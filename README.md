@@ -36,6 +36,9 @@ The SLS plugin optimizes server world management through **OverlayFS**, a union 
 **OverlayFS Integration**:  
 OverlayFS is a Linux-specific feature, so SLS must run in a Linux environment. Non-Linux hosts can use Docker to provide the required Linux environment.
 
+### SQLite
+World configuration yml files will be replaced my SQLite
+
 ### World Class
 The `World` class represents a single world configuration. It includes all the details listed in the registry configuration, along with default values and paths to the world and server directories.
 
