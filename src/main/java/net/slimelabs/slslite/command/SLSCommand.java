@@ -20,15 +20,17 @@ import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public final class SLSCommand implements SimpleCommand {
 
     private static final List<String> PUBLIC_COMMANDS =
-            List.of("find", "info", "join", "list", "registries", "version");
+            List.of("dequeue", "find", "info", "join", "list", "registries", "version");
     private static final List<String> ADMIN_COMMANDS =
             List.of("blueprints", "reload", "start", "status", "stop");
 
@@ -68,6 +70,7 @@ public final class SLSCommand implements SimpleCommand {
 
         switch (arguments[0].toLowerCase(Locale.ROOT)) {
             case "blueprints" -> sendBlueprints(invocation.source(), arguments);
+            case "dequeue" -> dequeue(invocation.source(), arguments);
             case "find" -> find(invocation.source(), arguments);
             case "info" -> info(invocation.source(), arguments);
             case "join" -> join(invocation.source(), arguments);
@@ -105,7 +108,10 @@ public final class SLSCommand implements SimpleCommand {
                         : completed(List.of());
                 case "find" -> completed(proxy.getAllPlayers().stream()
                         .map(Player::getUsername).sorted().toList());
-                case "join" -> completed(sorted(blueprints.getTypes()));
+                case "join" -> completed(withPrefix("player", sorted(blueprints.getTypes())));
+                case "dequeue" -> CommandPermissions.canTargetOthers(source, "dequeue")
+                        ? completed(joinTargets())
+                        : completed(List.of());
                 case "reload" -> CommandPermissions.canAdminister(source, "reload")
                         ? completed(List.of("all", "blueprints", "software"))
                         : completed(List.of());
@@ -120,6 +126,10 @@ public final class SLSCommand implements SimpleCommand {
             };
         }
         if (arguments.length == 3 && "join".equals(operation)) {
+            if ("player".equalsIgnoreCase(arguments[1])) {
+                return completed(proxy.getAllPlayers().stream()
+                        .map(Player::getUsername).sorted().toList());
+            }
             return completed(blueprints.getByType(arguments[1]).stream()
                     .map(Blueprint::id).toList());
         }
@@ -130,8 +140,12 @@ public final class SLSCommand implements SimpleCommand {
         }
         if (arguments.length == 4 && "join".equals(operation)
                 && CommandPermissions.canTargetOthers(source, "join")) {
-            return completed(proxy.getAllPlayers().stream()
-                    .map(Player::getUsername).sorted().toList());
+            if ("player".equalsIgnoreCase(arguments[1])) {
+                return CommandPermissions.canAdminister(source, "join")
+                        ? completed(List.of("--force"))
+                        : completed(List.of());
+            }
+            return completed(joinTargets());
         }
         return completed(List.of());
     }
@@ -148,6 +162,7 @@ public final class SLSCommand implements SimpleCommand {
         ).color(NamedTextColor.GRAY));
         source.sendMessage(Component.text(
                 "Active instances: " + instances.getAll().size()
+                        + " | Queued players: " + joinService.queuedPlayers().size()
                         + " | Managed memory: " + resourceBudget.reservedMemoryMiB()
                         + "/" + resourceBudget.totalMemoryMiB() + " MiB"
         ).color(NamedTextColor.GRAY));
@@ -256,51 +271,190 @@ public final class SLSCommand implements SimpleCommand {
     }
 
     private void join(CommandSource source, String[] arguments) {
+        if (arguments.length >= 2 && "player".equalsIgnoreCase(arguments[1])) {
+            joinPlayer(source, arguments);
+            return;
+        }
         if (arguments.length < 3 || arguments.length > 4) {
-            source.sendMessage(Component.text("Usage: /sls join <registry> <server> [player]")
+            source.sendMessage(Component.text(
+                    "Usage: /sls join <registry> <server> [all|local|player]"
+            )
                     .color(NamedTextColor.RED));
             return;
         }
-
-        Player target;
+        List<Player> targets;
         if (arguments.length == 4) {
             if (!CommandPermissions.canTargetOthers(source, "join")) {
                 permissionDenied(source, "join other players");
                 return;
             }
-            target = proxy.getPlayer(arguments[3]).orElse(null);
-            if (target == null) {
-                source.sendMessage(Component.text("Player not found: " + arguments[3])
-                        .color(NamedTextColor.RED));
-                return;
-            }
+            targets = resolveTargets(source, arguments[3]);
         } else if (source instanceof Player player) {
-            target = player;
+            targets = List.of(player);
         } else {
             source.sendMessage(Component.text(
                     "Console must specify a player: /sls join <registry> <server> <player>"
             ).color(NamedTextColor.RED));
             return;
         }
-
-        try {
-            LocalJoinService.JoinAttempt attempt =
-                    joinService.join(target, arguments[1], arguments[2]);
-            ManagedInstance instance = attempt.instance();
-            String action = attempt.created() ? "Preparing" : "Joining";
-            source.sendMessage(Component.text(
-                    action + " " + instance.id() + " for " + target.getUsername() + "..."
-            ).color(attempt.created() ? NamedTextColor.YELLOW : NamedTextColor.GREEN));
-            if (source != target) {
-                target.sendMessage(Component.text(
-                        "SLS-LITE is connecting you to " + arguments[1] + "/" + arguments[2] + "."
-                ).color(NamedTextColor.YELLOW));
-            }
-            attempt.connection().whenComplete((result, failure) ->
-                    reportConnection(source, target, instance, result, failure));
-        } catch (InstanceOperationException exception) {
-            source.sendMessage(Component.text(exception.getMessage()).color(NamedTextColor.RED));
+        if (targets.isEmpty()) {
+            return;
         }
+
+        for (Player target : targets) {
+            try {
+                LocalJoinService.JoinAttempt attempt =
+                        joinService.join(target, arguments[1], arguments[2]);
+                ManagedInstance instance = attempt.instance();
+                String action = attempt.created() ? "Preparing" : "Queued for";
+                source.sendMessage(Component.text(
+                        action + " " + instance.id() + " for " + target.getUsername() + "..."
+                ).color(attempt.created() ? NamedTextColor.YELLOW : NamedTextColor.GREEN));
+                if (source != target) {
+                    target.sendMessage(Component.text(
+                            "Queued for " + arguments[1] + "/" + arguments[2] + "."
+                    ).color(NamedTextColor.YELLOW));
+                }
+                attempt.connection().whenComplete((result, failure) ->
+                        reportConnection(source, target, instance, result, failure));
+            } catch (InstanceOperationException exception) {
+                source.sendMessage(Component.text(
+                        target.getUsername() + ": " + exception.getMessage()
+                ).color(NamedTextColor.RED));
+            }
+        }
+    }
+
+    private void joinPlayer(CommandSource source, String[] arguments) {
+        if (arguments.length < 3 || arguments.length > 4) {
+            source.sendMessage(Component.text(
+                    "Usage: /sls join player <player> [--force]"
+            ).color(NamedTextColor.RED));
+            return;
+        }
+        if (!(source instanceof Player player)) {
+            source.sendMessage(Component.text(
+                    "Console cannot join another player's server."
+            ).color(NamedTextColor.RED));
+            return;
+        }
+        if (arguments.length == 4) {
+            if (!"--force".equalsIgnoreCase(arguments[3])) {
+                source.sendMessage(Component.text(
+                        "Usage: /sls join player <player> [--force]"
+                ).color(NamedTextColor.RED));
+                return;
+            }
+            if (!CommandPermissions.canAdminister(source, "join")) {
+                permissionDenied(source, "force a player join");
+                return;
+            }
+        }
+
+        Player target = proxy.getPlayer(arguments[2]).orElse(null);
+        if (target == null) {
+            source.sendMessage(Component.text("Player not found: " + arguments[2])
+                    .color(NamedTextColor.RED));
+            return;
+        }
+        try {
+            LocalJoinService.DirectJoin directJoin =
+                    joinService.joinPlayer(player, target);
+            source.sendMessage(Component.text(
+                    "Joining " + target.getUsername() + " on "
+                            + directJoin.instance().id() + "..."
+            ).color(NamedTextColor.YELLOW));
+            directJoin.connection().whenComplete((result, failure) ->
+                    reportConnection(
+                            source,
+                            player,
+                            directJoin.instance(),
+                            result,
+                            failure
+                    ));
+        } catch (InstanceOperationException exception) {
+            source.sendMessage(Component.text(exception.getMessage())
+                    .color(NamedTextColor.RED));
+        }
+    }
+
+    private void dequeue(CommandSource source, String[] arguments) {
+        if (arguments.length > 2) {
+            source.sendMessage(Component.text(
+                    "Usage: /sls dequeue [all|local|player]"
+            ).color(NamedTextColor.RED));
+            return;
+        }
+
+        List<LocalJoinService.QueueTicket> removed;
+        if (arguments.length == 1) {
+            if (!(source instanceof Player player)) {
+                source.sendMessage(Component.text(
+                        "Console must specify all or a player."
+                ).color(NamedTextColor.RED));
+                return;
+            }
+            removed = joinService.dequeue(player.getUniqueId()).stream().toList();
+        } else {
+            if (!CommandPermissions.canTargetOthers(source, "dequeue")) {
+                permissionDenied(source, "dequeue other players");
+                return;
+            }
+            String target = arguments[1];
+            if ("all".equalsIgnoreCase(target)) {
+                removed = joinService.dequeueAll();
+            } else if ("local".equalsIgnoreCase(target)) {
+                List<Player> local = resolveTargets(source, "local");
+                removed = joinService.dequeue(local.stream()
+                        .map(Player::getUniqueId).toList());
+            } else {
+                Player player = proxy.getPlayer(target).orElse(null);
+                if (player == null) {
+                    source.sendMessage(Component.text("Player not found: " + target)
+                            .color(NamedTextColor.RED));
+                    return;
+                }
+                removed = joinService.dequeue(player.getUniqueId()).stream().toList();
+            }
+        }
+
+        if (removed.isEmpty()) {
+            source.sendMessage(Component.text("No matching players were queued.")
+                    .color(NamedTextColor.YELLOW));
+            return;
+        }
+        source.sendMessage(Component.text(
+                "Removed " + removed.size() + " player(s) from matchmaking."
+        ).color(NamedTextColor.GREEN));
+    }
+
+    private List<Player> resolveTargets(CommandSource source, String target) {
+        if ("all".equalsIgnoreCase(target)) {
+            return List.copyOf(proxy.getAllPlayers());
+        }
+        if ("local".equalsIgnoreCase(target)) {
+            if (!(source instanceof Player player)) {
+                source.sendMessage(Component.text(
+                        "Console cannot use the local player selector."
+                ).color(NamedTextColor.RED));
+                return List.of();
+            }
+            return player.getCurrentServer()
+                    .map(connection -> List.copyOf(connection.getServer().getPlayersConnected()))
+                    .orElseGet(() -> {
+                        source.sendMessage(Component.text(
+                                "You are not connected to a backend server."
+                        ).color(NamedTextColor.RED));
+                        return List.of();
+                    });
+        }
+        Player player = proxy.getPlayer(target).orElse(null);
+        if (player == null) {
+            source.sendMessage(Component.text("Player not found: " + target)
+                    .color(NamedTextColor.RED));
+            return List.of();
+        }
+        return List.of(player);
     }
 
     private void reportConnection(
@@ -311,6 +465,9 @@ public final class SLSCommand implements SimpleCommand {
             Throwable failure
     ) {
         if (failure != null) {
+            if (rootCause(failure) instanceof LocalJoinService.QueueCancelledException) {
+                return;
+            }
             source.sendMessage(Component.text(
                     "Unable to connect " + target.getUsername() + ": " + rootMessage(failure)
             ).color(NamedTextColor.RED));
@@ -484,6 +641,24 @@ public final class SLSCommand implements SimpleCommand {
         return instances.getAll().stream().map(ManagedInstance::id).sorted().toList();
     }
 
+    private List<String> joinTargets() {
+        Set<String> targets = new LinkedHashSet<>();
+        targets.add("all");
+        targets.add("local");
+        proxy.getAllPlayers().stream()
+                .map(Player::getUsername)
+                .sorted()
+                .forEach(targets::add);
+        return List.copyOf(targets);
+    }
+
+    private static List<String> withPrefix(String prefix, List<String> values) {
+        List<String> result = new java.util.ArrayList<>(values.size() + 1);
+        result.add(prefix);
+        result.addAll(values);
+        return List.copyOf(result);
+    }
+
     private static List<String> sorted(Collection<String> values) {
         return values.stream().sorted(Comparator.naturalOrder()).toList();
     }
@@ -493,12 +668,17 @@ public final class SLSCommand implements SimpleCommand {
     }
 
     private static String rootMessage(Throwable throwable) {
+        Throwable current = rootCause(throwable);
+        return current.getMessage() == null
+                ? current.getClass().getSimpleName()
+                : current.getMessage();
+    }
+
+    private static Throwable rootCause(Throwable throwable) {
         Throwable current = throwable;
         while (current.getCause() != null) {
             current = current.getCause();
         }
-        return current.getMessage() == null
-                ? current.getClass().getSimpleName()
-                : current.getMessage();
+        return current;
     }
 }

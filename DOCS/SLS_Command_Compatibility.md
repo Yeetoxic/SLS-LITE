@@ -21,7 +21,7 @@ shape and return a concise `not available in local mode` explanation.
 | `list` | Public | Adapted | Match vSLS display and hover information. |
 | `create <type> <id> [flags...]` | Admin | Planned | Add safe local equivalents for supported override flags. |
 | `start <type> <id>` | Admin | Adapted | Preserve saved-instance semantics when persistence lands. |
-| `join <type> <id> [target]` | Self public; others admin | Adapted | Add `all`, `local`, `player`, `--force`, capacity, and queue behavior. |
+| `join <type> <id> [target]` | Self public; others admin | Adapted | Add capacity enforcement and the full-server Join Anyway interaction. |
 | `find <player>` | Public | Supported | Match vSLS messages and display details. |
 | `system` | Admin | Planned | Report the local Velocity host and SLS-LITE version. |
 | `node <id> [drained [value]]` | Admin | Local-mode response planned | Node administration is distributed-only. |
@@ -33,7 +33,7 @@ shape and return a concise `not available in local mode` explanation.
 | `reload [all\|config\|blueprints\|software]` | Admin | Adapted | Add the upstream `config` mode. |
 | `stop <server\|all> [force]` | Admin | Adapted | Add `all` and compatible `force` behavior. |
 | `kill <server\|all> [force]` | Admin | Planned | Add explicit force-termination behavior. |
-| `dequeue [all\|local\|player]` | Self public; others admin | Planned | Implement with the matchmaking queue. |
+| `dequeue [all\|local\|player]` | Self public; others admin | Adapted | Match final vSLS feedback and queue context. |
 | `status <server> [remote]` | Admin | Adapted | Return a local-mode explanation for `remote`. |
 | `stats <server>` | Admin | Planned | Add locally measurable CPU, memory, disk, and uptime values. |
 | `version` | Public | Adapted | Match vSLS author metadata formatting where practical. |

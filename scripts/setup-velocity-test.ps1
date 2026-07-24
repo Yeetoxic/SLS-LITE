@@ -53,11 +53,13 @@ Copy-Item -LiteralPath (Join-Path $repository "target\sls-lite-0.1.0-SNAPSHOT.ja
 
 Set-Content -LiteralPath (Join-Path $pluginData "config.yml") -Encoding utf8 -Value @'
 resources:
-  total_memory_mib: 1024
+  total_memory_mib: 4096
 network:
   ports:
     start: 25600
     end: 25610
+matchmaking:
+  queue_timeout_seconds: 180
 paths:
   instances: instances
 '@
@@ -66,6 +68,22 @@ Set-Content -LiteralPath (Join-Path $pluginData "blueprints\smoke.yml") -Encodin
 blueprint:
   id: smoke
   name: Local Smoke Test
+  type: test
+server:
+  software: paper
+  version: "26.1.2"
+  limits:
+    memory_limit: 768
+save: false
+annotations:
+  sls-lite:
+    test-only: true
+'@
+
+Set-Content -LiteralPath (Join-Path $pluginData "blueprints\smoke2.yml") -Encoding utf8 -Value @'
+blueprint:
+  id: smoke2
+  name: Local Smoke Test 2
   type: test
 server:
   software: paper

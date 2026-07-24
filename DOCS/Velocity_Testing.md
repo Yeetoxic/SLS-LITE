@@ -58,13 +58,55 @@ first join to an already-ready managed backend. In game, run:
 /sls list
 /sls find <your-player-name>
 /sls join test smoke
+/sls dequeue
 ```
 
-The final command should reuse the ready `smoke` instance. To test provisioning
-from the join command, stop the existing instance from the Velocity console,
-connect through a configured lobby, and run `/sls join test smoke`. The player
-must remain connected to a server while Paper prepares; automatic queue and
-lobby provisioning are not implemented yet.
+The join command should reuse the ready `smoke` instance. To test queued
+provisioning, connect through a separately configured lobby, stop the smoke
+instance, and run `/sls join test smoke`. SLS-LITE should keep the player on the
+lobby, start Paper, and transfer the player only after the instance reaches
+`READY`.
+
+Queue checks:
+
+1. Run `/sls join test smoke` twice while Paper starts. The second request must
+   report that the player is already queued.
+2. Run `/sls dequeue`; the pending transfer must be cancelled.
+3. Disconnect while queued; the request must be removed automatically.
+4. With admin permission, test `/sls join test smoke all`,
+   `/sls join test smoke local`, and a specific player name.
+5. When the last request for a queue-created instance is cancelled, the instance
+   should stop after it reaches a safely stoppable state.
+
+Managed lobby provisioning is not implemented yet, so queued provisioning needs
+an external test lobby in this release.
+
+## Two-Server Join Test
+
+The fixture includes `test/smoke` and `test/smoke2`. They share the prepared
+Paper software but receive separate isolated instance directories and Velocity
+registrations. Start one instance of each:
+
+```text
+sls start test smoke
+sls start test smoke2
+sls list
+```
+
+Join the proxy with one Minecraft client, then:
+
+1. Run `/sls join test smoke2`. The player must move to the `smoke2.xxxxxx`
+   instance.
+2. Run `/sls join test smoke`. The player must move back to the
+   `smoke.xxxxxx` instance.
+3. Repeat both commands and verify that no additional instances are created.
+
+For the separate `join player` test, use two clients on different instances and
+run `/sls join player <other-player>`.
+
+`/sls join player <player> --force` is restricted to administrators. It
+currently follows the same route because blueprint capacity enforcement has not
+been implemented yet.
 
 Finish from the Velocity console:
 
@@ -93,6 +135,7 @@ sls.command.start
 sls.command.status
 sls.command.stop
 sls.command.join.others
+sls.command.dequeue.others
 ```
 
 Console may use `/sls join <registry> <server> <player>`. A player may target

@@ -16,6 +16,7 @@ public final class SLSConfigRepository {
     private static final int DEFAULT_TOTAL_MEMORY_MIB = 4096;
     private static final int DEFAULT_PORT_RANGE_START = 25570;
     private static final int DEFAULT_PORT_RANGE_END = 25670;
+    private static final int DEFAULT_QUEUE_TIMEOUT_SECONDS = 180;
     private static final String DEFAULT_INSTANCES_DIRECTORY = "instances";
 
     private final Path dataDirectory;
@@ -56,6 +57,8 @@ public final class SLSConfigRepository {
             Map<String, Object> resources = YamlValues.optionalMap(root, "resources", configPath);
             Map<String, Object> network = YamlValues.optionalMap(root, "network", configPath);
             Map<String, Object> ports = YamlValues.optionalMap(network, "ports", configPath);
+            Map<String, Object> matchmaking =
+                    YamlValues.optionalMap(root, "matchmaking", configPath);
             Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);
 
             int totalMemory = YamlValues.optionalPositiveInt(
@@ -76,6 +79,12 @@ public final class SLSConfigRepository {
                     DEFAULT_PORT_RANGE_END,
                     configPath
             );
+            int queueTimeout = YamlValues.optionalPositiveInt(
+                    matchmaking,
+                    "queue_timeout_seconds",
+                    DEFAULT_QUEUE_TIMEOUT_SECONDS,
+                    configPath
+            );
             String instances = YamlValues.optionalString(
                     paths,
                     "instances",
@@ -85,7 +94,13 @@ public final class SLSConfigRepository {
 
             Path instancesDirectory = resolveManagedPath(instances, "paths.instances");
             try {
-                return new SLSConfig(totalMemory, portStart, portEnd, instancesDirectory);
+                return new SLSConfig(
+                        totalMemory,
+                        portStart,
+                        portEnd,
+                        queueTimeout,
+                        instancesDirectory
+                );
             } catch (IllegalArgumentException exception) {
                 throw YamlValues.error(configPath, exception.getMessage());
             }

@@ -83,6 +83,7 @@ class ConfigurationValidatorTest {
                 totalMemory,
                 25570,
                 25670,
+                180,
                 temporaryDirectory.resolve("instances")
         );
         return new Repositories(config, blueprints, profiles);

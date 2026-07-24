@@ -25,6 +25,7 @@ class SLSConfigRepositoryTest {
         assertEquals(4096, config.totalMemoryMiB());
         assertEquals(25570, config.portRangeStart());
         assertEquals(25670, config.portRangeEnd());
+        assertEquals(180, config.queueTimeoutSeconds());
         assertEquals(
                 temporaryDirectory.resolve("instances").toAbsolutePath().normalize(),
                 config.instancesDirectory()

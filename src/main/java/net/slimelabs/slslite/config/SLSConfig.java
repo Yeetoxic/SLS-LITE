@@ -6,6 +6,7 @@ public record SLSConfig(
         int totalMemoryMiB,
         int portRangeStart,
         int portRangeEnd,
+        int queueTimeoutSeconds,
         Path instancesDirectory
 ) {
 
@@ -20,6 +21,9 @@ public record SLSConfig(
             throw new IllegalArgumentException(
                     "portRangeEnd must be between portRangeStart and 65535"
             );
+        }
+        if (queueTimeoutSeconds <= 0) {
+            throw new IllegalArgumentException("queueTimeoutSeconds must be positive");
         }
         instancesDirectory = instancesDirectory.toAbsolutePath().normalize();
     }

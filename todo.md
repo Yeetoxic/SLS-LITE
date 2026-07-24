@@ -109,12 +109,14 @@ hosted backend and lobby servers.
 ## Phase 5: Velocity Integration
 
 - [x] Register and unregister managed backends with Velocity safely.
-- [ ] Queue players while an instance is preparing or starting.
+- [x] Queue players while an instance is preparing or starting.
 - [x] Connect requested players only after the instance reaches `READY`.
-- [ ] Add queue timeout, cancellation, disconnect, and startup-failure handling.
+- [x] Add queue timeout, cancellation, disconnect, and startup-failure handling.
 - [x] Add `/sls list`, `/sls start`, `/sls stop`, `/sls reload`, and
       `/sls status`.
 - [x] Add registry-aware `/sls join`.
+- [x] Add `/sls dequeue` for self, named-player, `all`, and `local` queue
+      cancellation.
 - [ ] Add `/sls logs`.
 - [x] Require explicit permissions for administrative actions.
 - [x] Add permissions for other-player join actions.
@@ -133,8 +135,10 @@ hosted backend and lobby servers.
       for every administrative SLS-LITE command.
 - [x] Keep implemented self-service operations public where vSLS does, including
       listing, version information, joining oneself, and finding a player.
-- [ ] Require administrative permission when an operation targets `all`, `local`,
-      another player, or bypasses blueprint capacity and lifecycle safeguards.
+- [x] Require administrative permission when an implemented operation targets
+      `all`, `local`, or another player.
+- [ ] Require administrative permission for force operations that bypass
+      blueprint capacity or lifecycle safeguards when those options are added.
 - [x] Add optional granular SLS-LITE permission nodes only as additive aliases;
       users with `sls.command.admin` must retain access to all local
       administrative functionality.
@@ -151,8 +155,9 @@ hosted backend and lobby servers.
 - [ ] Mirror the complete vSLS `v0.2.0` top-level tree, including `system` and
       `node`; keep SLS-LITE-only commands such as `registries` and `blueprints`
       as additive aliases rather than replacements for upstream commands.
-- [ ] Match the vSLS target selectors and modifiers: `all`, `local`, player
-      names, `player <player>`, `force`, `--force`, and `remote`.
+- [ ] Match the remaining vSLS modifier behavior for capacity-bypassing
+      `force`/`--force` and daemon-backed `remote`. The implemented join paths
+      support `all`, `local`, player names, and `player <player>`.
 - [ ] Add a versioned command-contract fixture for vSLS names, argument trees,
       permission nodes, sender restrictions, and completion visibility.
 - [ ] Return `not available in local mode` with an explanation for distributed
@@ -437,7 +442,8 @@ the local implementation has equivalent behavior.
 - [x] Test port allocation and release.
 - [x] Test process output parsing, startup timeout, graceful shutdown, and crash
       handling with a small fixture process.
-- [ ] Test queue success, timeout, disconnect, and failed-start behavior.
+- [x] Test queue success, timeout, cancellation, disconnect, failed-start
+      behavior, duplicate requests, and orphan cleanup.
 - [ ] Test external and managed lobby routing.
 - [ ] Add virtual lobby compatibility tests if that mode is adopted.
 - [x] Add an integration fixture that launches Velocity and one lightweight

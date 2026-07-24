@@ -90,6 +90,9 @@ network:
     start: 25570
     end: 25670
 
+matchmaking:
+  queue_timeout_seconds: 180
+
 paths:
   instances: instances
 ```
@@ -97,7 +100,8 @@ paths:
 The memory value is the shared budget for managed backend processes and excludes
 Velocity itself. Managed paths must remain relative to the SLS-LITE data
 directory. Managed instances reserve an available loopback port from this range
-and release it during cleanup.
+and release it during cleanup. Matchmaking requests fail and clean themselves up
+after the configured timeout.
 
 SLS-LITE also creates `software-profiles/paper.yml`:
 

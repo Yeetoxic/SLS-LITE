@@ -3,6 +3,7 @@ package net.slimelabs.slslite;
 import com.google.inject.Inject;
 import com.velocitypowered.api.command.CommandMeta;
 import com.velocitypowered.api.event.Subscribe;
+import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
@@ -97,7 +98,12 @@ public final class SLSLite {
                     new VelocityBackendRegistry(proxy),
                     logger
             );
-            joinService = new LocalJoinService(proxy, blueprints, instanceManager);
+            joinService = new LocalJoinService(
+                    proxy,
+                    blueprints,
+                    instanceManager,
+                    Duration.ofSeconds(configuration.get().queueTimeoutSeconds())
+            );
         } catch (Exception exception) {
             logger.error(
                     "SLS-LITE initialization failed; managed server features are disabled",
@@ -141,7 +147,17 @@ public final class SLSLite {
     }
 
     @Subscribe
+    public void onDisconnect(DisconnectEvent event) {
+        if (joinService != null) {
+            joinService.disconnect(event.getPlayer().getUniqueId());
+        }
+    }
+
+    @Subscribe
     public void onProxyShutdown(ProxyShutdownEvent event) {
+        if (joinService != null) {
+            joinService.close();
+        }
         if (instanceManager != null) {
             logger.info(
                     "Stopping {} managed instance(s)",
