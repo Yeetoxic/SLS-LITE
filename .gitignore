@@ -1,0 +1,37 @@
+# Maven
+/target/
+dependency-reduced-pom.xml
+pom.xml.*.backup
+release.properties
+
+# Java
+*.class
+*.jar
+hs_err_pid*
+replay_pid*
+
+# IntelliJ IDEA
+/.idea/
+*.iml
+
+# Visual Studio Code
+/.vscode/
+
+# Eclipse
+/.classpath
+/.project
+/.settings/
+
+# Local Velocity and SLS-LITE runtime
+/logs/
+/plugins/
+/run/
+/test-server/
+/velocity.toml
+/forwarding.secret
+*.log
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

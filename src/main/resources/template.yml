@@ -1,18 +1,19 @@
-# Template Registry Configuration File
+# SLS-LITE blueprint using modern SLS terminology.
 
-registry:
-  - name: 'template' # Name of your registry
-    path: './plugins/sls/registries/template' # Path to the registry folder
+blueprint:
+  id: template
+  name: Template Server
+  type: game
 
-# List of worlds in your registry
-worlds:
-  - name: 'world name' # REQUIRED: Name of your world
-    folder-name: 'template_world' # REQUIRED: Folder containing world files
-    server-folder: '1_21' # REQUIRED: Server folder name
-    authors: 'protoxon, yeetoxic' # OPTIONAL: Comma-separated list of authors
-    save-world: true # OPTIONAL: Save changes to the world (default: false)
-    view-distance: 12 # OPTIONAL: Server view distance (default: 15)
-    max-players: 25 # OPTIONAL: Max players allowed (default: 69)
-    ram-allocation: 2GB # OPTIONAL: RAM allocation for the server (default: 2GB)
-    description: 'A template world' # OPTIONAL: Brief description of the world
-    allowed-client-versions: 1.21.. # OPTIONAL: Allowed client versions. See CONFIG_DOCS
+server:
+  software: paper
+  version: "26.1"
+  limits:
+    memory_limit: 2048
+
+save: false
+
+annotations:
+  sls-lite:
+    start-on-proxy-start: false
+    stop-when-empty: true
