@@ -19,6 +19,8 @@ import net.slimelabs.slslite.config.SLSConfigRepository;
 import net.slimelabs.slslite.instance.InstanceDirectoryPreparer;
 import net.slimelabs.slslite.instance.IdleInstanceReaper;
 import net.slimelabs.slslite.instance.InstanceManager;
+import net.slimelabs.slslite.instance.InstanceReconciler;
+import net.slimelabs.slslite.instance.InstanceReconciliationReport;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.LocalLobbyProvider;
 import net.slimelabs.slslite.log.ConsoleBanner;
@@ -89,6 +91,21 @@ public final class SLSLite {
             );
             InstanceDirectoryPreparer directoryPreparer = new InstanceDirectoryPreparer(
                     configuration.get().instancesDirectory()
+            );
+            InstanceReconciliationReport reconciliation = new InstanceReconciler(
+                    directoryPreparer,
+                    logger
+            ).reconcile();
+            logger.info(
+                    "Instance reconciliation inspected {} directorie(s): "
+                            + "{} stale ephemeral removed, {} persistent preserved, "
+                            + "{} running preserved, {} unknown preserved, {} failure(s)",
+                    reconciliation.inspected(),
+                    reconciliation.removedEphemeral(),
+                    reconciliation.preservedPersistent(),
+                    reconciliation.preservedRunning(),
+                    reconciliation.preservedUnknown(),
+                    reconciliation.failures()
             );
             PaperProcessSpecFactory processSpecFactory = new PaperProcessSpecFactory(dataDirectory);
             int portCount = configuration.get().portRangeEnd()

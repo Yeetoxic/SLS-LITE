@@ -324,8 +324,13 @@ the local implementation has equivalent behavior.
 - [ ] Add bounded crash restart policies with exponential backoff.
 - [ ] Add maintenance or drain mode that prevents new instance creation while
       allowing existing instances to finish.
-- [ ] Add startup reconciliation so SLS-LITE detects stale processes, directories,
-      ports, and registrations after an unclean shutdown.
+- [x] Add startup reconciliation with durable ownership metadata so SLS-LITE
+      removes confirmed dead ephemeral directories after an unclean shutdown
+      while preserving persistent, live, malformed, and legacy directories.
+- [x] Probe loopback ports during allocation so ports retained by surviving
+      processes are skipped after restart.
+- [ ] Reconcile plugin-owned Velocity registrations if supported plugin hot
+      reload is added; registrations do not survive a normal proxy restart.
 - [ ] Consider an optional local event stream or administration API only after the
       in-proxy API is stable and authenticated.
 
@@ -454,6 +459,7 @@ the local implementation has equivalent behavior.
       handling with a small fixture process.
 - [x] Test queue success, timeout, cancellation, disconnect, failed-start
       behavior, duplicate requests, and orphan cleanup.
+- [x] Test durable instance metadata and unclean-shutdown reconciliation.
 - [ ] Test external and managed lobby routing.
 - [ ] Add virtual lobby compatibility tests if that mode is adopted.
 - [x] Add an integration fixture that launches Velocity and one lightweight

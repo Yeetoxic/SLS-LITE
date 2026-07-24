@@ -85,6 +85,19 @@ Idle cleanup checks:
 5. Start a server and immediately run `sls stop <instance-id>` while it is
    preparing; startup must cancel and release its port, memory, and directory.
 
+Unclean-shutdown reconciliation checks:
+
+1. Confirm a running managed instance contains
+   `.sls-lite-instance.properties`.
+2. Terminate the test allocation without a graceful proxy shutdown, then start
+   it again.
+3. The startup reconciliation summary must report the dead ephemeral instance
+   as removed before the managed lobby starts.
+4. An unmarked legacy directory and any `save: true` directory must remain and
+   be reported as preserved.
+5. A loopback port still owned by a surviving process must be skipped by the
+   allocator.
+
 ## Two-Server Join Test
 
 The fixture includes `test/smoke` and `test/smoke2`. They share the prepared

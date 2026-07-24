@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Collection;
@@ -42,6 +43,7 @@ public final class InstanceManager implements ServerController {
     private final ResourceBudget resourceBudget;
     private final LoopbackPortAllocator portAllocator;
     private final InstanceDirectoryPreparer directoryPreparer;
+    private final InstanceMetadataStore metadataStore;
     private final PaperProcessSpecFactory processSpecFactory;
     private final ProcessSupervisor processSupervisor;
     private final BackendRegistry backendRegistry;
@@ -68,6 +70,7 @@ public final class InstanceManager implements ServerController {
         this.resourceBudget = resourceBudget;
         this.portAllocator = portAllocator;
         this.directoryPreparer = directoryPreparer;
+        this.metadataStore = new InstanceMetadataStore(directoryPreparer.root());
         this.processSpecFactory = processSpecFactory;
         this.processSupervisor = processSupervisor;
         this.backendRegistry = backendRegistry;
@@ -186,6 +189,7 @@ public final class InstanceManager implements ServerController {
             if (instance.state() == InstanceState.PREPARING) {
                 instance.requestStop();
                 instance.lifecycle().transitionTo(InstanceState.STOPPING);
+                writeMetadataBestEffort(instance, InstanceState.STOPPING, null);
                 instance.readyFuture().completeExceptionally(
                         new CancellationException(
                                 "Instance startup was cancelled: " + instanceId
@@ -206,6 +210,7 @@ public final class InstanceManager implements ServerController {
             try {
                 if (instance.state() == InstanceState.STARTING) {
                     instance.requestStop();
+                    writeMetadataBestEffort(instance, InstanceState.STOPPING, process);
                     instance.readyFuture().completeExceptionally(
                             new CancellationException(
                                     "Instance startup was cancelled: " + instanceId
@@ -213,6 +218,7 @@ public final class InstanceManager implements ServerController {
                     );
                     process.cancelStartup();
                 } else {
+                    writeMetadataBestEffort(instance, InstanceState.STOPPING, process);
                     process.stop();
                 }
                 return instance.stoppedFuture();
@@ -250,6 +256,7 @@ public final class InstanceManager implements ServerController {
             if (!prepared.equals(instance.directory())) {
                 throw new InstanceOperationException("Prepared instance path changed unexpectedly");
             }
+            writeMetadata(instance, InstanceState.PREPARING, null);
             ServerPropertiesEditor.applyManagedNetworkSettings(prepared, instance.port());
             ProcessSpec spec = processSpecFactory.create(
                     profile,
@@ -264,6 +271,7 @@ public final class InstanceManager implements ServerController {
                     finishCancelledPreparation(instance);
                     return;
                 }
+                writeMetadata(instance, InstanceState.STARTING, null);
                 process = processSupervisor.start(
                         instance.id(),
                         spec,
@@ -272,19 +280,20 @@ public final class InstanceManager implements ServerController {
                 );
                 instance.attachProcess(process);
             }
-            process.readyFuture().whenComplete((ignored, failure) -> {
-                if (failure == null) {
-                    registerReady(instance);
-                } else {
-                    instance.readyFuture().completeExceptionally(failure);
-                }
-            });
             process.exitFuture().whenComplete((exitCode, failure) -> {
                 cleanup(instance);
                 if (failure == null) {
                     instance.stoppedFuture().complete(exitCode);
                 } else {
                     instance.stoppedFuture().completeExceptionally(failure);
+                }
+            });
+            writeMetadata(instance, InstanceState.STARTING, process);
+            process.readyFuture().whenComplete((ignored, failure) -> {
+                if (failure == null) {
+                    registerReady(instance);
+                } else {
+                    instance.readyFuture().completeExceptionally(failure);
                 }
             });
         } catch (Exception exception) {
@@ -301,6 +310,7 @@ public final class InstanceManager implements ServerController {
                 return;
             }
             try {
+                writeMetadata(instance, InstanceState.READY, instance.process());
                 backendRegistry.register(
                         instance.id(),
                         new InetSocketAddress(InetAddress.getLoopbackAddress(), instance.port())
@@ -312,7 +322,7 @@ public final class InstanceManager implements ServerController {
                         instance.id(),
                         instance.port()
                 );
-            } catch (RuntimeException exception) {
+            } catch (InstancePreparationException | RuntimeException exception) {
                 instance.readyFuture().completeExceptionally(exception);
                 SupervisedProcess process = instance.process();
                 if (process != null) {
@@ -323,6 +333,7 @@ public final class InstanceManager implements ServerController {
     }
 
     private void failPreparation(ManagedInstance instance, Exception exception) {
+        SupervisedProcess process;
         synchronized (instance) {
             if (instance.state() == InstanceState.STOPPING
                     && instance.stopRequested()) {
@@ -333,8 +344,13 @@ public final class InstanceManager implements ServerController {
                 instance.lifecycle().transitionTo(InstanceState.FAILED);
             }
             instance.readyFuture().completeExceptionally(exception);
+            process = instance.process();
         }
         logger.error("Unable to start managed instance " + instance.id(), exception);
+        if (process != null) {
+            process.forceStop();
+            return;
+        }
         cleanup(instance);
     }
 
@@ -366,6 +382,8 @@ public final class InstanceManager implements ServerController {
                             exception
                     );
                 }
+            } else {
+                writeMetadataBestEffort(instance, instance.state(), null);
             }
             if (!instance.readyFuture().isDone()) {
                 instance.readyFuture().completeExceptionally(
@@ -392,11 +410,59 @@ public final class InstanceManager implements ServerController {
     private String uniqueInstanceId(String blueprintId) throws InstanceOperationException {
         for (int attempt = 0; attempt < ID_ATTEMPTS; attempt++) {
             String candidate = idGenerator.generate(blueprintId);
-            if (!instances.containsKey(candidate)) {
+            if (!instances.containsKey(candidate)
+                    && !Files.exists(directoryPreparer.root().resolve(candidate))) {
                 return candidate;
             }
         }
         throw new InstanceOperationException("Unable to generate a unique instance ID");
+    }
+
+    private void writeMetadata(
+            ManagedInstance instance,
+            InstanceState state,
+            SupervisedProcess process
+    ) throws InstancePreparationException {
+        Long processId = process == null ? null : process.processId();
+        java.time.Instant processStartedAt = process == null
+                ? null
+                : process.processStartedAt().orElse(null);
+        InstanceMetadata metadata = new InstanceMetadata(
+                instance.id(),
+                instance.blueprint().id(),
+                instance.blueprint().save(),
+                state,
+                instance.createdAt(),
+                processId,
+                processStartedAt
+        );
+        try {
+            metadataStore.write(instance.directory(), metadata);
+        } catch (IOException exception) {
+            throw new InstancePreparationException(
+                    "Unable to write instance metadata for " + instance.id(),
+                    exception
+            );
+        }
+    }
+
+    private void writeMetadataBestEffort(
+            ManagedInstance instance,
+            InstanceState state,
+            SupervisedProcess process
+    ) {
+        if (!Files.isDirectory(instance.directory())) {
+            return;
+        }
+        try {
+            writeMetadata(instance, state, process);
+        } catch (InstancePreparationException exception) {
+            logger.warn(
+                    "Unable to update instance metadata for {}: {}",
+                    instance.id(),
+                    exception.getMessage()
+            );
+        }
     }
 
     private static ThreadFactory threadFactory() {

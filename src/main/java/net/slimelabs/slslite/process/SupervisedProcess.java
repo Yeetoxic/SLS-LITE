@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
@@ -96,6 +97,20 @@ public final class SupervisedProcess {
 
     public Instant startedAt() {
         return startedAt;
+    }
+
+    public synchronized long processId() {
+        if (process == null) {
+            throw new IllegalStateException("Instance process has not started: " + instanceId);
+        }
+        return process.pid();
+    }
+
+    public synchronized Optional<Instant> processStartedAt() {
+        if (process == null) {
+            return Optional.empty();
+        }
+        return process.info().startInstant();
     }
 
     public CompletableFuture<Void> readyFuture() {

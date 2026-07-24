@@ -78,6 +78,12 @@ class InstanceManagerTest {
         awaitCleanup();
 
         assertTrue(Files.isDirectory(instance.directory()));
+        InstanceMetadata metadata = new InstanceMetadataStore(
+                instance.directory().getParent()
+        ).read(instance.directory()).orElseThrow();
+        assertTrue(metadata.persistent());
+        assertEquals(InstanceState.STOPPED, metadata.state());
+        assertEquals(null, metadata.processId());
     }
 
     @Test

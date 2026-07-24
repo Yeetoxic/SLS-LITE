@@ -128,6 +128,15 @@ annotations:
 players and queued joins before draining an instance, preventing a new
 matchmaking request from being assigned while shutdown begins.
 
+Each managed instance contains an internal `.sls-lite-instance.properties`
+ownership record. On startup, SLS-LITE uses that record to remove confirmed
+stale ephemeral directories left by an unclean shutdown. Persistent instances,
+matching live child processes, malformed records, and directories from older
+versions without metadata are preserved and reported rather than deleted.
+Loopback ports are probed before allocation, so a surviving process cannot be
+assigned a conflicting port. Persistent instances are not automatically resumed
+yet.
+
 `lobby.mode: external` routes players to an existing Velocity registration named
 by `lobby.server`. `lobby.mode: managed` starts the blueprint identified by
 `lobby.registry` and `lobby.server` in the local allocation and reserves that
