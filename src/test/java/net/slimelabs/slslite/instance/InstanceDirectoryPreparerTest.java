@@ -22,7 +22,7 @@ class InstanceDirectoryPreparerTest {
         Path instances = temporaryDirectory.resolve("instances");
         InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(instances);
 
-        Path prepared = preparer.prepare("game-1234567890", source);
+        Path prepared = preparer.prepare("game.x82odk", source);
         Files.writeString(prepared.resolve("config/settings.yml"), "changed");
 
         assertEquals("original", Files.readString(source.resolve("config/settings.yml")));
@@ -33,12 +33,12 @@ class InstanceDirectoryPreparerTest {
     void refusesExistingInstanceDirectory() throws Exception {
         Path source = createSource();
         Path instances = temporaryDirectory.resolve("instances");
-        Files.createDirectories(instances.resolve("game-1234567890"));
+        Files.createDirectories(instances.resolve("game.x82odk"));
         InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(instances);
 
         assertThrows(
                 InstancePreparationException.class,
-                () -> preparer.prepare("game-1234567890", source)
+                () -> preparer.prepare("game.x82odk", source)
         );
     }
 
@@ -60,9 +60,9 @@ class InstanceDirectoryPreparerTest {
         Path source = createSource();
         Path instances = temporaryDirectory.resolve("instances");
         InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(instances);
-        Path prepared = preparer.prepare("game-1234567890", source);
+        Path prepared = preparer.prepare("game.x82odk", source);
 
-        preparer.delete("game-1234567890");
+        preparer.delete("game.x82odk");
 
         assertFalse(Files.exists(prepared));
         assertTrue(Files.exists(source));

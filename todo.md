@@ -78,14 +78,14 @@ hosted backend and lobby servers.
       `CREATED`, `PREPARING`, `STARTING`, `READY`, `STOPPING`, `STOPPED`,
       and `FAILED`.
 - [x] Use a bounded executor for process and log supervision.
-- [ ] Give every instance a unique ID, directory, Velocity server name, and port.
+- [x] Give every instance a unique ID, directory, Velocity server name, and port.
 - [ ] Implement a synchronized port allocator with startup retry handling.
 - [x] Use one output reader per child process.
 - [x] Add configurable readiness and startup timeout handling.
 - [x] Send the configured stop command before forcefully terminating a process.
-- [ ] Add stop timeouts, crash detection, exit-code reporting, and cleanup.
+- [x] Add stop timeouts, crash detection, exit-code reporting, and cleanup.
 - [x] Prevent duplicate starts and conflicting lifecycle actions.
-- [ ] Track total allocated memory and reject starts that exceed the configured
+- [x] Track total allocated memory and reject starts that exceed the configured
       single-host budget.
 - [ ] Recover or clean up incomplete instance state after a proxy restart.
 
@@ -94,7 +94,7 @@ hosted backend and lobby servers.
 - [ ] Never run multiple instances from the same writable server directory.
 - [x] Create a separate writable directory for every instance.
 - [x] Implement portable directory-copy isolation as the default mode.
-- [ ] Support ephemeral instances that are deleted after shutdown.
+- [x] Support ephemeral instances that are deleted after shutdown.
 - [ ] Support persistent instances that can be stopped and restarted.
 - [ ] Add an explicit reset operation that restores an instance from its template.
 - [ ] Investigate optional copy-on-write optimizations:
@@ -108,18 +108,58 @@ hosted backend and lobby servers.
 
 ## Phase 5: Velocity Integration
 
-- [ ] Register and unregister managed backends with Velocity safely.
+- [x] Register and unregister managed backends with Velocity safely.
 - [ ] Queue players while an instance is preparing or starting.
-- [ ] Connect queued players only after the instance reaches `READY`.
+- [x] Connect requested players only after the instance reaches `READY`.
 - [ ] Add queue timeout, cancellation, disconnect, and startup-failure handling.
-- [ ] Add `/sls list`, `/sls start`, `/sls join`, `/sls stop`, `/sls logs`,
-      `/sls reload`, and `/sls status`.
-- [ ] Require explicit permissions for administrative and other-player actions.
-- [ ] Support joining an existing instance or creating one from a blueprint.
+- [x] Add `/sls list`, `/sls start`, `/sls stop`, `/sls reload`, and
+      `/sls status`.
+- [x] Add registry-aware `/sls join`.
+- [ ] Add `/sls logs`.
+- [x] Require explicit permissions for administrative actions.
+- [x] Add permissions for other-player join actions.
+- [x] Support joining an existing instance or creating one from a blueprint.
 - [ ] Add automatic idle shutdown with a configurable delay.
 - [ ] Add optional ViaVersion integration for backend protocol detection.
 - [ ] Avoid requiring PacketEvents unless a retained feature needs packet-level
       control.
+
+### Command and Permission Compatibility
+
+- [x] Maintain a command compatibility table for the targeted vSLS release,
+      covering syntax, permission, sender restrictions, tab completion,
+      lifecycle behavior, and local support status.
+- [x] Preserve `sls.command.admin` as the upstream-compatible umbrella permission
+      for every administrative SLS-LITE command.
+- [x] Keep implemented self-service operations public where vSLS does, including
+      listing, version information, joining oneself, and finding a player.
+- [ ] Require administrative permission when an operation targets `all`, `local`,
+      another player, or bypasses blueprint capacity and lifecycle safeguards.
+- [x] Add optional granular SLS-LITE permission nodes only as additive aliases;
+      users with `sls.command.admin` must retain access to all local
+      administrative functionality.
+- [x] Hide unauthorized subcommands and argument suggestions while still
+      returning a clear permission error for directly entered commands.
+- [x] Match vSLS player-only and console-capable behavior for the implemented
+      join command, including
+      requiring an explicit player target when a console sender cannot act on
+      itself.
+- [ ] Port locally meaningful vSLS commands and options, including `info`,
+      `list`, `create`, `start`, `join`, `find`, `console`, `blueprint`, `debug`,
+      `delete`, `logs`, `reload`, `stop`, `kill`, `dequeue`, `status`, `stats`,
+      `reset`, `restart`, and `version`.
+- [ ] Mirror the complete vSLS `v0.2.0` top-level tree, including `system` and
+      `node`; keep SLS-LITE-only commands such as `registries` and `blueprints`
+      as additive aliases rather than replacements for upstream commands.
+- [ ] Match the vSLS target selectors and modifiers: `all`, `local`, player
+      names, `player <player>`, `force`, `--force`, and `remote`.
+- [ ] Add a versioned command-contract fixture for vSLS names, argument trees,
+      permission nodes, sender restrictions, and completion visibility.
+- [ ] Return `not available in local mode` with an explanation for distributed
+      commands such as remote node administration instead of silently omitting
+      or partially emulating them.
+- [ ] Add command tests covering public, granular, administrator, console,
+      player, other-player, force, invalid-usage, and tab-completion cases.
 
 ## Modern SLS Features
 
@@ -134,6 +174,9 @@ It does not run under full SLS. Compatibility means sharing terminology,
 configuration, commands, lifecycle semantics, examples, and documentation where
 the local implementation has equivalent behavior.
 
+- [x] Use the vSLS human-readable composite instance ID format
+      `<blueprint-id>.<six-character-id>` for commands, directories, logs, and
+      Velocity registrations.
 - [ ] Keep SLS-LITE entirely operational inside Velocity and its locally managed
       child processes.
 - [ ] Treat modern SLS as the behavioral and documentation reference when an
@@ -142,7 +185,7 @@ the local implementation has equivalent behavior.
       Protocube, a daemon, S4J, Docker, or another SLS installation.
 - [ ] Prefer direct support for compatible modern SLS configuration over a
       separate SLS-LITE-only schema or mandatory conversion step.
-- [ ] Use a local server-controller interface to separate commands, matchmaking,
+- [x] Use a local server-controller interface to separate commands, matchmaking,
       and lifecycle logic from Java process and filesystem management.
 - [ ] Do not add a remote-controller implementation or make full SLS a runtime
       mode of SLS-LITE.
@@ -173,9 +216,12 @@ the local implementation has equivalent behavior.
 
 ### Upstream Alignment
 
+- [x] Record the historical Velocity-only baseline at SLS commit
+      `4f9b7ca7f6d857d43253076f1627ad4087f663ab` and separate its proven
+      single-host behavior from implementation details that must be modernized.
 - [ ] Treat modern SLS terminology and public configuration conventions as the
       preferred reference when the same concept exists in SLS-LITE.
-- [ ] Record the upstream SLS release and commit targeted by each SLS-LITE
+- [x] Record the initial upstream SLS release and commit targeted by SLS-LITE
       release.
 - [ ] Maintain a feature compatibility matrix with `supported`, `adapted`,
       `unsupported`, and `planned` states.
@@ -191,6 +237,13 @@ the local implementation has equivalent behavior.
       behavior change.
 - [ ] Keep upstream example blueprints and software definitions as compatibility
       fixtures where licensing permits.
+- [ ] Add migration fixtures for the historical `minigames.yml`,
+      `adventureMaps.yml`, and `archive.yml` formats.
+- [ ] Decide whether historical `shutdown` and `config` forms remain as hidden
+      or documented aliases without displacing modern vSLS `stop`, `reload`,
+      and `blueprint` commands.
+- [ ] Add an optional, validated compatibility listener for the historical
+      `slimelabs:network` plugin message channel.
 - [ ] Never introduce a runtime dependency on Protocube, the daemon, S4J, Docker,
       or another SLS installation.
 
@@ -268,6 +321,16 @@ the local implementation has equivalent behavior.
 
 ### Matchmaking and Join Actions
 
+- [x] Treat `blueprint.type` as the user-defined registry namespace and
+      `blueprint.id` as the server/blueprint within that registry.
+- [x] Discover registries dynamically from loaded blueprint types; adding the
+      first blueprint with a new type must make that registry available without
+      a central registry declaration or plugin restart.
+- [x] Support the SLS command shape `/sls join <registry> <server>` with
+      registry-aware tab completion and validation that the selected server
+      belongs to that registry.
+- [ ] Add registry-aware variants of create, start, list, and administrative
+      commands where modern vSLS exposes the same grouping.
 - [ ] Port modern vSLS game types that group compatible blueprints for
       matchmaking.
 - [ ] Add a pluggable blueprint selection strategy, starting with first-available
@@ -366,6 +429,8 @@ the local implementation has equivalent behavior.
 ## Testing
 
 - [x] Replace the current `main()` test classes with JUnit tests.
+- [x] Set up a local Pterodactyl Panel/Wings environment with a Java 25
+      Velocity allocation and browser-accessible server console.
 - [ ] Test memory parsing.
 - [x] Test path validation, configuration validation, and ID generation.
 - [x] Test lifecycle transitions and invalid concurrent actions.
@@ -375,7 +440,7 @@ the local implementation has equivalent behavior.
 - [ ] Test queue success, timeout, disconnect, and failed-start behavior.
 - [ ] Test external and managed lobby routing.
 - [ ] Add virtual lobby compatibility tests if that mode is adopted.
-- [ ] Add an integration fixture that launches Velocity and one lightweight
+- [x] Add an integration fixture that launches Velocity and one lightweight
       backend in a constrained single-host environment.
 - [ ] Add CI for compilation, tests, packaging, and dependency checks.
 

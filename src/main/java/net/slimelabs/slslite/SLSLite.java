@@ -3,6 +3,7 @@ package net.slimelabs.slslite;
 import com.google.inject.Inject;
 import com.velocitypowered.api.command.CommandMeta;
 import com.velocitypowered.api.event.Subscribe;
+import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
@@ -13,12 +14,15 @@ import net.slimelabs.slslite.command.SLSCommand;
 import net.slimelabs.slslite.config.ConfigurationValidator;
 import net.slimelabs.slslite.config.SLSConfigRepository;
 import net.slimelabs.slslite.instance.InstanceDirectoryPreparer;
+import net.slimelabs.slslite.instance.InstanceManager;
 import net.slimelabs.slslite.log.ConsoleBanner;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.PaperProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
+import net.slimelabs.slslite.velocity.LocalJoinService;
+import net.slimelabs.slslite.velocity.VelocityBackendRegistry;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
@@ -41,10 +45,9 @@ public final class SLSLite {
     private final SoftwareProfileRepository softwareProfiles;
     private final Path dataDirectory;
     private ResourceBudget resourceBudget;
-    private LoopbackPortAllocator portAllocator;
-    private InstanceDirectoryPreparer directoryPreparer;
-    private PaperProcessSpecFactory processSpecFactory;
     private ProcessSupervisor processSupervisor;
+    private InstanceManager instanceManager;
+    private LocalJoinService joinService;
 
     @Inject
     public SLSLite(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -72,17 +75,29 @@ public final class SLSLite {
                     softwareProfiles
             );
             resourceBudget = new ResourceBudget(configuration.get().totalMemoryMiB());
-            portAllocator = new LoopbackPortAllocator(
+            LoopbackPortAllocator portAllocator = new LoopbackPortAllocator(
                     configuration.get().portRangeStart(),
                     configuration.get().portRangeEnd()
             );
-            directoryPreparer = new InstanceDirectoryPreparer(
+            InstanceDirectoryPreparer directoryPreparer = new InstanceDirectoryPreparer(
                     configuration.get().instancesDirectory()
             );
-            processSpecFactory = new PaperProcessSpecFactory(dataDirectory);
+            PaperProcessSpecFactory processSpecFactory = new PaperProcessSpecFactory(dataDirectory);
             int portCount = configuration.get().portRangeEnd()
                     - configuration.get().portRangeStart() + 1;
             processSupervisor = new ProcessSupervisor(Math.min(portCount, 16));
+            instanceManager = new InstanceManager(
+                    blueprints,
+                    softwareProfiles,
+                    resourceBudget,
+                    portAllocator,
+                    directoryPreparer,
+                    processSpecFactory,
+                    processSupervisor,
+                    new VelocityBackendRegistry(proxy),
+                    logger
+            );
+            joinService = new LocalJoinService(proxy, blueprints, instanceManager);
         } catch (Exception exception) {
             logger.error(
                     "SLS-LITE initialization failed; managed server features are disabled",
@@ -97,7 +112,15 @@ public final class SLSLite {
                 .build();
         proxy.getCommandManager().register(
                 commandMeta,
-                new SLSCommand(blueprints, softwareProfiles, resourceBudget, logger)
+                new SLSCommand(
+                        proxy,
+                        blueprints,
+                        softwareProfiles,
+                        resourceBudget,
+                        instanceManager,
+                        joinService,
+                        logger
+                )
         );
 
         logger.info(
@@ -110,13 +133,21 @@ public final class SLSLite {
     }
 
     @Subscribe
+    public void onPlayerChooseInitialServer(PlayerChooseInitialServerEvent event) {
+        if (joinService == null || event.getInitialServer().isPresent()) {
+            return;
+        }
+        joinService.initialServer().ifPresent(event::setInitialServer);
+    }
+
+    @Subscribe
     public void onProxyShutdown(ProxyShutdownEvent event) {
-        if (processSupervisor != null) {
+        if (instanceManager != null) {
             logger.info(
-                    "Stopping {} managed process(es)",
-                    processSupervisor.activeProcesses().size()
+                    "Stopping {} managed instance(s)",
+                    instanceManager.getAll().size()
             );
-            processSupervisor.shutdown(Duration.ofSeconds(35));
+            instanceManager.shutdown(Duration.ofSeconds(35));
         }
         ConsoleBanner.logShutdown(logger);
     }

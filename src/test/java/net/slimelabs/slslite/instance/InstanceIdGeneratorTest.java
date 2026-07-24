@@ -11,13 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class InstanceIdGeneratorTest {
 
     @Test
-    void createsFilesystemAndVelocitySafeId() {
+    void createsSlsCompatibleCompositeId() {
         InstanceIdGenerator generator = new InstanceIdGenerator(new Random(42));
 
         String first = generator.generate("block-hunt");
         String second = generator.generate("block-hunt");
 
-        assertTrue(first.matches("block-hunt-[a-z0-9]{10}"));
+        assertTrue(first.matches("block-hunt\\.[0-9abcdefhkmnorsuvwxz]{6}"));
+        assertTrue(InstanceIdGenerator.isValid(first));
         assertNotEquals(first, second);
     }
 

@@ -146,7 +146,7 @@ public final class SupervisedProcess {
         return exit;
     }
 
-    synchronized void forceStop() {
+    public synchronized void forceStop() {
         if (process != null && process.isAlive()) {
             InstanceState state = lifecycle.state();
             if (state == InstanceState.STARTING

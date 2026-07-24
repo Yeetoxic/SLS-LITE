@@ -94,6 +94,36 @@ class BlueprintRepositoryTest {
         assertThrows(BlueprintException.class, repository::reload);
     }
 
+    @Test
+    void discoversUserDefinedRegistryTypes() throws Exception {
+        write("lobby.yml", """
+                blueprint:
+                  id: main-lobby
+                  name: Main Lobby
+                  type: lobbies
+                server:
+                  software: paper
+                  version: "26.1"
+                """);
+        write("adventure.yml", """
+                blueprint:
+                  id: sky-quest
+                  name: Sky Quest
+                  type: adventures
+                server:
+                  software: paper
+                  version: "26.1"
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        assertEquals(java.util.Set.of("lobbies", "adventures"), repository.getTypes());
+        assertEquals("sky-quest", repository.get("adventures", "sky-quest").orElseThrow().id());
+        assertTrue(repository.get("lobbies", "sky-quest").isEmpty());
+        assertEquals(1, repository.getByType("lobbies").size());
+    }
+
     private void write(String name, String content) throws IOException {
         Files.writeString(temporaryDirectory.resolve(name), content);
     }

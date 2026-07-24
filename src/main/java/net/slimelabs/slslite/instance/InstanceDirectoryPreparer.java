@@ -7,17 +7,17 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.regex.Pattern;
 
 public final class InstanceDirectoryPreparer {
-
-    private static final Pattern VALID_INSTANCE_ID =
-            Pattern.compile("[a-z0-9][a-z0-9_-]{0,74}");
 
     private final Path instancesRoot;
 
     public InstanceDirectoryPreparer(Path instancesRoot) {
         this.instancesRoot = instancesRoot.toAbsolutePath().normalize();
+    }
+
+    public Path root() {
+        return instancesRoot;
     }
 
     public Path prepare(String instanceId, Path sourceDirectory)
@@ -71,7 +71,7 @@ public final class InstanceDirectoryPreparer {
     }
 
     private Path destination(String instanceId) throws InstancePreparationException {
-        if (instanceId == null || !VALID_INSTANCE_ID.matcher(instanceId).matches()) {
+        if (!InstanceIdGenerator.isValid(instanceId)) {
             throw new InstancePreparationException("Invalid instance ID: " + instanceId);
         }
 

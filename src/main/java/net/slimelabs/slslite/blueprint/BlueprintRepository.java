@@ -14,7 +14,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public final class BlueprintRepository {
@@ -53,10 +55,27 @@ public final class BlueprintRepository {
         return Optional.ofNullable(blueprints.get(id));
     }
 
+    public Optional<Blueprint> get(String type, String id) {
+        return get(id).filter(blueprint -> blueprint.type().equals(type));
+    }
+
     public Collection<Blueprint> getAll() {
         return blueprints.values().stream()
                 .sorted(java.util.Comparator.comparing(Blueprint::id))
                 .toList();
+    }
+
+    public Collection<Blueprint> getByType(String type) {
+        return blueprints.values().stream()
+                .filter(blueprint -> blueprint.type().equals(type))
+                .sorted(java.util.Comparator.comparing(Blueprint::id))
+                .toList();
+    }
+
+    public Set<String> getTypes() {
+        return blueprints.values().stream()
+                .map(Blueprint::type)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     private List<Path> blueprintFiles() throws IOException {
