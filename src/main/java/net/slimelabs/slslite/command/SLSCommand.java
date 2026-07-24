@@ -7,6 +7,8 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.slimelabs.slslite.BuildInfo;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.resource.ResourceBudget;
+import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -17,10 +19,19 @@ public final class SLSCommand implements SimpleCommand {
     private static final String ADMIN_PERMISSION = "sls.command.admin";
 
     private final BlueprintRepository blueprints;
+    private final SoftwareProfileRepository softwareProfiles;
+    private final ResourceBudget resourceBudget;
     private final Logger logger;
 
-    public SLSCommand(BlueprintRepository blueprints, Logger logger) {
+    public SLSCommand(
+            BlueprintRepository blueprints,
+            SoftwareProfileRepository softwareProfiles,
+            ResourceBudget resourceBudget,
+            Logger logger
+    ) {
         this.blueprints = blueprints;
+        this.softwareProfiles = softwareProfiles;
+        this.resourceBudget = resourceBudget;
         this.logger = logger;
     }
 
@@ -61,6 +72,10 @@ public final class SLSCommand implements SimpleCommand {
                         .color(NamedTextColor.GRAY)));
         source.sendMessage(Component.text("Loaded blueprints: " + blueprints.getAll().size())
                 .color(NamedTextColor.GRAY));
+        source.sendMessage(Component.text(
+                "Software profiles: " + softwareProfiles.getAll().size()
+                        + " | Managed memory: " + resourceBudget.totalMemoryMiB() + " MiB"
+        ).color(NamedTextColor.GRAY));
     }
 
     private void sendBlueprints(CommandSource source) {

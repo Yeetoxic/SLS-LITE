@@ -11,14 +11,19 @@ implementation. The current development baseline provides:
 
 - A Java 21-compatible Velocity 4.1 plugin foundation.
 - Modern SLS-style blueprint metadata.
+- Validated host configuration and software launch profiles.
 - Validated YAML loading and reload support.
 - Explicit server-instance lifecycle states.
 - Local memory reservation accounting.
+- Loopback port reservation and isolated instance-directory copying.
+- Shell-free Paper command construction and managed process supervision.
 - A shaded release JAR with isolated runtime dependencies.
 - JUnit coverage for the implemented foundation.
 
-It does not launch or connect players to Paper servers yet. Do not deploy this
-development version to a production network.
+The internal supervisor can launch and stop child Java processes, but it is not
+yet connected to user commands or Velocity backend registration. It does not
+connect players to Paper servers yet. Do not deploy this development version to
+a production network.
 
 ## Goal
 
@@ -59,6 +64,58 @@ Distributed SLS features are adapted to a single host:
 - Maven 3.9 or newer.
 
 The plugin is compiled to Java 21 bytecode and is tested on JDK 25.
+
+## Configuration
+
+On first initialization, SLS-LITE creates `config.yml` in its Velocity plugin
+data directory:
+
+```yaml
+resources:
+  total_memory_mib: 4096
+
+network:
+  ports:
+    start: 25570
+    end: 25670
+
+paths:
+  instances: instances
+```
+
+The memory value is the shared budget for managed backend processes and excludes
+Velocity itself. Managed paths must remain relative to the SLS-LITE data
+directory. Port allocation is not implemented yet.
+
+SLS-LITE also creates `software-profiles/paper.yml`:
+
+```yaml
+software:
+  id: paper
+  base_directory: software/paper/{version}
+  server_jar: paper.jar
+
+launch:
+  java: java
+  jvm_arguments:
+    - "-Xms{memory_mib}M"
+    - "-Xmx{memory_mib}M"
+  server_arguments:
+    - "--nogui"
+
+readiness:
+  pattern: 'Done \([^)]+\)! For help'
+  timeout_seconds: 180
+
+shutdown:
+  command: stop
+  timeout_seconds: 30
+```
+
+Launch arguments are represented as YAML lists so future process creation can
+pass them directly to Java without invoking a command shell. The first process
+supervisor will support manually prepared Paper installations at
+`software/paper/{version}/paper.jar`.
 
 ## Build
 

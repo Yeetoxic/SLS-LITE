@@ -42,16 +42,18 @@ hosted backend and lobby servers.
 - [x] Add and relocate all runtime dependencies in the release JAR.
 - [x] Initialize the blueprint repository from the Velocity initialization event.
 - [x] Register the initial `/sls` command from the Velocity initialization event.
-- [ ] Initialize configuration and process lifecycle services from the Velocity
-      initialization event.
-- [ ] Shut down all managed child processes during proxy shutdown.
+- [x] Initialize host configuration and software profile services from the
+      Velocity initialization event.
+- [x] Initialize process lifecycle services from the Velocity initialization
+      event.
+- [x] Shut down all managed child processes during proxy shutdown.
 - [x] Replace static mutable globals with explicit services where practical.
 - [x] Establish a passing `mvn test` and `mvn package` baseline.
 
 ## Phase 2: Configuration Model
 
 - [x] Replace the legacy registry format with a small blueprint model.
-- [ ] Add software profiles containing:
+- [x] Add software profiles containing:
   - Java executable or runtime selection.
   - Server JAR or base server directory.
   - Invocation arguments.
@@ -75,14 +77,14 @@ hosted backend and lobby servers.
 - [x] Introduce explicit instance states:
       `CREATED`, `PREPARING`, `STARTING`, `READY`, `STOPPING`, `STOPPED`,
       and `FAILED`.
-- [ ] Use a bounded executor for process and log supervision.
+- [x] Use a bounded executor for process and log supervision.
 - [ ] Give every instance a unique ID, directory, Velocity server name, and port.
 - [ ] Implement a synchronized port allocator with startup retry handling.
-- [ ] Use one output reader per child process.
-- [ ] Add configurable readiness and startup timeout handling.
-- [ ] Send the configured stop command before forcefully terminating a process.
+- [x] Use one output reader per child process.
+- [x] Add configurable readiness and startup timeout handling.
+- [x] Send the configured stop command before forcefully terminating a process.
 - [ ] Add stop timeouts, crash detection, exit-code reporting, and cleanup.
-- [ ] Prevent duplicate starts and conflicting lifecycle actions.
+- [x] Prevent duplicate starts and conflicting lifecycle actions.
 - [ ] Track total allocated memory and reject starts that exceed the configured
       single-host budget.
 - [ ] Recover or clean up incomplete instance state after a proxy restart.
@@ -90,8 +92,8 @@ hosted backend and lobby servers.
 ## Phase 4: Instance Files
 
 - [ ] Never run multiple instances from the same writable server directory.
-- [ ] Create a separate writable directory for every instance.
-- [ ] Implement portable directory-copy isolation as the default mode.
+- [x] Create a separate writable directory for every instance.
+- [x] Implement portable directory-copy isolation as the default mode.
 - [ ] Support ephemeral instances that are deleted after shutdown.
 - [ ] Support persistent instances that can be stopped and restarted.
 - [ ] Add an explicit reset operation that restores an instance from its template.
@@ -351,7 +353,7 @@ the local implementation has equivalent behavior.
 
 - [ ] Restrict all configured paths to the SLS-LITE data directory unless an
       operator explicitly allows an external path.
-- [ ] Validate Java commands and arguments without invoking a shell.
+- [x] Validate Java commands and arguments without invoking a shell.
 - [ ] Prevent path traversal in blueprint IDs, world names, and instance IDs.
 - [ ] Redact secrets and sensitive paths from user-facing errors.
 - [ ] Bound retained logs and rotate or delete old instance logs.
@@ -364,11 +366,11 @@ the local implementation has equivalent behavior.
 ## Testing
 
 - [x] Replace the current `main()` test classes with JUnit tests.
-- [ ] Test memory parsing, path validation, configuration validation, and ID
-      generation.
+- [ ] Test memory parsing.
+- [x] Test path validation, configuration validation, and ID generation.
 - [x] Test lifecycle transitions and invalid concurrent actions.
-- [ ] Test port allocation and release.
-- [ ] Test process output parsing, startup timeout, graceful shutdown, and crash
+- [x] Test port allocation and release.
+- [x] Test process output parsing, startup timeout, graceful shutdown, and crash
       handling with a small fixture process.
 - [ ] Test queue success, timeout, disconnect, and failed-start behavior.
 - [ ] Test external and managed lobby routing.

@@ -1,0 +1,22 @@
+# Default profile for a manually prepared Paper installation.
+
+software:
+  id: paper
+  base_directory: software/paper/{version}
+  server_jar: paper.jar
+
+launch:
+  java: java
+  jvm_arguments:
+    - "-Xms{memory_mib}M"
+    - "-Xmx{memory_mib}M"
+  server_arguments:
+    - "--nogui"
+
+readiness:
+  pattern: 'Done \([^)]+\)! For help'
+  timeout_seconds: 180
+
+shutdown:
+  command: stop
+  timeout_seconds: 30

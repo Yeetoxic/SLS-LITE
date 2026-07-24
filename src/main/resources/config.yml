@@ -1,0 +1,14 @@
+# Host-wide SLS-LITE settings.
+
+resources:
+  # Shared budget for managed Paper processes, excluding Velocity itself.
+  total_memory_mib: 4096
+
+network:
+  ports:
+    start: 25570
+    end: 25670
+
+paths:
+  # Managed paths are relative to the SLS-LITE plugin data directory.
+  instances: instances
