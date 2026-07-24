@@ -18,14 +18,14 @@ shape and return a concise `not available in local mode` explanation.
 | vSLS command | Permission | SLS-LITE status | Remaining compatibility work |
 | --- | --- | --- | --- |
 | `info [server]` | Details: `sls.command.admin` | Adapted | Match active-server list and resource/player details. |
-| `list` | Public | Adapted | Match vSLS display and hover information. |
+| `list` | Public | Adapted | vSLS layout, status colors, counts, and hover information matched. |
 | `create <type> <id> [flags...]` | Admin | Planned | Add safe local equivalents for supported override flags. |
 | `start <type> <id>` | Admin | Adapted | Preserve saved-instance semantics when persistence lands. |
 | `join <type> <id> [target]` | Self public; others admin | Adapted | Add capacity enforcement and the full-server Join Anyway interaction. |
-| `find <player>` | Public | Supported | Match vSLS messages and display details. |
+| `find <player>` | Public | Supported | vSLS messages, hover details, and action-bar feedback matched. |
 | `system` | Admin | Planned | Report the local Velocity host and SLS-LITE version. |
 | `node <id> [drained [value]]` | Admin | Local-mode response planned | Node administration is distributed-only. |
-| `console <server> <command>` | Admin | Planned | Write safely to the supervised child process input. |
+| `console <server> <command>` | Admin | Adapted | Safe local process input is supported; add bounded in-game output capture. |
 | `blueprint <id>` | Admin | Planned | Pretty-print one blueprint; keep `blueprints` as an additive alias. |
 | `debug` | Public, player-only | Planned | Add per-player local lifecycle diagnostics. |
 | `delete <server\|all>` | Admin | Planned | Define safe persistent and ephemeral deletion behavior. |
@@ -34,9 +34,33 @@ shape and return a concise `not available in local mode` explanation.
 | `stop <server\|all> [force]` | Admin | Adapted | Add `all` and compatible `force` behavior. |
 | `kill <server\|all> [force]` | Admin | Planned | Add explicit force-termination behavior. |
 | `dequeue [all\|local\|player]` | Self public; others admin | Adapted | Match final vSLS feedback and queue context. |
-| `status <server> [remote]` | Admin | Adapted | Return a local-mode explanation for `remote`. |
+| `status <server> [remote]` | Admin | Adapted | Local status output matched; add the `remote` local-mode response. |
 | `stats <server>` | Admin | Planned | Add locally measurable CPU, memory, disk, and uptime values. |
-| `version` | Public | Adapted | Match vSLS author metadata formatting where practical. |
+| `version` | Public | Adapted | vSLS label, emphasis, author metadata, and colors matched. |
+| `pause <server>` | Admin | Compatibility response | Local process suspension is not implemented yet. |
+| `resume <server>` | Admin | Compatibility response | Local process resumption is not implemented yet. |
+| `restart <server>` | Admin | Compatibility response | Add stop/start behavior with lobby evacuation. |
+| `reset <server>` | Admin | Compatibility response | Add safe template restoration. |
+| `install <info\|logs>` | Admin | Compatibility response | Define whether software installation has a safe local equivalent. |
+
+## Presentation Contract
+
+The implemented command output follows the pinned vSLS component structure:
+
+- Blue gradient `[SLS]` prefix with project hover information.
+- Dark-aqua labels, gray values, gold/yellow composite instance IDs, and
+  lifecycle-aware status colors.
+- vSLS usage grammar: `Usage: /sls <option | option>`.
+- Server and player hover details, list framing, and player-facing action-bar
+  feedback.
+- vSLS wording is retained verbatim where the behavior is equivalent.
+  `SLS-LITE` replaces `vSLS` branding, and daemon-only metrics or actions are
+  replaced with truthful local equivalents.
+
+The source contract is encoded in `VSLSCommandContract` and tested against the
+pinned release and commit. Commands advertised by the upstream root tree but
+not implemented in SLS-LITE return a styled compatibility response instead of
+falling through as an unknown command.
 
 ## Compatibility Rules
 

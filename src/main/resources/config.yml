@@ -12,6 +12,12 @@ network:
 matchmaking:
   queue_timeout_seconds: 180
 
+lobby:
+  # external uses an existing Velocity server; managed starts this blueprint locally.
+  mode: external
+  registry: lobby
+  server: lobby
+
 paths:
   # Managed paths are relative to the SLS-LITE plugin data directory.
   instances: instances

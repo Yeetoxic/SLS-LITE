@@ -17,6 +17,9 @@ public final class SLSConfigRepository {
     private static final int DEFAULT_PORT_RANGE_START = 25570;
     private static final int DEFAULT_PORT_RANGE_END = 25670;
     private static final int DEFAULT_QUEUE_TIMEOUT_SECONDS = 180;
+    private static final String DEFAULT_LOBBY_MODE = "external";
+    private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
+    private static final String DEFAULT_LOBBY_SERVER = "lobby";
     private static final String DEFAULT_INSTANCES_DIRECTORY = "instances";
 
     private final Path dataDirectory;
@@ -59,6 +62,7 @@ public final class SLSConfigRepository {
             Map<String, Object> ports = YamlValues.optionalMap(network, "ports", configPath);
             Map<String, Object> matchmaking =
                     YamlValues.optionalMap(root, "matchmaking", configPath);
+            Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
             Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);
 
             int totalMemory = YamlValues.optionalPositiveInt(
@@ -85,6 +89,24 @@ public final class SLSConfigRepository {
                     DEFAULT_QUEUE_TIMEOUT_SECONDS,
                     configPath
             );
+            String lobbyMode = YamlValues.optionalString(
+                    lobby,
+                    "mode",
+                    DEFAULT_LOBBY_MODE,
+                    configPath
+            );
+            String lobbyRegistry = YamlValues.optionalString(
+                    lobby,
+                    "registry",
+                    DEFAULT_LOBBY_REGISTRY,
+                    configPath
+            );
+            String lobbyServer = YamlValues.optionalString(
+                    lobby,
+                    "server",
+                    DEFAULT_LOBBY_SERVER,
+                    configPath
+            );
             String instances = YamlValues.optionalString(
                     paths,
                     "instances",
@@ -99,6 +121,11 @@ public final class SLSConfigRepository {
                         portStart,
                         portEnd,
                         queueTimeout,
+                        new LobbyConfig(
+                                LobbyMode.parse(lobbyMode),
+                                lobbyRegistry,
+                                lobbyServer
+                        ),
                         instancesDirectory
                 );
             } catch (IllegalArgumentException exception) {

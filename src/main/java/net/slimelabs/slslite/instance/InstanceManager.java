@@ -16,6 +16,7 @@ import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import net.slimelabs.slslite.velocity.BackendRegistry;
 import org.slf4j.Logger;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
@@ -155,6 +156,26 @@ public final class InstanceManager implements ServerController {
             throw new InstanceOperationException("Unknown active instance: " + instanceId);
         }
         return instance;
+    }
+
+    @Override
+    public void sendCommand(String instanceId, String command)
+            throws InstanceOperationException {
+        String normalized = normalizeConsoleCommand(command);
+        ManagedInstance instance = get(instanceId);
+        synchronized (instance) {
+            SupervisedProcess process = instance.process();
+            if (process == null) {
+                throw new InstanceOperationException(
+                        "Instance has no active process: " + instanceId
+                );
+            }
+            try {
+                process.sendCommand(normalized);
+            } catch (IOException | IllegalArgumentException | IllegalStateException exception) {
+                throw new InstanceOperationException(exception.getMessage(), exception);
+            }
+        }
     }
 
     @Override
@@ -348,5 +369,25 @@ public final class InstanceManager implements ServerController {
             thread.setDaemon(true);
             return thread;
         };
+    }
+
+    private static String normalizeConsoleCommand(String command)
+            throws InstanceOperationException {
+        if (command == null || command.contains("\n") || command.contains("\r")) {
+            throw new InstanceOperationException("Console command must be one line");
+        }
+        String normalized = command.strip();
+        if (normalized.startsWith("/")) {
+            normalized = normalized.substring(1).strip();
+        }
+        if (normalized.isBlank()) {
+            throw new InstanceOperationException("Console command must not be blank");
+        }
+        if (normalized.length() > 4096) {
+            throw new InstanceOperationException(
+                    "Console command exceeds the 4096 character limit"
+            );
+        }
+        return normalized;
     }
 }

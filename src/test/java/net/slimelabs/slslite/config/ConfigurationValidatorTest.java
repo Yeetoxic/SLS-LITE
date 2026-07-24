@@ -49,6 +49,25 @@ class ConfigurationValidatorTest {
         ));
     }
 
+    @Test
+    void rejectsMissingManagedLobbyBlueprint() throws Exception {
+        Repositories repositories = repositories("paper", 1024, 2048);
+        SLSConfig managedLobby = new SLSConfig(
+                repositories.config().totalMemoryMiB(),
+                repositories.config().portRangeStart(),
+                repositories.config().portRangeEnd(),
+                repositories.config().queueTimeoutSeconds(),
+                new LobbyConfig(LobbyMode.MANAGED, "lobby", "missing"),
+                repositories.config().instancesDirectory()
+        );
+
+        assertThrows(ConfigurationException.class, () -> ConfigurationValidator.validate(
+                managedLobby,
+                repositories.blueprints(),
+                repositories.profiles()
+        ));
+    }
+
     private Repositories repositories(
             String softwareId,
             int blueprintMemory,
@@ -84,6 +103,7 @@ class ConfigurationValidatorTest {
                 25570,
                 25670,
                 180,
+                new LobbyConfig(LobbyMode.EXTERNAL, "lobby", "lobby"),
                 temporaryDirectory.resolve("instances")
         );
         return new Repositories(config, blueprints, profiles);

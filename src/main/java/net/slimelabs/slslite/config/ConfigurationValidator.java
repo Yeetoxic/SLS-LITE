@@ -29,5 +29,15 @@ public final class ConfigurationValidator {
                 );
             }
         }
+        if (config.lobby().mode() == LobbyMode.MANAGED
+                && blueprints.get(
+                config.lobby().registry(),
+                config.lobby().server()
+        ).isEmpty()) {
+            throw new ConfigurationException(
+                    "Managed lobby blueprint not found: "
+                            + config.lobby().registry() + "/" + config.lobby().server()
+            );
+        }
     }
 }

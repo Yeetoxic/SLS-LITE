@@ -60,8 +60,29 @@ network:
     end: 25610
 matchmaking:
   queue_timeout_seconds: 180
+lobby:
+  mode: managed
+  registry: lobby
+  server: lobby
 paths:
   instances: instances
+'@
+
+Set-Content -LiteralPath (Join-Path $pluginData "blueprints\lobby.yml") -Encoding utf8 -Value @'
+blueprint:
+  id: lobby
+  name: Local Managed Lobby
+  type: lobby
+server:
+  software: paper
+  version: "26.1.2"
+  limits:
+    memory_limit: 768
+save: false
+annotations:
+  sls-lite:
+    test-only: true
+    managed-lobby: true
 '@
 
 Set-Content -LiteralPath (Join-Path $pluginData "blueprints\smoke.yml") -Encoding utf8 -Value @'

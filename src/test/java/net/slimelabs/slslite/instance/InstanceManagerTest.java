@@ -81,6 +81,20 @@ class InstanceManagerTest {
     }
 
     @Test
+    void sendsNormalizedSingleLineConsoleCommands() throws Exception {
+        createContext(false, true);
+        ManagedInstance instance = manager.start("fixture");
+        instance.readyFuture().get(10, TimeUnit.SECONDS);
+
+        manager.sendCommand(instance.id(), "/say hello");
+        assertThrows(
+                InstanceOperationException.class,
+                () -> manager.sendCommand(instance.id(), "say one\nsay two")
+        );
+        manager.stop(instance.id()).get(10, TimeUnit.SECONDS);
+    }
+
+    @Test
     void releasesAdmissionsWhenProcessFailsBeforeReadiness() throws Exception {
         TestContext context = createContext(false, false);
 

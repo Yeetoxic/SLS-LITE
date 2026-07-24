@@ -6,13 +6,16 @@ import com.velocitypowered.api.proxy.ConnectionRequestBuilder;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.slimelabs.slslite.BuildInfo;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
+import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import net.slimelabs.slslite.velocity.LocalJoinService;
@@ -32,7 +35,11 @@ public final class SLSCommand implements SimpleCommand {
     private static final List<String> PUBLIC_COMMANDS =
             List.of("dequeue", "find", "info", "join", "list", "registries", "version");
     private static final List<String> ADMIN_COMMANDS =
-            List.of("blueprints", "reload", "start", "status", "stop");
+            List.of(
+                    "blueprint", "blueprints", "console", "create", "debug", "delete",
+                    "install", "kill", "logs", "node", "pause", "reload", "reset",
+                    "restart", "resume", "start", "stats", "status", "stop", "system"
+            );
 
     private final ProxyServer proxy;
     private final BlueprintRepository blueprints;
@@ -40,6 +47,7 @@ public final class SLSCommand implements SimpleCommand {
     private final ResourceBudget resourceBudget;
     private final ServerController instances;
     private final LocalJoinService joinService;
+    private final LobbyProvider lobbyProvider;
     private final Logger logger;
 
     public SLSCommand(
@@ -49,6 +57,7 @@ public final class SLSCommand implements SimpleCommand {
             ResourceBudget resourceBudget,
             ServerController instances,
             LocalJoinService joinService,
+            LobbyProvider lobbyProvider,
             Logger logger
     ) {
         this.proxy = proxy;
@@ -57,6 +66,7 @@ public final class SLSCommand implements SimpleCommand {
         this.resourceBudget = resourceBudget;
         this.instances = instances;
         this.joinService = joinService;
+        this.lobbyProvider = lobbyProvider;
         this.logger = logger;
     }
 
@@ -64,12 +74,13 @@ public final class SLSCommand implements SimpleCommand {
     public void execute(Invocation invocation) {
         String[] arguments = invocation.arguments();
         if (arguments.length == 0) {
-            sendSummary(invocation.source());
+            sendRootHelp(invocation.source());
             return;
         }
 
         switch (arguments[0].toLowerCase(Locale.ROOT)) {
             case "blueprints" -> sendBlueprints(invocation.source(), arguments);
+            case "console" -> console(invocation.source(), arguments);
             case "dequeue" -> dequeue(invocation.source(), arguments);
             case "find" -> find(invocation.source(), arguments);
             case "info" -> info(invocation.source(), arguments);
@@ -81,10 +92,11 @@ public final class SLSCommand implements SimpleCommand {
             case "status" -> status(invocation.source(), arguments);
             case "stop" -> stop(invocation.source(), arguments);
             case "version" -> sendVersion(invocation.source());
-            default -> invocation.source().sendMessage(
-                    Component.text("Unknown SLS-LITE subcommand.")
-                            .color(NamedTextColor.RED)
-            );
+            case "blueprint", "create", "debug", "delete", "install", "kill",
+                    "logs", "pause", "reset", "restart", "resume", "stats", "system" ->
+                    unavailable(invocation.source(), arguments[0], false);
+            case "node" -> unavailable(invocation.source(), arguments[0], true);
+            default -> sendRootHelp(invocation.source());
         }
     }
 
@@ -105,6 +117,9 @@ public final class SLSCommand implements SimpleCommand {
             return switch (operation) {
                 case "blueprints" -> CommandPermissions.canAdminister(source, "blueprints")
                         ? completed(sorted(blueprints.getTypes()))
+                        : completed(List.of());
+                case "console" -> CommandPermissions.canAdminister(source, "console")
+                        ? completed(withPrefix("this", instanceIds()))
                         : completed(List.of());
                 case "find" -> completed(proxy.getAllPlayers().stream()
                         .map(Player::getUsername).sorted().toList());
@@ -150,22 +165,45 @@ public final class SLSCommand implements SimpleCommand {
         return completed(List.of());
     }
 
+    private void sendRootHelp(CommandSource source) {
+        source.sendMessage(CommandMessages.incorrectUsage());
+        if (source.hasPermission(CommandPermissions.ADMIN)) {
+            source.sendMessage(CommandMessages.usage(
+                    "/sls",
+                    VSLSCommandContract.ADMIN_ROOT.toArray(String[]::new)
+            ));
+        } else {
+            source.sendMessage(CommandMessages.usage(
+                    "/sls", VSLSCommandContract.PUBLIC_ROOT.toArray(String[]::new)
+            ));
+        }
+    }
+
     private void sendSummary(CommandSource source) {
-        source.sendMessage(Component.text("SLS-LITE")
-                .color(NamedTextColor.GREEN)
-                .append(Component.text(" - standalone local server management for Velocity")
-                        .color(NamedTextColor.GRAY)));
-        source.sendMessage(Component.text(
-                "Registries: " + blueprints.getTypes().size()
-                        + " | Blueprints: " + blueprints.getAll().size()
-                        + " | Software profiles: " + softwareProfiles.getAll().size()
-        ).color(NamedTextColor.GRAY));
-        source.sendMessage(Component.text(
-                "Active instances: " + instances.getAll().size()
-                        + " | Queued players: " + joinService.queuedPlayers().size()
-                        + " | Managed memory: " + resourceBudget.reservedMemoryMiB()
-                        + "/" + resourceBudget.totalMemoryMiB() + " MiB"
-        ).color(NamedTextColor.GRAY));
+        TextComponent.Builder message = Component.text()
+                .append(Component.text("Info", NamedTextColor.DARK_AQUA))
+                .append(Component.text(" (SLS-LITE):", NamedTextColor.DARK_GRAY))
+                .appendNewline()
+                .append(infoLine("Registries:", Integer.toString(blueprints.getTypes().size())))
+                .appendNewline()
+                .append(infoLine("Blueprints:", Integer.toString(blueprints.getAll().size())))
+                .appendNewline()
+                .append(infoLine("Software profiles:", Integer.toString(
+                        softwareProfiles.getAll().size()
+                )))
+                .appendNewline()
+                .append(infoLine("Active servers:", Integer.toString(instances.getAll().size())))
+                .appendNewline()
+                .append(infoLine("Queued players:", Integer.toString(
+                        joinService.queuedPlayers().size()
+                )))
+                .appendNewline()
+                .append(infoLine(
+                        "Managed memory:",
+                        resourceBudget.reservedMemoryMiB() + "/"
+                                + resourceBudget.totalMemoryMiB() + " MiB"
+                ));
+        source.sendMessage(message.build());
     }
 
     private void info(CommandSource source, String[] arguments) {
@@ -181,13 +219,15 @@ public final class SLSCommand implements SimpleCommand {
 
     private void sendRegistries(CommandSource source) {
         if (blueprints.getTypes().isEmpty()) {
-            source.sendMessage(Component.text("No registries are loaded.")
-                    .color(NamedTextColor.YELLOW));
+            source.sendMessage(CommandMessages.message(
+                    "No registries are loaded.", NamedTextColor.YELLOW
+            ));
             return;
         }
-        source.sendMessage(Component.text("Registries").color(NamedTextColor.GREEN));
+        source.sendMessage(CommandMessages.message("Registries", NamedTextColor.GREEN));
         sorted(blueprints.getTypes()).forEach(type ->
-                source.sendMessage(Component.text("- " + type).color(NamedTextColor.GOLD)
+                source.sendMessage(CommandMessages.prefix()
+                        .append(Component.text("- " + type, NamedTextColor.GOLD))
                         .append(Component.text(
                                 " (" + blueprints.getByType(type).size() + " server(s))"
                         ).color(NamedTextColor.GRAY))));
@@ -203,20 +243,22 @@ public final class SLSCommand implements SimpleCommand {
         } else if (arguments.length == 2) {
             selected = blueprints.getByType(arguments[1]);
         } else {
-            source.sendMessage(Component.text("Usage: /sls blueprints [registry]")
-                    .color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.usage("/sls blueprints", "registry"));
             return;
         }
         if (selected.isEmpty()) {
-            source.sendMessage(Component.text("No matching blueprints are loaded.")
-                    .color(NamedTextColor.YELLOW));
+            source.sendMessage(CommandMessages.message(
+                    "No matching blueprints are loaded.", NamedTextColor.YELLOW
+            ));
             return;
         }
-        source.sendMessage(Component.text("Blueprints").color(NamedTextColor.GREEN));
+        source.sendMessage(CommandMessages.message("Blueprints", NamedTextColor.GREEN));
         selected.forEach(blueprint ->
-                source.sendMessage(Component.text(
-                        "- " + blueprint.type() + " " + blueprint.id()
-                ).color(NamedTextColor.GOLD).append(Component.text(
+                source.sendMessage(CommandMessages.prefix()
+                        .append(Component.text(
+                                "- " + blueprint.type() + " " + blueprint.id(),
+                                NamedTextColor.GOLD
+                        )).append(Component.text(
                         " (" + blueprint.software() + " " + blueprint.version()
                                 + ", " + blueprint.memoryLimitMiB() + " MiB)"
                 ).color(NamedTextColor.GRAY))));
@@ -224,17 +266,90 @@ public final class SLSCommand implements SimpleCommand {
 
     private void sendInstances(CommandSource source) {
         if (instances.getAll().isEmpty()) {
-            source.sendMessage(Component.text("No managed instances are active.")
-                    .color(NamedTextColor.YELLOW));
+            source.sendMessage(CommandMessages.message(
+                    "No servers found.", NamedTextColor.RED
+            ));
             return;
         }
-        source.sendMessage(Component.text("Managed instances").color(NamedTextColor.GREEN));
-        instances.getAll().forEach(instance ->
-                source.sendMessage(Component.text("- " + instance.id()).color(NamedTextColor.GOLD)
-                        .append(Component.text(
-                                " (" + instance.blueprint().type() + ", " + instance.state()
-                                        + ", port " + instance.port() + ")"
-                        ).color(NamedTextColor.GRAY))));
+        source.sendMessage(CommandMessages.listHeader());
+        instances.getAll().stream()
+                .sorted(Comparator.comparing(ManagedInstance::id))
+                .forEach(instance -> source.sendMessage(CommandMessages.listEntry(
+                        instance, playersOn(instance)
+                )));
+        source.sendMessage(CommandMessages.listFooter());
+    }
+
+    private void console(CommandSource source, String[] arguments) {
+        if (!requireAdmin(source, "console", "send managed server console commands")) {
+            return;
+        }
+        if (arguments.length == 1) {
+            source.sendMessage(CommandMessages.incorrectUsage());
+            source.sendMessage(CommandMessages.usage("/sls console", "server"));
+            return;
+        }
+        if (arguments.length == 2) {
+            source.sendMessage(CommandMessages.incorrectUsage());
+            source.sendMessage(CommandMessages.usage(
+                    "/sls console " + arguments[1], "command"
+            ));
+            return;
+        }
+
+        ManagedInstance instance = resolveConsoleInstance(source, arguments[1]);
+        if (instance == null) {
+            return;
+        }
+        String command = String.join(
+                " ",
+                java.util.Arrays.copyOfRange(arguments, 2, arguments.length)
+        );
+        try {
+            instances.sendCommand(instance.id(), command);
+            source.sendMessage(CommandMessages.message(
+                    "Command executed successfully", NamedTextColor.GRAY
+            ));
+        } catch (InstanceOperationException exception) {
+            source.sendMessage(CommandMessages.message(
+                    "Failed to send command to server " + instance.id() + ": "
+                            + exception.getMessage(),
+                    NamedTextColor.RED
+            ));
+        }
+    }
+
+    private ManagedInstance resolveConsoleInstance(
+            CommandSource source,
+            String requestedId
+    ) {
+        String instanceId = requestedId;
+        if ("this".equalsIgnoreCase(requestedId)) {
+            if (!(source instanceof Player player)) {
+                source.sendMessage(CommandMessages.message(
+                        "Console must specify a server id.", NamedTextColor.RED
+                ));
+                return null;
+            }
+            instanceId = player.getCurrentServer()
+                    .map(connection -> connection.getServerInfo().getName())
+                    .orElse(null);
+            if (instanceId == null || findInstanceOrNull(instanceId) == null) {
+                source.sendMessage(CommandMessages.message(
+                        "Server " + (instanceId == null ? "none" : instanceId)
+                                + " is not an SLS server",
+                        NamedTextColor.RED
+                ));
+                return null;
+            }
+        }
+        ManagedInstance instance = findInstanceOrNull(instanceId);
+        if (instance == null) {
+            source.sendMessage(CommandMessages.message(
+                    "No such server " + requestedId, NamedTextColor.RED
+            ));
+        }
+        return instance;
     }
 
     private void start(CommandSource source, String[] arguments) {
@@ -243,30 +358,36 @@ public final class SLSCommand implements SimpleCommand {
         }
         Optional<Blueprint> blueprint = resolveBlueprint(arguments);
         if (blueprint.isEmpty()) {
-            source.sendMessage(Component.text("Usage: /sls start <registry> <server>")
-                    .color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.usage(
+                    "/sls start", "type", "blueprint"
+            ));
             return;
         }
 
         try {
             ManagedInstance instance = instances.start(blueprint.get().id());
-            source.sendMessage(Component.text(
+            source.sendMessage(CommandMessages.message(
                     "Preparing " + instance.id() + " from "
-                            + blueprint.get().type() + "/" + blueprint.get().id() + "..."
-            ).color(NamedTextColor.YELLOW));
+                            + blueprint.get().type() + "/" + blueprint.get().id() + "...",
+                    NamedTextColor.YELLOW
+            ));
             instance.readyFuture().whenComplete((ready, failure) -> {
                 if (failure == null) {
-                    source.sendMessage(Component.text(
-                            "Instance " + ready.id() + " is ready on port " + ready.port() + "."
-                    ).color(NamedTextColor.GREEN));
+                    source.sendMessage(CommandMessages.message(
+                            "Server " + ready.id() + " is running.",
+                            NamedTextColor.GREEN
+                    ));
                 } else {
-                    source.sendMessage(Component.text(
-                            "Instance " + instance.id() + " failed: " + rootMessage(failure)
-                    ).color(NamedTextColor.RED));
+                    source.sendMessage(CommandMessages.message(
+                            "Server " + instance.id() + " failed: " + rootMessage(failure),
+                            NamedTextColor.RED
+                    ));
                 }
             });
         } catch (InstanceOperationException exception) {
-            source.sendMessage(Component.text(exception.getMessage()).color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.message(
+                    exception.getMessage(), NamedTextColor.RED
+            ));
         }
     }
 
@@ -276,10 +397,10 @@ public final class SLSCommand implements SimpleCommand {
             return;
         }
         if (arguments.length < 3 || arguments.length > 4) {
-            source.sendMessage(Component.text(
-                    "Usage: /sls join <registry> <server> [all|local|player]"
-            )
-                    .color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.incorrectUsage());
+            source.sendMessage(CommandMessages.usage(
+                    "/sls join", "type", "player"
+            ));
             return;
         }
         List<Player> targets;
@@ -292,9 +413,11 @@ public final class SLSCommand implements SimpleCommand {
         } else if (source instanceof Player player) {
             targets = List.of(player);
         } else {
-            source.sendMessage(Component.text(
-                    "Console must specify a player: /sls join <registry> <server> <player>"
-            ).color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.message(
+                    "Console must specify a player: "
+                            + "/sls join <registry> <server> <player>",
+                    NamedTextColor.RED
+            ));
             return;
         }
         if (targets.isEmpty()) {
@@ -307,42 +430,53 @@ public final class SLSCommand implements SimpleCommand {
                         joinService.join(target, arguments[1], arguments[2]);
                 ManagedInstance instance = attempt.instance();
                 String action = attempt.created() ? "Preparing" : "Queued for";
-                source.sendMessage(Component.text(
-                        action + " " + instance.id() + " for " + target.getUsername() + "..."
-                ).color(attempt.created() ? NamedTextColor.YELLOW : NamedTextColor.GREEN));
+                source.sendMessage(CommandMessages.prefix()
+                        .append(Component.text(
+                                action + " ", attempt.created()
+                                        ? NamedTextColor.YELLOW
+                                        : NamedTextColor.GREEN
+                        ))
+                        .append(CommandMessages.player(target))
+                        .append(Component.text(" for ", NamedTextColor.GRAY))
+                        .append(CommandMessages.server(
+                                instance, playersOn(instance).size()
+                        ))
+                        .append(Component.text(".", NamedTextColor.GRAY)));
                 if (source != target) {
-                    target.sendMessage(Component.text(
-                            "Queued for " + arguments[1] + "/" + arguments[2] + "."
-                    ).color(NamedTextColor.YELLOW));
+                    target.sendMessage(CommandMessages.message(
+                            "Queued for " + arguments[1] + "/" + arguments[2] + ".",
+                            NamedTextColor.YELLOW
+                    ));
                 }
                 attempt.connection().whenComplete((result, failure) ->
                         reportConnection(source, target, instance, result, failure));
             } catch (InstanceOperationException exception) {
-                source.sendMessage(Component.text(
-                        target.getUsername() + ": " + exception.getMessage()
-                ).color(NamedTextColor.RED));
+                source.sendMessage(CommandMessages.message(
+                        target.getUsername() + ": " + exception.getMessage(),
+                        NamedTextColor.RED
+                ));
             }
         }
     }
 
     private void joinPlayer(CommandSource source, String[] arguments) {
         if (arguments.length < 3 || arguments.length > 4) {
-            source.sendMessage(Component.text(
-                    "Usage: /sls join player <player> [--force]"
-            ).color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.usage(
+                    "/sls join player", "player"
+            ));
             return;
         }
         if (!(source instanceof Player player)) {
-            source.sendMessage(Component.text(
-                    "Console cannot join another player's server."
-            ).color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.message(
+                    "Console cannot join another player's server.", NamedTextColor.RED
+            ));
             return;
         }
         if (arguments.length == 4) {
             if (!"--force".equalsIgnoreCase(arguments[3])) {
-                source.sendMessage(Component.text(
-                        "Usage: /sls join player <player> [--force]"
-                ).color(NamedTextColor.RED));
+                source.sendMessage(CommandMessages.usage(
+                        "/sls join player", "player"
+                ));
                 return;
             }
             if (!CommandPermissions.canAdminister(source, "join")) {
@@ -353,17 +487,21 @@ public final class SLSCommand implements SimpleCommand {
 
         Player target = proxy.getPlayer(arguments[2]).orElse(null);
         if (target == null) {
-            source.sendMessage(Component.text("Player not found: " + arguments[2])
-                    .color(NamedTextColor.RED));
+            sendPlayerNotFound(source, arguments[2]);
             return;
         }
         try {
             LocalJoinService.DirectJoin directJoin =
                     joinService.joinPlayer(player, target);
-            source.sendMessage(Component.text(
-                    "Joining " + target.getUsername() + " on "
-                            + directJoin.instance().id() + "..."
-            ).color(NamedTextColor.YELLOW));
+            source.sendMessage(CommandMessages.prefix()
+                    .append(Component.text("Joining ", NamedTextColor.GREEN))
+                    .append(CommandMessages.player(target))
+                    .append(Component.text(" on ", NamedTextColor.GRAY))
+                    .append(CommandMessages.server(
+                            directJoin.instance(),
+                            playersOn(directJoin.instance()).size()
+                    ))
+                    .append(Component.text(".", NamedTextColor.GRAY)));
             directJoin.connection().whenComplete((result, failure) ->
                     reportConnection(
                             source,
@@ -373,25 +511,26 @@ public final class SLSCommand implements SimpleCommand {
                             failure
                     ));
         } catch (InstanceOperationException exception) {
-            source.sendMessage(Component.text(exception.getMessage())
-                    .color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.message(
+                    exception.getMessage(), NamedTextColor.RED
+            ));
         }
     }
 
     private void dequeue(CommandSource source, String[] arguments) {
         if (arguments.length > 2) {
-            source.sendMessage(Component.text(
-                    "Usage: /sls dequeue [all|local|player]"
-            ).color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.usage(
+                    "/sls dequeue", "all", "local", "player"
+            ));
             return;
         }
 
         List<LocalJoinService.QueueTicket> removed;
         if (arguments.length == 1) {
             if (!(source instanceof Player player)) {
-                source.sendMessage(Component.text(
-                        "Console must specify all or a player."
-                ).color(NamedTextColor.RED));
+                source.sendMessage(CommandMessages.message(
+                        "Console must specify all or a player.", NamedTextColor.RED
+                ));
                 return;
             }
             removed = joinService.dequeue(player.getUniqueId()).stream().toList();
@@ -410,8 +549,7 @@ public final class SLSCommand implements SimpleCommand {
             } else {
                 Player player = proxy.getPlayer(target).orElse(null);
                 if (player == null) {
-                    source.sendMessage(Component.text("Player not found: " + target)
-                            .color(NamedTextColor.RED));
+                    sendPlayerNotFound(source, target);
                     return;
                 }
                 removed = joinService.dequeue(player.getUniqueId()).stream().toList();
@@ -419,13 +557,15 @@ public final class SLSCommand implements SimpleCommand {
         }
 
         if (removed.isEmpty()) {
-            source.sendMessage(Component.text("No matching players were queued.")
-                    .color(NamedTextColor.YELLOW));
+            source.sendMessage(CommandMessages.message(
+                    "No matching players were queued.", NamedTextColor.YELLOW
+            ));
             return;
         }
-        source.sendMessage(Component.text(
-                "Removed " + removed.size() + " player(s) from matchmaking."
-        ).color(NamedTextColor.GREEN));
+        source.sendMessage(CommandMessages.message(
+                "Removed " + removed.size() + " player(s) from matchmaking.",
+                NamedTextColor.GREEN
+        ));
     }
 
     private List<Player> resolveTargets(CommandSource source, String target) {
@@ -434,24 +574,24 @@ public final class SLSCommand implements SimpleCommand {
         }
         if ("local".equalsIgnoreCase(target)) {
             if (!(source instanceof Player player)) {
-                source.sendMessage(Component.text(
-                        "Console cannot use the local player selector."
-                ).color(NamedTextColor.RED));
+                source.sendMessage(CommandMessages.message(
+                        "Console cannot use the local player selector.", NamedTextColor.RED
+                ));
                 return List.of();
             }
             return player.getCurrentServer()
                     .map(connection -> List.copyOf(connection.getServer().getPlayersConnected()))
                     .orElseGet(() -> {
-                        source.sendMessage(Component.text(
-                                "You are not connected to a backend server."
-                        ).color(NamedTextColor.RED));
+                        source.sendMessage(CommandMessages.message(
+                                "You are not connected to a backend server.",
+                                NamedTextColor.RED
+                        ));
                         return List.of();
                     });
         }
         Player player = proxy.getPlayer(target).orElse(null);
         if (player == null) {
-            source.sendMessage(Component.text("Player not found: " + target)
-                    .color(NamedTextColor.RED));
+            sendPlayerNotFound(source, target);
             return List.of();
         }
         return List.of(player);
@@ -468,33 +608,35 @@ public final class SLSCommand implements SimpleCommand {
             if (rootCause(failure) instanceof LocalJoinService.QueueCancelledException) {
                 return;
             }
-            source.sendMessage(Component.text(
-                    "Unable to connect " + target.getUsername() + ": " + rootMessage(failure)
-            ).color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.message(
+                    "Unable to connect " + target.getUsername() + ": "
+                            + rootMessage(failure),
+                    NamedTextColor.RED
+            ));
             return;
         }
         if (result.isSuccessful()
                 || result.getStatus() == ConnectionRequestBuilder.Status.ALREADY_CONNECTED) {
-            source.sendMessage(Component.text(
-                    "Connected " + target.getUsername() + " to " + instance.id() + "."
-            ).color(NamedTextColor.GREEN));
+            source.sendMessage(CommandMessages.message(
+                    "Connected " + target.getUsername() + " to " + instance.id() + ".",
+                    NamedTextColor.GREEN
+            ));
             return;
         }
-        source.sendMessage(Component.text(
-                "Connection to " + instance.id() + " failed: " + result.getStatus()
-        ).color(NamedTextColor.RED));
+        source.sendMessage(CommandMessages.message(
+                "Connection to " + instance.id() + " failed: " + result.getStatus(),
+                NamedTextColor.RED
+        ));
     }
 
     private void find(CommandSource source, String[] arguments) {
         if (arguments.length != 2) {
-            source.sendMessage(Component.text("Usage: /sls find <player>")
-                    .color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.usage("/sls find", "player"));
             return;
         }
         Player player = proxy.getPlayer(arguments[1]).orElse(null);
         if (player == null) {
-            source.sendMessage(Component.text("Player not found: " + arguments[1])
-                    .color(NamedTextColor.RED));
+            sendPlayerNotFound(source, arguments[1]);
             return;
         }
         String current = player.getCurrentServer()
@@ -503,14 +645,28 @@ public final class SLSCommand implements SimpleCommand {
         boolean managed = current != null && instances.getAll().stream()
                 .anyMatch(instance -> instance.id().equals(current));
         if (!managed) {
-            source.sendMessage(Component.text(
-                    player.getUsername() + " is not connected to a managed SLS-LITE instance."
-            ).color(NamedTextColor.YELLOW));
+            source.sendMessage(CommandMessages.prefix()
+                    .append(CommandMessages.player(player))
+                    .append(Component.text(
+                            " is not on an SLS-LITE server. ", NamedTextColor.RED
+                    ))
+                    .append(CommandMessages.labelValue("Current server:",
+                            current == null ? "none" : current)));
+            sendActionBar(source, Component.text(
+                    player.getUsername() + " is not on an SLS-LITE server",
+                    NamedTextColor.RED
+            ));
             return;
         }
-        source.sendMessage(Component.text(
-                player.getUsername() + " is on " + current + "."
-        ).color(NamedTextColor.GREEN));
+        ManagedInstance instance = findInstance(current);
+        source.sendMessage(CommandMessages.prefix()
+                .append(CommandMessages.player(player))
+                .append(Component.text(" is currently on ", NamedTextColor.GRAY))
+                .append(CommandMessages.server(instance, playersOn(instance).size())));
+        sendActionBar(source, Component.text(
+                player.getUsername() + " is on " + instance.id(),
+                NamedTextColor.GREEN
+        ));
     }
 
     private void stop(CommandSource source, String[] arguments) {
@@ -518,26 +674,53 @@ public final class SLSCommand implements SimpleCommand {
             return;
         }
         if (arguments.length != 2) {
-            source.sendMessage(Component.text("Usage: /sls stop <instance>")
-                    .color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.usage("/sls stop", "server"));
             return;
         }
+        if (lobbyProvider.isLobby(arguments[1])) {
+            source.sendMessage(CommandMessages.message(
+                    "The active lobby cannot be stopped with /sls stop.",
+                    NamedTextColor.RED
+            ));
+            return;
+        }
+        source.sendMessage(CommandMessages.message(
+                "Moving players to the lobby before stopping " + arguments[1] + "...",
+                NamedTextColor.YELLOW
+        ));
+        lobbyProvider.evacuate(arguments[1]).whenComplete((ignored, evacuationFailure) -> {
+            if (evacuationFailure != null) {
+                source.sendMessage(CommandMessages.message(
+                        "Stop cancelled: " + rootMessage(evacuationFailure),
+                        NamedTextColor.RED
+                ));
+                return;
+            }
+            stopInstance(source, arguments[1]);
+        });
+    }
+
+    private void stopInstance(CommandSource source, String instanceId) {
         try {
-            source.sendMessage(Component.text("Stopping " + arguments[1] + "...")
-                    .color(NamedTextColor.YELLOW));
-            instances.stop(arguments[1]).whenComplete((exitCode, failure) -> {
+            source.sendMessage(CommandMessages.message(
+                    "Stopping " + instanceId + "...", NamedTextColor.YELLOW
+            ));
+            instances.stop(instanceId).whenComplete((exitCode, failure) -> {
                 if (failure == null) {
-                    source.sendMessage(Component.text(
-                            "Stopped " + arguments[1] + " with exit code " + exitCode + "."
-                    ).color(NamedTextColor.GREEN));
+                    source.sendMessage(CommandMessages.message(
+                            "Stopped " + instanceId + " with exit code " + exitCode + ".",
+                            NamedTextColor.GREEN
+                    ));
                 } else {
-                    source.sendMessage(Component.text(
-                            "Stop failed: " + rootMessage(failure)
-                    ).color(NamedTextColor.RED));
+                    source.sendMessage(CommandMessages.message(
+                            "Stop failed: " + rootMessage(failure), NamedTextColor.RED
+                    ));
                 }
             });
         } catch (InstanceOperationException exception) {
-            source.sendMessage(Component.text(exception.getMessage()).color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.message(
+                    exception.getMessage(), NamedTextColor.RED
+            ));
         }
     }
 
@@ -554,26 +737,27 @@ public final class SLSCommand implements SimpleCommand {
             return;
         }
         if (arguments.length != 2) {
-            source.sendMessage(Component.text("Usage: /sls " + permission + " <instance>")
-                    .color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.usage(
+                    "/sls " + permission, "server"
+            ));
             return;
         }
         try {
             ManagedInstance instance = instances.get(arguments[1]);
-            source.sendMessage(Component.text(instance.id()).color(NamedTextColor.GREEN));
-            source.sendMessage(Component.text(
-                    "Registry: " + instance.blueprint().type()
-                            + " | Blueprint: " + instance.blueprint().id()
-                            + " | State: " + instance.state()
-            ).color(NamedTextColor.GRAY));
-            source.sendMessage(Component.text(
-                    "Port: " + instance.port() + " | Memory: "
-                            + instance.blueprint().memoryLimitMiB() + " MiB"
-            ).color(NamedTextColor.GRAY));
-            source.sendMessage(Component.text("Directory: " + instance.directory())
-                    .color(NamedTextColor.DARK_GRAY));
+            if ("status".equals(permission)) {
+                source.sendMessage(CommandMessages.prefix()
+                        .append(Component.text("Status: ", NamedTextColor.DARK_AQUA))
+                        .append(Component.text(
+                                CommandMessages.statusName(instance.state()),
+                                NamedTextColor.GRAY
+                        )));
+                return;
+            }
+            sendInstanceInfo(source, instance);
         } catch (InstanceOperationException exception) {
-            source.sendMessage(Component.text(exception.getMessage()).color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.message(
+                    "No such server " + arguments[1], NamedTextColor.RED
+            ));
         }
     }
 
@@ -583,8 +767,9 @@ public final class SLSCommand implements SimpleCommand {
         }
         String mode = arguments.length == 1 ? "all" : arguments[1].toLowerCase(Locale.ROOT);
         if (arguments.length > 2 || !List.of("all", "blueprints", "software").contains(mode)) {
-            source.sendMessage(Component.text("Usage: /sls reload [all|blueprints|software]")
-                    .color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.usage(
+                    "/sls reload", "all", "blueprints", "software"
+            ));
             return;
         }
         try {
@@ -594,23 +779,28 @@ public final class SLSCommand implements SimpleCommand {
             if ("all".equals(mode) || "blueprints".equals(mode)) {
                 blueprints.reload();
             }
-            source.sendMessage(Component.text(
+            source.sendMessage(CommandMessages.message(
                     "Reloaded " + mode + ": " + blueprints.getTypes().size()
                             + " registries, " + blueprints.getAll().size()
                             + " blueprints, " + softwareProfiles.getAll().size()
-                            + " software profiles."
-            ).color(NamedTextColor.GREEN));
+                            + " software profiles.",
+                    NamedTextColor.GREEN
+            ));
         } catch (Exception exception) {
             logger.error("Unable to reload SLS-LITE " + mode, exception);
-            source.sendMessage(Component.text(
-                    "Reload failed: " + rootMessage(exception)
-            ).color(NamedTextColor.RED));
+            source.sendMessage(CommandMessages.message(
+                    "Reload failed: " + rootMessage(exception), NamedTextColor.RED
+            ));
         }
     }
 
     private void sendVersion(CommandSource source) {
-        source.sendMessage(Component.text("SLS-LITE " + BuildInfo.VERSION)
-                .color(NamedTextColor.GREEN));
+        source.sendMessage(CommandMessages.prefix()
+                .append(Component.text("Version: ", NamedTextColor.DARK_AQUA)
+                        .decorate(TextDecoration.BOLD))
+                .append(Component.text(BuildInfo.VERSION, NamedTextColor.GOLD))
+                .append(Component.text(" By: ", NamedTextColor.DARK_AQUA))
+                .append(Component.text(BuildInfo.AUTHORS, NamedTextColor.GOLD)));
     }
 
     private Optional<Blueprint> resolveBlueprint(String[] arguments) {
@@ -632,9 +822,132 @@ public final class SLSCommand implements SimpleCommand {
     }
 
     private void permissionDenied(CommandSource source, String operation) {
-        source.sendMessage(Component.text(
-                "You do not have permission to " + operation + "."
-        ).color(NamedTextColor.RED));
+        source.sendMessage(CommandMessages.message(
+                "You do not have permission to " + operation + ".",
+                NamedTextColor.RED
+        ));
+    }
+
+    private void unavailable(
+            CommandSource source,
+            String command,
+            boolean distributedOnly
+    ) {
+        if (!requireAdmin(source, command, "use /sls " + command)) {
+            return;
+        }
+        String explanation = distributedOnly
+                ? " is not available in local mode."
+                : " is not available in this SLS-LITE build yet.";
+        source.sendMessage(CommandMessages.prefix()
+                .append(Component.text("/sls " + command, NamedTextColor.GOLD))
+                .append(Component.text(explanation, NamedTextColor.GRAY)));
+    }
+
+    private void sendInstanceInfo(CommandSource source, ManagedInstance instance) {
+        List<Player> players = playersOn(instance);
+        long uptimeSeconds = Math.max(
+                0L,
+                java.time.Duration.between(
+                        instance.createdAt(), java.time.Instant.now()
+                ).toSeconds()
+        );
+        TextComponent.Builder message = Component.text()
+                .append(Component.text("Info", NamedTextColor.DARK_AQUA))
+                .append(Component.text(
+                        " (" + instance.id() + "):", NamedTextColor.DARK_GRAY
+                ))
+                .appendNewline()
+                .append(infoLine("Players:", Integer.toString(players.size()))
+                        .hoverEvent(Component.text(
+                                players.isEmpty()
+                                        ? "No players"
+                                        : players.stream().map(Player::getUsername)
+                                                .sorted().reduce((left, right) ->
+                                                        left + ", " + right).orElse(""),
+                                NamedTextColor.DARK_PURPLE
+                        )))
+                .appendNewline()
+                .append(Component.text(" - ", NamedTextColor.GOLD))
+                .append(Component.text("Status:", NamedTextColor.DARK_GRAY))
+                .append(Component.text(
+                        " " + CommandMessages.statusName(instance.state()),
+                        CommandMessages.statusColor(instance.state())
+                ))
+                .appendNewline()
+                .append(infoLine("Blueprint:", instance.blueprint().name())
+                        .hoverEvent(Component.text(
+                                instance.blueprint().id(), NamedTextColor.DARK_PURPLE
+                        )))
+                .appendNewline()
+                .append(infoLine("Type:", instance.blueprint().type()))
+                .appendNewline()
+                .append(infoLine(
+                        "Server:",
+                        instance.blueprint().software() + " "
+                                + instance.blueprint().version()
+                ))
+                .appendNewline()
+                .append(infoLine("Port:", Integer.toString(instance.port())))
+                .appendNewline()
+                .append(infoLine(
+                        "Mem:",
+                        instance.blueprint().memoryLimitMiB() + " MiB limit"
+                ))
+                .appendNewline()
+                .append(infoLine("Uptime:", formatDuration(uptimeSeconds)))
+                .appendNewline()
+                .append(Component.text(
+                        "------------------------------------",
+                        NamedTextColor.DARK_GRAY
+                ).decorate(TextDecoration.STRIKETHROUGH).decorate(TextDecoration.BOLD));
+        source.sendMessage(message.build());
+    }
+
+    private static Component infoLine(String label, String value) {
+        return Component.text(" - ", NamedTextColor.GOLD)
+                .append(Component.text(label, NamedTextColor.DARK_GRAY))
+                .append(Component.text(" " + value, NamedTextColor.BLUE));
+    }
+
+    private List<Player> playersOn(ManagedInstance instance) {
+        return proxy.getServer(instance.id())
+                .map(server -> List.copyOf(server.getPlayersConnected()))
+                .orElseGet(List::of);
+    }
+
+    private ManagedInstance findInstance(String id) {
+        return java.util.Objects.requireNonNull(findInstanceOrNull(id));
+    }
+
+    private ManagedInstance findInstanceOrNull(String id) {
+        return instances.getAll().stream()
+                .filter(instance -> instance.id().equals(id))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static void sendPlayerNotFound(CommandSource source, String playerName) {
+        source.sendMessage(CommandMessages.prefix()
+                .append(Component.text("Player ", NamedTextColor.RED))
+                .append(Component.text(playerName, NamedTextColor.DARK_AQUA))
+                .append(Component.text(" was not found.", NamedTextColor.RED)));
+        sendActionBar(source, Component.text(
+                "Player not found: " + playerName, NamedTextColor.RED
+        ));
+    }
+
+    private static void sendActionBar(CommandSource source, Component component) {
+        if (source instanceof Player player) {
+            player.sendActionBar(component);
+        }
+    }
+
+    private static String formatDuration(long seconds) {
+        long hours = seconds / 3600;
+        long minutes = (seconds % 3600) / 60;
+        long remainingSeconds = seconds % 60;
+        return hours + "h " + minutes + "m " + remainingSeconds + "s";
     }
 
     private List<String> instanceIds() {

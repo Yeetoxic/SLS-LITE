@@ -152,14 +152,19 @@ hosted backend and lobby servers.
       `list`, `create`, `start`, `join`, `find`, `console`, `blueprint`, `debug`,
       `delete`, `logs`, `reload`, `stop`, `kill`, `dequeue`, `status`, `stats`,
       `reset`, `restart`, and `version`.
+- [x] Match the pinned vSLS command presentation for implemented commands:
+      prefix, usage grammar, list framing, status colors, player/server hover
+      details, version metadata, and action-bar feedback.
 - [ ] Mirror the complete vSLS `v0.2.0` top-level tree, including `system` and
       `node`; keep SLS-LITE-only commands such as `registries` and `blueprints`
       as additive aliases rather than replacements for upstream commands.
 - [ ] Match the remaining vSLS modifier behavior for capacity-bypassing
       `force`/`--force` and daemon-backed `remote`. The implemented join paths
       support `all`, `local`, player names, and `player <player>`.
-- [ ] Add a versioned command-contract fixture for vSLS names, argument trees,
-      permission nodes, sender restrictions, and completion visibility.
+- [x] Add the initial versioned command-contract fixture for the pinned vSLS
+      release, root command names, and public/admin help visibility.
+- [ ] Extend the command-contract fixture across every argument branch,
+      permission node, sender restriction, and completion case.
 - [ ] Return `not available in local mode` with an explanation for distributed
       commands such as remote node administration instead of silently omitting
       or partially emulating them.
@@ -357,7 +362,10 @@ the local implementation has equivalent behavior.
 - [ ] Report process CPU time, current memory when measurable, configured memory,
       and disk usage without claiming container-level enforcement.
 - [ ] Add paginated recent logs and live console following.
-- [ ] Add console command execution without competing with the process log reader.
+- [x] Add line-oriented console command execution through the supervised process
+      input without competing with the process log reader.
+- [ ] Add bounded output capture for `/sls console` so the invoking player sees
+      the relevant child-console response without retaining unbounded logs.
 - [ ] Add create-time overrides for memory, save mode, seed, view distance, and
       selected safe configuration values.
 - [ ] Add per-instance reset, restart, delete, and force-kill operations.
@@ -374,22 +382,23 @@ the local implementation has equivalent behavior.
 
 ### Lobby Modes
 
-- [ ] Support `lobby.mode: external`.
+- [x] Support `lobby.mode: external`.
   - Use a normal separately hosted lobby already registered with Velocity.
   - Never start, stop, copy, or otherwise manage that server.
   - Preserve this as the conventional and maximum-compatibility option.
 
 - [ ] Support `lobby.mode: managed`.
-  - Start a Paper lobby as an SLS-LITE child process in the same hosting
+  - [x] Start a Paper lobby as an SLS-LITE child process in the same hosting
     allocation as Velocity.
-  - Treat the lobby as a reserved persistent blueprint.
-  - Start it during proxy initialization and wait for readiness before routing
+  - [x] Treat the active lobby as a reserved blueprint that normal stop commands
+    cannot terminate.
+  - [x] Start it during proxy initialization and wait for readiness before routing
     players.
-  - Keep it running independently of normal idle-instance cleanup.
-  - Restart it after a crash with bounded retry and backoff.
-  - Route players to a safe fallback or disconnect message while it is offline.
-  - Stop it gracefully during proxy shutdown.
-  - Allow operators to disable automatic startup and manage it with commands.
+  - [x] Keep it running independently of normal matchmaking cleanup.
+  - [ ] Restart it after a crash with bounded retry and backoff.
+  - [ ] Route players to a safe fallback or disconnect message while it is offline.
+  - [x] Stop it gracefully during proxy shutdown.
+  - [ ] Allow operators to disable automatic startup and manage it with commands.
 
 - [ ] Investigate `lobby.mode: virtual` as an optional proxy-native lobby.
   - This is the only mode that would host the lobby experience directly in the
@@ -408,10 +417,11 @@ the local implementation has equivalent behavior.
 
 ### Lobby Routing
 
-- [ ] Add a lobby provider interface shared by external, managed, and virtual
+- [x] Add a lobby provider interface shared by external, managed, and virtual
       modes.
-- [ ] Route first joins to the configured lobby provider.
-- [ ] Route players back to the lobby when a managed game server stops.
+- [x] Route first joins to the configured lobby provider.
+- [x] Route players back to the lobby when a managed game server stops or kicks
+      them.
 - [ ] Handle lobby startup failure without creating a reconnect loop.
 - [ ] Support forced-host and multiple-lobby configurations later without making
       them part of the first release.

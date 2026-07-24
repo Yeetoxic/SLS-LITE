@@ -12,6 +12,13 @@ public interface ServerController {
 
     ManagedInstance get(String instanceId) throws InstanceOperationException;
 
+    default void sendCommand(String instanceId, String command)
+            throws InstanceOperationException {
+        throw new InstanceOperationException(
+                "Console commands are unavailable for " + instanceId
+        );
+    }
+
     CompletableFuture<Integer> stop(String instanceId) throws InstanceOperationException;
 
     void shutdown(Duration timeout);

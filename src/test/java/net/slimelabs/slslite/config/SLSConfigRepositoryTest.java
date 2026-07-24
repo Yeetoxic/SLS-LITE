@@ -26,6 +26,9 @@ class SLSConfigRepositoryTest {
         assertEquals(25570, config.portRangeStart());
         assertEquals(25670, config.portRangeEnd());
         assertEquals(180, config.queueTimeoutSeconds());
+        assertEquals(LobbyMode.EXTERNAL, config.lobby().mode());
+        assertEquals("lobby", config.lobby().registry());
+        assertEquals("lobby", config.lobby().server());
         assertEquals(
                 temporaryDirectory.resolve("instances").toAbsolutePath().normalize(),
                 config.instancesDirectory()
@@ -52,6 +55,17 @@ class SLSConfigRepositoryTest {
                   ports:
                     start: 30000
                     end: 29999
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        assertThrows(ConfigurationException.class, repository::reload);
+    }
+
+    @Test
+    void rejectsUnknownLobbyMode() throws Exception {
+        writeConfig("""
+                lobby:
+                  mode: virtual
                 """);
         SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
 

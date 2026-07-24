@@ -93,6 +93,11 @@ network:
 matchmaking:
   queue_timeout_seconds: 180
 
+lobby:
+  mode: external
+  registry: lobby
+  server: lobby
+
 paths:
   instances: instances
 ```
@@ -102,6 +107,11 @@ Velocity itself. Managed paths must remain relative to the SLS-LITE data
 directory. Managed instances reserve an available loopback port from this range
 and release it during cleanup. Matchmaking requests fail and clean themselves up
 after the configured timeout.
+
+`lobby.mode: external` routes players to an existing Velocity registration named
+by `lobby.server`. `lobby.mode: managed` starts the blueprint identified by
+`lobby.registry` and `lobby.server` in the local allocation and reserves that
+instance as the initial and fallback lobby.
 
 SLS-LITE also creates `software-profiles/paper.yml`:
 

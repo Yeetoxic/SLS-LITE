@@ -19,8 +19,10 @@ public final class FixtureProcessMain {
                         System.in,
                         StandardCharsets.UTF_8
                 ))) {
-                    while (!"stop".equals(input.readLine())) {
-                        // Wait for the same line-oriented stop command used by Paper.
+                    String line;
+                    while ((line = input.readLine()) != null && !"stop".equals(line)) {
+                        System.out.println("RECEIVED:" + line);
+                        System.out.flush();
                     }
                 }
             }

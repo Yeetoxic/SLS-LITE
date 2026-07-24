@@ -53,6 +53,31 @@ class ProcessSupervisorTest {
     }
 
     @Test
+    void writesOneConsoleCommandToAReadyProcess() throws Exception {
+        supervisor = new ProcessSupervisor(1);
+        InstanceLifecycle lifecycle = preparingLifecycle("test-command");
+        List<String> output = new CopyOnWriteArrayList<>();
+        SupervisedProcess process = supervisor.start(
+                "test-command",
+                spec("ready-stop", Duration.ofSeconds(5), Duration.ofSeconds(2)),
+                lifecycle,
+                output::add
+        );
+        process.readyFuture().get(5, TimeUnit.SECONDS);
+
+        process.sendCommand("say hello world");
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (!output.contains("RECEIVED:say hello world")
+                && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+
+        assertTrue(output.contains("RECEIVED:say hello world"));
+        assertThrows(IllegalArgumentException.class, () -> process.sendCommand("one\ntwo"));
+        process.stop().get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
     void failsAndTerminatesWhenReadinessTimesOut() throws Exception {
         supervisor = new ProcessSupervisor(1);
         InstanceLifecycle lifecycle = preparingLifecycle("test-timeout");

@@ -4,18 +4,22 @@ import com.google.inject.Inject;
 import com.velocitypowered.api.command.CommandMeta;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
+import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
+import net.kyori.adventure.text.Component;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.command.SLSCommand;
 import net.slimelabs.slslite.config.ConfigurationValidator;
 import net.slimelabs.slslite.config.SLSConfigRepository;
 import net.slimelabs.slslite.instance.InstanceDirectoryPreparer;
 import net.slimelabs.slslite.instance.InstanceManager;
+import net.slimelabs.slslite.lobby.LobbyProvider;
+import net.slimelabs.slslite.lobby.LocalLobbyProvider;
 import net.slimelabs.slslite.log.ConsoleBanner;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.PaperProcessSpecFactory;
@@ -49,6 +53,7 @@ public final class SLSLite {
     private ProcessSupervisor processSupervisor;
     private InstanceManager instanceManager;
     private LocalJoinService joinService;
+    private LobbyProvider lobbyProvider;
 
     @Inject
     public SLSLite(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -104,6 +109,13 @@ public final class SLSLite {
                     instanceManager,
                     Duration.ofSeconds(configuration.get().queueTimeoutSeconds())
             );
+            lobbyProvider = new LocalLobbyProvider(
+                    proxy,
+                    blueprints,
+                    instanceManager,
+                    configuration.get().lobby(),
+                    logger
+            );
         } catch (Exception exception) {
             logger.error(
                     "SLS-LITE initialization failed; managed server features are disabled",
@@ -125,9 +137,11 @@ public final class SLSLite {
                         resourceBudget,
                         instanceManager,
                         joinService,
+                        lobbyProvider,
                         logger
                 )
         );
+        lobbyProvider.start();
 
         logger.info(
                 "SLS-LITE initialized with {} blueprint(s), {} software profile(s), "
@@ -140,10 +154,27 @@ public final class SLSLite {
 
     @Subscribe
     public void onPlayerChooseInitialServer(PlayerChooseInitialServerEvent event) {
-        if (joinService == null || event.getInitialServer().isPresent()) {
+        if (lobbyProvider != null && lobbyProvider.server().isPresent()) {
+            event.setInitialServer(lobbyProvider.server().orElseThrow());
             return;
         }
-        joinService.initialServer().ifPresent(event::setInitialServer);
+        if (joinService != null && event.getInitialServer().isEmpty()) {
+            joinService.initialServer().ifPresent(event::setInitialServer);
+        }
+    }
+
+    @Subscribe
+    public void onKickedFromServer(KickedFromServerEvent event) {
+        if (lobbyProvider == null
+                || lobbyProvider.isLobby(event.getServer().getServerInfo().getName())) {
+            return;
+        }
+        lobbyProvider.server().ifPresent(lobby -> event.setResult(
+                KickedFromServerEvent.RedirectPlayer.create(
+                        lobby,
+                        Component.text("Returning you to the lobby.")
+                )
+        ));
     }
 
     @Subscribe

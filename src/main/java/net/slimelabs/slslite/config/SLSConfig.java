@@ -7,6 +7,7 @@ public record SLSConfig(
         int portRangeStart,
         int portRangeEnd,
         int queueTimeoutSeconds,
+        LobbyConfig lobby,
         Path instancesDirectory
 ) {
 
@@ -24,6 +25,9 @@ public record SLSConfig(
         }
         if (queueTimeoutSeconds <= 0) {
             throw new IllegalArgumentException("queueTimeoutSeconds must be positive");
+        }
+        if (lobby == null) {
+            throw new IllegalArgumentException("lobby configuration is required");
         }
         instancesDirectory = instancesDirectory.toAbsolutePath().normalize();
     }

@@ -105,6 +105,25 @@ public final class SupervisedProcess {
         return exit;
     }
 
+    public synchronized void sendCommand(String command) throws IOException {
+        if (command == null || command.isBlank()) {
+            throw new IllegalArgumentException("command must not be blank");
+        }
+        if (command.contains("\n") || command.contains("\r")) {
+            throw new IllegalArgumentException("command must be one line");
+        }
+        if (lifecycle.state() != InstanceState.READY
+                || process == null
+                || !process.isAlive()) {
+            throw new IllegalStateException(
+                    "Instance " + instanceId + " is not ready for console commands"
+            );
+        }
+        input.write(command);
+        input.newLine();
+        input.flush();
+    }
+
     public synchronized CompletableFuture<Integer> stop() {
         if (process == null) {
             return exit;

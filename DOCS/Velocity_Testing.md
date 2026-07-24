@@ -20,7 +20,7 @@ From the repository root:
 
 The script builds SLS-LITE, downloads the pinned official PaperMC artifacts,
 configures a loopback-only proxy, accepts the Paper EULA for the local fixture,
-and installs an ephemeral `smoke` blueprint.
+and installs managed `lobby/lobby`, `test/smoke`, and `test/smoke2` blueprints.
 
 ## Manual Test
 
@@ -35,22 +35,20 @@ Run these commands in the Velocity console:
 
 ```text
 sls registries
+sls blueprints lobby
 sls blueprints test
-sls start test smoke
 sls list
-sls status <instance-id>
 ```
 
 Expected behavior:
 
-1. The `test` registry and its `smoke` server are listed.
-2. Paper starts on one of `127.0.0.1:25600-25610`.
-3. The instance reaches `READY` before Velocity registration.
-4. `sls list` and `sls status` show an ID shaped like `smoke.x82odk`.
+1. SLS-LITE automatically starts `lobby.xxxxxx` during proxy initialization.
+2. The lobby reaches `READY` before Velocity registration.
+3. The `lobby` and `test` registries are listed.
+4. `sls list` shows the reserved managed lobby.
 
 After the instance reports `READY`, connect Minecraft to `localhost:25565`.
-When Velocity has no external initial server configured, SLS-LITE routes the
-first join to an already-ready managed backend. In game, run:
+SLS-LITE must route the first join to `lobby.xxxxxx`. In game, run:
 
 ```text
 /sls version
@@ -61,11 +59,8 @@ first join to an already-ready managed backend. In game, run:
 /sls dequeue
 ```
 
-The join command should reuse the ready `smoke` instance. To test queued
-provisioning, connect through a separately configured lobby, stop the smoke
-instance, and run `/sls join test smoke`. SLS-LITE should keep the player on the
-lobby, start Paper, and transfer the player only after the instance reaches
-`READY`.
+The join command should keep the player on the lobby while provisioning
+`smoke.xxxxxx`, then transfer only after the game server reaches `READY`.
 
 Queue checks:
 
@@ -77,9 +72,6 @@ Queue checks:
    `/sls join test smoke local`, and a specific player name.
 5. When the last request for a queue-created instance is cancelled, the instance
    should stop after it reaches a safely stoppable state.
-
-Managed lobby provisioning is not implemented yet, so queued provisioning needs
-an external test lobby in this release.
 
 ## Two-Server Join Test
 
@@ -117,9 +109,24 @@ end
 
 Expected cleanup:
 
-1. `sls stop` exits with code `0`, unregisters the backend, releases memory and
+1. A player on the stopped game instance moves to `lobby.xxxxxx` before
+   shutdown.
+2. `sls stop` exits with code `0`, unregisters the backend, releases memory and
    port reservations, and removes the ephemeral instance directory.
-2. Velocity exits with no managed child processes remaining.
+3. Attempting `sls stop <lobby-instance-id>` is rejected.
+4. Velocity shutdown stops the lobby and leaves no managed child processes.
+
+Console command checks:
+
+```text
+sls console <instance-id> say SLS-LITE console test
+sls console this list
+```
+
+The first form works from players or the Velocity console. The `this` selector
+is player-only and resolves the managed backend the sender currently occupies.
+The target must be a ready SLS-LITE instance and the sender must have
+`sls.command.admin` or `sls.command.console`.
 
 ## Permissions
 
