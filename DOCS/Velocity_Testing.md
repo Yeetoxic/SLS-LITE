@@ -73,6 +73,18 @@ Queue checks:
 5. When the last request for a queue-created instance is cancelled, the instance
    should stop after it reaches a safely stoppable state.
 
+Idle cleanup checks:
+
+1. Leave `smoke.xxxxxx` so it has no connected players.
+2. The fixture's `lifecycle.idle_shutdown_seconds` is `20`; within the delay
+   plus the five-second scan interval, the console must report
+   `Stopping idle instance smoke.xxxxxx`.
+3. Rejoin or queue for the instance before the delay expires and confirm the
+   shutdown is cancelled.
+4. Leave the managed lobby empty and confirm it remains running.
+5. Start a server and immediately run `sls stop <instance-id>` while it is
+   preparing; startup must cancel and release its port, memory, and directory.
+
 ## Two-Server Join Test
 
 The fixture includes `test/smoke` and `test/smoke2`. They share the prepared

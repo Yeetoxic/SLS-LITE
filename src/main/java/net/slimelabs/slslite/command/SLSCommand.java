@@ -29,6 +29,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 
 public final class SLSCommand implements SimpleCommand {
 
@@ -376,6 +377,11 @@ public final class SLSCommand implements SimpleCommand {
                     source.sendMessage(CommandMessages.message(
                             "Server " + ready.id() + " is running.",
                             NamedTextColor.GREEN
+                    ));
+                } else if (rootCause(failure) instanceof CancellationException) {
+                    source.sendMessage(CommandMessages.message(
+                            "Server " + instance.id() + " startup cancelled.",
+                            NamedTextColor.YELLOW
                     ));
                 } else {
                     source.sendMessage(CommandMessages.message(

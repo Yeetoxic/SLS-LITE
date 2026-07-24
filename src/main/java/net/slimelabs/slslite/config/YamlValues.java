@@ -81,6 +81,24 @@ public final class YamlValues {
         return number.intValue();
     }
 
+    public static int optionalNonNegativeInt(
+            Map<String, Object> values,
+            String key,
+            int defaultValue,
+            Path path
+    ) throws ConfigurationException {
+        Object value = values.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!(value instanceof Number number)
+                || number.intValue() < 0
+                || number.doubleValue() != number.intValue()) {
+            throw error(path, "'" + key + "' must be a non-negative integer");
+        }
+        return number.intValue();
+    }
+
     public static List<String> optionalStringList(
             Map<String, Object> values,
             String key,

@@ -17,6 +17,7 @@ import net.slimelabs.slslite.command.SLSCommand;
 import net.slimelabs.slslite.config.ConfigurationValidator;
 import net.slimelabs.slslite.config.SLSConfigRepository;
 import net.slimelabs.slslite.instance.InstanceDirectoryPreparer;
+import net.slimelabs.slslite.instance.IdleInstanceReaper;
 import net.slimelabs.slslite.instance.InstanceManager;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.LocalLobbyProvider;
@@ -54,6 +55,7 @@ public final class SLSLite {
     private InstanceManager instanceManager;
     private LocalJoinService joinService;
     private LobbyProvider lobbyProvider;
+    private IdleInstanceReaper idleReaper;
 
     @Inject
     public SLSLite(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -116,6 +118,14 @@ public final class SLSLite {
                     configuration.get().lobby(),
                     logger
             );
+            idleReaper = new IdleInstanceReaper(
+                    proxy,
+                    instanceManager,
+                    joinService,
+                    lobbyProvider,
+                    configuration.get().idleShutdownSeconds(),
+                    logger
+            );
         } catch (Exception exception) {
             logger.error(
                     "SLS-LITE initialization failed; managed server features are disabled",
@@ -142,6 +152,7 @@ public final class SLSLite {
                 )
         );
         lobbyProvider.start();
+        idleReaper.start();
 
         logger.info(
                 "SLS-LITE initialized with {} blueprint(s), {} software profile(s), "
@@ -186,6 +197,9 @@ public final class SLSLite {
 
     @Subscribe
     public void onProxyShutdown(ProxyShutdownEvent event) {
+        if (idleReaper != null) {
+            idleReaper.close();
+        }
         if (joinService != null) {
             joinService.close();
         }

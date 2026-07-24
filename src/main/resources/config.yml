@@ -12,6 +12,10 @@ network:
 matchmaking:
   queue_timeout_seconds: 180
 
+lifecycle:
+  # Stops empty managed servers after this delay. Set to 0 to disable globally.
+  idle_shutdown_seconds: 180
+
 lobby:
   # external uses an existing Velocity server; managed starts this blueprint locally.
   mode: external

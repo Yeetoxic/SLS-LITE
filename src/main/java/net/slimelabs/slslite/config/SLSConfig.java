@@ -7,6 +7,7 @@ public record SLSConfig(
         int portRangeStart,
         int portRangeEnd,
         int queueTimeoutSeconds,
+        int idleShutdownSeconds,
         LobbyConfig lobby,
         Path instancesDirectory
 ) {
@@ -25,6 +26,9 @@ public record SLSConfig(
         }
         if (queueTimeoutSeconds <= 0) {
             throw new IllegalArgumentException("queueTimeoutSeconds must be positive");
+        }
+        if (idleShutdownSeconds < 0) {
+            throw new IllegalArgumentException("idleShutdownSeconds must not be negative");
         }
         if (lobby == null) {
             throw new IllegalArgumentException("lobby configuration is required");

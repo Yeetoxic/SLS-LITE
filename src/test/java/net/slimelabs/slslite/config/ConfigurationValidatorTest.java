@@ -57,6 +57,7 @@ class ConfigurationValidatorTest {
                 repositories.config().portRangeStart(),
                 repositories.config().portRangeEnd(),
                 repositories.config().queueTimeoutSeconds(),
+                repositories.config().idleShutdownSeconds(),
                 new LobbyConfig(LobbyMode.MANAGED, "lobby", "missing"),
                 repositories.config().instancesDirectory()
         );
@@ -102,6 +103,7 @@ class ConfigurationValidatorTest {
                 totalMemory,
                 25570,
                 25670,
+                180,
                 180,
                 new LobbyConfig(LobbyMode.EXTERNAL, "lobby", "lobby"),
                 temporaryDirectory.resolve("instances")

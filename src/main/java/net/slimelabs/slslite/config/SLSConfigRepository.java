@@ -17,6 +17,7 @@ public final class SLSConfigRepository {
     private static final int DEFAULT_PORT_RANGE_START = 25570;
     private static final int DEFAULT_PORT_RANGE_END = 25670;
     private static final int DEFAULT_QUEUE_TIMEOUT_SECONDS = 180;
+    private static final int DEFAULT_IDLE_SHUTDOWN_SECONDS = 180;
     private static final String DEFAULT_LOBBY_MODE = "external";
     private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
     private static final String DEFAULT_LOBBY_SERVER = "lobby";
@@ -62,6 +63,8 @@ public final class SLSConfigRepository {
             Map<String, Object> ports = YamlValues.optionalMap(network, "ports", configPath);
             Map<String, Object> matchmaking =
                     YamlValues.optionalMap(root, "matchmaking", configPath);
+            Map<String, Object> lifecycle =
+                    YamlValues.optionalMap(root, "lifecycle", configPath);
             Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
             Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);
 
@@ -87,6 +90,12 @@ public final class SLSConfigRepository {
                     matchmaking,
                     "queue_timeout_seconds",
                     DEFAULT_QUEUE_TIMEOUT_SECONDS,
+                    configPath
+            );
+            int idleShutdown = YamlValues.optionalNonNegativeInt(
+                    lifecycle,
+                    "idle_shutdown_seconds",
+                    DEFAULT_IDLE_SHUTDOWN_SECONDS,
                     configPath
             );
             String lobbyMode = YamlValues.optionalString(
@@ -121,6 +130,7 @@ public final class SLSConfigRepository {
                         portStart,
                         portEnd,
                         queueTimeout,
+                        idleShutdown,
                         new LobbyConfig(
                                 LobbyMode.parse(lobbyMode),
                                 lobbyRegistry,

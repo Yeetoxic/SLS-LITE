@@ -15,5 +15,9 @@ save: false
 
 annotations:
   sls-lite:
+    # Prevent automatic empty-server shutdown for priority services.
+    keep-alive: false
+    # Optional per-blueprint override; omit to use config.yml.
+    idle-shutdown-seconds: 180
     start-on-proxy-start: false
     stop-when-empty: true

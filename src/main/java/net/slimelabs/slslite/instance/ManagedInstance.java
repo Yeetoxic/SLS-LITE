@@ -20,6 +20,7 @@ public final class ManagedInstance {
 
     private volatile SupervisedProcess process;
     private volatile boolean registered;
+    private volatile boolean stopRequested;
 
     ManagedInstance(
             String id,
@@ -85,5 +86,13 @@ public final class ManagedInstance {
 
     void registered(boolean registered) {
         this.registered = registered;
+    }
+
+    boolean stopRequested() {
+        return stopRequested;
+    }
+
+    void requestStop() {
+        stopRequested = true;
     }
 }

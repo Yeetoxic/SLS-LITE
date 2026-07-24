@@ -60,6 +60,8 @@ network:
     end: 25610
 matchmaking:
   queue_timeout_seconds: 180
+lifecycle:
+  idle_shutdown_seconds: 20
 lobby:
   mode: managed
   registry: lobby

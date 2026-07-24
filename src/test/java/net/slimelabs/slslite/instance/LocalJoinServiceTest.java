@@ -30,6 +30,7 @@ import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -201,6 +202,27 @@ class LocalJoinServiceTest {
         }
     }
 
+    @Test
+    void drainingInstanceIsNotSelectedForANewJoin() throws Exception {
+        Fixture fixture = fixture(Duration.ofSeconds(5));
+        try (LocalJoinService service = fixture.service()) {
+            LocalJoinService.JoinAttempt first =
+                    service.join(fixture.player(), "test", "smoke");
+            ManagedInstance firstInstance = first.instance();
+            firstInstance.lifecycle().transitionTo(InstanceState.STARTING);
+            firstInstance.lifecycle().transitionTo(InstanceState.READY);
+            firstInstance.readyFuture().complete(firstInstance);
+            first.connection().get(5, TimeUnit.SECONDS);
+
+            assertTrue(service.tryDrain(first.instance().id()));
+            LocalJoinService.JoinAttempt second =
+                    service.join(fixture.player(), "test", "smoke");
+
+            assertTrue(second.created());
+            assertNotEquals(first.instance().id(), second.instance().id());
+        }
+    }
+
     private Fixture fixture(Duration timeout) throws Exception {
         Path blueprintDirectory = temporaryDirectory.resolve("blueprints");
         BlueprintRepository blueprints = new BlueprintRepository(blueprintDirectory);
@@ -354,6 +376,7 @@ class LocalJoinServiceTest {
         private final Path directory;
         private final Map<String, ManagedInstance> instances = new LinkedHashMap<>();
         private int stopCount;
+        private int sequence;
 
         private FakeController(Blueprint blueprint, Path directory) {
             this.blueprint = blueprint;
@@ -362,13 +385,14 @@ class LocalJoinServiceTest {
 
         @Override
         public ManagedInstance start(String blueprintId) {
-            InstanceLifecycle lifecycle = new InstanceLifecycle("smoke.test01");
+            String id = "smoke.test" + String.format("%02d", ++sequence);
+            InstanceLifecycle lifecycle = new InstanceLifecycle(id);
             lifecycle.transitionTo(InstanceState.PREPARING);
             ManagedInstance instance = new ManagedInstance(
-                    "smoke.test01",
+                    id,
                     blueprint,
                     25600,
-                    directory.resolve("smoke.test01"),
+                    directory.resolve(id),
                     lifecycle
             );
             instances.put(instance.id(), instance);

@@ -1,6 +1,7 @@
 package net.slimelabs.slslite.config;
 
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintLifecyclePolicy;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
 
@@ -15,6 +16,16 @@ public final class ConfigurationValidator {
             SoftwareProfileRepository softwareProfiles
     ) throws ConfigurationException {
         for (Blueprint blueprint : blueprints.getAll()) {
+            try {
+                BlueprintLifecyclePolicy.from(
+                        blueprint,
+                        config.idleShutdownSeconds()
+                );
+            } catch (IllegalArgumentException exception) {
+                throw new ConfigurationException(
+                        "Blueprint '" + blueprint.id() + "': " + exception.getMessage()
+                );
+            }
             if (softwareProfiles.get(blueprint.software()).isEmpty()) {
                 throw new ConfigurationException(
                         "Blueprint '" + blueprint.id() + "' references missing software profile '"

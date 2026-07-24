@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -183,9 +184,17 @@ public final class InstanceManager implements ServerController {
         ManagedInstance instance = get(instanceId);
         synchronized (instance) {
             if (instance.state() == InstanceState.PREPARING) {
-                throw new InstanceOperationException(
-                        "Instance is still preparing and cannot be stopped yet: " + instanceId
+                instance.requestStop();
+                instance.lifecycle().transitionTo(InstanceState.STOPPING);
+                instance.readyFuture().completeExceptionally(
+                        new CancellationException(
+                                "Instance startup was cancelled: " + instanceId
+                        )
                 );
+                return instance.stoppedFuture();
+            }
+            if (instance.state() == InstanceState.STOPPING) {
+                return instance.stoppedFuture();
             }
             SupervisedProcess process = instance.process();
             if (process == null) {
@@ -195,7 +204,17 @@ public final class InstanceManager implements ServerController {
             }
             unregister(instance);
             try {
-                process.stop();
+                if (instance.state() == InstanceState.STARTING) {
+                    instance.requestStop();
+                    instance.readyFuture().completeExceptionally(
+                            new CancellationException(
+                                    "Instance startup was cancelled: " + instanceId
+                            )
+                    );
+                    process.cancelStartup();
+                } else {
+                    process.stop();
+                }
                 return instance.stoppedFuture();
             } catch (IllegalStateException exception) {
                 throw new InstanceOperationException(exception.getMessage(), exception);
@@ -239,13 +258,20 @@ public final class InstanceManager implements ServerController {
                     prepared,
                     instance.port()
             );
-            SupervisedProcess process = processSupervisor.start(
-                    instance.id(),
-                    spec,
-                    instance.lifecycle(),
-                    line -> logger.info("[{}] {}", instance.id(), line)
-            );
-            instance.attachProcess(process);
+            SupervisedProcess process;
+            synchronized (instance) {
+                if (instance.stopRequested()) {
+                    finishCancelledPreparation(instance);
+                    return;
+                }
+                process = processSupervisor.start(
+                        instance.id(),
+                        spec,
+                        instance.lifecycle(),
+                        line -> logger.info("[{}] {}", instance.id(), line)
+                );
+                instance.attachProcess(process);
+            }
             process.readyFuture().whenComplete((ignored, failure) -> {
                 if (failure == null) {
                     registerReady(instance);
@@ -298,6 +324,11 @@ public final class InstanceManager implements ServerController {
 
     private void failPreparation(ManagedInstance instance, Exception exception) {
         synchronized (instance) {
+            if (instance.state() == InstanceState.STOPPING
+                    && instance.stopRequested()) {
+                finishCancelledPreparation(instance);
+                return;
+            }
             if (instance.state() == InstanceState.PREPARING) {
                 instance.lifecycle().transitionTo(InstanceState.FAILED);
             }
@@ -305,6 +336,15 @@ public final class InstanceManager implements ServerController {
         }
         logger.error("Unable to start managed instance " + instance.id(), exception);
         cleanup(instance);
+    }
+
+    private void finishCancelledPreparation(ManagedInstance instance) {
+        if (instance.state() == InstanceState.STOPPING) {
+            instance.lifecycle().transitionTo(InstanceState.STOPPED);
+        }
+        cleanup(instance);
+        instance.stoppedFuture().complete(0);
+        logger.info("Cancelled instance startup for {}", instance.id());
     }
 
     private void cleanup(ManagedInstance instance) {

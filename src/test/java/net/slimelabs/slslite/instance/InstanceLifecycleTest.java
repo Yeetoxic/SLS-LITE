@@ -38,4 +38,15 @@ class InstanceLifecycleTest {
     void definesTerminalStoppedState() {
         assertFalse(InstanceLifecycle.canTransition(InstanceState.STOPPED, InstanceState.STARTING));
     }
+
+    @Test
+    void allowsPreparationToBeCancelled() {
+        InstanceLifecycle lifecycle = new InstanceLifecycle("game.123456");
+        lifecycle.transitionTo(InstanceState.PREPARING);
+
+        lifecycle.transitionTo(InstanceState.STOPPING);
+        lifecycle.transitionTo(InstanceState.STOPPED);
+
+        assertEquals(InstanceState.STOPPED, lifecycle.state());
+    }
 }

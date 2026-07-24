@@ -26,6 +26,7 @@ class SLSConfigRepositoryTest {
         assertEquals(25570, config.portRangeStart());
         assertEquals(25670, config.portRangeEnd());
         assertEquals(180, config.queueTimeoutSeconds());
+        assertEquals(180, config.idleShutdownSeconds());
         assertEquals(LobbyMode.EXTERNAL, config.lobby().mode());
         assertEquals("lobby", config.lobby().registry());
         assertEquals("lobby", config.lobby().server());
@@ -70,6 +71,19 @@ class SLSConfigRepositoryTest {
         SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
 
         assertThrows(ConfigurationException.class, repository::reload);
+    }
+
+    @Test
+    void allowsIdleShutdownToBeDisabled() throws Exception {
+        writeConfig("""
+                lifecycle:
+                  idle_shutdown_seconds: 0
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        repository.reload();
+
+        assertEquals(0, repository.get().idleShutdownSeconds());
     }
 
     private void writeConfig(String content) throws Exception {

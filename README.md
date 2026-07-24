@@ -14,6 +14,7 @@ implementation. The current development baseline provides:
 - Validated host configuration and software launch profiles.
 - Validated YAML loading and reload support.
 - Explicit server-instance lifecycle states.
+- Configurable idle shutdown for empty ephemeral instances.
 - Local memory reservation accounting.
 - Loopback port reservation and isolated instance-directory copying.
 - Shell-free Paper command construction and managed process supervision.
@@ -23,9 +24,9 @@ implementation. The current development baseline provides:
 The `/sls start`, `/sls join`, `/sls list`, `/sls status`, and `/sls stop`
 commands now manage local Paper processes, dynamically register ready backends
 with Velocity, and connect requested players after an instance becomes ready.
-Full matchmaking queues, capacity handling, and lobby provisioning are not
-implemented yet. Do not deploy this development version to a production
-network.
+Matchmaking queues and external or managed lobby routing are implemented.
+Capacity enforcement, persistent-instance restart, and production hardening are
+not complete. Do not deploy this development version to a production network.
 
 ## Goal
 
@@ -93,6 +94,9 @@ network:
 matchmaking:
   queue_timeout_seconds: 180
 
+lifecycle:
+  idle_shutdown_seconds: 180
+
 lobby:
   mode: external
   registry: lobby
@@ -107,6 +111,22 @@ Velocity itself. Managed paths must remain relative to the SLS-LITE data
 directory. Managed instances reserve an available loopback port from this range
 and release it during cleanup. Matchmaking requests fail and clean themselves up
 after the configured timeout.
+
+Empty `READY` ephemeral instances stop after `lifecycle.idle_shutdown_seconds`.
+Set the value to `0` to disable idle shutdown globally. Persistent `save: true`
+instances and the active lobby are excluded. A blueprint can override the delay
+or opt out:
+
+```yaml
+annotations:
+  sls-lite:
+    idle-shutdown-seconds: 300
+    keep-alive: true
+```
+
+`stop-when-empty: false` is also treated as keep-alive. Idle shutdown rechecks
+players and queued joins before draining an instance, preventing a new
+matchmaking request from being assigned while shutdown begins.
 
 `lobby.mode: external` routes players to an existing Velocity registration named
 by `lobby.server`. `lobby.mode: managed` starts the blueprint identified by

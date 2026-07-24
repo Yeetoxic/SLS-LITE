@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -162,6 +163,29 @@ public final class SupervisedProcess {
                 spec.stopTimeout().toMillis(),
                 TimeUnit.MILLISECONDS
         );
+        return exit;
+    }
+
+    public synchronized CompletableFuture<Integer> cancelStartup() {
+        if (process == null || !process.isAlive()) {
+            return exit;
+        }
+        if (lifecycle.state() == InstanceState.STOPPING) {
+            return exit;
+        }
+        if (lifecycle.state() != InstanceState.STARTING) {
+            throw new IllegalStateException(
+                    "Cannot cancel startup for instance " + instanceId
+                            + " while " + lifecycle.state()
+            );
+        }
+
+        lifecycle.transitionTo(InstanceState.STOPPING);
+        cancel(startupDeadline);
+        ready.completeExceptionally(new CancellationException(
+                "Instance startup was cancelled: " + instanceId
+        ));
+        process.destroyForcibly();
         return exit;
     }
 

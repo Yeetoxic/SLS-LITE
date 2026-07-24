@@ -110,6 +110,20 @@ class InstanceManagerTest {
         assertTrue(context.backends().registrations.isEmpty());
     }
 
+    @Test
+    void stopDuringStartupReleasesAllAdmissions() throws Exception {
+        TestContext context = createContext(false, true);
+        ManagedInstance instance = manager.start("fixture");
+
+        assertEquals(0, manager.stop(instance.id()).get(10, TimeUnit.SECONDS));
+        awaitCleanup();
+
+        assertTrue(context.backends().registrations.isEmpty());
+        assertTrue(context.ports().reservations().isEmpty());
+        assertEquals(0, context.budget().reservedMemoryMiB());
+        assertFalse(Files.exists(instance.directory()));
+    }
+
     private TestContext createContext(boolean save, boolean includeJar) throws Exception {
         Path blueprintsDirectory = Files.createDirectories(
                 temporaryDirectory.resolve("blueprints")

@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -49,6 +50,27 @@ class ProcessSupervisorTest {
         assertEquals(InstanceState.READY, process.state());
         assertTrue(output.contains("FIXTURE READY"));
         assertEquals(0, process.stop().get(5, TimeUnit.SECONDS));
+        assertEquals(InstanceState.STOPPED, process.state());
+    }
+
+    @Test
+    void cancelsStartupWithoutWaitingForTheGracefulStopDeadline() throws Exception {
+        supervisor = new ProcessSupervisor(1);
+        InstanceLifecycle lifecycle = preparingLifecycle("test-cancel");
+        SupervisedProcess process = supervisor.start(
+                "test-cancel",
+                spec("silent", Duration.ofSeconds(30), Duration.ofSeconds(30)),
+                lifecycle,
+                line -> {
+                }
+        );
+
+        long started = System.nanoTime();
+        int exitCode = process.cancelStartup().get(5, TimeUnit.SECONDS);
+
+        assertTrue(exitCode != 0);
+        assertTrue(System.nanoTime() - started < TimeUnit.SECONDS.toNanos(5));
+        assertThrows(CancellationException.class, process.readyFuture()::join);
         assertEquals(InstanceState.STOPPED, process.state());
     }
 

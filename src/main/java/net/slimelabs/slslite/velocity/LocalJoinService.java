@@ -9,6 +9,7 @@ import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.InstanceState;
+import net.slimelabs.slslite.instance.IdleAdmissionControl;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
 
@@ -30,7 +31,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-public final class LocalJoinService implements AutoCloseable {
+public final class LocalJoinService implements AutoCloseable, IdleAdmissionControl {
 
     private final ProxyServer proxy;
     private final BlueprintRepository blueprints;
@@ -39,6 +40,7 @@ public final class LocalJoinService implements AutoCloseable {
     private final ScheduledExecutorService scheduler;
     private final Map<UUID, QueueEntry> queue = new HashMap<>();
     private final Set<String> queueOwnedInstances = new java.util.HashSet<>();
+    private final Set<String> drainingInstances = new java.util.HashSet<>();
     private boolean closed;
 
     public LocalJoinService(
@@ -167,6 +169,22 @@ public final class LocalJoinService implements AutoCloseable {
                 .toList();
     }
 
+    @Override
+    public synchronized boolean hasPendingJoin(String instanceId) {
+        return queue.values().stream()
+                .anyMatch(entry -> entry.instance.id().equals(instanceId));
+    }
+
+    @Override
+    public synchronized boolean tryDrain(String instanceId) {
+        return !hasPendingJoin(instanceId) && drainingInstances.add(instanceId);
+    }
+
+    @Override
+    public synchronized void cancelDrain(String instanceId) {
+        drainingInstances.remove(instanceId);
+    }
+
     public Optional<QueueTicket> dequeue(UUID playerId) {
         QueueEntry entry;
         synchronized (this) {
@@ -219,6 +237,7 @@ public final class LocalJoinService implements AutoCloseable {
             closed = true;
             entries = List.copyOf(queue.values());
             queue.clear();
+            drainingInstances.clear();
         }
         entries.forEach(entry -> cancel(entry, "Matchmaking is shutting down"));
         entries.stream()
@@ -234,11 +253,16 @@ public final class LocalJoinService implements AutoCloseable {
                 .filter(instance -> instance.state() != InstanceState.STOPPING)
                 .filter(instance -> instance.state() != InstanceState.STOPPED)
                 .filter(instance -> instance.state() != InstanceState.FAILED)
+                .filter(instance -> !isDraining(instance.id()))
                 .sorted(Comparator
                         .comparing((ManagedInstance instance) ->
                                 instance.state() == InstanceState.READY ? 0 : 1)
                         .thenComparing(ManagedInstance::createdAt))
                 .findFirst();
+    }
+
+    private synchronized boolean isDraining(String instanceId) {
+        return drainingInstances.contains(instanceId);
     }
 
     private void connect(QueueEntry entry, ManagedInstance instance) {

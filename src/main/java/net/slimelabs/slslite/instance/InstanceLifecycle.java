@@ -39,7 +39,9 @@ public final class InstanceLifecycle {
 
         return switch (current) {
             case CREATED -> next == InstanceState.PREPARING || next == InstanceState.FAILED;
-            case PREPARING -> next == InstanceState.STARTING || next == InstanceState.FAILED;
+            case PREPARING -> next == InstanceState.STARTING
+                    || next == InstanceState.STOPPING
+                    || next == InstanceState.FAILED;
             case STARTING -> next == InstanceState.READY
                     || next == InstanceState.STOPPING
                     || next == InstanceState.FAILED;

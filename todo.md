@@ -91,7 +91,7 @@ hosted backend and lobby servers.
 
 ## Phase 4: Instance Files
 
-- [ ] Never run multiple instances from the same writable server directory.
+- [x] Never run multiple instances from the same writable server directory.
 - [x] Create a separate writable directory for every instance.
 - [x] Implement portable directory-copy isolation as the default mode.
 - [x] Support ephemeral instances that are deleted after shutdown.
@@ -121,7 +121,7 @@ hosted backend and lobby servers.
 - [x] Require explicit permissions for administrative actions.
 - [x] Add permissions for other-player join actions.
 - [x] Support joining an existing instance or creating one from a blueprint.
-- [ ] Add automatic idle shutdown with a configurable delay.
+- [x] Add automatic idle shutdown with a configurable delay.
 - [ ] Add optional ViaVersion integration for backend protocol detection.
 - [ ] Avoid requiring PacketEvents unless a retained feature needs packet-level
       control.
@@ -155,7 +155,7 @@ hosted backend and lobby servers.
 - [x] Match the pinned vSLS command presentation for implemented commands:
       prefix, usage grammar, list framing, status colors, player/server hover
       details, version metadata, and action-bar feedback.
-- [ ] Mirror the complete vSLS `v0.2.0` top-level tree, including `system` and
+- [x] Mirror the complete vSLS `v0.2.0` top-level tree, including `system` and
       `node`; keep SLS-LITE-only commands such as `registries` and `blueprints`
       as additive aliases rather than replacements for upstream commands.
 - [ ] Match the remaining vSLS modifier behavior for capacity-bypassing
@@ -187,7 +187,7 @@ the local implementation has equivalent behavior.
 - [x] Use the vSLS human-readable composite instance ID format
       `<blueprint-id>.<six-character-id>` for commands, directories, logs, and
       Velocity registrations.
-- [ ] Keep SLS-LITE entirely operational inside Velocity and its locally managed
+- [x] Keep SLS-LITE entirely operational inside Velocity and its locally managed
       child processes.
 - [ ] Treat modern SLS as the behavioral and documentation reference when an
       equivalent feature exists in both projects.
@@ -272,7 +272,7 @@ the local implementation has equivalent behavior.
       standalone SLS-LITE-compatible copy with unsupported fields explained.
 - [ ] Preserve unknown annotations during load and save so external tools can
       attach metadata without SLS-LITE deleting it.
-- [ ] Use stable blueprint IDs and short instance IDs similar to modern SLS.
+- [x] Use stable blueprint IDs and short instance IDs similar to modern SLS.
 - [ ] Keep the SLS-LITE schema smaller than the upstream schema and reject fields
       that imply unavailable isolation or host capabilities.
 
@@ -347,7 +347,7 @@ the local implementation has equivalent behavior.
       and random selection.
 - [ ] Prefer existing ready instances with capacity before creating another.
 - [ ] Enforce per-blueprint player and instance limits during allocation.
-- [ ] Cancel provisioning when its queue becomes empty when safe to do so.
+- [x] Cancel provisioning when its queue becomes empty when safe to do so.
 - [ ] Support blueprint `on-join` console actions with safe placeholders such as
       player name and UUID.
 - [ ] Add a force-join permission that can bypass blueprint capacity for
@@ -463,12 +463,12 @@ the local implementation has equivalent behavior.
 ## First Usable Release
 
 - [ ] One plugin JAR and one documented configuration.
-- [ ] One Velocity allocation can launch an isolated Paper lobby and at least one
+- [x] One Velocity allocation can launch an isolated Paper lobby and at least one
       additional managed backend.
-- [ ] Players can join the lobby, request a blueprint, wait for startup, connect,
+- [x] Players can join the lobby, request a blueprint, wait for startup, connect,
       and return to the lobby after the backend stops.
 - [ ] External lobby mode works without SLS-LITE managing that lobby.
-- [ ] Every child process shuts down cleanly with the proxy.
-- [ ] Startup failures leave no registered ghost servers or corrupt instance
+- [x] Every child process shuts down cleanly with the proxy.
+- [x] Startup failures leave no registered ghost servers or corrupt instance
       directories.
 - [ ] Installation and host-capability requirements are documented honestly.
