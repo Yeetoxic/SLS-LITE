@@ -5,7 +5,7 @@ import com.velocitypowered.api.proxy.server.RegisteredServer;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-public interface LobbyProvider {
+public interface LobbyProvider extends AutoCloseable {
 
     void start();
 
@@ -13,7 +13,12 @@ public interface LobbyProvider {
 
     CompletableFuture<RegisteredServer> readyFuture();
 
+    LobbyStatus status();
+
     boolean isLobby(String serverName);
 
     CompletableFuture<Void> evacuate(String serverName);
+
+    @Override
+    void close();
 }

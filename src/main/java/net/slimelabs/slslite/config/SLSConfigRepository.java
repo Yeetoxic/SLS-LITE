@@ -21,6 +21,10 @@ public final class SLSConfigRepository {
     private static final String DEFAULT_LOBBY_MODE = "external";
     private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
     private static final String DEFAULT_LOBBY_SERVER = "lobby";
+    private static final int DEFAULT_LOBBY_MAX_RESTART_ATTEMPTS = 5;
+    private static final int DEFAULT_LOBBY_INITIAL_BACKOFF_SECONDS = 5;
+    private static final int DEFAULT_LOBBY_MAX_BACKOFF_SECONDS = 60;
+    private static final int DEFAULT_LOBBY_STABLE_AFTER_SECONDS = 120;
     private static final String DEFAULT_INSTANCES_DIRECTORY = "instances";
 
     private final Path dataDirectory;
@@ -66,6 +70,8 @@ public final class SLSConfigRepository {
             Map<String, Object> lifecycle =
                     YamlValues.optionalMap(root, "lifecycle", configPath);
             Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
+            Map<String, Object> lobbyRecovery =
+                    YamlValues.optionalMap(lobby, "recovery", configPath);
             Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);
 
             int totalMemory = YamlValues.optionalPositiveInt(
@@ -116,6 +122,30 @@ public final class SLSConfigRepository {
                     DEFAULT_LOBBY_SERVER,
                     configPath
             );
+            int lobbyMaxRestartAttempts = YamlValues.optionalNonNegativeInt(
+                    lobbyRecovery,
+                    "max_attempts",
+                    DEFAULT_LOBBY_MAX_RESTART_ATTEMPTS,
+                    configPath
+            );
+            int lobbyInitialBackoff = YamlValues.optionalPositiveInt(
+                    lobbyRecovery,
+                    "initial_backoff_seconds",
+                    DEFAULT_LOBBY_INITIAL_BACKOFF_SECONDS,
+                    configPath
+            );
+            int lobbyMaxBackoff = YamlValues.optionalPositiveInt(
+                    lobbyRecovery,
+                    "max_backoff_seconds",
+                    DEFAULT_LOBBY_MAX_BACKOFF_SECONDS,
+                    configPath
+            );
+            int lobbyStableAfter = YamlValues.optionalPositiveInt(
+                    lobbyRecovery,
+                    "stable_after_seconds",
+                    DEFAULT_LOBBY_STABLE_AFTER_SECONDS,
+                    configPath
+            );
             String instances = YamlValues.optionalString(
                     paths,
                     "instances",
@@ -134,7 +164,11 @@ public final class SLSConfigRepository {
                         new LobbyConfig(
                                 LobbyMode.parse(lobbyMode),
                                 lobbyRegistry,
-                                lobbyServer
+                                lobbyServer,
+                                lobbyMaxRestartAttempts,
+                                lobbyInitialBackoff,
+                                lobbyMaxBackoff,
+                                lobbyStableAfter
                         ),
                         instancesDirectory
                 );

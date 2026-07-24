@@ -142,6 +142,25 @@ by `lobby.server`. `lobby.mode: managed` starts the blueprint identified by
 `lobby.registry` and `lobby.server` in the local allocation and reserves that
 instance as the initial and fallback lobby.
 
+Managed lobbies restart after unexpected exits using bounded exponential
+backoff. Retry limits are configured under `lobby.recovery`:
+
+```yaml
+lobby:
+  recovery:
+    max_attempts: 5
+    initial_backoff_seconds: 5
+    max_backoff_seconds: 60
+    stable_after_seconds: 120
+```
+
+Set `max_attempts` to `0` to disable recovery. A lobby that remains healthy for
+`stable_after_seconds` receives a fresh retry budget. While no lobby is ready,
+new connections and backend kick redirects fail closed with a temporary
+unavailability message instead of routing players to an arbitrary server.
+`/sls info` reports `STARTING`, `READY`, `RECOVERING`, `OFFLINE`, or
+`SHUTTING_DOWN`.
+
 SLS-LITE also creates `software-profiles/paper.yml`:
 
 ```yaml

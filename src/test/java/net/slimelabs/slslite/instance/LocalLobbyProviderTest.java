@@ -9,6 +9,7 @@ import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.LobbyConfig;
 import net.slimelabs.slslite.config.LobbyMode;
 import net.slimelabs.slslite.lobby.LocalLobbyProvider;
+import net.slimelabs.slslite.lobby.LobbyStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
@@ -63,6 +64,8 @@ class LocalLobbyProviderTest {
         assertSame(registered, provider.readyFuture().get(1, TimeUnit.SECONDS));
         assertSame(registered, provider.server().orElseThrow());
         assertTrue(provider.isLobby(instance.id()));
+        assertEquals(LobbyStatus.READY, provider.status());
+        provider.close();
     }
 
     @Test
@@ -91,6 +94,131 @@ class LocalLobbyProviderTest {
 
         assertSame(lobby, provider.readyFuture().get(1, TimeUnit.SECONDS));
         assertSame(lobby, requestedServer.get());
+        provider.close();
+    }
+
+    @Test
+    void restartsManagedLobbyAfterUnexpectedExit() throws Exception {
+        BlueprintRepository blueprints = blueprints();
+        FakeController controller = new FakeController(
+                blueprints.get("lobby", "lobby").orElseThrow(),
+                temporaryDirectory
+        );
+        Map<String, RegisteredServer> servers = new LinkedHashMap<>();
+        LocalLobbyProvider provider = new LocalLobbyProvider(
+                proxy(servers),
+                blueprints,
+                controller,
+                recoveryConfig(2),
+                LoggerFactory.getLogger(LocalLobbyProviderTest.class)
+        );
+
+        provider.start();
+        ManagedInstance first = controller.instance();
+        RegisteredServer firstServer = registeredServer(List.of());
+        publishReady(first, firstServer, servers);
+        assertEquals(LobbyStatus.READY, provider.status());
+
+        first.stoppedFuture().complete(137);
+        assertEquals(LobbyStatus.RECOVERING, provider.status());
+        awaitStarts(controller, 2);
+
+        ManagedInstance second = controller.instance();
+        RegisteredServer secondServer = registeredServer(List.of());
+        publishReady(second, secondServer, servers);
+
+        assertEquals(LobbyStatus.READY, provider.status());
+        assertSame(secondServer, provider.server().orElseThrow());
+        assertTrue(provider.isLobby(second.id()));
+        provider.close();
+    }
+
+    @Test
+    void stopsRetryingAfterRecoveryBudgetIsExhausted() throws Exception {
+        BlueprintRepository blueprints = blueprints();
+        FakeController controller = new FakeController(
+                blueprints.get("lobby", "lobby").orElseThrow(),
+                temporaryDirectory
+        );
+        LocalLobbyProvider provider = new LocalLobbyProvider(
+                proxy(new LinkedHashMap<>()),
+                blueprints,
+                controller,
+                recoveryConfig(1),
+                LoggerFactory.getLogger(LocalLobbyProviderTest.class)
+        );
+
+        provider.start();
+        controller.instance().readyFuture().completeExceptionally(
+                new IllegalStateException("first failure")
+        );
+        awaitStarts(controller, 2);
+        controller.instance().readyFuture().completeExceptionally(
+                new IllegalStateException("second failure")
+        );
+
+        assertEquals(LobbyStatus.OFFLINE, provider.status());
+        assertTrue(provider.readyFuture().isCompletedExceptionally());
+        provider.close();
+    }
+
+    @Test
+    void intentionalCloseSuppressesRecovery() throws Exception {
+        BlueprintRepository blueprints = blueprints();
+        FakeController controller = new FakeController(
+                blueprints.get("lobby", "lobby").orElseThrow(),
+                temporaryDirectory
+        );
+        Map<String, RegisteredServer> servers = new LinkedHashMap<>();
+        LocalLobbyProvider provider = new LocalLobbyProvider(
+                proxy(servers),
+                blueprints,
+                controller,
+                recoveryConfig(2),
+                LoggerFactory.getLogger(LocalLobbyProviderTest.class)
+        );
+
+        provider.start();
+        ManagedInstance instance = controller.instance();
+        publishReady(instance, registeredServer(List.of()), servers);
+        provider.close();
+        instance.stoppedFuture().complete(0);
+        Thread.sleep(1200);
+
+        assertEquals(1, controller.starts());
+        assertEquals(LobbyStatus.SHUTTING_DOWN, provider.status());
+    }
+
+    @Test
+    void stableRecoveryResetsTheRetryBudget() throws Exception {
+        BlueprintRepository blueprints = blueprints();
+        FakeController controller = new FakeController(
+                blueprints.get("lobby", "lobby").orElseThrow(),
+                temporaryDirectory
+        );
+        Map<String, RegisteredServer> servers = new LinkedHashMap<>();
+        LocalLobbyProvider provider = new LocalLobbyProvider(
+                proxy(servers),
+                blueprints,
+                controller,
+                recoveryConfig(1),
+                LoggerFactory.getLogger(LocalLobbyProviderTest.class)
+        );
+
+        provider.start();
+        ManagedInstance first = controller.instance();
+        publishReady(first, registeredServer(List.of()), servers);
+        first.stoppedFuture().complete(137);
+        awaitStarts(controller, 2);
+
+        ManagedInstance second = controller.instance();
+        publishReady(second, registeredServer(List.of()), servers);
+        Thread.sleep(1200);
+        second.stoppedFuture().complete(137);
+        assertEquals(LobbyStatus.RECOVERING, provider.status());
+        awaitStarts(controller, 3);
+
+        provider.close();
     }
 
     private BlueprintRepository blueprints() throws Exception {
@@ -174,6 +302,38 @@ class LocalLobbyProviderTest {
         );
     }
 
+    private static LobbyConfig recoveryConfig(int attempts) {
+        return new LobbyConfig(
+                LobbyMode.MANAGED,
+                "lobby",
+                "lobby",
+                attempts,
+                1,
+                1,
+                1
+        );
+    }
+
+    private static void publishReady(
+            ManagedInstance instance,
+            RegisteredServer server,
+            Map<String, RegisteredServer> servers
+    ) {
+        servers.put(instance.id(), server);
+        instance.lifecycle().transitionTo(InstanceState.STARTING);
+        instance.lifecycle().transitionTo(InstanceState.READY);
+        instance.readyFuture().complete(instance);
+    }
+
+    private static void awaitStarts(FakeController controller, int expected)
+            throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (controller.starts() < expected && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+        }
+        assertEquals(expected, controller.starts());
+    }
+
     private static Object defaultValue(Class<?> type) {
         if (type == boolean.class) {
             return false;
@@ -191,6 +351,7 @@ class LocalLobbyProviderTest {
         private final Blueprint blueprint;
         private final Path directory;
         private ManagedInstance instance;
+        private int starts;
 
         private FakeController(Blueprint blueprint, Path directory) {
             this.blueprint = blueprint;
@@ -199,10 +360,11 @@ class LocalLobbyProviderTest {
 
         @Override
         public ManagedInstance start(String blueprintId) {
-            InstanceLifecycle lifecycle = new InstanceLifecycle("lobby.test01");
+            String id = "lobby.abc00" + (++starts);
+            InstanceLifecycle lifecycle = new InstanceLifecycle(id);
             lifecycle.transitionTo(InstanceState.PREPARING);
             instance = new ManagedInstance(
-                    "lobby.test01",
+                    id,
                     blueprint,
                     25600,
                     directory.resolve("lobby.test01"),
@@ -235,6 +397,10 @@ class LocalLobbyProviderTest {
 
         private ManagedInstance instance() {
             return instance;
+        }
+
+        private int starts() {
+            return starts;
         }
     }
 }

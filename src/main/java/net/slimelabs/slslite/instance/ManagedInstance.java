@@ -64,7 +64,7 @@ public final class ManagedInstance {
         return ready;
     }
 
-    CompletableFuture<Integer> stoppedFuture() {
+    public CompletableFuture<Integer> stoppedFuture() {
         return stopped;
     }
 

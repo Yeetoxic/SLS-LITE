@@ -322,6 +322,8 @@ the local implementation has equivalent behavior.
   - Maximum concurrent instances.
   - Startup and stop timeout overrides.
 - [ ] Add bounded crash restart policies with exponential backoff.
+  - [x] Implement the managed-lobby policy with configurable attempts, bounded
+        backoff, and retry-budget reset after a stable runtime.
 - [ ] Add maintenance or drain mode that prevents new instance creation while
       allowing existing instances to finish.
 - [x] Add startup reconciliation with durable ownership metadata so SLS-LITE
@@ -400,8 +402,9 @@ the local implementation has equivalent behavior.
   - [x] Start it during proxy initialization and wait for readiness before routing
     players.
   - [x] Keep it running independently of normal matchmaking cleanup.
-  - [ ] Restart it after a crash with bounded retry and backoff.
-  - [ ] Route players to a safe fallback or disconnect message while it is offline.
+  - [x] Restart it after a crash with bounded retry and backoff.
+  - [x] Disconnect with a clear temporary-unavailability message while it is
+        starting, recovering, or offline.
   - [x] Stop it gracefully during proxy shutdown.
   - [ ] Allow operators to disable automatic startup and manage it with commands.
 
@@ -427,10 +430,10 @@ the local implementation has equivalent behavior.
 - [x] Route first joins to the configured lobby provider.
 - [x] Route players back to the lobby when a managed game server stops or kicks
       them.
-- [ ] Handle lobby startup failure without creating a reconnect loop.
+- [x] Handle lobby startup failure without creating a reconnect loop.
 - [ ] Support forced-host and multiple-lobby configurations later without making
       them part of the first release.
-- [ ] Add health and readiness reporting for the active lobby provider.
+- [x] Add health and readiness reporting for the active lobby provider.
 
 ## Phase 6: Reliability and Security
 

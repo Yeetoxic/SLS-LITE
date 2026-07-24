@@ -30,6 +30,10 @@ class SLSConfigRepositoryTest {
         assertEquals(LobbyMode.EXTERNAL, config.lobby().mode());
         assertEquals("lobby", config.lobby().registry());
         assertEquals("lobby", config.lobby().server());
+        assertEquals(5, config.lobby().maxRestartAttempts());
+        assertEquals(5, config.lobby().initialBackoffSeconds());
+        assertEquals(60, config.lobby().maxBackoffSeconds());
+        assertEquals(120, config.lobby().stableAfterSeconds());
         assertEquals(
                 temporaryDirectory.resolve("instances").toAbsolutePath().normalize(),
                 config.instancesDirectory()
@@ -84,6 +88,43 @@ class SLSConfigRepositoryTest {
         repository.reload();
 
         assertEquals(0, repository.get().idleShutdownSeconds());
+    }
+
+    @Test
+    void loadsManagedLobbyRecoveryPolicy() throws Exception {
+        writeConfig("""
+                lobby:
+                  mode: managed
+                  registry: lobby
+                  server: lobby
+                  recovery:
+                    max_attempts: 3
+                    initial_backoff_seconds: 2
+                    max_backoff_seconds: 8
+                    stable_after_seconds: 30
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        repository.reload();
+
+        LobbyConfig lobby = repository.get().lobby();
+        assertEquals(3, lobby.maxRestartAttempts());
+        assertEquals(2, lobby.initialBackoffSeconds());
+        assertEquals(8, lobby.maxBackoffSeconds());
+        assertEquals(30, lobby.stableAfterSeconds());
+    }
+
+    @Test
+    void rejectsLobbyMaximumBackoffBelowInitialBackoff() throws Exception {
+        writeConfig("""
+                lobby:
+                  recovery:
+                    initial_backoff_seconds: 10
+                    max_backoff_seconds: 5
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        assertThrows(ConfigurationException.class, repository::reload);
     }
 
     private void writeConfig(String content) throws Exception {

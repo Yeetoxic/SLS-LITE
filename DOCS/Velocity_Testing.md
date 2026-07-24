@@ -98,6 +98,19 @@ Unclean-shutdown reconciliation checks:
 5. A loopback port still owned by a surviving process must be skipped by the
    allocator.
 
+Managed-lobby recovery checks:
+
+1. Wait for the managed lobby to reach `READY`, then forcibly terminate only its
+   Paper process.
+2. `/sls info` must report `RECOVERING`, and the console must show recovery
+   attempt `1/3` after the fixture's two-second delay.
+3. A new `lobby.xxxxxx` instance must start, register with Velocity, and reach
+   `READY`; the crashed instance directory must be removed.
+4. Repeat failures and confirm delays increase to four and eight seconds, then
+   stop after the third failed recovery attempt.
+5. Restart the proxy normally and confirm shutdown does not schedule a lobby
+   recovery.
+
 ## Two-Server Join Test
 
 The fixture includes `test/smoke` and `test/smoke2`. They share the prepared

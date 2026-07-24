@@ -195,6 +195,8 @@ public final class SLSCommand implements SimpleCommand {
                 .appendNewline()
                 .append(infoLine("Active servers:", Integer.toString(instances.getAll().size())))
                 .appendNewline()
+                .append(infoLine("Lobby status:", lobbyProvider.status().name()))
+                .appendNewline()
                 .append(infoLine("Queued players:", Integer.toString(
                         joinService.queuedPlayers().size()
                 )))

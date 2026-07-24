@@ -66,6 +66,11 @@ lobby:
   mode: managed
   registry: lobby
   server: lobby
+  recovery:
+    max_attempts: 3
+    initial_backoff_seconds: 2
+    max_backoff_seconds: 8
+    stable_after_seconds: 20
 paths:
   instances: instances
 '@

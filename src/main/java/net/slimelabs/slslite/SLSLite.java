@@ -22,6 +22,7 @@ import net.slimelabs.slslite.instance.InstanceManager;
 import net.slimelabs.slslite.instance.InstanceReconciler;
 import net.slimelabs.slslite.instance.InstanceReconciliationReport;
 import net.slimelabs.slslite.lobby.LobbyProvider;
+import net.slimelabs.slslite.lobby.LobbyStatus;
 import net.slimelabs.slslite.lobby.LocalLobbyProvider;
 import net.slimelabs.slslite.log.ConsoleBanner;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
@@ -182,8 +183,13 @@ public final class SLSLite {
 
     @Subscribe
     public void onPlayerChooseInitialServer(PlayerChooseInitialServerEvent event) {
-        if (lobbyProvider != null && lobbyProvider.server().isPresent()) {
-            event.setInitialServer(lobbyProvider.server().orElseThrow());
+        if (lobbyProvider != null) {
+            var lobby = lobbyProvider.server();
+            if (lobby.isPresent()) {
+                event.setInitialServer(lobby.orElseThrow());
+            } else {
+                event.getPlayer().disconnect(lobbyUnavailableMessage());
+            }
             return;
         }
         if (joinService != null && event.getInitialServer().isEmpty()) {
@@ -193,16 +199,26 @@ public final class SLSLite {
 
     @Subscribe
     public void onKickedFromServer(KickedFromServerEvent event) {
-        if (lobbyProvider == null
-                || lobbyProvider.isLobby(event.getServer().getServerInfo().getName())) {
+        if (lobbyProvider == null) {
             return;
         }
-        lobbyProvider.server().ifPresent(lobby -> event.setResult(
-                KickedFromServerEvent.RedirectPlayer.create(
-                        lobby,
-                        Component.text("Returning you to the lobby.")
-                )
-        ));
+        if (lobbyProvider.isLobby(event.getServer().getServerInfo().getName())) {
+            event.setResult(KickedFromServerEvent.DisconnectPlayer.create(
+                    lobbyUnavailableMessage()
+            ));
+            return;
+        }
+        var lobby = lobbyProvider.server();
+        if (lobby.isPresent()) {
+            event.setResult(KickedFromServerEvent.RedirectPlayer.create(
+                    lobby.orElseThrow(),
+                    Component.text("Returning you to the lobby.")
+            ));
+        } else {
+            event.setResult(KickedFromServerEvent.DisconnectPlayer.create(
+                    lobbyUnavailableMessage()
+            ));
+        }
     }
 
     @Subscribe
@@ -217,6 +233,9 @@ public final class SLSLite {
         if (idleReaper != null) {
             idleReaper.close();
         }
+        if (lobbyProvider != null) {
+            lobbyProvider.close();
+        }
         if (joinService != null) {
             joinService.close();
         }
@@ -228,5 +247,19 @@ public final class SLSLite {
             instanceManager.shutdown(Duration.ofSeconds(35));
         }
         ConsoleBanner.logShutdown(logger);
+    }
+
+    private Component lobbyUnavailableMessage() {
+        LobbyStatus current = lobbyProvider == null
+                ? LobbyStatus.OFFLINE
+                : lobbyProvider.status();
+        if (current == LobbyStatus.STARTING || current == LobbyStatus.RECOVERING) {
+            return Component.text(
+                    "The lobby is restarting. Please reconnect shortly."
+            );
+        }
+        return Component.text(
+                "The lobby is currently unavailable. Please try again later."
+        );
     }
 }

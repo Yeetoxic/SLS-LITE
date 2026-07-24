@@ -5,6 +5,7 @@ import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.lobby.LobbyProvider;
+import net.slimelabs.slslite.lobby.LobbyStatus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -237,6 +238,11 @@ class IdleInstanceReaperTest {
             }
 
             @Override
+            public LobbyStatus status() {
+                return LobbyStatus.READY;
+            }
+
+            @Override
             public boolean isLobby(String serverName) {
                 return lobbyId.equals(serverName);
             }
@@ -244,6 +250,10 @@ class IdleInstanceReaperTest {
             @Override
             public CompletableFuture<Void> evacuate(String serverName) {
                 return CompletableFuture.completedFuture(null);
+            }
+
+            @Override
+            public void close() {
             }
         };
     }

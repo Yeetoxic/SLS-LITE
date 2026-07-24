@@ -21,6 +21,12 @@ lobby:
   mode: external
   registry: lobby
   server: lobby
+  recovery:
+    # Managed-lobby retries use bounded exponential backoff. Set attempts to 0 to disable.
+    max_attempts: 5
+    initial_backoff_seconds: 5
+    max_backoff_seconds: 60
+    stable_after_seconds: 120
 
 paths:
   # Managed paths are relative to the SLS-LITE plugin data directory.
