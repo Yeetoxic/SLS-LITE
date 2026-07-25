@@ -27,6 +27,9 @@ class SLSConfigRepositoryTest {
         assertEquals(25670, config.portRangeEnd());
         assertEquals(180, config.queueTimeoutSeconds());
         assertEquals(180, config.idleShutdownSeconds());
+        assertEquals(false, config.managedOutput().mirrorToProxyConsole());
+        assertEquals(true, config.managedOutput().writeTemporaryFile());
+        assertEquals(4096, config.managedOutput().temporaryFileMaxKiB());
         assertEquals(LobbyMode.EXTERNAL, config.lobby().mode());
         assertEquals("lobby", config.lobby().registry());
         assertEquals("lobby", config.lobby().server());
@@ -121,6 +124,35 @@ class SLSConfigRepositoryTest {
                   recovery:
                     initial_backoff_seconds: 10
                     max_backoff_seconds: 5
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        assertThrows(ConfigurationException.class, repository::reload);
+    }
+
+    @Test
+    void loadsManagedOutputPolicy() throws Exception {
+        writeConfig("""
+                managed_output:
+                  mirror_to_proxy_console: true
+                  write_temporary_file: false
+                  temporary_file_max_kib: 128
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        repository.reload();
+
+        ManagedOutputConfig output = repository.get().managedOutput();
+        assertEquals(true, output.mirrorToProxyConsole());
+        assertEquals(false, output.writeTemporaryFile());
+        assertEquals(128, output.temporaryFileMaxKiB());
+    }
+
+    @Test
+    void rejectsNonBooleanManagedOutputSetting() throws Exception {
+        writeConfig("""
+                managed_output:
+                  mirror_to_proxy_console: sometimes
                 """);
         SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
 

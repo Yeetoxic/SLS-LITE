@@ -19,14 +19,20 @@ hosted backend and lobby servers.
 
 ## Hosting Feasibility
 
-- [ ] Document the minimum host capabilities:
+- [x] Document the minimum host capabilities:
   - Permission to launch child Java processes.
   - Permission to bind additional loopback ports.
   - Enough shared memory for Velocity and all active backends.
   - Writable directories for templates, instances, worlds, and logs.
 - [ ] Add a startup capability check for Java, process creation, loopback ports,
       filesystem permissions, and available memory.
-- [ ] Fail with clear diagnostics when the hosting environment blocks a required
+  - [x] Probe writable instance storage, loopback binding, and every configured
+        child Java runtime before enabling managed features.
+  - [x] Report the declared managed-memory budget without presenting it as
+        measured provider memory.
+  - [ ] Add provider-specific available-memory detection only where it is
+        reliable and cannot escape panel or container limits.
+- [x] Fail with clear diagnostics when the hosting environment blocks a required
       capability.
 - [ ] Do not attempt to bypass hosting-panel limits, container restrictions, or
       provider terms.
@@ -117,7 +123,8 @@ hosted backend and lobby servers.
 - [x] Add registry-aware `/sls join`.
 - [x] Add `/sls dequeue` for self, named-player, `all`, and `local` queue
       cancellation.
-- [ ] Add `/sls logs`.
+- [x] Add `/sls logs` with the vSLS-compatible
+      `<server> [page] [lines]` arguments and bounded local retention.
 - [x] Require explicit permissions for administrative actions.
 - [x] Add permissions for other-player join actions.
 - [x] Support joining an existing instance or creating one from a blueprint.
@@ -148,6 +155,8 @@ hosted backend and lobby servers.
       join command, including
       requiring an explicit player target when a console sender cannot act on
       itself.
+- [x] Resolve the vSLS `this` server selector consistently from a player's
+      current Velocity backend for every implemented server-targeting command.
 - [ ] Port locally meaningful vSLS commands and options, including `info`,
       `list`, `create`, `start`, `join`, `find`, `console`, `blueprint`, `debug`,
       `delete`, `logs`, `reload`, `stop`, `kill`, `dequeue`, `status`, `stats`,
@@ -364,11 +373,20 @@ the local implementation has equivalent behavior.
 
 - [x] Add distinct startup and shutdown console banners with SLS-LITE artwork,
       credits, version, source, and AGPL-3.0 links.
-- [ ] Add server information views for blueprint, software version, state, port,
+- [x] Add server information views for blueprint, software version, state, port,
       players, uptime, and instance directory.
 - [ ] Report process CPU time, current memory when measurable, configured memory,
       and disk usage without claiming container-level enforcement.
+  - [x] Report process CPU time, uptime, and configured memory while explicitly
+        labeling child memory, network, and disk measurements as unavailable.
+  - [ ] Add portable or platform-specific measured child memory, network, and
+        disk values where they can be obtained reliably.
 - [ ] Add paginated recent logs and live console following.
+  - [x] Add vSLS-compatible recent-log pagination backed by a fixed
+        1,000-line per-instance ring buffer.
+  - [x] Add configurable proxy-console mirroring and a bounded temporary
+        per-instance log file that does not create unbounded archives.
+  - [ ] Add an opt-in live console follow mode without blocking Velocity threads.
 - [x] Add line-oriented console command execution through the supervised process
       input without competing with the process log reader.
 - [ ] Add bounded output capture for `/sls console` so the invoking player sees
@@ -446,8 +464,12 @@ the local implementation has equivalent behavior.
 - [ ] Make all shared lifecycle and registry state thread-safe.
 - [ ] Add structured errors for configuration, preparation, startup, connection,
       shutdown, and cleanup failures.
-- [ ] Add a diagnostic command that reports host capabilities and current resource
+- [x] Add a diagnostic command that reports host capabilities and current resource
       allocations.
+  - [x] Adapt `/sls system` to report the local runtime, JVM memory, CPU threads,
+        managed memory budget, and active managed process count.
+  - [x] Probe child-process creation, writable paths, and loopback-port binding
+        with actionable pass/fail results.
 
 ## Testing
 

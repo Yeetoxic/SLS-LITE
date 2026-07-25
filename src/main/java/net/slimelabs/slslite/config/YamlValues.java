@@ -99,6 +99,22 @@ public final class YamlValues {
         return number.intValue();
     }
 
+    public static boolean optionalBoolean(
+            Map<String, Object> values,
+            String key,
+            boolean defaultValue,
+            Path path
+    ) throws ConfigurationException {
+        Object value = values.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!(value instanceof Boolean booleanValue)) {
+            throw error(path, "'" + key + "' must be true or false");
+        }
+        return booleanValue;
+    }
+
     public static List<String> optionalStringList(
             Map<String, Object> values,
             String key,

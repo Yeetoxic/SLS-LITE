@@ -16,6 +16,10 @@ import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.command.SLSCommand;
 import net.slimelabs.slslite.config.ConfigurationValidator;
 import net.slimelabs.slslite.config.SLSConfigRepository;
+import net.slimelabs.slslite.host.HostCapability;
+import net.slimelabs.slslite.host.HostCapabilityChecker;
+import net.slimelabs.slslite.host.HostCapabilityReport;
+import net.slimelabs.slslite.host.HostCapabilityStatus;
 import net.slimelabs.slslite.instance.InstanceDirectoryPreparer;
 import net.slimelabs.slslite.instance.IdleInstanceReaper;
 import net.slimelabs.slslite.instance.InstanceManager;
@@ -59,6 +63,7 @@ public final class SLSLite {
     private LocalJoinService joinService;
     private LobbyProvider lobbyProvider;
     private IdleInstanceReaper idleReaper;
+    private HostCapabilityReport hostCapabilities;
 
     @Inject
     public SLSLite(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -93,6 +98,21 @@ public final class SLSLite {
             InstanceDirectoryPreparer directoryPreparer = new InstanceDirectoryPreparer(
                     configuration.get().instancesDirectory()
             );
+            PaperProcessSpecFactory processSpecFactory = new PaperProcessSpecFactory(dataDirectory);
+            hostCapabilities = new HostCapabilityChecker().check(
+                    configuration.get().instancesDirectory(),
+                    portAllocator,
+                    softwareProfiles.getAll(),
+                    processSpecFactory,
+                    configuration.get().totalMemoryMiB()
+            );
+            logHostCapabilities(hostCapabilities);
+            if (hostCapabilities.hasFailures()) {
+                throw new IllegalStateException(
+                        "Required host capability checks failed: "
+                                + hostCapabilities.failureSummary()
+                );
+            }
             InstanceReconciliationReport reconciliation = new InstanceReconciler(
                     directoryPreparer,
                     logger
@@ -108,7 +128,6 @@ public final class SLSLite {
                     reconciliation.preservedUnknown(),
                     reconciliation.failures()
             );
-            PaperProcessSpecFactory processSpecFactory = new PaperProcessSpecFactory(dataDirectory);
             int portCount = configuration.get().portRangeEnd()
                     - configuration.get().portRangeStart() + 1;
             processSupervisor = new ProcessSupervisor(Math.min(portCount, 16));
@@ -116,6 +135,7 @@ public final class SLSLite {
                     blueprints,
                     softwareProfiles,
                     resourceBudget,
+                    configuration.get().managedOutput(),
                     portAllocator,
                     directoryPreparer,
                     processSpecFactory,
@@ -166,6 +186,8 @@ public final class SLSLite {
                         instanceManager,
                         joinService,
                         lobbyProvider,
+                        configuration.get().managedOutput(),
+                        hostCapabilities,
                         logger
                 )
         );
@@ -179,6 +201,34 @@ public final class SLSLite {
                 softwareProfiles.getAll().size(),
                 resourceBudget.totalMemoryMiB()
         );
+    }
+
+    private void logHostCapabilities(HostCapabilityReport report) {
+        for (HostCapability capability : report.capabilities()) {
+            String message = "Host capability [{}]: {} - {}";
+            if (capability.status() == HostCapabilityStatus.FAILURE) {
+                logger.error(
+                        message,
+                        capability.status(),
+                        capability.name(),
+                        capability.detail()
+                );
+            } else if (capability.status() == HostCapabilityStatus.WARNING) {
+                logger.warn(
+                        message,
+                        capability.status(),
+                        capability.name(),
+                        capability.detail()
+                );
+            } else {
+                logger.info(
+                        message,
+                        capability.status(),
+                        capability.name(),
+                        capability.detail()
+                );
+            }
+        }
     }
 
     @Subscribe

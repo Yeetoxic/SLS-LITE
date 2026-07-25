@@ -1,33 +1,91 @@
 # Host-wide SLS-LITE settings.
+#
+# All settings in this file apply after Velocity is restarted. YAML indentation
+# matters: use spaces, not tabs. Sizes use MiB/KiB and durations use seconds.
 
 resources:
-  # Shared budget for managed Paper processes, excluding Velocity itself.
+  # Positive integer. Shared admission budget, in MiB, for all managed Paper
+  # processes. This excludes Velocity and is not a measurement of the hosting
+  # panel's real memory limit. A start is rejected when its blueprint memory
+  # limit would make the total reservations exceed this value.
   total_memory_mib: 4096
 
 network:
   ports:
+    # Inclusive loopback port range used by managed backend servers. Each active
+    # instance reserves one port and binds it to 127.0.0.1.
+    #
+    # start: integer from 1024 through 65535.
+    # end: integer from start through 65535.
+    # Make the range large enough for the maximum number of simultaneous
+    # managed servers, and do not overlap ports used by other local services.
     start: 25570
     end: 25670
 
 matchmaking:
+  # Positive integer. Maximum time, in seconds, a player may wait for a managed
+  # server to become ready. Expired requests are removed from the queue.
   queue_timeout_seconds: 180
 
 lifecycle:
-  # Stops empty managed servers after this delay. Set to 0 to disable globally.
+  # Non-negative integer. Number of seconds an empty, ephemeral managed server
+  # remains ready before SLS-LITE stops it. Use 0 to disable automatic idle
+  # shutdown globally. Persistent servers and the active lobby are excluded.
+  # Blueprints may override this policy with SLS-LITE lifecycle annotations.
   idle_shutdown_seconds: 180
 
+managed_output:
+  # Boolean: true or false. When true, every managed server output line is also
+  # written to the Velocity console with its instance ID. Keep false on busy or
+  # resource-constrained networks to prevent console spam.
+  mirror_to_proxy_console: false
+
+  # Boolean: true or false. Writes managed output to
+  # <instance>/logs/sls-lite-console.log. Ephemeral logs are deleted with their
+  # instance directory. /sls logs works regardless of this setting because its
+  # recent output is held in a separate bounded memory buffer.
+  write_temporary_file: true
+
+  # Positive integer from 1 through 1048576. Hard per-instance file limit in
+  # KiB. SLS-LITE stops writing when the limit is reached and does not create
+  # rotated archives. This value is still validated when file output is false.
+  temporary_file_max_kib: 4096
+
 lobby:
-  # external uses an existing Velocity server; managed starts this blueprint locally.
+  # Lobby implementation. Valid values:
+  #   external - use an existing backend already registered in velocity.toml.
+  #   managed  - start the configured SLS-LITE blueprint as a local child.
   mode: external
+
+  # Non-blank registry/type name containing the managed lobby blueprint.
+  # This value is ignored in external mode.
   registry: lobby
+
+  # Non-blank server name.
+  #   external mode: exact Velocity registered-server name.
+  #   managed mode: blueprint ID inside the registry above.
   server: lobby
+
   recovery:
-    # Managed-lobby retries use bounded exponential backoff. Set attempts to 0 to disable.
+    # Recovery settings apply only to managed mode.
+
+    # Non-negative integer. Maximum automatic restart attempts after the managed
+    # lobby crashes. Use 0 to disable automatic crash recovery.
     max_attempts: 5
+
+    # Positive integer. Delay before the first restart attempt.
     initial_backoff_seconds: 5
+
+    # Positive integer greater than or equal to initial_backoff_seconds.
+    # Exponential restart delays will not grow beyond this value.
     max_backoff_seconds: 60
+
+    # Positive integer. A recovered lobby must remain healthy for this many
+    # seconds before its used restart-attempt budget is reset.
     stable_after_seconds: 120
 
 paths:
-  # Managed paths are relative to the SLS-LITE plugin data directory.
+  # Non-blank relative path for isolated managed instance directories. Absolute
+  # paths and values that escape the SLS-LITE plugin data directory are rejected.
+  # Do not point this at a software template or another server's live directory.
   instances: instances

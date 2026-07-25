@@ -2,6 +2,7 @@ package net.slimelabs.slslite.instance;
 
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.network.PortAllocationException;
 import net.slimelabs.slslite.process.PaperProcessSpecFactory;
@@ -41,6 +42,7 @@ public final class InstanceManager implements ServerController {
     private final BlueprintRepository blueprints;
     private final SoftwareProfileRepository softwareProfiles;
     private final ResourceBudget resourceBudget;
+    private final ManagedOutputConfig outputConfig;
     private final LoopbackPortAllocator portAllocator;
     private final InstanceDirectoryPreparer directoryPreparer;
     private final InstanceMetadataStore metadataStore;
@@ -58,6 +60,7 @@ public final class InstanceManager implements ServerController {
             BlueprintRepository blueprints,
             SoftwareProfileRepository softwareProfiles,
             ResourceBudget resourceBudget,
+            ManagedOutputConfig outputConfig,
             LoopbackPortAllocator portAllocator,
             InstanceDirectoryPreparer directoryPreparer,
             PaperProcessSpecFactory processSpecFactory,
@@ -68,6 +71,7 @@ public final class InstanceManager implements ServerController {
         this.blueprints = blueprints;
         this.softwareProfiles = softwareProfiles;
         this.resourceBudget = resourceBudget;
+        this.outputConfig = outputConfig;
         this.portAllocator = portAllocator;
         this.directoryPreparer = directoryPreparer;
         this.metadataStore = new InstanceMetadataStore(directoryPreparer.root());
@@ -256,6 +260,7 @@ public final class InstanceManager implements ServerController {
             if (!prepared.equals(instance.directory())) {
                 throw new InstanceOperationException("Prepared instance path changed unexpectedly");
             }
+            instance.configureOutput(outputConfig);
             writeMetadata(instance, InstanceState.PREPARING, null);
             ServerPropertiesEditor.applyManagedNetworkSettings(prepared, instance.port());
             ProcessSpec spec = processSpecFactory.create(
@@ -276,7 +281,17 @@ public final class InstanceManager implements ServerController {
                         instance.id(),
                         spec,
                         instance.lifecycle(),
-                        line -> logger.info("[{}] {}", instance.id(), line)
+                        line -> {
+                            instance.appendLog(line);
+                            if (instance.mirrorsOutputToProxyConsole()) {
+                                logger.info("[{}] {}", instance.id(), line);
+                            }
+                            instance.takeOutputFailure().ifPresent(failure -> logger.warn(
+                                    "Temporary console log disabled for {}: {}",
+                                    instance.id(),
+                                    failure.getMessage()
+                            ));
+                        }
                 );
                 instance.attachProcess(process);
             }
@@ -371,6 +386,12 @@ public final class InstanceManager implements ServerController {
                 }
             }
             unregister(instance);
+            instance.closeOutput();
+            instance.takeOutputFailure().ifPresent(failure -> logger.warn(
+                    "Unable to close temporary console log for {}: {}",
+                    instance.id(),
+                    failure.getMessage()
+            ));
             portAllocator.release(instance.port());
             resourceBudget.release(instance.id());
             if (!instance.blueprint().save()) {

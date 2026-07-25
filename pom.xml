@@ -64,13 +64,7 @@
                 <version>3.15.0</version>
                 <configuration>
                     <release>${maven.compiler.release}</release>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>com.velocitypowered</groupId>
-                            <artifactId>velocity-api</artifactId>
-                            <version>${velocity.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
+                    <proc>none</proc>
                 </configuration>
             </plugin>
             <plugin>

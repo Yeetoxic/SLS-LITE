@@ -1,0 +1,13 @@
+{
+  "id": "sls-lite",
+  "name": "SLS-LITE",
+  "version": "0.1.0-SNAPSHOT",
+  "description": "Standalone, single-host SLS implementation for Velocity",
+  "url": "https://github.com/Yeetoxic/SLS-LITE",
+  "authors": [
+    "Protoxon",
+    "Yeetoxic"
+  ],
+  "dependencies": [],
+  "main": "net.slimelabs.slslite.SLSLite"
+}

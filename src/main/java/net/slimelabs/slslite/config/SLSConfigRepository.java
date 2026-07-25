@@ -18,6 +18,9 @@ public final class SLSConfigRepository {
     private static final int DEFAULT_PORT_RANGE_END = 25670;
     private static final int DEFAULT_QUEUE_TIMEOUT_SECONDS = 180;
     private static final int DEFAULT_IDLE_SHUTDOWN_SECONDS = 180;
+    private static final boolean DEFAULT_MIRROR_MANAGED_OUTPUT = false;
+    private static final boolean DEFAULT_WRITE_TEMPORARY_LOG = true;
+    private static final int DEFAULT_TEMPORARY_LOG_MAX_KIB = 4096;
     private static final String DEFAULT_LOBBY_MODE = "external";
     private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
     private static final String DEFAULT_LOBBY_SERVER = "lobby";
@@ -69,6 +72,8 @@ public final class SLSConfigRepository {
                     YamlValues.optionalMap(root, "matchmaking", configPath);
             Map<String, Object> lifecycle =
                     YamlValues.optionalMap(root, "lifecycle", configPath);
+            Map<String, Object> managedOutput =
+                    YamlValues.optionalMap(root, "managed_output", configPath);
             Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
             Map<String, Object> lobbyRecovery =
                     YamlValues.optionalMap(lobby, "recovery", configPath);
@@ -102,6 +107,24 @@ public final class SLSConfigRepository {
                     lifecycle,
                     "idle_shutdown_seconds",
                     DEFAULT_IDLE_SHUTDOWN_SECONDS,
+                    configPath
+            );
+            boolean mirrorManagedOutput = YamlValues.optionalBoolean(
+                    managedOutput,
+                    "mirror_to_proxy_console",
+                    DEFAULT_MIRROR_MANAGED_OUTPUT,
+                    configPath
+            );
+            boolean writeTemporaryLog = YamlValues.optionalBoolean(
+                    managedOutput,
+                    "write_temporary_file",
+                    DEFAULT_WRITE_TEMPORARY_LOG,
+                    configPath
+            );
+            int temporaryLogMaxKiB = YamlValues.optionalPositiveInt(
+                    managedOutput,
+                    "temporary_file_max_kib",
+                    DEFAULT_TEMPORARY_LOG_MAX_KIB,
                     configPath
             );
             String lobbyMode = YamlValues.optionalString(
@@ -161,6 +184,11 @@ public final class SLSConfigRepository {
                         portEnd,
                         queueTimeout,
                         idleShutdown,
+                        new ManagedOutputConfig(
+                                mirrorManagedOutput,
+                                writeTemporaryLog,
+                                temporaryLogMaxKiB
+                        ),
                         new LobbyConfig(
                                 LobbyMode.parse(lobbyMode),
                                 lobbyRegistry,

@@ -1,10 +1,15 @@
 package net.slimelabs.slslite.instance;
 
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.process.SupervisedProcess;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
 public final class ManagedInstance {
@@ -17,8 +22,14 @@ public final class ManagedInstance {
     private final Instant createdAt = Instant.now();
     private final CompletableFuture<ManagedInstance> ready = new CompletableFuture<>();
     private final CompletableFuture<Integer> stopped = new CompletableFuture<>();
+    private final InstanceLogBuffer logs = new InstanceLogBuffer();
 
     private volatile SupervisedProcess process;
+    private volatile ManagedOutputConfig outputConfig =
+            new ManagedOutputConfig(false, false, 4096);
+    private volatile TemporaryInstanceLog temporaryLog;
+    private volatile IOException outputFailure;
+    private volatile boolean outputDisabled;
     private volatile boolean registered;
     private volatile boolean stopRequested;
 
@@ -66,6 +77,99 @@ public final class ManagedInstance {
 
     public CompletableFuture<Integer> stoppedFuture() {
         return stopped;
+    }
+
+    public InstanceLogPage logs(int page, int linesPerPage) {
+        return logs.page(page, linesPerPage);
+    }
+
+    public int retainedLogLines() {
+        return logs.size();
+    }
+
+    public int logRetentionCapacity() {
+        return InstanceLogBuffer.CAPACITY;
+    }
+
+    public boolean mirrorsOutputToProxyConsole() {
+        return outputConfig.mirrorToProxyConsole();
+    }
+
+    public boolean writesTemporaryLog() {
+        return outputConfig.writeTemporaryFile();
+    }
+
+    public Optional<Path> temporaryLogPath() {
+        return writesTemporaryLog()
+                ? Optional.of(directory.resolve(TemporaryInstanceLog.RELATIVE_PATH))
+                : Optional.empty();
+    }
+
+    public OptionalLong processId() {
+        SupervisedProcess current = process;
+        if (current == null) {
+            return OptionalLong.empty();
+        }
+        try {
+            return OptionalLong.of(current.processId());
+        } catch (IllegalStateException exception) {
+            return OptionalLong.empty();
+        }
+    }
+
+    public Optional<Instant> processStartedAt() {
+        SupervisedProcess current = process;
+        return current == null ? Optional.empty() : current.processStartedAt();
+    }
+
+    public Optional<Duration> processCpuTime() {
+        OptionalLong id = processId();
+        if (id.isEmpty()) {
+            return Optional.empty();
+        }
+        return ProcessHandle.of(id.getAsLong())
+                .flatMap(handle -> handle.info().totalCpuDuration());
+    }
+
+    void configureOutput(ManagedOutputConfig config) throws IOException {
+        outputConfig = config;
+        if (config.writeTemporaryFile()) {
+            temporaryLog = new TemporaryInstanceLog(
+                    directory,
+                    config.temporaryFileMaxKiB()
+            );
+        }
+    }
+
+    void appendLog(String line) {
+        logs.append(line);
+        TemporaryInstanceLog current = temporaryLog;
+        if (current != null && !outputDisabled) {
+            try {
+                current.append(line);
+            } catch (IOException exception) {
+                outputDisabled = true;
+                outputFailure = exception;
+            }
+        }
+    }
+
+    Optional<IOException> takeOutputFailure() {
+        IOException failure = outputFailure;
+        outputFailure = null;
+        return Optional.ofNullable(failure);
+    }
+
+    void closeOutput() {
+        TemporaryInstanceLog current = temporaryLog;
+        temporaryLog = null;
+        if (current != null) {
+            try {
+                current.close();
+            } catch (IOException exception) {
+                outputFailure = exception;
+            }
+        }
     }
 
     InstanceLifecycle lifecycle() {

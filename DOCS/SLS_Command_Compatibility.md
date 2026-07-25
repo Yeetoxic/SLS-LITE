@@ -17,25 +17,25 @@ shape and return a concise `not available in local mode` explanation.
 
 | vSLS command | Permission | SLS-LITE status | Remaining compatibility work |
 | --- | --- | --- | --- |
-| `info [server]` | Details: `sls.command.admin` | Adapted | Match active-server list and resource/player details. |
+| `info [server]` | Details: `sls.command.admin` | Adapted | Summary and local instance details include players, lifecycle, process, resource, queue, log, and directory information. |
 | `list` | Public | Adapted | vSLS layout, status colors, counts, and hover information matched. |
 | `create <type> <id> [flags...]` | Admin | Planned | Add safe local equivalents for supported override flags. |
 | `start <type> <id>` | Admin | Adapted | Preserve saved-instance semantics when persistence lands. |
 | `join <type> <id> [target]` | Self public; others admin | Adapted | Add capacity enforcement and the full-server Join Anyway interaction. |
 | `find <player>` | Public | Supported | vSLS messages, hover details, and action-bar feedback matched. |
-| `system` | Admin | Planned | Report the local Velocity host and SLS-LITE version. |
+| `system` | Admin | Adapted | Reports local runtime, JVM memory, managed memory allocation, CPU threads, Java, and OS details; capability probes remain planned. |
 | `node <id> [drained [value]]` | Admin | Local-mode response planned | Node administration is distributed-only. |
 | `console <server> <command>` | Admin | Adapted | Safe local process input is supported; add bounded in-game output capture. |
 | `blueprint <id>` | Admin | Planned | Pretty-print one blueprint; keep `blueprints` as an additive alias. |
 | `debug` | Public, player-only | Planned | Add per-player local lifecycle diagnostics. |
 | `delete <server\|all>` | Admin | Planned | Define safe persistent and ephemeral deletion behavior. |
-| `logs <server> [lines]` | Admin | Planned | Read bounded recent local process logs. |
+| `logs <server> [page] [lines]` | Admin | Adapted | vSLS pagination is backed by a bounded 1,000-line local process-output buffer. |
 | `reload [all\|config\|blueprints\|software]` | Admin | Adapted | Add the upstream `config` mode. |
 | `stop <server\|all> [force]` | Admin | Adapted | Add `all` and compatible `force` behavior. |
 | `kill <server\|all> [force]` | Admin | Planned | Add explicit force-termination behavior. |
 | `dequeue [all\|local\|player]` | Self public; others admin | Adapted | Match final vSLS feedback and queue context. |
 | `status <server> [remote]` | Admin | Adapted | Local status output matched; add the `remote` local-mode response. |
-| `stats <server>` | Admin | Planned | Add locally measurable CPU, memory, disk, and uptime values. |
+| `stats [server]` | Admin | Adapted | Reports lifecycle state, process CPU time, configured memory, uptime, and retained logs; Java cannot portably measure child memory, network, or disk usage. |
 | `version` | Public | Adapted | vSLS label, emphasis, author metadata, and colors matched. |
 | `pause <server>` | Admin | Compatibility response | Local process suspension is not implemented yet. |
 | `resume <server>` | Admin | Compatibility response | Local process resumption is not implemented yet. |

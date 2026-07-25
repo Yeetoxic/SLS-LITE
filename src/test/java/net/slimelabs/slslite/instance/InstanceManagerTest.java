@@ -1,6 +1,7 @@
 package net.slimelabs.slslite.instance;
 
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.FixtureProcessMain;
 import net.slimelabs.slslite.process.PaperProcessSpecFactory;
@@ -58,7 +59,11 @@ class InstanceManagerTest {
         assertEquals(InstanceState.READY, instance.state());
         assertTrue(context.backends().registrations.containsKey(instance.id()));
         assertTrue(Files.isRegularFile(instance.directory().resolve("server.properties")));
+        assertTrue(Files.isRegularFile(
+                instance.directory().resolve(TemporaryInstanceLog.RELATIVE_PATH)
+        ));
         assertEquals(256, context.budget().reservedMemoryMiB());
+        assertTrue(instance.logs(1, 50).lines().contains("FIXTURE READY"));
 
         assertEquals(0, manager.stop(instance.id()).get(10, TimeUnit.SECONDS));
         awaitCleanup();
@@ -190,6 +195,7 @@ class InstanceManagerTest {
                 blueprints,
                 profiles,
                 budget,
+                new ManagedOutputConfig(false, true, 64),
                 ports,
                 preparer,
                 new PaperProcessSpecFactory(temporaryDirectory),

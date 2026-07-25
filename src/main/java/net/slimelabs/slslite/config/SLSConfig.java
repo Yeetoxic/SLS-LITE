@@ -8,6 +8,7 @@ public record SLSConfig(
         int portRangeEnd,
         int queueTimeoutSeconds,
         int idleShutdownSeconds,
+        ManagedOutputConfig managedOutput,
         LobbyConfig lobby,
         Path instancesDirectory
 ) {
@@ -29,6 +30,9 @@ public record SLSConfig(
         }
         if (idleShutdownSeconds < 0) {
             throw new IllegalArgumentException("idleShutdownSeconds must not be negative");
+        }
+        if (managedOutput == null) {
+            throw new IllegalArgumentException("managed output configuration is required");
         }
         if (lobby == null) {
             throw new IllegalArgumentException("lobby configuration is required");

@@ -47,7 +47,7 @@ public final class PaperProcessSpecFactory {
                 expand(profile.serverJar(), placeholders(blueprint, instanceId, port)),
                 "software.server_jar"
         );
-        String javaExecutable = resolveJavaExecutable(profile.javaExecutable());
+        String javaExecutable = resolveJavaExecutable(profile);
         Map<String, String> placeholders = placeholders(blueprint, instanceId, port);
 
         List<String> command = new ArrayList<>();
@@ -71,8 +71,9 @@ public final class PaperProcessSpecFactory {
         );
     }
 
-    private String resolveJavaExecutable(String configured)
+    public String resolveJavaExecutable(SoftwareProfile profile)
             throws ProcessSpecificationException {
+        String configured = profile.javaExecutable();
         if (!configured.contains("/") && !configured.contains("\\")) {
             return configured;
         }

@@ -18,6 +18,9 @@ implementation. The current development baseline provides:
 - Local memory reservation accounting.
 - Loopback port reservation and isolated instance-directory copying.
 - Shell-free Paper command construction and managed process supervision.
+- Startup probes for child Java execution, writable instance storage, and
+  loopback port binding.
+- Bounded in-game and temporary-file process logs with optional proxy mirroring.
 - A shaded release JAR with isolated runtime dependencies.
 - JUnit coverage for the implemented foundation.
 
@@ -74,8 +77,17 @@ Distributed SLS features are adapted to a single host:
 - Java 25 for current Paper releases that require it.
 - A current compatible Velocity build.
 - Maven 3.9 or newer.
+- Permission for Velocity to launch child Java processes.
+- Permission to bind managed backends to additional loopback ports.
+- Writable plugin storage for software, instances, worlds, and temporary logs.
+- Enough provider-assigned memory for Velocity plus every admitted backend.
 
 The plugin is compiled to Java 21 bytecode and is tested on JDK 25.
+At startup, SLS-LITE verifies storage, loopback binding, and every distinct Java
+runtime referenced by a software profile. Managed initialization fails with a
+specific diagnostic if a required probe fails. Provider memory limits cannot be
+discovered portably, so `resources.total_memory_mib` remains an operator-declared
+admission budget.
 
 ## Configuration
 
@@ -97,6 +109,11 @@ matchmaking:
 lifecycle:
   idle_shutdown_seconds: 180
 
+managed_output:
+  mirror_to_proxy_console: false
+  write_temporary_file: true
+  temporary_file_max_kib: 4096
+
 lobby:
   mode: external
   registry: lobby
@@ -111,6 +128,14 @@ Velocity itself. Managed paths must remain relative to the SLS-LITE data
 directory. Managed instances reserve an available loopback port from this range
 and release it during cleanup. Matchmaking requests fail and clean themselves up
 after the configured timeout.
+
+Managed process output always feeds the bounded `/sls logs` viewer. Proxy
+mirroring is disabled by default so Paper output does not flood the Velocity
+console. When temporary files are enabled, each instance writes
+`logs/sls-lite-console.log` inside its isolated directory and stops writing at
+the configured hard cap; no archive files are created. Ephemeral instance logs
+are removed with the instance directory. These host-wide settings currently
+apply after a proxy restart.
 
 Empty `READY` ephemeral instances stop after `lifecycle.idle_shutdown_seconds`.
 Set the value to `0` to disable idle shutdown globally. Persistent `save: true`

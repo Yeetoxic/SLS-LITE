@@ -159,12 +159,42 @@ Console command checks:
 ```text
 sls console <instance-id> say SLS-LITE console test
 sls console this list
+sls logs <instance-id>
+sls logs <instance-id> 1 100
+sls stats <instance-id>
+sls system
 ```
 
 The first form works from players or the Velocity console. The `this` selector
 is player-only and resolves the managed backend the sender currently occupies.
 The target must be a ready SLS-LITE instance and the sender must have
 `sls.command.admin` or `sls.command.console`.
+
+From a player connected to a managed backend, `this` must resolve consistently
+for `console`, `info`, `logs`, `stats`, `status`, and `stop`. Console senders
+must provide an explicit composite instance ID. A player connected to an
+external or otherwise unmanaged backend must receive `is not an SLS server`
+instead of treating `this` as a literal instance ID.
+
+`sls logs` uses the vSLS `<server> [page] [lines]` grammar. Page 1 contains the
+newest retained output, pages preserve chronological line order, `lines`
+defaults to 50 and accepts `max`, and each instance retains at most 1,000 lines.
+The `this` selector works for player senders on a managed backend.
+
+`sls stats` reports only values available from the local Java supervisor.
+Configured child memory is not presented as measured usage. `sls system`
+reports Velocity JVM pressure separately from the managed child-memory budget.
+It also reports startup capability results for writable storage, loopback port
+binding, and child Java execution. Hover a result in-game for its probe detail.
+
+With the default managed-output policy, Paper output should not be repeated in
+the Velocity console after the short SLS-LITE lifecycle messages. Verify that:
+
+1. `/sls logs <instance-id>` still shows the Paper output.
+2. `<instance-directory>/logs/sls-lite-console.log` exists.
+3. The temporary file never exceeds `managed_output.temporary_file_max_kib`.
+4. Setting `mirror_to_proxy_console: true` and restarting Velocity restores the
+   prefixed `[instance-id]` console stream.
 
 ## Permissions
 
@@ -175,10 +205,13 @@ public. Administrative commands accept the upstream-compatible
 ```text
 sls.command.blueprints
 sls.command.info
+sls.command.logs
 sls.command.reload
 sls.command.start
+sls.command.stats
 sls.command.status
 sls.command.stop
+sls.command.system
 sls.command.join.others
 sls.command.dequeue.others
 ```
