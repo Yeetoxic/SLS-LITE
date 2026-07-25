@@ -2,6 +2,8 @@ package net.slimelabs.slslite.instance;
 
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
+import net.slimelabs.slslite.config.ForwardingConfig;
+import net.slimelabs.slslite.config.ForwardingMode;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.FixtureProcessMain;
 import net.slimelabs.slslite.process.PaperProcessSpecFactory;
@@ -196,6 +198,11 @@ class InstanceManagerTest {
                 profiles,
                 budget,
                 new ManagedOutputConfig(false, true, 64),
+                new ForwardingConfig(
+                        ForwardingMode.NONE,
+                        false,
+                        temporaryDirectory.resolve("forwarding.secret")
+                ),
                 ports,
                 preparer,
                 new PaperProcessSpecFactory(temporaryDirectory),

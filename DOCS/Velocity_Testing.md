@@ -135,8 +135,10 @@ For the separate `join player` test, use two clients on different instances and
 run `/sls join player <other-player>`.
 
 `/sls join player <player> --force` is restricted to administrators. It
-currently follows the same route because blueprint capacity enforcement has not
-been implemented yet.
+bypasses the target instance's blueprint player limit. It still requires the
+target player to be on a ready, registered SLS-LITE instance. Verify the same
+command without `--force` returns `Instance is full` when that instance has
+reached `max_players`.
 
 Finish from the Velocity console:
 
@@ -223,3 +225,17 @@ completion.
 
 This fixture intentionally uses offline mode and no player forwarding. It binds
 only to loopback and is not a production configuration.
+
+For a production-style forwarding test, configure Velocity with modern
+forwarding, place its secret in `forwarding.secret`, and set:
+
+```yaml
+forwarding:
+  mode: modern
+  online_mode: true
+  secret_file: forwarding.secret
+```
+
+After starting a managed Paper instance, verify `spigot.yml` has BungeeCord
+forwarding disabled and `config/paper-global.yml` has Velocity forwarding
+enabled with the matching online-mode value. Do not publish either secret file.

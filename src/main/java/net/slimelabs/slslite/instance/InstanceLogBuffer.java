@@ -7,7 +7,7 @@ import java.util.List;
 final class InstanceLogBuffer {
 
     static final int CAPACITY = 1_000;
-    static final int MAX_LINE_LENGTH = 4_096;
+    static final int MAX_LINE_LENGTH = 1_024;
 
     private final ArrayDeque<String> lines = new ArrayDeque<>(CAPACITY);
 

@@ -3,6 +3,7 @@ package net.slimelabs.slslite.instance;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
+import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.network.PortAllocationException;
 import net.slimelabs.slslite.process.PaperProcessSpecFactory;
@@ -43,6 +44,7 @@ public final class InstanceManager implements ServerController {
     private final SoftwareProfileRepository softwareProfiles;
     private final ResourceBudget resourceBudget;
     private final ManagedOutputConfig outputConfig;
+    private final ForwardingConfig forwardingConfig;
     private final LoopbackPortAllocator portAllocator;
     private final InstanceDirectoryPreparer directoryPreparer;
     private final InstanceMetadataStore metadataStore;
@@ -61,6 +63,7 @@ public final class InstanceManager implements ServerController {
             SoftwareProfileRepository softwareProfiles,
             ResourceBudget resourceBudget,
             ManagedOutputConfig outputConfig,
+            ForwardingConfig forwardingConfig,
             LoopbackPortAllocator portAllocator,
             InstanceDirectoryPreparer directoryPreparer,
             PaperProcessSpecFactory processSpecFactory,
@@ -72,6 +75,7 @@ public final class InstanceManager implements ServerController {
         this.softwareProfiles = softwareProfiles;
         this.resourceBudget = resourceBudget;
         this.outputConfig = outputConfig;
+        this.forwardingConfig = forwardingConfig;
         this.portAllocator = portAllocator;
         this.directoryPreparer = directoryPreparer;
         this.metadataStore = new InstanceMetadataStore(directoryPreparer.root());
@@ -262,7 +266,12 @@ public final class InstanceManager implements ServerController {
             }
             instance.configureOutput(outputConfig);
             writeMetadata(instance, InstanceState.PREPARING, null);
-            ServerPropertiesEditor.applyManagedNetworkSettings(prepared, instance.port());
+            ServerPropertiesEditor.applyManagedNetworkSettings(
+                    prepared,
+                    instance.port(),
+                    instance.blueprint().maxPlayers()
+            );
+            PaperForwardingEditor.apply(prepared, forwardingConfig);
             ProcessSpec spec = processSpecFactory.create(
                     profile,
                     instance.blueprint(),

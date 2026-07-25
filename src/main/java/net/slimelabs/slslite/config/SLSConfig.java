@@ -9,6 +9,7 @@ public record SLSConfig(
         int queueTimeoutSeconds,
         int idleShutdownSeconds,
         ManagedOutputConfig managedOutput,
+        ForwardingConfig forwarding,
         LobbyConfig lobby,
         Path instancesDirectory
 ) {
@@ -33,6 +34,9 @@ public record SLSConfig(
         }
         if (managedOutput == null) {
             throw new IllegalArgumentException("managed output configuration is required");
+        }
+        if (forwarding == null) {
+            throw new IllegalArgumentException("forwarding configuration is required");
         }
         if (lobby == null) {
             throw new IllegalArgumentException("lobby configuration is required");

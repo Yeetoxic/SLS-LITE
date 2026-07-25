@@ -24,7 +24,7 @@ class ServerPropertiesEditorTest {
                 StandardCharsets.UTF_8
         );
 
-        ServerPropertiesEditor.applyManagedNetworkSettings(temporaryDirectory, 25571);
+        ServerPropertiesEditor.applyManagedNetworkSettings(temporaryDirectory, 25571, 12);
 
         Properties properties = new Properties();
         try (Reader input = Files.newBufferedReader(
@@ -35,6 +35,7 @@ class ServerPropertiesEditorTest {
         }
         assertEquals("Test Server", properties.getProperty("motd"));
         assertEquals("false", properties.getProperty("online-mode"));
+        assertEquals("12", properties.getProperty("max-players"));
         assertEquals("127.0.0.1", properties.getProperty("server-ip"));
         assertEquals("25571", properties.getProperty("server-port"));
     }

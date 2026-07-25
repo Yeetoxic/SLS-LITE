@@ -41,7 +41,7 @@ public final class SLSCommand implements SimpleCommand {
 
     private static final int DEFAULT_LOG_PAGE = 1;
     private static final int DEFAULT_LOG_LINES = 50;
-    private static final int MAX_LOG_LINES = 1_000;
+    private static final int MAX_LOG_LINES = 100;
 
     private static final List<String> PUBLIC_COMMANDS =
             List.of("dequeue", "find", "info", "join", "list", "registries", "version");
@@ -574,27 +574,23 @@ public final class SLSCommand implements SimpleCommand {
             CommandSource source,
             String requestedId
     ) {
-        String instanceId = requestedId;
-        if ("this".equalsIgnoreCase(requestedId)) {
-            if (!(source instanceof Player player)) {
-                source.sendMessage(CommandMessages.message(
-                        "Console must specify a server id.", NamedTextColor.RED
-                ));
-                return null;
-            }
-            instanceId = player.getCurrentServer()
-                    .map(connection -> connection.getServerInfo().getName())
-                    .orElse(null);
-            if (instanceId == null || findInstanceOrNull(instanceId) == null) {
-                source.sendMessage(CommandMessages.message(
-                        "Server " + (instanceId == null ? "none" : instanceId)
-                                + " is not an SLS server",
-                        NamedTextColor.RED
-                ));
-                return null;
-            }
+        Optional<String> currentServer = source instanceof Player player
+                ? player.getCurrentServer()
+                        .map(connection -> connection.getServerInfo().getName())
+                : Optional.empty();
+        InstanceTargetResolver.Resolution resolution = InstanceTargetResolver.resolve(
+                requestedId,
+                source instanceof Player,
+                currentServer,
+                id -> findInstanceOrNull(id) != null
+        );
+        if (resolution.error() != null) {
+            source.sendMessage(CommandMessages.message(
+                    resolution.error(), NamedTextColor.RED
+            ));
+            return null;
         }
-        ManagedInstance instance = findInstanceOrNull(instanceId);
+        ManagedInstance instance = findInstanceOrNull(resolution.instanceId());
         if (instance == null) {
             source.sendMessage(CommandMessages.message(
                     "No such server " + requestedId, NamedTextColor.RED
@@ -728,10 +724,11 @@ public final class SLSCommand implements SimpleCommand {
             ));
             return;
         }
-        if (arguments.length == 4) {
+        boolean force = arguments.length == 4;
+        if (force) {
             if (!"--force".equalsIgnoreCase(arguments[3])) {
                 source.sendMessage(CommandMessages.usage(
-                        "/sls join player", "player"
+                        "/sls join player", "player", "--force"
                 ));
                 return;
             }
@@ -748,9 +745,12 @@ public final class SLSCommand implements SimpleCommand {
         }
         try {
             LocalJoinService.DirectJoin directJoin =
-                    joinService.joinPlayer(player, target);
+                    joinService.joinPlayer(player, target, force);
             source.sendMessage(CommandMessages.prefix()
-                    .append(Component.text("Joining ", NamedTextColor.GREEN))
+                    .append(Component.text(
+                            force ? "Force joining " : "Joining ",
+                            force ? NamedTextColor.YELLOW : NamedTextColor.GREEN
+                    ))
                     .append(CommandMessages.player(target))
                     .append(Component.text(" on ", NamedTextColor.GRAY))
                     .append(CommandMessages.server(

@@ -99,6 +99,13 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
 
             Optional<ManagedInstance> existing = selectInstance(blueprint);
             created = existing.isEmpty();
+            if (created && activeInstanceCount(blueprint) >= blueprint.maxInstances()) {
+                throw new InstanceOperationException(
+                        "All instances of " + registry + "/" + server
+                                + " are full and the blueprint limit of "
+                                + blueprint.maxInstances() + " instance(s) has been reached"
+                );
+            }
             ManagedInstance instance = existing.isPresent()
                     ? existing.get()
                     : instances.start(blueprint.id());
@@ -137,7 +144,12 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         return entry == null ? Optional.empty() : Optional.of(entry.ticket);
     }
 
-    public DirectJoin joinPlayer(Player player, Player target)
+    public synchronized DirectJoin joinPlayer(Player player, Player target)
+            throws InstanceOperationException {
+        return joinPlayer(player, target, false);
+    }
+
+    public synchronized DirectJoin joinPlayer(Player player, Player target, boolean force)
             throws InstanceOperationException {
         ServerConnection targetConnection = target.getCurrentServer().orElseThrow(
                 () -> new InstanceOperationException(
@@ -156,6 +168,13 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                         "Managed instance is not registered with Velocity: " + instance.id()
                 )
         );
+        if (!force
+                && registered.getPlayersConnected().size() + queuedFor(instance.id())
+                >= instance.blueprint().maxPlayers()) {
+            throw new InstanceOperationException(
+                    "Instance is full: " + instance.id()
+            );
+        }
         return new DirectJoin(
                 instance,
                 player.createConnectionRequest(registered).connect()
@@ -250,15 +269,40 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     private Optional<ManagedInstance> selectInstance(Blueprint blueprint) {
         return instances.getAll().stream()
                 .filter(instance -> instance.blueprint().id().equals(blueprint.id()))
-                .filter(instance -> instance.state() != InstanceState.STOPPING)
-                .filter(instance -> instance.state() != InstanceState.STOPPED)
-                .filter(instance -> instance.state() != InstanceState.FAILED)
+                .filter(this::isActive)
                 .filter(instance -> !isDraining(instance.id()))
+                .filter(instance -> occupiedSlots(instance) < blueprint.maxPlayers())
                 .sorted(Comparator
                         .comparing((ManagedInstance instance) ->
                                 instance.state() == InstanceState.READY ? 0 : 1)
                         .thenComparing(ManagedInstance::createdAt))
                 .findFirst();
+    }
+
+    private long activeInstanceCount(Blueprint blueprint) {
+        return instances.getAll().stream()
+                .filter(instance -> instance.blueprint().id().equals(blueprint.id()))
+                .filter(this::isActive)
+                .count();
+    }
+
+    private boolean isActive(ManagedInstance instance) {
+        return instance.state() != InstanceState.STOPPING
+                && instance.state() != InstanceState.STOPPED
+                && instance.state() != InstanceState.FAILED;
+    }
+
+    private int occupiedSlots(ManagedInstance instance) {
+        int connected = proxy.getServer(instance.id())
+                .map(server -> server.getPlayersConnected().size())
+                .orElse(0);
+        return connected + queuedFor(instance.id());
+    }
+
+    private int queuedFor(String instanceId) {
+        return (int) queue.values().stream()
+                .filter(entry -> entry.ticket.instanceId().equals(instanceId))
+                .count();
     }
 
     private synchronized boolean isDraining(String instanceId) {

@@ -21,7 +21,7 @@ shape and return a concise `not available in local mode` explanation.
 | `list` | Public | Adapted | vSLS layout, status colors, counts, and hover information matched. |
 | `create <type> <id> [flags...]` | Admin | Planned | Add safe local equivalents for supported override flags. |
 | `start <type> <id>` | Admin | Adapted | Preserve saved-instance semantics when persistence lands. |
-| `join <type> <id> [target]` | Self public; others admin | Adapted | Add capacity enforcement and the full-server Join Anyway interaction. |
+| `join <type> <id> [target]` | Self public; others admin | Adapted | Capacity-aware allocation is supported; admin `/sls join player <player> --force` can bypass a full target instance. |
 | `find <player>` | Public | Supported | vSLS messages, hover details, and action-bar feedback matched. |
 | `system` | Admin | Adapted | Reports local runtime, JVM memory, managed memory allocation, CPU threads, Java, and OS details; capability probes remain planned. |
 | `node <id> [drained [value]]` | Admin | Local-mode response planned | Node administration is distributed-only. |

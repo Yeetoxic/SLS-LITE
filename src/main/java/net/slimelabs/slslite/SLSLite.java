@@ -71,7 +71,10 @@ public final class SLSLite {
         this.logger = logger;
         this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
         this.blueprints = new BlueprintRepository(this.dataDirectory.resolve("blueprints"));
-        this.configuration = new SLSConfigRepository(this.dataDirectory);
+        this.configuration = new SLSConfigRepository(
+                this.dataDirectory,
+                Path.of("").toAbsolutePath().normalize()
+        );
         this.softwareProfiles = new SoftwareProfileRepository(
                 this.dataDirectory.resolve("software-profiles")
         );
@@ -136,6 +139,7 @@ public final class SLSLite {
                     softwareProfiles,
                     resourceBudget,
                     configuration.get().managedOutput(),
+                    configuration.get().forwarding(),
                     portAllocator,
                     directoryPreparer,
                     processSpecFactory,

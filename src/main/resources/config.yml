@@ -51,6 +51,23 @@ managed_output:
   # rotated archives. This value is still validated when file output is false.
   temporary_file_max_kib: 4096
 
+forwarding:
+  # Player-information forwarding mode. Valid values:
+  #   none   - disable Velocity forwarding in managed Paper servers. Suitable
+  #            only for isolated development where player identity is not needed.
+  #   modern - configure modern Velocity forwarding for managed Paper servers.
+  #            Use this for a real network.
+  mode: none
+
+  # Boolean: true or false. Must match online-mode in velocity.toml when mode is
+  # modern. This controls whether Paper expects Velocity to authenticate players.
+  online_mode: true
+
+  # Non-blank relative path from the Velocity working directory to the same
+  # secret file configured by forwarding-secret-file in velocity.toml. Absolute
+  # paths and paths escaping the Velocity directory are rejected.
+  secret_file: forwarding.secret
+
 lobby:
   # Lobby implementation. Valid values:
   #   external - use an existing backend already registered in velocity.toml.

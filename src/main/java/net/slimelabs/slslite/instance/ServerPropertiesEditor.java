@@ -13,10 +13,17 @@ public final class ServerPropertiesEditor {
     private ServerPropertiesEditor() {
     }
 
-    public static void applyManagedNetworkSettings(Path instanceDirectory, int port)
+    public static void applyManagedNetworkSettings(
+            Path instanceDirectory,
+            int port,
+            int maxPlayers
+    )
             throws IOException {
         if (port < 1024 || port > 65535) {
             throw new IllegalArgumentException("port must be between 1024 and 65535");
+        }
+        if (maxPlayers <= 0) {
+            throw new IllegalArgumentException("maxPlayers must be positive");
         }
 
         Path root = instanceDirectory.toAbsolutePath().normalize();
@@ -31,6 +38,7 @@ public final class ServerPropertiesEditor {
         properties.setProperty("server-ip", "127.0.0.1");
         properties.setProperty("server-port", Integer.toString(port));
         properties.setProperty("online-mode", "false");
+        properties.setProperty("max-players", Integer.toString(maxPlayers));
 
         try (Writer output = Files.newBufferedWriter(propertiesPath, StandardCharsets.UTF_8)) {
             properties.store(output, "Managed by SLS-LITE");

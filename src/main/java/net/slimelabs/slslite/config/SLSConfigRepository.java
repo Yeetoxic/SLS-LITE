@@ -21,6 +21,9 @@ public final class SLSConfigRepository {
     private static final boolean DEFAULT_MIRROR_MANAGED_OUTPUT = false;
     private static final boolean DEFAULT_WRITE_TEMPORARY_LOG = true;
     private static final int DEFAULT_TEMPORARY_LOG_MAX_KIB = 4096;
+    private static final String DEFAULT_FORWARDING_MODE = "none";
+    private static final boolean DEFAULT_FORWARDING_ONLINE_MODE = true;
+    private static final String DEFAULT_FORWARDING_SECRET_FILE = "forwarding.secret";
     private static final String DEFAULT_LOBBY_MODE = "external";
     private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
     private static final String DEFAULT_LOBBY_SERVER = "lobby";
@@ -31,11 +34,17 @@ public final class SLSConfigRepository {
     private static final String DEFAULT_INSTANCES_DIRECTORY = "instances";
 
     private final Path dataDirectory;
+    private final Path proxyDirectory;
     private final Path configPath;
     private volatile SLSConfig config;
 
     public SLSConfigRepository(Path dataDirectory) {
+        this(dataDirectory, dataDirectory);
+    }
+
+    public SLSConfigRepository(Path dataDirectory, Path proxyDirectory) {
         this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
+        this.proxyDirectory = proxyDirectory.toAbsolutePath().normalize();
         this.configPath = this.dataDirectory.resolve("config.yml");
     }
 
@@ -74,6 +83,8 @@ public final class SLSConfigRepository {
                     YamlValues.optionalMap(root, "lifecycle", configPath);
             Map<String, Object> managedOutput =
                     YamlValues.optionalMap(root, "managed_output", configPath);
+            Map<String, Object> forwarding =
+                    YamlValues.optionalMap(root, "forwarding", configPath);
             Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
             Map<String, Object> lobbyRecovery =
                     YamlValues.optionalMap(lobby, "recovery", configPath);
@@ -125,6 +136,24 @@ public final class SLSConfigRepository {
                     managedOutput,
                     "temporary_file_max_kib",
                     DEFAULT_TEMPORARY_LOG_MAX_KIB,
+                    configPath
+            );
+            String forwardingMode = YamlValues.optionalString(
+                    forwarding,
+                    "mode",
+                    DEFAULT_FORWARDING_MODE,
+                    configPath
+            );
+            boolean forwardingOnlineMode = YamlValues.optionalBoolean(
+                    forwarding,
+                    "online_mode",
+                    DEFAULT_FORWARDING_ONLINE_MODE,
+                    configPath
+            );
+            String forwardingSecretFile = YamlValues.optionalString(
+                    forwarding,
+                    "secret_file",
+                    DEFAULT_FORWARDING_SECRET_FILE,
                     configPath
             );
             String lobbyMode = YamlValues.optionalString(
@@ -189,6 +218,14 @@ public final class SLSConfigRepository {
                                 writeTemporaryLog,
                                 temporaryLogMaxKiB
                         ),
+                        new ForwardingConfig(
+                                ForwardingMode.parse(forwardingMode),
+                                forwardingOnlineMode,
+                                resolveProxyPath(
+                                        forwardingSecretFile,
+                                        "forwarding.secret_file"
+                                )
+                        ),
                         new LobbyConfig(
                                 LobbyMode.parse(lobbyMode),
                                 lobbyRegistry,
@@ -228,6 +265,21 @@ public final class SLSConfigRepository {
         if (!resolved.startsWith(dataDirectory)) {
             throw YamlValues.error(configPath, "'" + key + "' must stay inside "
                     + dataDirectory);
+        }
+        return resolved;
+    }
+
+    private Path resolveProxyPath(String value, String key) throws ConfigurationException {
+        Path configured = Path.of(value);
+        if (configured.isAbsolute()) {
+            throw YamlValues.error(configPath, "'" + key + "' must be relative");
+        }
+        Path resolved = proxyDirectory.resolve(configured).normalize();
+        if (!resolved.startsWith(proxyDirectory)) {
+            throw YamlValues.error(
+                    configPath,
+                    "'" + key + "' must stay inside " + proxyDirectory
+            );
         }
         return resolved;
     }

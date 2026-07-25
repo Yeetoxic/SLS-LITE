@@ -29,6 +29,8 @@ class BlueprintRepositoryTest {
                   version: "26.1"
                   limits:
                     memory_limit: 1536
+                    max_players: 32
+                    max_instances: 3
                 save: false
                 annotations:
                   sls-lite:
@@ -44,6 +46,8 @@ class BlueprintRepositoryTest {
         assertEquals("paper", blueprint.software());
         assertEquals("26.1", blueprint.version());
         assertEquals(1536, blueprint.memoryLimitMiB());
+        assertEquals(32, blueprint.maxPlayers());
+        assertEquals(3, blueprint.maxInstances());
         assertFalse(blueprint.save());
     }
 
@@ -87,6 +91,25 @@ class BlueprintRepositoryTest {
                 server:
                   software: paper
                   version: "26.1"
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+
+        assertThrows(BlueprintException.class, repository::reload);
+    }
+
+    @Test
+    void rejectsFractionalMemoryLimit() throws Exception {
+        write("fractional.yml", """
+                blueprint:
+                  id: fractional
+                  name: Fractional
+                  type: game
+                server:
+                  software: paper
+                  version: "26.1"
+                  limits:
+                    memory_limit: 768.5
                 """);
 
         BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);

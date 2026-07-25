@@ -7,7 +7,6 @@ import net.slimelabs.slslite.process.ProcessSpecificationException;
 import net.slimelabs.slslite.software.SoftwareProfile;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -104,7 +103,8 @@ public final class HostCapabilityChecker {
         Process process = null;
         try {
             process = new ProcessBuilder(executable, "-version")
-                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start();
             if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
@@ -114,7 +114,6 @@ public final class HostCapabilityChecker {
                                 + PROCESS_TIMEOUT_SECONDS + " seconds"
                 );
             }
-            process.getInputStream().transferTo(OutputStream.nullOutputStream());
             if (process.exitValue() != 0) {
                 return failure(
                         "Child Java process",

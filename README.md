@@ -114,6 +114,11 @@ managed_output:
   write_temporary_file: true
   temporary_file_max_kib: 4096
 
+forwarding:
+  mode: none
+  online_mode: true
+  secret_file: forwarding.secret
+
 lobby:
   mode: external
   registry: lobby
@@ -136,6 +141,13 @@ console. When temporary files are enabled, each instance writes
 the configured hard cap; no archive files are created. Ephemeral instance logs
 are removed with the instance directory. These host-wide settings currently
 apply after a proxy restart.
+
+For a production Paper network, set `forwarding.mode: modern`,
+`forwarding.online_mode` to the same value as Velocity's `online-mode`, and
+`forwarding.secret_file` to Velocity's configured forwarding secret file.
+SLS-LITE then patches each managed instance's `spigot.yml` and
+`config/paper-global.yml` without exposing the secret in process arguments or
+logs. The default `none` mode is intended for isolated smoke testing.
 
 Empty `READY` ephemeral instances stop after `lifecycle.idle_shutdown_seconds`.
 Set the value to `0` to disable idle shutdown globally. Persistent `save: true`
@@ -252,6 +264,8 @@ server:
   software: paper
   version: "26.1"
   limits:
+    max_players: 20
+    max_instances: 1
     memory_limit: 2048
 
 save: false
@@ -262,9 +276,11 @@ annotations:
     stop-when-empty: true
 ```
 
-Only the fields represented by the current blueprint model are active. More
-modern SLS-compatible fields will be added as their local implementations are
-built.
+`max_players` applies to each instance and is written to `server.properties`.
+Queued joins reserve slots before the backend is ready. When all instances are
+full, SLS-LITE may start another instance up to `max_instances`; afterward it
+rejects the join with a capacity error. Memory admission can still reject a
+permitted instance when the host-wide managed-memory budget is exhausted.
 
 ## Roadmap
 

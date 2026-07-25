@@ -203,6 +203,42 @@ class LocalJoinServiceTest {
     }
 
     @Test
+    void forcedJoinPlayerBypassesBlueprintPlayerCapacity() throws Exception {
+        Fixture fixture = fixture(Duration.ofSeconds(5), 1);
+        try (LocalJoinService service = fixture.service()) {
+            ManagedInstance instance = fixture.controller().start("smoke");
+            instance.lifecycle().transitionTo(InstanceState.STARTING);
+            instance.lifecycle().transitionTo(InstanceState.READY);
+            instance.readyFuture().complete(instance);
+
+            RegisteredServer registeredServer = registeredServer();
+            ServerConnection connection = serverConnection(instance.id(), registeredServer);
+            Player target = player(
+                    UUID.randomUUID(),
+                    "TargetPlayer",
+                    registeredServer,
+                    connectionResult(registeredServer),
+                    Optional.of(connection)
+            );
+
+            InstanceOperationException full = assertThrows(
+                    InstanceOperationException.class,
+                    () -> service.joinPlayer(fixture.player(), target)
+            );
+            assertTrue(full.getMessage().contains("Instance is full"));
+
+            LocalJoinService.DirectJoin forced =
+                    service.joinPlayer(fixture.player(), target, true);
+
+            assertEquals(instance.id(), forced.instance().id());
+            assertEquals(
+                    ConnectionRequestBuilder.Status.SUCCESS,
+                    forced.connection().get(1, TimeUnit.SECONDS).getStatus()
+            );
+        }
+    }
+
+    @Test
     void drainingInstanceIsNotSelectedForANewJoin() throws Exception {
         Fixture fixture = fixture(Duration.ofSeconds(5));
         try (LocalJoinService service = fixture.service()) {
@@ -223,7 +259,47 @@ class LocalJoinServiceTest {
         }
     }
 
+    @Test
+    void queuedPlayersScaleOnlyUpToBlueprintCapacity() throws Exception {
+        Fixture fixture = fixture(Duration.ofSeconds(5));
+        Player secondPlayer = player(
+                UUID.randomUUID(),
+                "SecondPlayer",
+                registeredServer(),
+                connectionResult(registeredServer()),
+                Optional.empty()
+        );
+        Player thirdPlayer = player(
+                UUID.randomUUID(),
+                "ThirdPlayer",
+                registeredServer(),
+                connectionResult(registeredServer()),
+                Optional.empty()
+        );
+
+        try (LocalJoinService service = fixture.service()) {
+            LocalJoinService.JoinAttempt first =
+                    service.join(fixture.player(), "test", "smoke");
+            LocalJoinService.JoinAttempt second =
+                    service.join(secondPlayer, "test", "smoke");
+
+            assertTrue(first.created());
+            assertTrue(second.created());
+            assertNotEquals(first.instance().id(), second.instance().id());
+            InstanceOperationException exception = assertThrows(
+                    InstanceOperationException.class,
+                    () -> service.join(thirdPlayer, "test", "smoke")
+            );
+            assertTrue(exception.getMessage().contains("blueprint limit of 2"));
+            assertEquals(2, fixture.controller().getAll().size());
+        }
+    }
+
     private Fixture fixture(Duration timeout) throws Exception {
+        return fixture(timeout, 0);
+    }
+
+    private Fixture fixture(Duration timeout, int connectedPlayers) throws Exception {
         Path blueprintDirectory = temporaryDirectory.resolve("blueprints");
         BlueprintRepository blueprints = new BlueprintRepository(blueprintDirectory);
         Files.createDirectories(blueprintDirectory);
@@ -237,13 +313,15 @@ class LocalJoinServiceTest {
                   version: "26.1"
                   limits:
                     memory_limit: 512
+                    max_players: 1
+                    max_instances: 2
                 """);
         blueprints.reload();
 
         Blueprint blueprint = blueprints.get("test", "smoke").orElseThrow();
         FakeController controller = new FakeController(blueprint, temporaryDirectory);
         UUID playerId = UUID.randomUUID();
-        RegisteredServer registeredServer = registeredServer();
+        RegisteredServer registeredServer = registeredServer(connectedPlayers);
         ConnectionRequestBuilder.Result result = connectionResult(registeredServer);
         Player player = player(
                 playerId,
@@ -325,11 +403,16 @@ class LocalJoinServiceTest {
     }
 
     private static RegisteredServer registeredServer() {
+        return registeredServer(0);
+    }
+
+    private static RegisteredServer registeredServer(int connectedPlayers) {
         return (RegisteredServer) Proxy.newProxyInstance(
                 RegisteredServer.class.getClassLoader(),
                 new Class<?>[]{RegisteredServer.class},
                 (proxy, method, arguments) -> switch (method.getName()) {
-                    case "getPlayersConnected" -> List.of();
+                    case "getPlayersConnected" ->
+                            java.util.Collections.nCopies(connectedPlayers, null);
                     default -> defaultValue(method.getReturnType());
                 }
         );

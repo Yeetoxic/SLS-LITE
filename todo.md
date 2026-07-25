@@ -73,6 +73,9 @@ hosted backend and lobby servers.
   - Maximum players and maximum active instances.
   - Persistent or ephemeral state.
   - Idle shutdown behavior.
+  - [x] Implement memory, player, and active-instance limits.
+  - [x] Implement persistent/ephemeral and idle-shutdown policy fields.
+  - [ ] Add a blueprint-level base world or template directory.
 - [x] Validate all currently supported configuration before starting an instance.
 - [x] Use platform-independent `Path` handling.
 - [ ] Reload configuration without corrupting active instance state.
@@ -111,6 +114,11 @@ hosted backend and lobby servers.
       unavailable.
 - [ ] Apply required `server.properties` values to the instance copy, including
       loopback address, allocated port, forwarding settings, and view distance.
+  - [x] Apply loopback address, allocated port, offline backend mode, and
+        blueprint player capacity.
+  - [x] Apply modern Velocity forwarding to Paper and disable legacy BungeeCord
+        forwarding when configured.
+  - [ ] Add a configurable view-distance policy.
 
 ## Phase 5: Velocity Integration
 
@@ -144,7 +152,7 @@ hosted backend and lobby servers.
       listing, version information, joining oneself, and finding a player.
 - [x] Require administrative permission when an implemented operation targets
       `all`, `local`, or another player.
-- [ ] Require administrative permission for force operations that bypass
+- [x] Require administrative permission for force operations that bypass
       blueprint capacity or lifecycle safeguards when those options are added.
 - [x] Add optional granular SLS-LITE permission nodes only as additive aliases;
       users with `sls.command.admin` must retain access to all local
@@ -167,9 +175,10 @@ hosted backend and lobby servers.
 - [x] Mirror the complete vSLS `v0.2.0` top-level tree, including `system` and
       `node`; keep SLS-LITE-only commands such as `registries` and `blueprints`
       as additive aliases rather than replacements for upstream commands.
-- [ ] Match the remaining vSLS modifier behavior for capacity-bypassing
-      `force`/`--force` and daemon-backed `remote`. The implemented join paths
-      support `all`, `local`, player names, and `player <player>`.
+- [ ] Match the remaining vSLS modifier behavior. Capacity-bypassing
+      `/sls join player <player> --force` is implemented; daemon-backed
+      `remote` remains unavailable. The implemented join paths support `all`,
+      `local`, player names, and `player <player>`.
 - [x] Add the initial versioned command-contract fixture for the pinned vSLS
       release, root command names, and public/admin help visibility.
 - [ ] Extend the command-contract fixture across every argument branch,
@@ -179,6 +188,8 @@ hosted backend and lobby servers.
       or partially emulating them.
 - [ ] Add command tests covering public, granular, administrator, console,
       player, other-player, force, invalid-usage, and tab-completion cases.
+  - [x] Cover the shared `this` selector for console, external backends, and
+        managed backends.
 
 ## Modern SLS Features
 
@@ -362,11 +373,11 @@ the local implementation has equivalent behavior.
 - [ ] Add a pluggable blueprint selection strategy, starting with first-available
       and random selection.
 - [ ] Prefer existing ready instances with capacity before creating another.
-- [ ] Enforce per-blueprint player and instance limits during allocation.
+- [x] Enforce per-blueprint player and instance limits during allocation.
 - [x] Cancel provisioning when its queue becomes empty when safe to do so.
 - [ ] Support blueprint `on-join` console actions with safe placeholders such as
       player name and UUID.
-- [ ] Add a force-join permission that can bypass blueprint capacity for
+- [x] Add a force-join permission that can bypass blueprint capacity for
       administrators.
 
 ### Operations and Observability

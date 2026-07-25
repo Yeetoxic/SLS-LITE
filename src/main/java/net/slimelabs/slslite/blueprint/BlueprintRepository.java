@@ -23,6 +23,8 @@ public final class BlueprintRepository {
 
     private static final Pattern VALID_ID = Pattern.compile("[a-z0-9][a-z0-9_-]{0,63}");
     private static final int DEFAULT_MEMORY_MIB = 1024;
+    private static final int DEFAULT_MAX_PLAYERS = 20;
+    private static final int DEFAULT_MAX_INSTANCES = 1;
 
     private final Path directory;
     private volatile Map<String, Blueprint> blueprints = Map.of();
@@ -123,9 +125,32 @@ public final class BlueprintRepository {
             String software = requiredString(server, "software", path);
             String version = requiredString(server, "version", path);
             int memory = optionalPositiveInt(limits, "memory_limit", DEFAULT_MEMORY_MIB, path);
+            int maxPlayers = optionalPositiveInt(
+                    limits,
+                    "max_players",
+                    DEFAULT_MAX_PLAYERS,
+                    path
+            );
+            int maxInstances = optionalPositiveInt(
+                    limits,
+                    "max_instances",
+                    DEFAULT_MAX_INSTANCES,
+                    path
+            );
             boolean save = optionalBoolean(root, "save", false, path);
 
-            return new Blueprint(id, name, type, software, version, memory, save, annotations);
+            return new Blueprint(
+                    id,
+                    name,
+                    type,
+                    software,
+                    version,
+                    memory,
+                    maxPlayers,
+                    maxInstances,
+                    save,
+                    annotations
+            );
         } catch (IOException exception) {
             throw new BlueprintException("Unable to read blueprint " + path, exception);
         } catch (BlueprintException exception) {
@@ -197,7 +222,9 @@ public final class BlueprintRepository {
         if (value == null) {
             return defaultValue;
         }
-        if (!(value instanceof Number number) || number.intValue() <= 0) {
+        if (!(value instanceof Number number)
+                || number.intValue() <= 0
+                || number.doubleValue() != number.intValue()) {
             throw error(path, "'" + key + "' must be a positive integer");
         }
         return number.intValue();

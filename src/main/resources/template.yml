@@ -9,6 +9,11 @@ server:
   software: paper
   version: "26.1"
   limits:
+    # Positive integer. Player slots available on each running instance.
+    max_players: 20
+    # Positive integer. Maximum simultaneous instances of this blueprint.
+    max_instances: 1
+    # Positive integer MiB reservation for each running instance.
     memory_limit: 2048
 
 save: false

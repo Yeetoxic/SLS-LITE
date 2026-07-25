@@ -30,6 +30,12 @@ class SLSConfigRepositoryTest {
         assertEquals(false, config.managedOutput().mirrorToProxyConsole());
         assertEquals(true, config.managedOutput().writeTemporaryFile());
         assertEquals(4096, config.managedOutput().temporaryFileMaxKiB());
+        assertEquals(ForwardingMode.NONE, config.forwarding().mode());
+        assertEquals(true, config.forwarding().onlineMode());
+        assertEquals(
+                temporaryDirectory.resolve("forwarding.secret").toAbsolutePath().normalize(),
+                config.forwarding().secretFile()
+        );
         assertEquals(LobbyMode.EXTERNAL, config.lobby().mode());
         assertEquals("lobby", config.lobby().registry());
         assertEquals("lobby", config.lobby().server());
@@ -153,6 +159,40 @@ class SLSConfigRepositoryTest {
         writeConfig("""
                 managed_output:
                   mirror_to_proxy_console: sometimes
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        assertThrows(ConfigurationException.class, repository::reload);
+    }
+
+    @Test
+    void loadsModernForwardingPolicy() throws Exception {
+        writeConfig("""
+                forwarding:
+                  mode: modern
+                  online_mode: false
+                  secret_file: secrets/velocity.secret
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        repository.reload();
+
+        ForwardingConfig forwarding = repository.get().forwarding();
+        assertEquals(ForwardingMode.MODERN, forwarding.mode());
+        assertEquals(false, forwarding.onlineMode());
+        assertEquals(
+                temporaryDirectory.resolve("secrets/velocity.secret")
+                        .toAbsolutePath().normalize(),
+                forwarding.secretFile()
+        );
+    }
+
+    @Test
+    void rejectsForwardingSecretTraversal() throws Exception {
+        writeConfig("""
+                forwarding:
+                  mode: modern
+                  secret_file: ../outside.secret
                 """);
         SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
 
