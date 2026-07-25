@@ -12,12 +12,13 @@ use Pterodactyl\Repositories\Wings\DaemonPowerRepository;
 use Pterodactyl\Services\Allocations\AssignmentService;
 use Pterodactyl\Services\Servers\ServerCreationService;
 
-const PANEL_ROOT = '/var/www/pterodactyl';
 const EXTERNAL_ID = 'sls-lite-local-velocity';
 
-require PANEL_ROOT . '/vendor/autoload.php';
+$panelRoot = getenv('PANEL_ROOT') ?: '/var/www/pterodactyl';
 
-$app = require PANEL_ROOT . '/bootstrap/app.php';
+require $panelRoot . '/vendor/autoload.php';
+
+$app = require $panelRoot . '/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
 $node = Node::query()->findOrFail(1);

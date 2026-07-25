@@ -490,6 +490,10 @@ the local implementation has equivalent behavior.
 - [x] Replace the current `main()` test classes with JUnit tests.
 - [x] Set up a local Pterodactyl Panel/Wings environment with a Java 25
       Velocity allocation and browser-accessible server console.
+  - [x] Move the local Panel, Wings, MariaDB, and Redis control plane into
+        Docker while preserving existing server data and credentials.
+  - [x] Proxy signed Wings upload/download routes through the local Panel and
+        verify a 128 MiB browser-equivalent file upload.
 - [ ] Test memory parsing.
 - [x] Test path validation, configuration validation, and ID generation.
 - [x] Test lifecycle transitions and invalid concurrent actions.

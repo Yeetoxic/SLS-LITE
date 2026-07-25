@@ -1,0 +1,134 @@
+services:
+  database:
+    image: mariadb:11.4
+    container_name: sls-ptero-database
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MARIADB_DATABASE: panel
+      MARIADB_USER: pterodactyl
+      MARIADB_PASSWORD: ${PTERO_DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${PTERO_DB_ROOT_PASSWORD}
+    volumes:
+      - ${PTERO_STATE_DIR}/database:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD
+        - healthcheck.sh
+        - --connect
+        - --innodb_initialized
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - control
+
+  cache:
+    image: redis:7-alpine
+    container_name: sls-ptero-cache
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - "60"
+      - "1"
+      - --loglevel
+      - warning
+    volumes:
+      - ${PTERO_STATE_DIR}/redis:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - control
+
+  panel:
+    image: ghcr.io/pterodactyl/panel:v1.14.1
+    container_name: sls-ptero-panel
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:8088:80
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8088
+      APP_TIMEZONE: America/Los_Angeles
+      APP_SERVICE_AUTHOR: admin@local.test
+      APP_KEY: ${PTERO_APP_KEY}
+      APP_ENVIRONMENT_ONLY: "false"
+      DB_HOST: database
+      DB_PORT: "3306"
+      DB_DATABASE: panel
+      DB_USERNAME: pterodactyl
+      DB_PASSWORD: ${PTERO_DB_PASSWORD}
+      CACHE_DRIVER: redis
+      SESSION_DRIVER: redis
+      QUEUE_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: cache
+      REDIS_PORT: "6379"
+      MAIL_DRIVER: log
+      MAIL_FROM: admin@local.test
+      RECAPTCHA_ENABLED: "false"
+      TRUSTED_PROXIES: "*"
+    volumes:
+      - ${PTERO_STATE_DIR}/panel-var:/app/var
+      - ${PTERO_STATE_DIR}/panel-logs:/app/storage/logs
+      - ${PTERO_STATE_DIR}/panel-nginx:/etc/nginx/http.d
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1/ || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks:
+      - control
+
+  wings:
+    image: ghcr.io/pterodactyl/wings:v1.13.1
+    container_name: sls-ptero-wings
+    restart: unless-stopped
+    depends_on:
+      panel:
+        condition: service_healthy
+    tty: true
+    environment:
+      TZ: America/Los_Angeles
+      WINGS_UID: "999"
+      WINGS_GID: "989"
+      WINGS_USERNAME: pterodactyl
+    ports:
+      - 127.0.0.1:2022:2022
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ${PTERO_STATE_DIR}/wings:/etc/pterodactyl
+      - /var/lib/pterodactyl:/var/lib/pterodactyl
+      - /var/log/pterodactyl:/var/log/pterodactyl
+      - /tmp/pterodactyl:/tmp/pterodactyl
+      - /run/wings:/run/wings
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+    networks:
+      - control
+      - pterodactyl
+
+networks:
+  control:
+    name: sls_pterodactyl_control
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
+  pterodactyl:
+    external: true
+    name: pterodactyl_nw
