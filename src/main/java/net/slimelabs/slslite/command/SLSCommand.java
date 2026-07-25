@@ -106,6 +106,8 @@ public final class SLSCommand implements SimpleCommand {
             case "logs" -> logs(invocation.source(), arguments);
             case "registries" -> sendRegistries(invocation.source());
             case "reload" -> reload(invocation.source(), arguments);
+            case "reset" -> reset(invocation.source(), arguments);
+            case "restart" -> restart(invocation.source(), arguments);
             case "start" -> start(invocation.source(), arguments);
             case "stats" -> stats(invocation.source(), arguments);
             case "status" -> status(invocation.source(), arguments);
@@ -113,7 +115,7 @@ public final class SLSCommand implements SimpleCommand {
             case "system" -> system(invocation.source(), arguments);
             case "version" -> sendVersion(invocation.source());
             case "blueprint", "create", "debug", "delete", "install", "kill",
-                    "pause", "reset", "restart", "resume" ->
+                    "pause", "resume" ->
                     unavailable(invocation.source(), arguments[0], false);
             case "node" -> unavailable(invocation.source(), arguments[0], true);
             default -> sendRootHelp(invocation.source());
@@ -154,6 +156,10 @@ public final class SLSCommand implements SimpleCommand {
                 case "start" -> CommandPermissions.canAdminister(source, "start")
                         ? completed(sorted(blueprints.getTypes()))
                         : completed(List.of());
+                case "reset", "restart" ->
+                        CommandPermissions.canAdminister(source, operation)
+                                ? completed(withPrefix("this", persistentInstanceIds()))
+                                : completed(List.of());
                 case "status", "stop", "info", "stats" ->
                         CommandPermissions.canAdminister(source, operation)
                                 ? completed(withPrefix("this", instanceIds()))
@@ -984,6 +990,119 @@ public final class SLSCommand implements SimpleCommand {
         }
     }
 
+    private void restart(CommandSource source, String[] arguments) {
+        cyclePersistent(source, arguments, false);
+    }
+
+    private void reset(CommandSource source, String[] arguments) {
+        cyclePersistent(source, arguments, true);
+    }
+
+    private void cyclePersistent(
+            CommandSource source,
+            String[] arguments,
+            boolean reset
+    ) {
+        String operation = reset ? "reset" : "restart";
+        if (!requireAdmin(
+                source,
+                operation,
+                operation + " persistent servers"
+        )) {
+            return;
+        }
+        if (arguments.length != 2) {
+            source.sendMessage(CommandMessages.usage(
+                    "/sls " + operation,
+                    "server"
+            ));
+            return;
+        }
+
+        String instanceId = arguments[1];
+        ManagedInstance active = null;
+        if ("this".equalsIgnoreCase(instanceId)) {
+            active = resolveInstance(source, instanceId);
+            if (active == null) {
+                return;
+            }
+            instanceId = active.id();
+        } else {
+            active = findInstanceOrNull(instanceId);
+        }
+        if (active != null && lobbyProvider.isLobby(active.id())) {
+            source.sendMessage(CommandMessages.message(
+                    "The active lobby cannot be " + operation + " manually.",
+                    NamedTextColor.RED
+            ));
+            return;
+        }
+
+        String targetId = instanceId;
+        Runnable beginRestart = () -> {
+            try {
+                source.sendMessage(CommandMessages.message(
+                        (reset ? "Resetting" : "Restarting")
+                                + " persistent server " + targetId + "...",
+                        NamedTextColor.YELLOW
+                ));
+                CompletableFuture<ManagedInstance> cycle = reset
+                        ? instances.reset(targetId)
+                        : instances.restart(targetId);
+                cycle.whenComplete((restarted, failure) -> {
+                    if (failure != null) {
+                        source.sendMessage(CommandMessages.message(
+                                capitalize(operation) + " failed: "
+                                        + rootMessage(failure),
+                                NamedTextColor.RED
+                        ));
+                        return;
+                    }
+                    restarted.readyFuture().whenComplete((ready, readyFailure) -> {
+                        if (readyFailure == null) {
+                            source.sendMessage(CommandMessages.message(
+                                    "Server " + ready.id() + " "
+                                            + (reset ? "reset" : "restarted") + ".",
+                                    NamedTextColor.GREEN
+                            ));
+                        } else {
+                            source.sendMessage(CommandMessages.message(
+                                    capitalize(operation) + " failed: "
+                                            + rootMessage(readyFailure),
+                                    NamedTextColor.RED
+                            ));
+                        }
+                    });
+                });
+            } catch (InstanceOperationException exception) {
+                source.sendMessage(CommandMessages.message(
+                        exception.getMessage(), NamedTextColor.RED
+                ));
+            }
+        };
+
+        if (active == null) {
+            beginRestart.run();
+            return;
+        }
+        source.sendMessage(CommandMessages.message(
+                "Moving players to the lobby before "
+                        + (reset ? "resetting " : "restarting ")
+                        + targetId + "...",
+                NamedTextColor.YELLOW
+        ));
+        lobbyProvider.evacuate(targetId).whenComplete((ignored, failure) -> {
+            if (failure == null) {
+                beginRestart.run();
+            } else {
+                source.sendMessage(CommandMessages.message(
+                        capitalize(operation) + " cancelled: " + rootMessage(failure),
+                        NamedTextColor.RED
+                ));
+            }
+        });
+    }
+
     private void status(CommandSource source, String[] arguments) {
         sendInstanceStatus(source, arguments, "status");
     }
@@ -1313,6 +1432,12 @@ public final class SLSCommand implements SimpleCommand {
         return instances.getAll().stream().map(ManagedInstance::id).sorted().toList();
     }
 
+    private List<String> persistentInstanceIds() {
+        Set<String> ids = new LinkedHashSet<>(instanceIds());
+        ids.addAll(instances.persistentInstanceIds());
+        return sorted(ids);
+    }
+
     private List<String> joinTargets() {
         Set<String> targets = new LinkedHashSet<>();
         targets.add("all");
@@ -1344,6 +1469,10 @@ public final class SLSCommand implements SimpleCommand {
         return current.getMessage() == null
                 ? current.getClass().getSimpleName()
                 : current.getMessage();
+    }
+
+    private static String capitalize(String value) {
+        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
     private static Throwable rootCause(Throwable throwable) {

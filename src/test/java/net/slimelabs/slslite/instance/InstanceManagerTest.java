@@ -91,6 +91,82 @@ class InstanceManagerTest {
         assertTrue(metadata.persistent());
         assertEquals(InstanceState.STOPPED, metadata.state());
         assertEquals(null, metadata.processId());
+        assertEquals(java.util.List.of(instance.id()), manager.persistentInstanceIds());
+    }
+
+    @Test
+    void restartsPersistentInstanceWithSameIdAndDirectory() throws Exception {
+        createContext(true, true);
+
+        ManagedInstance original = manager.start("fixture");
+        original.readyFuture().get(10, TimeUnit.SECONDS);
+        Files.writeString(original.directory().resolve("persistent-marker"), "preserved");
+
+        ManagedInstance restarted = manager.restart(original.id())
+                .get(10, TimeUnit.SECONDS);
+        restarted.readyFuture().get(10, TimeUnit.SECONDS);
+
+        assertEquals(original.id(), restarted.id());
+        assertEquals(original.directory(), restarted.directory());
+        assertEquals(original.createdAt(), restarted.createdAt());
+        assertTrue(Files.isRegularFile(restarted.directory().resolve("persistent-marker")));
+        assertEquals(InstanceState.READY, restarted.state());
+    }
+
+    @Test
+    void restartsStoppedPersistentInstanceAfterManagerRecreation() throws Exception {
+        createContext(true, true);
+        ManagedInstance original = manager.start("fixture");
+        original.readyFuture().get(10, TimeUnit.SECONDS);
+        manager.stop(original.id()).get(10, TimeUnit.SECONDS);
+        awaitCleanup();
+        manager.shutdown(Duration.ofSeconds(3));
+
+        createContext(true, true);
+        ManagedInstance recovered = manager.restart(original.id())
+                .get(10, TimeUnit.SECONDS);
+        recovered.readyFuture().get(10, TimeUnit.SECONDS);
+
+        assertEquals(original.id(), recovered.id());
+        assertEquals(original.createdAt(), recovered.createdAt());
+        assertEquals(InstanceState.READY, recovered.state());
+    }
+
+    @Test
+    void rejectsRestartForEphemeralInstance() throws Exception {
+        createContext(false, true);
+        ManagedInstance instance = manager.start("fixture");
+        instance.readyFuture().get(10, TimeUnit.SECONDS);
+
+        InstanceOperationException exception = assertThrows(
+                InstanceOperationException.class,
+                () -> manager.restart(instance.id())
+        );
+
+        assertTrue(exception.getMessage().contains("ephemeral"));
+    }
+
+    @Test
+    void resetsPersistentInstanceFromTemplateAndKeepsItsId() throws Exception {
+        createContext(true, true);
+        Path template = temporaryDirectory.resolve("software/paper/fixture/template-version");
+        Files.writeString(template, "version-one");
+
+        ManagedInstance original = manager.start("fixture");
+        original.readyFuture().get(10, TimeUnit.SECONDS);
+        Files.writeString(original.directory().resolve("world-data"), "player changes");
+        Files.writeString(template, "version-two");
+
+        ManagedInstance reset = manager.reset(original.id()).get(10, TimeUnit.SECONDS);
+        reset.readyFuture().get(10, TimeUnit.SECONDS);
+
+        assertEquals(original.id(), reset.id());
+        assertEquals(original.createdAt(), reset.createdAt());
+        assertFalse(Files.exists(reset.directory().resolve("world-data")));
+        assertEquals(
+                "version-two",
+                Files.readString(reset.directory().resolve("template-version"))
+        );
     }
 
     @Test

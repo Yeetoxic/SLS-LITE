@@ -124,6 +124,9 @@ annotations:
     test-only: true
 '@
 
+Copy-Item -LiteralPath (Join-Path $repositoryRoot "scripts\fixtures\persistent-smoke.yml") `
+    -Destination (Join-Path $pluginData "blueprints\persistent-smoke.yml") -Force
+
 Set-Content -LiteralPath (Join-Path $pluginData "software-profiles\paper.yml") `
     -Encoding utf8 -Value @'
 software:

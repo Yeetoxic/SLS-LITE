@@ -96,7 +96,7 @@ hosted backend and lobby servers.
 - [x] Prevent duplicate starts and conflicting lifecycle actions.
 - [x] Track total allocated memory and reject starts that exceed the configured
       single-host budget.
-- [ ] Recover or clean up incomplete instance state after a proxy restart.
+- [x] Recover or clean up incomplete instance state after a proxy restart.
 
 ## Phase 4: Instance Files
 
@@ -104,8 +104,8 @@ hosted backend and lobby servers.
 - [x] Create a separate writable directory for every instance.
 - [x] Implement portable directory-copy isolation as the default mode.
 - [x] Support ephemeral instances that are deleted after shutdown.
-- [ ] Support persistent instances that can be stopped and restarted.
-- [ ] Add an explicit reset operation that restores an instance from its template.
+- [x] Support persistent instances that can be stopped and restarted.
+- [x] Add an explicit reset operation that restores an instance from its template.
 - [ ] Investigate optional copy-on-write optimizations:
   - Linux OverlayFS when mounting is permitted.
   - Reflinks when supported by the host filesystem.
@@ -405,6 +405,9 @@ the local implementation has equivalent behavior.
 - [ ] Add create-time overrides for memory, save mode, seed, view distance, and
       selected safe configuration values.
 - [ ] Add per-instance reset, restart, delete, and force-kill operations.
+  - [x] Add persistent restart with same-ID directory reuse and lobby evacuation.
+  - [x] Add rollback-protected persistent reset from the current template.
+  - [ ] Add persistent delete and explicit force-kill operations.
 - [ ] Add software and blueprint reload commands with detailed validation errors.
 - [ ] Add a public Java API so other Velocity plugins can:
   - Inspect blueprints and instances.

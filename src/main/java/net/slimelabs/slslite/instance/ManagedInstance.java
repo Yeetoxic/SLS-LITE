@@ -19,7 +19,7 @@ public final class ManagedInstance {
     private final int port;
     private final Path directory;
     private final InstanceLifecycle lifecycle;
-    private final Instant createdAt = Instant.now();
+    private final Instant createdAt;
     private final CompletableFuture<ManagedInstance> ready = new CompletableFuture<>();
     private final CompletableFuture<Integer> stopped = new CompletableFuture<>();
     private final InstanceLogBuffer logs = new InstanceLogBuffer();
@@ -40,11 +40,23 @@ public final class ManagedInstance {
             Path directory,
             InstanceLifecycle lifecycle
     ) {
+        this(id, blueprint, port, directory, lifecycle, Instant.now());
+    }
+
+    ManagedInstance(
+            String id,
+            Blueprint blueprint,
+            int port,
+            Path directory,
+            InstanceLifecycle lifecycle,
+            Instant createdAt
+    ) {
         this.id = id;
         this.blueprint = blueprint;
         this.port = port;
         this.directory = directory;
         this.lifecycle = lifecycle;
+        this.createdAt = java.util.Objects.requireNonNull(createdAt, "createdAt");
     }
 
     public String id() {

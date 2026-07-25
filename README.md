@@ -27,8 +27,8 @@ implementation. The current development baseline provides:
 The `/sls start`, `/sls join`, `/sls list`, `/sls status`, and `/sls stop`
 commands now manage local Paper processes, dynamically register ready backends
 with Velocity, and connect requested players after an instance becomes ready.
-Matchmaking queues and external or managed lobby routing are implemented.
-Capacity enforcement, persistent-instance restart, and production hardening are
+Matchmaking queues, capacity enforcement, persistent-instance restart/reset,
+and external or managed lobby routing are implemented. Production hardening is
 not complete. Do not deploy this development version to a production network.
 
 ## Goal
@@ -173,6 +173,21 @@ versions without metadata are preserved and reported rather than deleted.
 Loopback ports are probed before allocation, so a surviving process cannot be
 assigned a conflicting port. Persistent instances are not automatically resumed
 yet.
+
+Administrators can recover or cycle a persistent instance using its original
+composite ID:
+
+```text
+/sls restart <instance-id>
+/sls reset <instance-id>
+```
+
+Restart preserves the instance directory and world. Reset evacuates players,
+stops the process, replaces the directory from its current software template,
+and starts the same instance ID. Directory replacement keeps a rollback copy
+until the new files and ownership metadata are valid. Both commands reject
+ephemeral instances and recorded child processes that are still running outside
+the current manager.
 
 `lobby.mode: external` routes players to an existing Velocity registration named
 by `lobby.server`. `lobby.mode: managed` starts the blueprint identified by

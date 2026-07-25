@@ -39,8 +39,8 @@ shape and return a concise `not available in local mode` explanation.
 | `version` | Public | Adapted | vSLS label, emphasis, author metadata, and colors matched. |
 | `pause <server>` | Admin | Compatibility response | Local process suspension is not implemented yet. |
 | `resume <server>` | Admin | Compatibility response | Local process resumption is not implemented yet. |
-| `restart <server>` | Admin | Compatibility response | Add stop/start behavior with lobby evacuation. |
-| `reset <server>` | Admin | Compatibility response | Add safe template restoration. |
+| `restart <server>` | Admin | Adapted | Evacuates an active persistent server and restarts the same ID and directory; stopped instances can be recovered after a proxy restart. |
+| `reset <server>` | Admin | Adapted | Uses rollback-protected template restoration, retains the same ID, and starts the reset server. |
 | `install <info\|logs>` | Admin | Compatibility response | Define whether software installation has a safe local equivalent. |
 
 ## Presentation Contract

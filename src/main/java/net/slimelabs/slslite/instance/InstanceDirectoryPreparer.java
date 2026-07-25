@@ -70,6 +70,70 @@ public final class InstanceDirectoryPreparer {
         }
     }
 
+    public void replace(
+            String instanceId,
+            Path sourceDirectory,
+            DirectoryInitializer initializer
+    ) throws InstancePreparationException {
+        Path destination = destination(instanceId);
+        Path source = sourceDirectory.toAbsolutePath().normalize();
+        if (!Files.isDirectory(source)) {
+            throw new InstancePreparationException(
+                    "Software base directory does not exist: " + source
+            );
+        }
+        if (!Files.isDirectory(destination)) {
+            throw new InstancePreparationException(
+                    "Persistent instance directory does not exist: " + destination
+            );
+        }
+        if (destination.startsWith(source) || source.startsWith(destination)) {
+            throw new InstancePreparationException(
+                    "Software base and persistent instance directories must not overlap"
+            );
+        }
+
+        String nonce = java.util.UUID.randomUUID().toString();
+        Path staging = instancesRoot.resolve("." + instanceId + ".reset-" + nonce);
+        Path backup = instancesRoot.resolve("." + instanceId + ".backup-" + nonce);
+        boolean originalMoved = false;
+        boolean replacementMoved = false;
+        boolean initialized = false;
+        try {
+            copyDirectory(source, staging);
+            moveDirectory(destination, backup);
+            originalMoved = true;
+            moveDirectory(staging, destination);
+            replacementMoved = true;
+            initializer.initialize(destination);
+            initialized = true;
+            deleteDirectory(backup);
+        } catch (Exception exception) {
+            if (initialized) {
+                throw new InstancePreparationException(
+                        "Persistent instance was reset, but its backup could not be removed: "
+                                + backup,
+                        exception
+                );
+            }
+            try {
+                if (replacementMoved) {
+                    deleteDirectory(destination);
+                }
+                if (originalMoved && Files.exists(backup)) {
+                    moveDirectory(backup, destination);
+                }
+                deleteDirectory(staging);
+            } catch (IOException rollbackFailure) {
+                exception.addSuppressed(rollbackFailure);
+            }
+            throw new InstancePreparationException(
+                    "Unable to reset persistent instance " + destination,
+                    exception
+            );
+        }
+    }
+
     private Path destination(String instanceId) throws InstancePreparationException {
         if (!InstanceIdGenerator.isValid(instanceId)) {
             throw new InstancePreparationException("Invalid instance ID: " + instanceId);
@@ -110,6 +174,14 @@ public final class InstanceDirectoryPreparer {
         });
     }
 
+    private static void moveDirectory(Path source, Path destination) throws IOException {
+        try {
+            Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException exception) {
+            Files.move(source, destination);
+        }
+    }
+
     private static void rejectSymbolicLink(Path path, BasicFileAttributes attrs)
             throws IOException {
         if (attrs.isSymbolicLink()) {
@@ -140,5 +212,10 @@ public final class InstanceDirectoryPreparer {
                 return FileVisitResult.CONTINUE;
             }
         });
+    }
+
+    @FunctionalInterface
+    public interface DirectoryInitializer {
+        void initialize(Path directory) throws Exception;
     }
 }

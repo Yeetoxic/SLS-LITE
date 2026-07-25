@@ -20,7 +20,8 @@ From the repository root:
 
 The script builds SLS-LITE, downloads the pinned official PaperMC artifacts,
 configures a loopback-only proxy, accepts the Paper EULA for the local fixture,
-and installs managed `lobby/lobby`, `test/smoke`, and `test/smoke2` blueprints.
+and installs managed `lobby/lobby`, `test/smoke`, `test/smoke2`, and
+`test/persistent-smoke` blueprints.
 
 ## Manual Test
 
@@ -139,6 +140,33 @@ bypasses the target instance's blueprint player limit. It still requires the
 target player to be on a ready, registered SLS-LITE instance. Verify the same
 command without `--force` returns `Instance is full` when that instance has
 reached `max_players`.
+
+## Persistent Lifecycle Test
+
+Start and join the persistent fixture:
+
+```text
+/sls start test persistent-smoke
+/sls join test persistent-smoke
+```
+
+Record the composite instance ID, place a block, and run:
+
+```text
+/sls restart <instance-id>
+```
+
+After reconnecting, verify the server keeps the same ID and the placed block
+still exists. Then place a different block and run:
+
+```text
+/sls reset <instance-id>
+```
+
+Reset is destructive. Verify players move to the lobby, the same instance ID
+returns, and both player changes are gone because the directory was restored
+from the prepared Paper template. Restart Velocity while the persistent server
+is stopped, then run `/sls restart <instance-id>` to verify metadata recovery.
 
 Finish from the Velocity console:
 

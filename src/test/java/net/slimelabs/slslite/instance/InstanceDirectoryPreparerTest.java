@@ -68,6 +68,36 @@ class InstanceDirectoryPreparerTest {
         assertTrue(Files.exists(source));
     }
 
+    @Test
+    void replacementRollsBackWhenInitializationFails() throws Exception {
+        Path source = createSource();
+        Path instances = temporaryDirectory.resolve("instances");
+        InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(instances);
+        Path prepared = preparer.prepare("game.x82odk", source);
+        Files.writeString(prepared.resolve("world-data"), "keep me");
+
+        Files.writeString(source.resolve("server.jar"), "replacement");
+        assertThrows(
+                InstancePreparationException.class,
+                () -> preparer.replace(
+                        "game.x82odk",
+                        source,
+                        ignored -> {
+                            throw new IllegalStateException("metadata failed");
+                        }
+                )
+        );
+
+        assertEquals("keep me", Files.readString(prepared.resolve("world-data")));
+        assertEquals("server", Files.readString(prepared.resolve("server.jar")));
+        try (var entries = Files.list(instances)) {
+            assertEquals(
+                    java.util.List.of("game.x82odk"),
+                    entries.map(path -> path.getFileName().toString()).sorted().toList()
+            );
+        }
+    }
+
     private Path createSource() throws Exception {
         Path source = temporaryDirectory.resolve("software");
         Files.createDirectories(source.resolve("config"));

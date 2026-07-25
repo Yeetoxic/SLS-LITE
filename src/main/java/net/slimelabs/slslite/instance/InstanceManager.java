@@ -35,6 +35,8 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.HashSet;
+import java.util.Set;
 
 public final class InstanceManager implements ServerController {
 
@@ -55,6 +57,7 @@ public final class InstanceManager implements ServerController {
     private final InstanceIdGenerator idGenerator;
     private final ThreadPoolExecutor operationExecutor;
     private final Map<String, ManagedInstance> instances = new java.util.HashMap<>();
+    private final Set<String> pendingRestarts = new HashSet<>();
 
     private boolean closed;
 
@@ -138,7 +141,7 @@ public final class InstanceManager implements ServerController {
             instances.put(instanceId, instance);
 
             try {
-                operationExecutor.execute(() -> prepareAndStart(instance, profile));
+                operationExecutor.execute(() -> prepareAndStart(instance, profile, false));
             } catch (RuntimeException exception) {
                 instances.remove(instanceId);
                 portAllocator.release(port);
@@ -158,6 +161,36 @@ public final class InstanceManager implements ServerController {
         return instances.values().stream()
                 .sorted(Comparator.comparing(ManagedInstance::id))
                 .toList();
+    }
+
+    @Override
+    public Collection<String> persistentInstanceIds() {
+        if (!Files.isDirectory(directoryPreparer.root())) {
+            return List.of();
+        }
+        try (var directories = Files.list(directoryPreparer.root())) {
+            return directories
+                    .filter(Files::isDirectory)
+                    .map(directory -> {
+                        try {
+                            return metadataStore.read(directory).orElse(null);
+                        } catch (IOException | RuntimeException exception) {
+                            return null;
+                        }
+                    })
+                    .filter(java.util.Objects::nonNull)
+                    .filter(InstanceMetadata::persistent)
+                    .map(InstanceMetadata::instanceId)
+                    .distinct()
+                    .sorted()
+                    .toList();
+        } catch (IOException exception) {
+            logger.warn(
+                    "Unable to discover persistent instances: {}",
+                    exception.getMessage()
+            );
+            return List.of();
+        }
     }
 
     @Override
@@ -237,6 +270,106 @@ public final class InstanceManager implements ServerController {
     }
 
     @Override
+    public CompletableFuture<ManagedInstance> restart(String instanceId)
+            throws InstanceOperationException {
+        return cyclePersistent(instanceId, false);
+    }
+
+    @Override
+    public CompletableFuture<ManagedInstance> reset(String instanceId)
+            throws InstanceOperationException {
+        return cyclePersistent(instanceId, true);
+    }
+
+    private CompletableFuture<ManagedInstance> cyclePersistent(
+            String instanceId,
+            boolean reset
+    ) throws InstanceOperationException {
+        ManagedInstance active;
+        InstanceMetadata metadata;
+        synchronized (this) {
+            if (closed) {
+                throw new InstanceOperationException("Instance manager is shutting down");
+            }
+            if (!InstanceIdGenerator.isValid(instanceId)) {
+                throw new InstanceOperationException("Invalid instance ID: " + instanceId);
+            }
+            if (!pendingRestarts.add(instanceId)) {
+                throw new InstanceOperationException(
+                        "Instance restart or reset is already in progress: " + instanceId
+                );
+            }
+            active = instances.get(instanceId);
+            try {
+                metadata = active == null
+                        ? readPersistentMetadata(instanceId)
+                        : metadataFor(active);
+                requireRestartable(metadata, active);
+            } catch (InstanceOperationException exception) {
+                pendingRestarts.remove(instanceId);
+                throw exception;
+            }
+        }
+
+        CompletableFuture<Integer> stopped;
+        try {
+            stopped = active == null
+                    ? CompletableFuture.completedFuture(0)
+                    : stop(instanceId);
+        } catch (InstanceOperationException exception) {
+            synchronized (this) {
+                pendingRestarts.remove(instanceId);
+            }
+            throw exception;
+        }
+
+        return stopped.thenApply(ignored -> {
+            try {
+                if (reset) {
+                    resetPersistent(instanceId);
+                }
+                return startPersistent(instanceId);
+            } catch (InstanceOperationException exception) {
+                throw new java.util.concurrent.CompletionException(exception);
+            }
+        }).whenComplete((ignored, failure) -> {
+            synchronized (this) {
+                pendingRestarts.remove(instanceId);
+            }
+        });
+    }
+
+    private void resetPersistent(String instanceId) throws InstanceOperationException {
+        InstanceMetadata metadata = readPersistentMetadata(instanceId);
+        requireRestartable(metadata, null);
+        Blueprint blueprint = blueprints.get(metadata.blueprintId()).orElseThrow(
+                () -> new InstanceOperationException(
+                        "Persistent instance " + instanceId
+                                + " references missing blueprint " + metadata.blueprintId()
+                )
+        );
+        SoftwareProfile profile = softwareProfiles.get(blueprint.software()).orElseThrow(
+                () -> new InstanceOperationException(
+                        "Missing software profile: " + blueprint.software()
+                )
+        );
+        try {
+            Path baseDirectory = processSpecFactory.resolveBaseDirectory(
+                    profile,
+                    blueprint.version()
+            );
+            InstanceMetadata stopped = metadata.withoutProcess(InstanceState.STOPPED);
+            directoryPreparer.replace(
+                    instanceId,
+                    baseDirectory,
+                    directory -> metadataStore.write(directory, stopped)
+            );
+        } catch (ProcessSpecificationException | InstancePreparationException exception) {
+            throw new InstanceOperationException(exception.getMessage(), exception);
+        }
+    }
+
+    @Override
     public void shutdown(Duration timeout) {
         List<ManagedInstance> snapshot;
         synchronized (this) {
@@ -254,13 +387,27 @@ public final class InstanceManager implements ServerController {
         }
     }
 
-    private void prepareAndStart(ManagedInstance instance, SoftwareProfile profile) {
+    private void prepareAndStart(
+            ManagedInstance instance,
+            SoftwareProfile profile,
+            boolean reuseDirectory
+    ) {
         try {
-            Path baseDirectory = processSpecFactory.resolveBaseDirectory(
-                    profile,
-                    instance.blueprint().version()
-            );
-            Path prepared = directoryPreparer.prepare(instance.id(), baseDirectory);
+            Path prepared;
+            if (reuseDirectory) {
+                prepared = instance.directory();
+                if (!Files.isDirectory(prepared)) {
+                    throw new InstancePreparationException(
+                            "Persistent instance directory does not exist: " + prepared
+                    );
+                }
+            } else {
+                Path baseDirectory = processSpecFactory.resolveBaseDirectory(
+                        profile,
+                        instance.blueprint().version()
+                );
+                prepared = directoryPreparer.prepare(instance.id(), baseDirectory);
+            }
             if (!prepared.equals(instance.directory())) {
                 throw new InstanceOperationException("Prepared instance path changed unexpectedly");
             }
@@ -435,6 +582,137 @@ public final class InstanceManager implements ServerController {
 
     private synchronized boolean isActive(ManagedInstance instance) {
         return instances.get(instance.id()) == instance && !closed;
+    }
+
+    private ManagedInstance startPersistent(String instanceId)
+            throws InstanceOperationException {
+        InstanceMetadata metadata = readPersistentMetadata(instanceId);
+        Blueprint blueprint = blueprints.get(metadata.blueprintId()).orElseThrow(
+                () -> new InstanceOperationException(
+                        "Persistent instance " + instanceId
+                                + " references missing blueprint " + metadata.blueprintId()
+                )
+        );
+        SoftwareProfile profile = softwareProfiles.get(blueprint.software()).orElseThrow(
+                () -> new InstanceOperationException(
+                        "Missing software profile: " + blueprint.software()
+                )
+        );
+        requireRestartable(metadata, null);
+
+        int port;
+        ManagedInstance instance;
+        synchronized (this) {
+            if (closed) {
+                throw new InstanceOperationException("Instance manager is shutting down");
+            }
+            if (instances.containsKey(instanceId)) {
+                throw new InstanceOperationException(
+                        "Instance is already active: " + instanceId
+                );
+            }
+            if (!resourceBudget.tryReserve(instanceId, blueprint.memoryLimitMiB())) {
+                throw new InstanceOperationException(
+                        "Insufficient managed memory for "
+                                + blueprint.memoryLimitMiB() + " MiB"
+                );
+            }
+            try {
+                port = portAllocator.allocate();
+            } catch (PortAllocationException exception) {
+                resourceBudget.release(instanceId);
+                throw new InstanceOperationException(exception.getMessage(), exception);
+            }
+
+            InstanceLifecycle lifecycle = new InstanceLifecycle(instanceId);
+            lifecycle.transitionTo(InstanceState.PREPARING);
+            instance = new ManagedInstance(
+                    instanceId,
+                    blueprint,
+                    port,
+                    directoryPreparer.root().resolve(instanceId),
+                    lifecycle,
+                    metadata.createdAt()
+            );
+            instances.put(instanceId, instance);
+            try {
+                operationExecutor.execute(() -> prepareAndStart(instance, profile, true));
+            } catch (RuntimeException exception) {
+                instances.remove(instanceId);
+                portAllocator.release(port);
+                resourceBudget.release(instanceId);
+                lifecycle.transitionTo(InstanceState.FAILED);
+                throw new InstanceOperationException(
+                        "Instance preparation queue is full",
+                        exception
+                );
+            }
+        }
+        return instance;
+    }
+
+    private InstanceMetadata readPersistentMetadata(String instanceId)
+            throws InstanceOperationException {
+        Path directory = directoryPreparer.root().resolve(instanceId);
+        try {
+            InstanceMetadata metadata = metadataStore.read(directory).orElseThrow(
+                    () -> new InstanceOperationException(
+                            "No persistent SLS-LITE instance exists: " + instanceId
+                    )
+            );
+            if (!metadata.instanceId().equals(instanceId)) {
+                throw new InstanceOperationException(
+                        "Persistent metadata does not match instance ID: " + instanceId
+                );
+            }
+            return metadata;
+        } catch (IOException exception) {
+            throw new InstanceOperationException(
+                    "Unable to read persistent instance metadata: " + instanceId,
+                    exception
+            );
+        }
+    }
+
+    private static InstanceMetadata metadataFor(ManagedInstance instance) {
+        return new InstanceMetadata(
+                instance.id(),
+                instance.blueprint().id(),
+                instance.blueprint().save(),
+                instance.state(),
+                instance.createdAt(),
+                instance.processId().isPresent() ? instance.processId().getAsLong() : null,
+                instance.processStartedAt().orElse(null)
+        );
+    }
+
+    private static void requireRestartable(
+            InstanceMetadata metadata,
+            ManagedInstance active
+    ) throws InstanceOperationException {
+        if (!metadata.persistent()) {
+            throw new InstanceOperationException(
+                    "Instance is ephemeral and cannot be restarted: " + metadata.instanceId()
+            );
+        }
+        if (active == null && isRecordedProcessRunning(metadata)) {
+            throw new InstanceOperationException(
+                    "Persistent instance process is still running: " + metadata.instanceId()
+            );
+        }
+    }
+
+    private static boolean isRecordedProcessRunning(InstanceMetadata metadata) {
+        if (metadata.processId() == null) {
+            return false;
+        }
+        return ProcessHandle.of(metadata.processId())
+                .filter(ProcessHandle::isAlive)
+                .filter(handle -> metadata.processStartedAt() == null
+                        || handle.info().startInstant().isEmpty()
+                        || handle.info().startInstant().orElseThrow()
+                                .equals(metadata.processStartedAt()))
+                .isPresent();
     }
 
     private String uniqueInstanceId(String blueprintId) throws InstanceOperationException {
