@@ -173,6 +173,7 @@ public final class SLSLimboProvider implements LobbyProvider {
                 config.enabled(),
                 status,
                 config.memoryMiB(),
+                config.advertisedProtocol(),
                 port < 0 ? OptionalInt.empty() : OptionalInt.of(port),
                 recoveryAttempts,
                 config.maxRestartAttempts(),
@@ -243,7 +244,11 @@ public final class SLSLimboProvider implements LobbyProvider {
             port = ports.allocate();
         }
         if (installation == null) {
-            installation = installer.install(port, forwarding);
+            installation = installer.install(
+                    port,
+                    forwarding,
+                    config.advertisedProtocol()
+            );
         }
     }
 

@@ -4,6 +4,7 @@ public record SLSLimboConfig(
         boolean enabled,
         int memoryMiB,
         int startupTimeoutSeconds,
+        int advertisedProtocol,
         int maxRestartAttempts,
         int initialBackoffSeconds,
         int maxBackoffSeconds,
@@ -19,6 +20,11 @@ public record SLSLimboConfig(
         if (startupTimeoutSeconds <= 0) {
             throw new IllegalArgumentException(
                     "SLS-Limbo startup timeout must be positive"
+            );
+        }
+        if (advertisedProtocol != -1 && advertisedProtocol <= 0) {
+            throw new IllegalArgumentException(
+                    "SLS-Limbo advertised protocol must be -1 or positive"
             );
         }
         if (maxRestartAttempts < 0) {

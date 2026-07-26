@@ -134,9 +134,12 @@ The bundled runtime is NanoLimbo 1.13.0 at commit
 launch. See [the third-party notice](../THIRD_PARTY/NanoLimbo.md) for source,
 license, and checksum details.
 
-ViaVersion is not currently integrated into this path. A proxy-installed
-ViaVersion may help only after SLS-LITE has an explicit, tested integration;
-it must not be treated as automatic support for an unknown Minecraft release.
+SLS-LITE can advertise an explicitly configured, validated NanoLimbo protocol
+baseline for a proxy-installed ViaVersion. Native per-client advertisement
+remains the default. See
+[the protocol compatibility matrix](Protocol_Compatibility.md) for tested
+versions and the translated-path acceptance criteria. Neither ViaVersion
+detection nor a newly released client is treated as automatic compatibility.
 
 ## Recovery
 
@@ -154,8 +157,8 @@ one actionable error and disconnects players who have no usable backend.
 
 - External-primary failure is detected reactively after a failed player
   connection; once detected, recovery is checked with background pings.
-- Native and ViaVersion-translated client compatibility is not yet covered by
-  the automated matrix.
+- Native client compatibility has an automated representative matrix.
+  ViaVersion-translated proxy coverage remains a release gate.
 - If both the primary lobby and SLS-Limbo fail, SLS-LITE enters a degraded
   no-lobby state. Players without a usable backend are disconnected with a clear
   lobby-unavailable message, while Velocity, console administration, diagnostics,

@@ -825,6 +825,10 @@ public final class SLSCommand implements SimpleCommand {
                     return diagnostics.status().name()
                             + ", " + diagnostics.memoryMiB() + " MiB"
                             + ", port " + port
+                            + ", protocol "
+                            + (diagnostics.advertisedProtocol() == -1
+                                    ? "native"
+                                    : diagnostics.advertisedProtocol())
                             + ", recovery " + diagnostics.recoveryAttempts()
                             + "/" + diagnostics.maxRecoveryAttempts();
                 })

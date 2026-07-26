@@ -152,6 +152,8 @@ limits, compatibility policy, and manual test are documented in
 [DOCS/SLS_Limbo.md](DOCS/SLS_Limbo.md). The bundled component's
 source, pinned revision, checksum, and GPL notice are recorded in
 [THIRD_PARTY/NanoLimbo.md](THIRD_PARTY/NanoLimbo.md).
+Native and translated client test results are tracked in
+[DOCS/Protocol_Compatibility.md](DOCS/Protocol_Compatibility.md).
 
 Normal matchmaking does not pass through SLS-Limbo. Players remain on their
 current healthy backend while queued and transfer directly when the requested

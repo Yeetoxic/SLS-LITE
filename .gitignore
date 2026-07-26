@@ -1,5 +1,6 @@
 # Maven
 /target/
+/tools/protocol-smoke/node_modules/
 dependency-reduced-pom.xml
 pom.xml.*.backup
 release.properties

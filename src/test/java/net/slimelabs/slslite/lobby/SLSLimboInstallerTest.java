@@ -5,6 +5,7 @@ import net.slimelabs.slslite.config.ForwardingMode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -12,6 +13,7 @@ import java.util.HexFormat;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SLSLimboInstallerTest {
@@ -31,7 +33,8 @@ class SLSLimboInstallerTest {
                                 ForwardingMode.NONE,
                                 true,
                                 temporaryDirectory.resolve("unused.secret")
-                        )
+                        ),
+                        -1
                 );
 
         assertTrue(Files.isRegularFile(installation.runtimeJar()));
@@ -44,6 +47,7 @@ class SLSLimboInstallerTest {
         );
         assertTrue(settings.contains("ip: \"127.0.0.1\""));
         assertTrue(settings.contains("port: 25580"));
+        assertTrue(settings.contains("protocol: -1"));
         assertTrue(settings.contains("type: NONE"));
         assertTrue(settings.contains("secret: \"<UNUSED>\""));
         assertFalse(Files.exists(
@@ -61,7 +65,8 @@ class SLSLimboInstallerTest {
         SLSLimboInstaller.SLSLimboInstallation installation =
                 installer.install(
                         25581,
-                        new ForwardingConfig(ForwardingMode.MODERN, true, secret)
+                        new ForwardingConfig(ForwardingMode.MODERN, true, secret),
+                        769
                 );
 
         Path copiedSecret =
@@ -71,8 +76,30 @@ class SLSLimboInstallerTest {
                 installation.workingDirectory().resolve("settings.yml")
         );
         assertTrue(settings.contains("type: MODERN"));
+        assertTrue(settings.contains("protocol: 769"));
         assertTrue(settings.contains("secret: \"@forwarding.secret\""));
         assertFalse(settings.contains("test-secret"));
+    }
+
+    @Test
+    void rejectsFixedProtocolMissingFromPinnedRuntime() {
+        SLSLimboInstaller installer =
+                new SLSLimboInstaller(temporaryDirectory);
+
+        IOException failure = assertThrows(
+                IOException.class,
+                () -> installer.install(
+                        25583,
+                        new ForwardingConfig(
+                                ForwardingMode.NONE,
+                                true,
+                                temporaryDirectory.resolve("unused.secret")
+                        ),
+                        Integer.MAX_VALUE
+                )
+        );
+
+        assertTrue(failure.getMessage().contains("is not supported"));
     }
 
     private static String sha256(Path path) throws Exception {

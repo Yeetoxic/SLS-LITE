@@ -169,7 +169,7 @@ access, and SLS-LITE administration must not require another plugin.
 - [x] Support joining an existing instance or creating one from a blueprint.
 - [x] Add automatic idle shutdown with a configurable delay.
 - [ ] Add optional ViaVersion integration for backend protocol detection.
-  - Let SLS-Limbo advertise one explicitly tested baseline
+  - [x] Let SLS-Limbo advertise one explicitly tested baseline
     protocol and use proxy-installed ViaVersion, when available, to translate
     newer supported clients to that baseline.
   - Detect ViaVersion through its public API without making it a required
@@ -626,8 +626,19 @@ the local implementation has equivalent behavior.
       behavior, duplicate requests, and orphan cleanup.
 - [x] Test durable instance metadata and unclean-shutdown reconciliation.
 - [x] Test external and managed lobby routing.
-- [ ] Add SLS-Limbo native and ViaVersion-translated protocol
-      compatibility tests.
+- [ ] Add SLS-Limbo native and ViaVersion-translated protocol compatibility
+      tests.
+  - [x] Add a pinned login-to-PLAY smoke harness and representative native
+        NanoLimbo matrix with backend-brand verification.
+  - [x] Verify the fixed `1.21.4`/protocol `769` baseline through Velocity and
+        ViaVersion with a newer automated client.
+  - [ ] Verify the same translated path with the current real client, including
+        SLS-Limbo movement, commands, and handoff to the primary lobby.
+  - [ ] Synchronize dynamically registered SLS-Limbo protocol metadata through
+        ViaVersion's public API so first boot does not wait for or require a
+        persisted backend probe.
+  - [ ] Investigate ViaVersion's translated minimal-heightmap warnings and
+        either resolve them or document a tested harmless version range.
 - [x] Add an integration fixture that launches Velocity and one lightweight
       backend in a constrained single-host environment.
 - [ ] Add CI for compilation, tests, packaging, and dependency checks.

@@ -29,6 +29,7 @@ public final class SLSConfigRepository {
     private static final boolean DEFAULT_LIMBO_ENABLED = true;
     private static final int DEFAULT_LIMBO_MEMORY_MIB = 96;
     private static final int DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS = 30;
+    private static final int DEFAULT_LIMBO_ADVERTISED_PROTOCOL = -1;
     private static final int DEFAULT_LIMBO_MAX_RESTART_ATTEMPTS = 5;
     private static final int DEFAULT_LIMBO_INITIAL_BACKOFF_SECONDS = 2;
     private static final int DEFAULT_LIMBO_MAX_BACKOFF_SECONDS = 30;
@@ -251,6 +252,13 @@ public final class SLSConfigRepository {
                     DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS,
                     configPath
             );
+            int limboAdvertisedProtocol =
+                    YamlValues.optionalMinusOneOrPositiveInt(
+                            limbo,
+                            "advertised_protocol",
+                            DEFAULT_LIMBO_ADVERTISED_PROTOCOL,
+                            configPath
+                    );
             int limboMaxRestartAttempts = YamlValues.optionalNonNegativeInt(
                     limboRecovery,
                     "max_attempts",
@@ -308,10 +316,11 @@ public final class SLSConfigRepository {
                                 claimCodeExpirySeconds
                         ),
                         new SLSLimboConfig(
-                                limboEnabled,
-                                limboMemory,
-                                limboStartupTimeout,
-                                limboMaxRestartAttempts,
+                                 limboEnabled,
+                                 limboMemory,
+                                 limboStartupTimeout,
+                                 limboAdvertisedProtocol,
+                                 limboMaxRestartAttempts,
                                 limboInitialBackoff,
                                 limboMaxBackoff,
                                 limboStableAfter

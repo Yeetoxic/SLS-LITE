@@ -99,6 +99,27 @@ public final class YamlValues {
         return number.intValue();
     }
 
+    public static int optionalMinusOneOrPositiveInt(
+            Map<String, Object> values,
+            String key,
+            int defaultValue,
+            Path path
+    ) throws ConfigurationException {
+        Object value = values.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!(value instanceof Number number)
+                || number.doubleValue() != number.intValue()
+                || (number.intValue() != -1 && number.intValue() <= 0)) {
+            throw error(
+                    path,
+                    "'" + key + "' must be -1 or a positive protocol number"
+            );
+        }
+        return number.intValue();
+    }
+
     public static boolean optionalBoolean(
             Map<String, Object> values,
             String key,

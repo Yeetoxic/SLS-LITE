@@ -1,0 +1,16 @@
+{
+  "name": "sls-lite-protocol-smoke",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SLS-Limbo protocol compatibility smoke client",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "test": "node smoke.js"
+  },
+  "dependencies": {
+    "minecraft-protocol": "1.66.2"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
+  }
+}

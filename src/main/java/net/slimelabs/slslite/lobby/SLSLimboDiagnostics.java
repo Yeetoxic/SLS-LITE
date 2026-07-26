@@ -7,6 +7,7 @@ public record SLSLimboDiagnostics(
         boolean enabled,
         LobbyStatus status,
         int memoryMiB,
+        int advertisedProtocol,
         OptionalInt port,
         int recoveryAttempts,
         int maxRecoveryAttempts,
