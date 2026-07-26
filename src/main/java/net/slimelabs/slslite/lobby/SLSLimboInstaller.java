@@ -2,6 +2,7 @@ package net.slimelabs.slslite.lobby;
 
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ForwardingMode;
+import net.slimelabs.slslite.config.SLSLimboConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -56,6 +57,16 @@ public final class SLSLimboInstaller {
                     "SLS-Limbo advertised protocol " + advertisedProtocol
                             + " is not supported by bundled NanoLimbo "
                             + NANOLIMBO_VERSION
+            );
+        }
+        if (advertisedProtocol != -1
+                && advertisedProtocol
+                < SLSLimboConfig.MINIMUM_FIXED_PROTOCOL) {
+            throw new IOException(
+                    "SLS-Limbo fixed protocol must be at least "
+                            + SLSLimboConfig.MINIMUM_FIXED_PROTOCOL
+                            + " because older NanoLimbo heightmaps cannot be "
+                            + "safely translated across Minecraft 1.21.5"
             );
         }
 

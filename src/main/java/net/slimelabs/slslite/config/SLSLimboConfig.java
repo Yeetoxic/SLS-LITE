@@ -11,6 +11,8 @@ public record SLSLimboConfig(
         int stableAfterSeconds
 ) {
 
+    public static final int MINIMUM_FIXED_PROTOCOL = 770;
+
     public SLSLimboConfig {
         if (memoryMiB < 64) {
             throw new IllegalArgumentException(
@@ -22,9 +24,11 @@ public record SLSLimboConfig(
                     "SLS-Limbo startup timeout must be positive"
             );
         }
-        if (advertisedProtocol != -1 && advertisedProtocol <= 0) {
+        if (advertisedProtocol != -1
+                && advertisedProtocol < MINIMUM_FIXED_PROTOCOL) {
             throw new IllegalArgumentException(
-                    "SLS-Limbo advertised protocol must be -1 or positive"
+                    "SLS-Limbo advertised protocol must be -1 or at least "
+                            + MINIMUM_FIXED_PROTOCOL
             );
         }
         if (maxRestartAttempts < 0) {

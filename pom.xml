@@ -26,6 +26,7 @@
         <maven.compiler.release>21</maven.compiler.release>
         <velocity.version>4.1.0-SNAPSHOT</velocity.version>
         <snakeyaml.version>2.6</snakeyaml.version>
+        <viaversion.version>5.11.0</viaversion.version>
         <junit.version>5.13.4</junit.version>
     </properties>
 
@@ -33,6 +34,10 @@
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
+        </repository>
+        <repository>
+            <id>viaversion</id>
+            <url>https://repo.viaversion.com</url>
         </repository>
     </repositories>
 
@@ -47,6 +52,12 @@
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
             <version>${snakeyaml.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.viaversion</groupId>
+            <artifactId>viaversion-api</artifactId>
+            <version>${viaversion.version}</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

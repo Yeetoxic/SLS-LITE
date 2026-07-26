@@ -10,6 +10,7 @@ import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
+import com.velocitypowered.api.plugin.Dependency;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
 import net.kyori.adventure.text.Component;
@@ -41,6 +42,8 @@ import net.slimelabs.slslite.security.AdminClaimService;
 import net.slimelabs.slslite.security.AdministratorStore;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import net.slimelabs.slslite.velocity.LocalJoinService;
+import net.slimelabs.slslite.velocity.BackendProtocolSynchronizer;
+import net.slimelabs.slslite.velocity.ViaVersionProtocolSynchronizer;
 import net.slimelabs.slslite.velocity.VelocityBackendRegistry;
 import org.slf4j.Logger;
 
@@ -53,7 +56,8 @@ import java.time.Duration;
         version = BuildInfo.VERSION,
         description = "Standalone, single-host SLS implementation for Velocity",
         url = "https://github.com/Yeetoxic/SLS-LITE",
-        authors = {"Protoxon", "Yeetoxic"}
+        authors = {"Protoxon", "Yeetoxic"},
+        dependencies = {@Dependency(id = "viaversion", optional = true)}
 )
 public final class SLSLite {
 
@@ -153,6 +157,8 @@ public final class SLSLite {
             int portCount = configuration.get().portRangeEnd()
                     - configuration.get().portRangeStart() + 1;
             processSupervisor = new ProcessSupervisor(Math.min(portCount, 16));
+            BackendProtocolSynchronizer protocolSynchronizer =
+                    ViaVersionProtocolSynchronizer.create(proxy, logger);
             instanceManager = new InstanceManager(
                     blueprints,
                     softwareProfiles,
@@ -163,7 +169,7 @@ public final class SLSLite {
                     directoryPreparer,
                     processSpecFactory,
                     processSupervisor,
-                    new VelocityBackendRegistry(proxy),
+                    new VelocityBackendRegistry(proxy, protocolSynchronizer),
                     logger
             );
             joinService = new LocalJoinService(
@@ -187,7 +193,7 @@ public final class SLSLite {
                     resourceBudget,
                     portAllocator,
                     processSupervisor,
-                    new VelocityBackendRegistry(proxy),
+                    new VelocityBackendRegistry(proxy, protocolSynchronizer),
                     logger
             );
             lobbyProvider = new FallbackLobbyProvider(

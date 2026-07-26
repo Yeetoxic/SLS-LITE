@@ -9,6 +9,7 @@ import net.slimelabs.slslite.velocity.TransferActionBar;
 import org.slf4j.Logger;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -133,7 +134,8 @@ public final class SLSLimboHandoffService implements AutoCloseable {
                         transferFailed(
                                 entry,
                                 primary,
-                                failure.getMessage()
+                                failure.getMessage(),
+                                connectionFailureReason(failure.getMessage())
                         );
                         return;
                     }
@@ -143,14 +145,22 @@ public final class SLSLimboHandoffService implements AutoCloseable {
                         remove(player.getUniqueId());
                         return;
                     }
-                    transferFailed(entry, primary, result.getStatus().name());
+                    transferFailed(
+                            entry,
+                            primary,
+                            result.getStatus().name(),
+                            result.getReasonComponent().orElseGet(
+                                    () -> statusFailureReason(result.getStatus())
+                            )
+                    );
                 });
     }
 
     private void transferFailed(
             WaitingPlayer entry,
             RegisteredServer primary,
-            String detail
+            String detail,
+            Component playerReason
     ) {
         Player player = entry.player();
         int failures = entry.failures().incrementAndGet();
@@ -166,10 +176,9 @@ public final class SLSLimboHandoffService implements AutoCloseable {
                     NamedTextColor.YELLOW
             ));
             if (entry.playerNotified().compareAndSet(false, true)) {
-                player.sendMessage(Component.text(
-                        "Your destination is not ready yet. You will remain "
-                                + "in SLS-Limbo while SLS-LITE checks it.",
-                        NamedTextColor.YELLOW
+                player.sendMessage(failureNotice(
+                        primary.getServerInfo().getName(),
+                        playerReason
                 ));
             }
         }
@@ -193,6 +202,71 @@ public final class SLSLimboHandoffService implements AutoCloseable {
                     retrySeconds
             );
         }
+    }
+
+    private static Component failureNotice(
+            String destination,
+            Component reason
+    ) {
+        return Component.text("SLS-LITE: ", NamedTextColor.GOLD)
+                .append(Component.text(
+                        "Unable to connect you to ",
+                        NamedTextColor.YELLOW
+                ))
+                .append(Component.text(destination, NamedTextColor.WHITE))
+                .append(Component.text(": ", NamedTextColor.YELLOW))
+                .append(reason)
+                .append(Component.text(
+                        " You will remain in SLS-Limbo while SLS-LITE retries.",
+                        NamedTextColor.YELLOW
+                ));
+    }
+
+    private static Component connectionFailureReason(String detail) {
+        String normalized = Optional.ofNullable(detail)
+                .orElse("")
+                .toLowerCase(java.util.Locale.ROOT);
+        if (normalized.contains("connection refused")) {
+            return Component.text(
+                    "The destination server is offline or still starting.",
+                    NamedTextColor.RED
+            );
+        }
+        if (normalized.contains("timed out")
+                || normalized.contains("timeout")) {
+            return Component.text(
+                    "The destination server did not respond in time.",
+                    NamedTextColor.RED
+            );
+        }
+        return Component.text(
+                "The destination server could not be reached.",
+                NamedTextColor.RED
+        );
+    }
+
+    private static Component statusFailureReason(
+            ConnectionRequestBuilder.Status status
+    ) {
+        return switch (status.name()) {
+            case "SERVER_DISCONNECTED" -> Component.text(
+                    "The destination server rejected the connection.",
+                    NamedTextColor.RED
+            );
+            case "CONNECTION_CANCELLED" -> Component.text(
+                    "The connection was cancelled by the proxy or another "
+                            + "plugin.",
+                    NamedTextColor.RED
+            );
+            case "CONNECTION_IN_PROGRESS" -> Component.text(
+                    "Another connection attempt is already in progress.",
+                    NamedTextColor.RED
+            );
+            default -> Component.text(
+                    "The destination is not accepting connections.",
+                    NamedTextColor.RED
+            );
+        };
     }
 
     private void scheduleRetry(WaitingPlayer entry, long delaySeconds) {

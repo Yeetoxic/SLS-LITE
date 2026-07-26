@@ -155,7 +155,7 @@ class SLSConfigRepositoryTest {
                     enabled: false
                     memory_mib: 128
                     startup_timeout_seconds: 45
-                    advertised_protocol: 769
+                    advertised_protocol: 770
                     recovery:
                       max_attempts: 3
                       initial_backoff_seconds: 4
@@ -170,7 +170,7 @@ class SLSConfigRepositoryTest {
         assertEquals(false, limbo.enabled());
         assertEquals(128, limbo.memoryMiB());
         assertEquals(45, limbo.startupTimeoutSeconds());
-        assertEquals(769, limbo.advertisedProtocol());
+        assertEquals(770, limbo.advertisedProtocol());
         assertEquals(3, limbo.maxRestartAttempts());
         assertEquals(4, limbo.initialBackoffSeconds());
         assertEquals(16, limbo.maxBackoffSeconds());

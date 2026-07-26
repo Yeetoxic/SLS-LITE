@@ -7,9 +7,9 @@ SLS-Limbo virtual lobby.
 
 - Project: NanoLimbo
 - Version: 1.13.0
-- Source: <https://github.com/NanoLimbo/NanoLimbo>
+- Source: <https://github.com/Nan1t/NanoLimbo>
 - Corresponding revision:
-  <https://github.com/NanoLimbo/NanoLimbo/tree/d192d57d1d4a5fdc7b87643f453d82cb7b9b4242>
+  <https://github.com/Nan1t/NanoLimbo/tree/d192d57d1d4a5fdc7b87643f453d82cb7b9b4242>
 - Commit: `d192d57d1d4a5fdc7b87643f453d82cb7b9b4242`
 - License: GNU General Public License version 3
 - Included binary: `src/main/resources/limbo/nanolimbo-1.13.0.jar`

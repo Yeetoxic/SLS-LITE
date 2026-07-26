@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SLSLimboHandoffServiceTest {
 
@@ -125,6 +126,42 @@ class SLSLimboHandoffServiceTest {
         handoff.close();
     }
 
+    @Test
+    void includesBackendDisconnectReasonInPlayerNotice() {
+        RegisteredServer limbo = server("sls-limbo");
+        RegisteredServer primary = server("lobby.abc123");
+        AtomicReference<Optional<ServerConnection>> current =
+                new AtomicReference<>(Optional.of(connection(limbo)));
+        AtomicInteger transfers = new AtomicInteger();
+        AtomicInteger messageCount = new AtomicInteger();
+        List<Component> messages = new ArrayList<>();
+        Player player = player(
+                current,
+                transfers,
+                primary,
+                ConnectionRequestBuilder.Status.SERVER_DISCONNECTED,
+                messageCount,
+                Optional.of(Component.text(
+                        "Outdated server! I'm still on 26.1.2"
+                )),
+                messages
+        );
+        TestLobbyProvider lobbies = new TestLobbyProvider(limbo);
+        SLSLimboHandoffService handoff = service(lobbies);
+
+        handoff.awaitPrimary(player);
+        handoff.connected(player, limbo);
+        lobbies.publishPrimary(primary);
+        lobbies.publishPrimary(primary);
+
+        assertEquals(1, messageCount.get());
+        String notice = messages.getFirst().toString();
+        assertTrue(notice.contains("lobby.abc123"));
+        assertTrue(notice.contains("Outdated server! I'm still on 26.1.2"));
+        assertTrue(notice.contains("SLS-LITE retries"));
+        handoff.close();
+    }
+
     private SLSLimboHandoffService service(TestLobbyProvider lobbies) {
         return new SLSLimboHandoffService(
                 lobbies,
@@ -154,6 +191,26 @@ class SLSLimboHandoffServiceTest {
             ConnectionRequestBuilder.Status status,
             AtomicInteger messages
     ) {
+        return player(
+                current,
+                transfers,
+                primary,
+                status,
+                messages,
+                Optional.empty(),
+                null
+        );
+    }
+
+    private static Player player(
+            AtomicReference<Optional<ServerConnection>> current,
+            AtomicInteger transfers,
+            RegisteredServer primary,
+            ConnectionRequestBuilder.Status status,
+            AtomicInteger messages,
+            Optional<Component> reason,
+            List<Component> sentMessages
+    ) {
         UUID playerId = UUID.randomUUID();
         ConnectionRequestBuilder.Result result =
                 (ConnectionRequestBuilder.Result) Proxy.newProxyInstance(
@@ -162,7 +219,7 @@ class SLSLimboHandoffServiceTest {
                         (proxy, method, arguments) -> switch (method.getName()) {
                             case "getStatus" -> status;
                             case "getAttemptedConnection" -> primary;
-                            case "getReasonComponent" -> Optional.empty();
+                            case "getReasonComponent" -> reason;
                             default -> defaultValue(method.getReturnType());
                         }
                 );
@@ -191,6 +248,9 @@ class SLSLimboHandoffServiceTest {
                     case "sendActionBar" -> null;
                     case "sendMessage" -> {
                         messages.incrementAndGet();
+                        if (sentMessages != null) {
+                            sentMessages.add((Component) arguments[0]);
+                        }
                         yield null;
                     }
                     default -> defaultValue(method.getReturnType());

@@ -66,7 +66,7 @@ class SLSLimboInstallerTest {
                 installer.install(
                         25581,
                         new ForwardingConfig(ForwardingMode.MODERN, true, secret),
-                        769
+                        770
                 );
 
         Path copiedSecret =
@@ -76,7 +76,7 @@ class SLSLimboInstallerTest {
                 installation.workingDirectory().resolve("settings.yml")
         );
         assertTrue(settings.contains("type: MODERN"));
-        assertTrue(settings.contains("protocol: 769"));
+        assertTrue(settings.contains("protocol: 770"));
         assertTrue(settings.contains("secret: \"@forwarding.secret\""));
         assertFalse(settings.contains("test-secret"));
     }
@@ -100,6 +100,28 @@ class SLSLimboInstallerTest {
         );
 
         assertTrue(failure.getMessage().contains("is not supported"));
+    }
+
+    @Test
+    void rejectsFixedProtocolWithUnsafeHeightmapTranslation() {
+        SLSLimboInstaller installer =
+                new SLSLimboInstaller(temporaryDirectory);
+
+        IOException failure = assertThrows(
+                IOException.class,
+                () -> installer.install(
+                        25584,
+                        new ForwardingConfig(
+                                ForwardingMode.NONE,
+                                true,
+                                temporaryDirectory.resolve("unused.secret")
+                        ),
+                        769
+                )
+        );
+
+        assertTrue(failure.getMessage().contains("heightmaps"));
+        assertTrue(failure.getMessage().contains("1.21.5"));
     }
 
     private static String sha256(Path path) throws Exception {

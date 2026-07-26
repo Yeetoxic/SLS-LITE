@@ -337,6 +337,21 @@ the local implementation has equivalent behavior.
 - [ ] Keep the SLS-LITE schema smaller than the upstream schema and reject fields
       that imply unavailable isolation or host capabilities.
 
+### Full Review Gate
+
+- [ ] Pause feature expansion and complete a full project review before beginning
+      automatic Paper downloads or any other provider-backed installer work.
+  - Review architecture, lifecycle ownership, concurrency, cleanup, path
+    security, resource accounting, configuration compatibility, commands,
+    permissions, diagnostics, and public documentation.
+  - Re-run the complete automated suite and the documented manual Pterodactyl
+    workflows for external lobby, managed lobby, SLS-Limbo, matchmaking,
+    recovery, shutdown, and protocol compatibility.
+  - Classify every remaining TODO as required for the first usable release,
+    intentionally deferred, or removed from scope.
+  - Require explicit project-owner approval before checking off or starting the
+    provider-based Paper installer tasks below.
+
 ### Software Profiles and Installation
 
 - [ ] Add version-to-Java mappings so a software profile can select the correct
@@ -506,6 +521,9 @@ the local implementation has equivalent behavior.
     only players already forced into SLS-Limbo when the primary becomes ready.
   - [x] Provide a minimal safe experience: a fixed spawn, movement, status message,
     and access to proxy-level `/sls` commands.
+  - [x] Explain the first failed primary handoff in chat, including safe backend
+    disconnect reasons such as protocol incompatibility, without repeating the
+    message on every retry.
   - [x] Package the required runtime inside the SLS-LITE JAR so operators do not
     install LimboAPI, PacketEvents, or another companion plugin.
   - [x] Evaluate a maintained embeddable virtual-server engine and its transitive
@@ -626,19 +644,23 @@ the local implementation has equivalent behavior.
       behavior, duplicate requests, and orphan cleanup.
 - [x] Test durable instance metadata and unclean-shutdown reconciliation.
 - [x] Test external and managed lobby routing.
-- [ ] Add SLS-Limbo native and ViaVersion-translated protocol compatibility
+- [x] Add SLS-Limbo native and ViaVersion-translated protocol compatibility
       tests.
   - [x] Add a pinned login-to-PLAY smoke harness and representative native
         NanoLimbo matrix with backend-brand verification.
-  - [x] Verify the fixed `1.21.4`/protocol `769` baseline through Velocity and
-        ViaVersion with a newer automated client.
-  - [ ] Verify the same translated path with the current real client, including
+  - [x] Verify the fixed `1.21.5`/protocol `770` baseline through Velocity and
+        ViaVersion with a newer automated client without heightmap warnings.
+  - [x] Verify the same translated path with the current real client, including
         SLS-Limbo movement, commands, and handoff to the primary lobby.
-  - [ ] Synchronize dynamically registered SLS-Limbo protocol metadata through
+  - [x] Synchronize dynamically registered SLS-Limbo protocol metadata through
         ViaVersion's public API so first boot does not wait for or require a
         persisted backend probe.
-  - [ ] Investigate ViaVersion's translated minimal-heightmap warnings and
-        either resolve them or document a tested harmless version range.
+  - [x] Synchronize every dynamically named managed backend with ViaVersion
+        before routing players, including replacement IDs created during
+        managed-lobby recovery.
+  - [x] Resolve ViaVersion's translated minimal-heightmap warnings by requiring
+        fixed translation baselines to use NanoLimbo's modern protocol `770+`
+        heightmap encoding.
 - [x] Add an integration fixture that launches Velocity and one lightweight
       backend in a constrained single-host environment.
 - [ ] Add CI for compilation, tests, packaging, and dependency checks.

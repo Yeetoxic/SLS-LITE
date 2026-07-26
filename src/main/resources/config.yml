@@ -110,10 +110,11 @@ lobby:
     # report readiness before SLS-LITE terminates it and marks it unavailable.
     startup_timeout_seconds: 30
 
-    # Integer: -1 or a positive Minecraft protocol number.
+    # Integer: -1 or a Minecraft protocol number of at least 770 (1.21.5).
     #   -1       - advertise each client protocol NanoLimbo supports natively.
-    #   positive - advertise a fixed, explicitly tested backend baseline for a
-    #              proxy-installed ViaVersion to translate to.
+    #   770+     - advertise a fixed, explicitly tested backend baseline for a
+    #              proxy-installed ViaVersion to translate to. Older fixed
+    #              baselines have unsafe heightmap translation behavior.
     # Keep -1 unless the selected protocol is listed as tested in
     # DOCS/Protocol_Compatibility.md. This does not install ViaVersion or make an
     # unknown Minecraft release compatible by itself.

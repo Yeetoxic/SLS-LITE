@@ -1,7 +1,7 @@
 param(
     [string]$HostName = "127.0.0.1",
     [int]$Port = 25565,
-    [string[]]$Versions = @("1.21.4"),
+    [string[]]$Versions = @("1.21.5"),
     [string]$ExpectedBrand = "SLS-Limbo",
     [int]$TimeoutSeconds = 15
 )

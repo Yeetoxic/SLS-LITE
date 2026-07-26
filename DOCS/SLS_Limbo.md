@@ -43,10 +43,12 @@ checking resumes.
 
 Per-player handoff failures use exponential retry delays of 10, 20, 40, and
 then 60 seconds. The player receives one chat explanation per SLS-Limbo waiting
-episode; later failures use a static action-bar status. Only the first failure
-is logged as a warning, with repeated failures available at debug level. This
-also prevents an online but protocol-incompatible backend from creating a
-connection and notification loop.
+episode. When Velocity provides a backend disconnect reason, such as an outdated
+server protocol, SLS-LITE includes that reason in the explanation. Connection
+refusals and timeouts use safe, human-readable fallback text. Later failures use
+a static action-bar status. Only the first failure is logged as a warning, with
+repeated failures available at debug level. This also prevents an online but
+protocol-incompatible backend from creating a connection and notification loop.
 
 ## How It Works
 

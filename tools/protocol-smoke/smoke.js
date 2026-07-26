@@ -132,7 +132,7 @@ function parseArguments(arguments_) {
   const values = {
     host: "127.0.0.1",
     port: 25565,
-    versions: ["1.21.4"],
+    versions: ["1.21.5"],
     brand: "SLS-Limbo",
     timeoutMs: 15000
   };

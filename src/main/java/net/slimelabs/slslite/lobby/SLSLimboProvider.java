@@ -344,7 +344,8 @@ public final class SLSLimboProvider implements LobbyProvider {
                 }
                 backends.register(
                         SERVER_NAME,
-                        new InetSocketAddress("127.0.0.1", port)
+                        new InetSocketAddress("127.0.0.1", port),
+                        config.advertisedProtocol()
                 );
                 registered = true;
                 registeredServer = proxy.getServer(SERVER_NAME)
