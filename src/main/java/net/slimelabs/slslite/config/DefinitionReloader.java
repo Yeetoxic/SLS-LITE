@@ -31,12 +31,14 @@ public final class DefinitionReloader {
                 softwareCandidate.getAll()
         );
 
-        // Install software first so newly referenced profiles exist before blueprints.
-        if (reloadSoftware) {
-            softwareProfiles.install(softwareCandidate);
+        if (blueprints.catalog() != softwareProfiles.catalog()) {
+            throw new ConfigurationException(
+                    "Blueprint and software repositories do not share a definition catalog"
+            );
         }
-        if (reloadBlueprints) {
-            blueprints.install(blueprintCandidate);
-        }
+        blueprints.catalog().install(
+                blueprintCandidate.values(),
+                softwareCandidate.values()
+        );
     }
 }

@@ -54,6 +54,7 @@ class ConfigurationValidatorTest {
         Repositories repositories = repositories("paper", 1024, 2048);
         SLSConfig managedLobby = new SLSConfig(
                 repositories.config().totalMemoryMiB(),
+                repositories.config().maxManagedProcesses(),
                 repositories.config().portRangeStart(),
                 repositories.config().portRangeEnd(),
                 repositories.config().queueTimeoutSeconds(),
@@ -71,6 +72,111 @@ class ConfigurationValidatorTest {
                 repositories.blueprints(),
                 repositories.profiles()
         ));
+    }
+
+    @Test
+    void rejectsManagedLobbyAndLimboOverCombinedBudget() throws Exception {
+        Repositories repositories = repositories("paper", 1024, 1024);
+        SLSConfig config = withManagedLobby(
+                repositories.config(),
+                "game",
+                "test",
+                repositories.config().limbo()
+        );
+
+        assertThrows(ConfigurationException.class, () -> ConfigurationValidator.validate(
+                config,
+                repositories.blueprints(),
+                repositories.profiles()
+        ));
+    }
+
+    @Test
+    void acceptsManagedLobbyAndLimboAtExactCombinedBudget() throws Exception {
+        Repositories repositories = repositories("paper", 1024, 1120);
+        SLSConfig config = withManagedLobby(
+                repositories.config(),
+                "game",
+                "test",
+                repositories.config().limbo()
+        );
+
+        assertDoesNotThrow(() -> ConfigurationValidator.validate(
+                config,
+                repositories.blueprints(),
+                repositories.profiles()
+        ));
+    }
+
+    @Test
+    void rejectsModernForwardingModeMismatch() throws Exception {
+        Repositories repositories = repositories("paper", 1024, 2048);
+        SLSConfig config = withForwarding(
+                repositories.config(),
+                new ForwardingConfig(
+                        ForwardingMode.MODERN,
+                        false,
+                        temporaryDirectory.resolve("forwarding.secret")
+                )
+        );
+
+        assertThrows(ConfigurationException.class, () -> ConfigurationValidator.validate(
+                config,
+                repositories.blueprints(),
+                repositories.profiles(),
+                true
+        ));
+    }
+
+    @Test
+    void allowsNoneForwardingModeWithoutOnlineModeMatch() throws Exception {
+        Repositories repositories = repositories("paper", 1024, 2048);
+
+        assertDoesNotThrow(() -> ConfigurationValidator.validate(
+                repositories.config(),
+                repositories.blueprints(),
+                repositories.profiles(),
+                false
+        ));
+    }
+
+    private SLSConfig withManagedLobby(
+            SLSConfig source,
+            String registry,
+            String server,
+            SLSLimboConfig limbo
+    ) {
+        return new SLSConfig(
+                source.totalMemoryMiB(),
+                source.maxManagedProcesses(),
+                source.portRangeStart(),
+                source.portRangeEnd(),
+                source.queueTimeoutSeconds(),
+                source.idleShutdownSeconds(),
+                source.managedOutput(),
+                source.forwarding(),
+                source.security(),
+                limbo,
+                new LobbyConfig(LobbyMode.MANAGED, registry, server),
+                source.instancesDirectory()
+        );
+    }
+
+    private SLSConfig withForwarding(SLSConfig source, ForwardingConfig forwarding) {
+        return new SLSConfig(
+                source.totalMemoryMiB(),
+                source.maxManagedProcesses(),
+                source.portRangeStart(),
+                source.portRangeEnd(),
+                source.queueTimeoutSeconds(),
+                source.idleShutdownSeconds(),
+                source.managedOutput(),
+                forwarding,
+                source.security(),
+                source.limbo(),
+                source.lobby(),
+                source.instancesDirectory()
+        );
     }
 
     private Repositories repositories(
@@ -105,6 +211,7 @@ class ConfigurationValidatorTest {
         profiles.reload();
         SLSConfig config = new SLSConfig(
                 totalMemory,
+                101,
                 25570,
                 25670,
                 180,

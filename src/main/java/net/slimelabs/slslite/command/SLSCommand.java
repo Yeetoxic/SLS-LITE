@@ -27,6 +27,7 @@ import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.SLSLimboDiagnostics;
 import net.slimelabs.slslite.resource.ResourceBudget;
+import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.security.AdminClaimService;
 import net.slimelabs.slslite.security.Administrator;
 import net.slimelabs.slslite.security.AdministratorStore;
@@ -67,6 +68,7 @@ public final class SLSCommand implements SimpleCommand {
     private final BlueprintRepository blueprints;
     private final SoftwareProfileRepository softwareProfiles;
     private final ResourceBudget resourceBudget;
+    private final ProcessSupervisor processSupervisor;
     private final ServerController instances;
     private final LocalJoinService joinService;
     private final LobbyProvider lobbyProvider;
@@ -83,6 +85,7 @@ public final class SLSCommand implements SimpleCommand {
             BlueprintRepository blueprints,
             SoftwareProfileRepository softwareProfiles,
             ResourceBudget resourceBudget,
+            ProcessSupervisor processSupervisor,
             ServerController instances,
             LocalJoinService joinService,
             LobbyProvider lobbyProvider,
@@ -97,6 +100,7 @@ public final class SLSCommand implements SimpleCommand {
         this.blueprints = blueprints;
         this.softwareProfiles = softwareProfiles;
         this.resourceBudget = resourceBudget;
+        this.processSupervisor = processSupervisor;
         this.instances = instances;
         this.joinService = joinService;
         this.lobbyProvider = lobbyProvider;
@@ -776,6 +780,12 @@ public final class SLSCommand implements SimpleCommand {
                         "Managed memory:",
                         resourceBudget.reservedMemoryMiB() + "/"
                                 + resourceBudget.totalMemoryMiB() + " MiB"
+                ))
+                .appendNewline()
+                .append(infoLine(
+                        "Managed processes:",
+                        processSupervisor.activeProcessCount() + "/"
+                                + processSupervisor.maximumProcesses()
                 ))
                 .appendNewline()
                 .append(infoLine(

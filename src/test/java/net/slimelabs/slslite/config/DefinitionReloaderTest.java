@@ -7,6 +7,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -57,6 +59,44 @@ class DefinitionReloaderTest {
         assertEquals("replacement", repositories.profiles().getAll().iterator().next().id());
     }
 
+    @Test
+    void concurrentReadersAlwaysObserveCompatibleCatalog() throws Exception {
+        Repositories repositories = repositories();
+        AtomicBoolean running = new AtomicBoolean(true);
+        CompletableFuture<Void> reader = CompletableFuture.runAsync(() -> {
+            while (running.get()) {
+                DefinitionCatalog.Snapshot snapshot =
+                        repositories.blueprints().catalog().snapshot();
+                snapshot.blueprints().values().forEach(blueprint -> {
+                    if (!snapshot.softwareProfiles().containsKey(blueprint.software())) {
+                        throw new AssertionError(
+                                "Observed blueprint without software profile: "
+                                        + blueprint.software()
+                        );
+                    }
+                });
+            }
+        });
+
+        try {
+            for (int iteration = 0; iteration < 20; iteration++) {
+                String id = iteration % 2 == 0 ? "replacement" : "paper";
+                writeProfile(repositories.profilesPath(), id);
+                writeBlueprint(repositories.blueprintsPath(), id);
+                DefinitionReloader.reload(
+                        repositories.config(),
+                        repositories.blueprints(),
+                        repositories.profiles(),
+                        true,
+                        true
+                );
+            }
+        } finally {
+            running.set(false);
+        }
+        reader.join();
+    }
+
     private Repositories repositories() throws Exception {
         Path blueprintsPath = Files.createDirectories(
                 temporaryDirectory.resolve("blueprints")
@@ -67,9 +107,13 @@ class DefinitionReloaderTest {
         writeBlueprint(blueprintsPath, "paper");
         writeProfile(profilesPath, "paper");
 
-        BlueprintRepository blueprints = new BlueprintRepository(blueprintsPath);
+        DefinitionCatalog catalog = new DefinitionCatalog();
+        BlueprintRepository blueprints = new BlueprintRepository(blueprintsPath, catalog);
         blueprints.reload();
-        SoftwareProfileRepository profiles = new SoftwareProfileRepository(profilesPath);
+        SoftwareProfileRepository profiles = new SoftwareProfileRepository(
+                profilesPath,
+                catalog
+        );
         profiles.reload();
         return new Repositories(
                 config(),
@@ -106,6 +150,7 @@ class DefinitionReloaderTest {
     private SLSConfig config() {
         return new SLSConfig(
                 1024,
+                101,
                 25570,
                 25670,
                 180,

@@ -118,6 +118,30 @@ class BlueprintRepositoryTest {
     }
 
     @Test
+    void rejectsUnknownStructuralKey() throws Exception {
+        write("typo.yml", """
+                blueprint:
+                  id: typo
+                  name: Typo
+                  type: game
+                server:
+                  software: paper
+                  version: "26.1"
+                  limits:
+                    max_intances: 2
+                """);
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+
+        BlueprintException exception = assertThrows(
+                BlueprintException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("server.limits.max_intances"));
+        assertTrue(exception.getMessage().contains("server.limits.max_instances"));
+    }
+
+    @Test
     void discoversUserDefinedRegistryTypes() throws Exception {
         write("lobby.yml", """
                 blueprint:

@@ -100,6 +100,7 @@ data directory:
 ```yaml
 resources:
   total_memory_mib: 4096
+  max_managed_processes: 101
 
 network:
   ports:
@@ -141,11 +142,19 @@ paths:
 ```
 
 The memory value is the shared budget for managed backend processes and excludes
-Velocity itself. SLS-Limbo reserves its configured heap from this
-same budget. Managed paths must remain relative to the SLS-LITE data
-directory. Managed instances reserve an available loopback port from this range
-and release it during cleanup. Matchmaking requests fail and clean themselves up
-after the configured timeout.
+Velocity itself. SLS-Limbo reserves its configured heap from this same budget
+and consumes one managed process slot. In managed-lobby mode, startup validation
+requires enough memory and process slots for both SLS-Limbo and the primary
+lobby. `max_managed_processes` cannot exceed the configured port count and
+defaults to that count when omitted. Managed paths must remain relative to the
+SLS-LITE data directory. Managed instances reserve an available loopback port
+from this range and release it during cleanup. Matchmaking requests fail and
+clean themselves up after the configured timeout.
+
+Unknown structural keys in host configuration, blueprints, and software profiles
+are rejected with their full path and a suggestion when one is available.
+Blueprint `annotations` remain open-ended so integrations can preserve their
+own metadata.
 
 SLS-Limbo is currently experimental. Its architecture, operational
 limits, compatibility policy, and manual test are documented in
@@ -171,6 +180,8 @@ apply after a proxy restart.
 For a production Paper network, set `forwarding.mode: modern`,
 `forwarding.online_mode` to the same value as Velocity's `online-mode`, and
 `forwarding.secret_file` to Velocity's configured forwarding secret file.
+SLS-LITE rejects startup when modern forwarding and Velocity disagree about
+online mode.
 SLS-LITE then patches each managed instance's `spigot.yml` and
 `config/paper-global.yml` without exposing the secret in process arguments or
 logs. The default `none` mode is intended for isolated smoke testing.

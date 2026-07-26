@@ -97,6 +97,28 @@ class SoftwareProfileRepositoryTest {
         assertThrows(ConfigurationException.class, repository::reload);
     }
 
+    @Test
+    void rejectsUnknownStructuralKey() throws Exception {
+        write("typo.yml", """
+                software:
+                  id: typo
+                  base_directory: software/typo
+                  server_jar: server.jar
+                readiness:
+                  timeout_second: 30
+                """);
+        SoftwareProfileRepository repository =
+                new SoftwareProfileRepository(temporaryDirectory);
+
+        ConfigurationException exception = assertThrows(
+                ConfigurationException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("readiness.timeout_second"));
+        assertTrue(exception.getMessage().contains("readiness.timeout_seconds"));
+    }
+
     private void write(String name, String content) throws Exception {
         Files.writeString(temporaryDirectory.resolve(name), content);
     }

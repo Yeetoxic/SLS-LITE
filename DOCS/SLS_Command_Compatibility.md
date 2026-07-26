@@ -30,14 +30,14 @@ upstream umbrella behavior.
 | `start <type> <id>` | Admin | Adapted | Preserve saved-instance semantics when persistence lands. |
 | `join <type> <id> [target]` | Self public; others admin | Adapted | Capacity-aware allocation is supported; admin `/sls join player <player> --force` can bypass a full target instance. |
 | `find <player>` | Public | Supported | vSLS messages, hover details, and action-bar feedback matched. |
-| `system` | Admin | Adapted | Reports local runtime, JVM memory, managed memory allocation, CPU threads, Java, and OS details; capability probes remain planned. |
+| `system` | Admin | Adapted | Reports local runtime, JVM memory, managed memory allocation, supervised process usage and limit, CPU threads, Java, and OS details; capability probes remain planned. |
 | `node <id> [drained [value]]` | Admin | Local-mode response planned | Node administration is distributed-only. |
 | `console <server> <command>` | Admin | Adapted | Safe local process input is supported; add bounded in-game output capture. |
 | `blueprint <id>` | Admin | Planned | Pretty-print one blueprint; keep `blueprints` as an additive alias. |
 | `debug` | Public, player-only | Planned | Add per-player local lifecycle diagnostics. |
 | `delete <server\|all>` | Admin | Planned | Define safe persistent and ephemeral deletion behavior. |
 | `logs <server> [page] [lines]` | Admin | Adapted | vSLS pagination is backed by a bounded 1,000-line local process-output buffer. |
-| `reload [all\|config\|blueprints\|software]` | Admin | Adapted | Blueprint/software candidates are cross-validated before either is installed. Add upstream `config` mode only when host-wide services can be rebuilt safely; until then `config.yml` requires a Velocity restart. |
+| `reload [all\|config\|blueprints\|software]` | Admin | Adapted | Blueprint/software candidates are cross-validated and installed as one immutable catalog revision. Add upstream `config` mode only when host-wide services can be rebuilt safely; until then `config.yml` requires a Velocity restart. |
 | `stop <server\|all> [force]` | Admin | Adapted | Add `all` and compatible `force` behavior. |
 | `kill <server\|all> [force]` | Admin | Planned | Add explicit force-termination behavior. |
 | `dequeue [all\|local\|player]` | Self public; others admin | Adapted | Match final vSLS feedback and queue context. |

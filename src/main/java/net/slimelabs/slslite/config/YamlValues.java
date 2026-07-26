@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class YamlValues {
 
@@ -158,6 +159,66 @@ public final class YamlValues {
             result.add(stringItem);
         }
         return List.copyOf(result);
+    }
+
+    public static void requireOnlyKeys(
+            Map<String, Object> values,
+            String section,
+            Path path,
+            String... allowedKeys
+    ) throws ConfigurationException {
+        Set<String> allowed = Set.of(allowedKeys);
+        for (String key : values.keySet()) {
+            if (!allowed.contains(key)) {
+                throw error(path, unknownKeyMessage(section, key, allowed));
+            }
+        }
+    }
+
+    public static String unknownKeyMessage(
+            String section,
+            String key,
+            Set<String> allowed
+    ) {
+        String qualified = section.isBlank() ? key : section + "." + key;
+        String nearest = null;
+        int nearestDistance = Integer.MAX_VALUE;
+        for (String candidate : allowed) {
+            int distance = editDistance(key, candidate);
+            if (distance < nearestDistance) {
+                nearest = candidate;
+                nearestDistance = distance;
+            }
+        }
+        String message = "unknown key '" + qualified + "'";
+        if (nearest != null && nearestDistance <= Math.max(2, key.length() / 3)) {
+            String qualifiedNearest = section.isBlank()
+                    ? nearest
+                    : section + "." + nearest;
+            message += "; did you mean '" + qualifiedNearest + "'?";
+        }
+        return message;
+    }
+
+    private static int editDistance(String left, String right) {
+        int[] previous = new int[right.length() + 1];
+        for (int index = 0; index <= right.length(); index++) {
+            previous[index] = index;
+        }
+        for (int leftIndex = 1; leftIndex <= left.length(); leftIndex++) {
+            int[] current = new int[right.length() + 1];
+            current[0] = leftIndex;
+            for (int rightIndex = 1; rightIndex <= right.length(); rightIndex++) {
+                int substitution = previous[rightIndex - 1]
+                        + (left.charAt(leftIndex - 1) == right.charAt(rightIndex - 1) ? 0 : 1);
+                current[rightIndex] = Math.min(
+                        Math.min(current[rightIndex - 1] + 1, previous[rightIndex] + 1),
+                        substitution
+                );
+            }
+            previous = current;
+        }
+        return previous[right.length()];
     }
 
     public static ConfigurationException error(Path path, String message) {

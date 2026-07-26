@@ -94,6 +94,14 @@ public final class ProcessSupervisor implements AutoCloseable {
         return List.copyOf(processes.values());
     }
 
+    public synchronized int activeProcessCount() {
+        return processes.size();
+    }
+
+    public int maximumProcesses() {
+        return maximumProcesses;
+    }
+
     public void shutdown(Duration timeout) {
         List<SupervisedProcess> snapshot;
         synchronized (this) {

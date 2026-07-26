@@ -104,7 +104,10 @@ lobby:
   retry budget.
 
 The SLS-Limbo reservation is included in `resources.total_memory_mib`. It also
-uses one port from `network.ports`. Its actual host usage includes JVM native
+uses one port from `network.ports` and one slot from
+`resources.max_managed_processes`. In managed-lobby mode, SLS-LITE rejects
+startup unless the declared budget and process limit can accommodate both
+SLS-Limbo and the primary lobby. Its actual host usage includes JVM native
 memory in addition to the configured heap, just like every Java child process.
 
 ## Player Experience

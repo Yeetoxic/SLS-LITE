@@ -23,6 +23,7 @@ class SLSConfigRepositoryTest {
 
         SLSConfig config = repository.get();
         assertEquals(4096, config.totalMemoryMiB());
+        assertEquals(101, config.maxManagedProcesses());
         assertEquals(25570, config.portRangeStart());
         assertEquals(25670, config.portRangeEnd());
         assertEquals(180, config.queueTimeoutSeconds());
@@ -82,6 +83,38 @@ class SLSConfigRepositoryTest {
         SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
 
         assertThrows(ConfigurationException.class, repository::reload);
+    }
+
+    @Test
+    void rejectsManagedProcessLimitAbovePortCount() throws Exception {
+        writeConfig("""
+                resources:
+                  max_managed_processes: 3
+                network:
+                  ports:
+                    start: 30000
+                    end: 30001
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        assertThrows(ConfigurationException.class, repository::reload);
+    }
+
+    @Test
+    void rejectsUnknownStructuralKeyWithSuggestion() throws Exception {
+        writeConfig("""
+                resources:
+                  total_memroy_mib: 2048
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        ConfigurationException exception = assertThrows(
+                ConfigurationException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("resources.total_memroy_mib"));
+        assertTrue(exception.getMessage().contains("resources.total_memory_mib"));
     }
 
     @Test

@@ -2,6 +2,7 @@ package net.slimelabs.slslite.instance;
 
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
@@ -100,14 +101,12 @@ public final class InstanceManager implements ServerController {
 
     @Override
     public ManagedInstance start(String blueprintId) throws InstanceOperationException {
-        Blueprint blueprint = blueprints.get(blueprintId).orElseThrow(
-                () -> new InstanceOperationException("Unknown blueprint: " + blueprintId)
+        ResolvedDefinition definition = resolveDefinition(
+                blueprintId,
+                "Unknown blueprint: " + blueprintId
         );
-        SoftwareProfile profile = softwareProfiles.get(blueprint.software()).orElseThrow(
-                () -> new InstanceOperationException(
-                        "Missing software profile: " + blueprint.software()
-                )
-        );
+        Blueprint blueprint = definition.blueprint();
+        SoftwareProfile profile = definition.softwareProfile();
 
         String instanceId;
         int port;
@@ -343,17 +342,13 @@ public final class InstanceManager implements ServerController {
     private void resetPersistent(String instanceId) throws InstanceOperationException {
         InstanceMetadata metadata = readPersistentMetadata(instanceId);
         requireRestartable(metadata, null);
-        Blueprint blueprint = blueprints.get(metadata.blueprintId()).orElseThrow(
-                () -> new InstanceOperationException(
-                        "Persistent instance " + instanceId
-                                + " references missing blueprint " + metadata.blueprintId()
-                )
+        ResolvedDefinition definition = resolveDefinition(
+                metadata.blueprintId(),
+                "Persistent instance " + instanceId
+                        + " references missing blueprint " + metadata.blueprintId()
         );
-        SoftwareProfile profile = softwareProfiles.get(blueprint.software()).orElseThrow(
-                () -> new InstanceOperationException(
-                        "Missing software profile: " + blueprint.software()
-                )
-        );
+        Blueprint blueprint = definition.blueprint();
+        SoftwareProfile profile = definition.softwareProfile();
         try {
             Path baseDirectory = processSpecFactory.resolveBaseDirectory(
                     profile,
@@ -588,17 +583,13 @@ public final class InstanceManager implements ServerController {
     private ManagedInstance startPersistent(String instanceId)
             throws InstanceOperationException {
         InstanceMetadata metadata = readPersistentMetadata(instanceId);
-        Blueprint blueprint = blueprints.get(metadata.blueprintId()).orElseThrow(
-                () -> new InstanceOperationException(
-                        "Persistent instance " + instanceId
-                                + " references missing blueprint " + metadata.blueprintId()
-                )
+        ResolvedDefinition definition = resolveDefinition(
+                metadata.blueprintId(),
+                "Persistent instance " + instanceId
+                        + " references missing blueprint " + metadata.blueprintId()
         );
-        SoftwareProfile profile = softwareProfiles.get(blueprint.software()).orElseThrow(
-                () -> new InstanceOperationException(
-                        "Missing software profile: " + blueprint.software()
-                )
-        );
+        Blueprint blueprint = definition.blueprint();
+        SoftwareProfile profile = definition.softwareProfile();
         requireRestartable(metadata, null);
 
         int port;
@@ -728,6 +719,25 @@ public final class InstanceManager implements ServerController {
         throw new InstanceOperationException("Unable to generate a unique instance ID");
     }
 
+    private ResolvedDefinition resolveDefinition(
+            String blueprintId,
+            String missingBlueprintMessage
+    ) throws InstanceOperationException {
+        DefinitionCatalog.Snapshot definitions = blueprints.catalog().snapshot();
+        Blueprint blueprint = java.util.Optional.ofNullable(
+                definitions.blueprints().get(blueprintId)
+        ).orElseThrow(() -> new InstanceOperationException(missingBlueprintMessage));
+        SoftwareProfile profile = blueprints.catalog() == softwareProfiles.catalog()
+                ? definitions.softwareProfiles().get(blueprint.software())
+                : softwareProfiles.get(blueprint.software()).orElse(null);
+        if (profile == null) {
+            throw new InstanceOperationException(
+                    "Missing software profile: " + blueprint.software()
+            );
+        }
+        return new ResolvedDefinition(blueprint, profile);
+    }
+
     private void enforceInstanceLimit(Blueprint blueprint, String restartingId)
             throws InstanceOperationException {
         long active = instances.values().stream()
@@ -745,6 +755,12 @@ public final class InstanceManager implements ServerController {
                             + blueprint.maxInstances() + " active instance(s)"
             );
         }
+    }
+
+    private record ResolvedDefinition(
+            Blueprint blueprint,
+            SoftwareProfile softwareProfile
+    ) {
     }
 
     private void writeMetadata(

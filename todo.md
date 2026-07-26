@@ -345,6 +345,10 @@ the local implementation has equivalent behavior.
     reclaim verified orphan children, enforce `max_instances` in the controller,
     cross-validate definition reloads before installation, and release terminal
     SLS-Limbo reservations.
+  - [x] Resolve the second review's configuration and consistency findings:
+    validate mandatory lobby/Limbo capacity and Velocity forwarding mode, reject
+    unknown structural YAML keys, install definitions through one atomic catalog,
+    and replace the hidden process ceiling with a configured, reported limit.
   - Review architecture, lifecycle ownership, concurrency, cleanup, path
     security, resource accounting, configuration compatibility, commands,
     permissions, diagnostics, and public documentation.

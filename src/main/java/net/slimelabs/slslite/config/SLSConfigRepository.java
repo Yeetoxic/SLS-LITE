@@ -110,9 +110,87 @@ public final class SLSConfigRepository {
             Map<String, Object> limbo = lobby.containsKey("limbo")
                     ? YamlValues.optionalMap(lobby, "limbo", configPath)
                     : YamlValues.optionalMap(lobby, "emergency", configPath);
+            String limboSection = lobby.containsKey("limbo")
+                    ? "lobby.limbo"
+                    : "lobby.emergency";
             Map<String, Object> limboRecovery =
                     YamlValues.optionalMap(limbo, "recovery", configPath);
             Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);
+
+            YamlValues.requireOnlyKeys(
+                    root,
+                    "",
+                    configPath,
+                    "resources", "network", "matchmaking", "lifecycle", "managed_output",
+                    "forwarding", "security", "lobby", "paths"
+            );
+            YamlValues.requireOnlyKeys(
+                    resources,
+                    "resources",
+                    configPath,
+                    "total_memory_mib", "max_managed_processes"
+            );
+            YamlValues.requireOnlyKeys(network, "network", configPath, "ports");
+            YamlValues.requireOnlyKeys(ports, "network.ports", configPath, "start", "end");
+            YamlValues.requireOnlyKeys(
+                    matchmaking,
+                    "matchmaking",
+                    configPath,
+                    "queue_timeout_seconds"
+            );
+            YamlValues.requireOnlyKeys(
+                    lifecycle,
+                    "lifecycle",
+                    configPath,
+                    "idle_shutdown_seconds"
+            );
+            YamlValues.requireOnlyKeys(
+                    managedOutput,
+                    "managed_output",
+                    configPath,
+                    "mirror_to_proxy_console", "write_temporary_file",
+                    "temporary_file_max_kib"
+            );
+            YamlValues.requireOnlyKeys(
+                    forwarding,
+                    "forwarding",
+                    configPath,
+                    "mode", "online_mode", "secret_file"
+            );
+            YamlValues.requireOnlyKeys(
+                    security,
+                    "security",
+                    configPath,
+                    "allow_insecure_offline_administrators", "claim_code_expiry_seconds"
+            );
+            YamlValues.requireOnlyKeys(
+                    lobby,
+                    "lobby",
+                    configPath,
+                    "mode", "registry", "server", "limbo", "emergency", "recovery"
+            );
+            YamlValues.requireOnlyKeys(
+                    lobbyRecovery,
+                    "lobby.recovery",
+                    configPath,
+                    "max_attempts", "initial_backoff_seconds", "max_backoff_seconds",
+                    "stable_after_seconds"
+            );
+            YamlValues.requireOnlyKeys(
+                    limbo,
+                    limboSection,
+                    configPath,
+                    "enabled", "memory_mib", "startup_timeout_seconds",
+                    "advertised_protocol", "recovery"
+            );
+            YamlValues.requireOnlyKeys(
+                    limboRecovery,
+                    limboSection + ".recovery",
+                    configPath,
+                    "max_attempts", "initial_backoff_seconds", "max_backoff_seconds",
+                    "stable_after_seconds"
+            );
+            YamlValues.requireOnlyKeys(paths, "paths", configPath, "instances");
 
             int totalMemory = YamlValues.optionalPositiveInt(
                     resources,
@@ -130,6 +208,12 @@ public final class SLSConfigRepository {
                     ports,
                     "end",
                     DEFAULT_PORT_RANGE_END,
+                    configPath
+            );
+            int maxManagedProcesses = YamlValues.optionalPositiveInt(
+                    resources,
+                    "max_managed_processes",
+                    portEnd - portStart + 1,
                     configPath
             );
             int queueTimeout = YamlValues.optionalPositiveInt(
@@ -294,6 +378,7 @@ public final class SLSConfigRepository {
             try {
                 return new SLSConfig(
                         totalMemory,
+                        maxManagedProcesses,
                         portStart,
                         portEnd,
                         queueTimeout,

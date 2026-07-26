@@ -1,5 +1,6 @@
 package net.slimelabs.slslite.blueprint;
 
+import net.slimelabs.slslite.config.DefinitionCatalog;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
@@ -13,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -27,10 +29,15 @@ public final class BlueprintRepository {
     private static final int DEFAULT_MAX_INSTANCES = 1;
 
     private final Path directory;
-    private volatile Map<String, Blueprint> blueprints = Map.of();
+    private final DefinitionCatalog catalog;
 
     public BlueprintRepository(Path directory) {
+        this(directory, new DefinitionCatalog());
+    }
+
+    public BlueprintRepository(Path directory, DefinitionCatalog catalog) {
         this.directory = directory;
+        this.catalog = catalog;
     }
 
     public void initialize() throws IOException, BlueprintException {
@@ -57,15 +64,19 @@ public final class BlueprintRepository {
     }
 
     public Snapshot snapshot() {
-        return new Snapshot(blueprints);
+        return new Snapshot(catalog.snapshot().blueprints());
     }
 
     public synchronized void install(Snapshot snapshot) {
-        blueprints = snapshot.values();
+        catalog.installBlueprints(snapshot.values());
+    }
+
+    public DefinitionCatalog catalog() {
+        return catalog;
     }
 
     public Optional<Blueprint> get(String id) {
-        return Optional.ofNullable(blueprints.get(id));
+        return Optional.ofNullable(catalog.snapshot().blueprints().get(id));
     }
 
     public Optional<Blueprint> get(String type, String id) {
@@ -73,20 +84,20 @@ public final class BlueprintRepository {
     }
 
     public Collection<Blueprint> getAll() {
-        return blueprints.values().stream()
+        return catalog.snapshot().blueprints().values().stream()
                 .sorted(java.util.Comparator.comparing(Blueprint::id))
                 .toList();
     }
 
     public Collection<Blueprint> getByType(String type) {
-        return blueprints.values().stream()
+        return catalog.snapshot().blueprints().values().stream()
                 .filter(blueprint -> blueprint.type().equals(type))
                 .sorted(java.util.Comparator.comparing(Blueprint::id))
                 .toList();
     }
 
     public Set<String> getTypes() {
-        return blueprints.values().stream()
+        return catalog.snapshot().blueprints().values().stream()
                 .map(Blueprint::type)
                 .collect(Collectors.toUnmodifiableSet());
     }
@@ -125,6 +136,20 @@ public final class BlueprintRepository {
             Map<String, Object> server = requiredMap(root, "server", path);
             Map<String, Object> limits = optionalMap(server, "limits", path);
             Map<String, Object> annotations = optionalMap(root, "annotations", path);
+            requireOnlyKeys(
+                    root,
+                    "",
+                    path,
+                    "blueprint", "server", "save", "annotations"
+            );
+            requireOnlyKeys(metadata, "blueprint", path, "id", "name", "type");
+            requireOnlyKeys(server, "server", path, "software", "version", "limits");
+            requireOnlyKeys(
+                    limits,
+                    "server.limits",
+                    path,
+                    "memory_limit", "max_players", "max_instances"
+            );
 
             String id = requiredString(metadata, "id", path);
             if (!VALID_ID.matcher(id).matches()) {
@@ -255,6 +280,27 @@ public final class BlueprintRepository {
             throw error(path, "'" + key + "' must be true or false");
         }
         return booleanValue;
+    }
+
+    private static void requireOnlyKeys(
+            Map<String, Object> values,
+            String section,
+            Path path,
+            String... allowedKeys
+    ) throws BlueprintException {
+        Set<String> allowed = Set.of(allowedKeys);
+        for (String key : values.keySet()) {
+            if (!allowed.contains(key)) {
+                throw error(
+                        path,
+                        net.slimelabs.slslite.config.YamlValues.unknownKeyMessage(
+                                section,
+                                key,
+                                allowed
+                        )
+                );
+            }
+        }
     }
 
     private static BlueprintException error(Path path, String message) {

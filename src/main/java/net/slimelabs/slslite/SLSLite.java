@@ -17,6 +17,8 @@ import net.kyori.adventure.text.Component;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.command.SLSCommand;
 import net.slimelabs.slslite.config.ConfigurationValidator;
+import net.slimelabs.slslite.config.DefinitionCatalog;
+import net.slimelabs.slslite.config.ForwardingMode;
 import net.slimelabs.slslite.config.SLSConfigRepository;
 import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityChecker;
@@ -83,13 +85,18 @@ public final class SLSLite {
         this.proxy = proxy;
         this.logger = logger;
         this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
-        this.blueprints = new BlueprintRepository(this.dataDirectory.resolve("blueprints"));
+        DefinitionCatalog definitions = new DefinitionCatalog();
+        this.blueprints = new BlueprintRepository(
+                this.dataDirectory.resolve("blueprints"),
+                definitions
+        );
         this.configuration = new SLSConfigRepository(
                 this.dataDirectory,
                 Path.of("").toAbsolutePath().normalize()
         );
         this.softwareProfiles = new SoftwareProfileRepository(
-                this.dataDirectory.resolve("software-profiles")
+                this.dataDirectory.resolve("software-profiles"),
+                definitions
         );
     }
 
@@ -114,8 +121,15 @@ public final class SLSLite {
             ConfigurationValidator.validate(
                     configuration.get(),
                     blueprints,
-                    softwareProfiles
+                    softwareProfiles,
+                    proxy.getConfiguration().isOnlineMode()
             );
+            if (configuration.get().forwarding().mode() == ForwardingMode.NONE) {
+                logger.warn(
+                        "Managed player forwarding is disabled; forwarding.mode=none "
+                                + "is intended only for isolated development"
+                );
+            }
             resourceBudget = new ResourceBudget(configuration.get().totalMemoryMiB());
             LoopbackPortAllocator portAllocator = new LoopbackPortAllocator(
                     configuration.get().portRangeStart(),
@@ -154,9 +168,9 @@ public final class SLSLite {
                     reconciliation.preservedUnknown(),
                     reconciliation.failures()
             );
-            int portCount = configuration.get().portRangeEnd()
-                    - configuration.get().portRangeStart() + 1;
-            processSupervisor = new ProcessSupervisor(Math.min(portCount, 16));
+            processSupervisor = new ProcessSupervisor(
+                    configuration.get().maxManagedProcesses()
+            );
             BackendProtocolSynchronizer protocolSynchronizer =
                     ViaVersionProtocolSynchronizer.create(proxy, logger);
             instanceManager = new InstanceManager(
@@ -230,6 +244,7 @@ public final class SLSLite {
                         blueprints,
                         softwareProfiles,
                         resourceBudget,
+                        processSupervisor,
                         instanceManager,
                         joinService,
                         lobbyProvider,

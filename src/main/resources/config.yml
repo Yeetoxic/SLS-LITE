@@ -10,6 +10,11 @@ resources:
   # limit would make the total reservations exceed this value.
   total_memory_mib: 4096
 
+  # Positive integer. Maximum number of child processes SLS-LITE may supervise
+  # at once. Defaults to the configured loopback port count when omitted and
+  # cannot exceed it. SLS-Limbo consumes one slot while it is running.
+  max_managed_processes: 101
+
 network:
   ports:
     # Inclusive loopback port range used by managed backend servers. Each active

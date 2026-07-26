@@ -1,6 +1,7 @@
 package net.slimelabs.slslite.software;
 
 import net.slimelabs.slslite.config.ConfigurationException;
+import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.YamlValues;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -34,10 +35,15 @@ public final class SoftwareProfileRepository {
     private static final int DEFAULT_STOP_TIMEOUT_SECONDS = 30;
 
     private final Path directory;
-    private volatile Map<String, SoftwareProfile> profiles = Map.of();
+    private final DefinitionCatalog catalog;
 
     public SoftwareProfileRepository(Path directory) {
+        this(directory, new DefinitionCatalog());
+    }
+
+    public SoftwareProfileRepository(Path directory, DefinitionCatalog catalog) {
         this.directory = directory.toAbsolutePath().normalize();
+        this.catalog = catalog;
     }
 
     public void initialize() throws IOException, ConfigurationException {
@@ -65,19 +71,23 @@ public final class SoftwareProfileRepository {
     }
 
     public Snapshot snapshot() {
-        return new Snapshot(profiles);
+        return new Snapshot(catalog.snapshot().softwareProfiles());
     }
 
     public synchronized void install(Snapshot snapshot) {
-        profiles = snapshot.values();
+        catalog.installSoftwareProfiles(snapshot.values());
+    }
+
+    public DefinitionCatalog catalog() {
+        return catalog;
     }
 
     public Optional<SoftwareProfile> get(String id) {
-        return Optional.ofNullable(profiles.get(id));
+        return Optional.ofNullable(catalog.snapshot().softwareProfiles().get(id));
     }
 
     public Collection<SoftwareProfile> getAll() {
-        return profiles.values().stream()
+        return catalog.snapshot().softwareProfiles().values().stream()
                 .sorted(Comparator.comparing(SoftwareProfile::id))
                 .toList();
     }
@@ -93,6 +103,36 @@ public final class SoftwareProfileRepository {
             Map<String, Object> launch = YamlValues.optionalMap(root, "launch", path);
             Map<String, Object> readiness = YamlValues.optionalMap(root, "readiness", path);
             Map<String, Object> shutdown = YamlValues.optionalMap(root, "shutdown", path);
+            YamlValues.requireOnlyKeys(
+                    root,
+                    "",
+                    path,
+                    "software", "launch", "readiness", "shutdown"
+            );
+            YamlValues.requireOnlyKeys(
+                    software,
+                    "software",
+                    path,
+                    "id", "base_directory", "server_jar"
+            );
+            YamlValues.requireOnlyKeys(
+                    launch,
+                    "launch",
+                    path,
+                    "java", "jvm_arguments", "server_arguments"
+            );
+            YamlValues.requireOnlyKeys(
+                    readiness,
+                    "readiness",
+                    path,
+                    "pattern", "timeout_seconds"
+            );
+            YamlValues.requireOnlyKeys(
+                    shutdown,
+                    "shutdown",
+                    path,
+                    "command", "timeout_seconds"
+            );
 
             String id = YamlValues.requiredString(software, "id", path);
             if (!VALID_ID.matcher(id).matches()) {
