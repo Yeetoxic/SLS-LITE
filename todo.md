@@ -522,9 +522,10 @@ the local implementation has equivalent behavior.
   - [x] Report SLS-Limbo state, memory, port, retry usage, last failure, and
     dual-lobby availability through `/sls info`, `/sls system`, and console
     diagnostics.
-  - [ ] Refuse to start the proxy, with an actionable error, if both the primary and
-    SLS-Limbo are unavailable; never silently route to a game
-    backend.
+  - [x] Enter a clearly reported degraded state if both the primary and SLS-Limbo
+    are unavailable: keep Velocity, console administration, diagnostics, and
+    bounded recovery running; reject players without a usable backend and never
+    silently route them to a game backend.
 
 ### Lobby Routing
 

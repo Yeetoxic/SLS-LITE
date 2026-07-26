@@ -125,6 +125,27 @@ class SLSLiteLobbyRoutingTest {
         );
     }
 
+    @Test
+    void disconnectsInitialJoinWithoutStoppingWhenAllLobbiesAreOffline()
+            throws Exception {
+        AtomicReference<Component> disconnectReason = new AtomicReference<>();
+        SLSLite plugin = plugin(provider(null, LobbyStatus.OFFLINE, "lobby"));
+        PlayerChooseInitialServerEvent event = new PlayerChooseInitialServerEvent(
+                player(disconnectReason),
+                null
+        );
+
+        plugin.onPlayerChooseInitialServer(event);
+
+        assertTrue(event.getInitialServer().isEmpty());
+        assertEquals(
+                Component.text(
+                        "The lobby is currently unavailable. Please try again later."
+                ),
+                disconnectReason.get()
+        );
+    }
+
     private SLSLite plugin(LobbyProvider lobbyProvider) throws Exception {
         SLSLite plugin = new SLSLite(
                 proxy(),

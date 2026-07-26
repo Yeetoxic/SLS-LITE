@@ -158,7 +158,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
 
     @Override
     public boolean bothUnavailable() {
-        return primary.server().isEmpty() && limbo.server().isEmpty();
+        return server().isEmpty();
     }
 
     @Override

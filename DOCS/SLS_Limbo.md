@@ -156,9 +156,10 @@ one actionable error and disconnects players who have no usable backend.
   connection; once detected, recovery is checked with background pings.
 - Native and ViaVersion-translated client compatibility is not yet covered by
   the automated matrix.
-- If both the primary lobby and SLS-Limbo fail, players are disconnected with a
-  clear lobby-unavailable message. Proxy startup currently continues so the
-  operator can diagnose the failure from its console.
+- If both the primary lobby and SLS-Limbo fail, SLS-LITE enters a degraded
+  no-lobby state. Players without a usable backend are disconnected with a clear
+  lobby-unavailable message, while Velocity, console administration, diagnostics,
+  and bounded recovery continue running.
 
 ## Manual Pterodactyl Test
 

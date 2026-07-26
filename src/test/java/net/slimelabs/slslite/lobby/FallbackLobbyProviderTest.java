@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FallbackLobbyProviderTest {
 
@@ -80,10 +81,58 @@ class FallbackLobbyProviderTest {
         fallback.close();
     }
 
+    @Test
+    void reportsDegradedStateWhenUnhealthyExternalPrimaryAndLimboAreUnavailable() {
+        RegisteredServer primaryServer = server("lobby");
+        LobbyProvider primary = provider(
+                "primary",
+                "lobby",
+                primaryServer,
+                LobbyStatus.EXTERNAL,
+                new ArrayList<>()
+        );
+        LobbyProvider limbo = provider(
+                "limbo",
+                "sls-limbo",
+                null,
+                LobbyStatus.OFFLINE,
+                new ArrayList<>()
+        );
+        FallbackLobbyProvider fallback = new FallbackLobbyProvider(
+                proxy(),
+                primary,
+                limbo,
+                LoggerFactory.getLogger(FallbackLobbyProviderTest.class)
+        );
+
+        fallback.start();
+        fallback.markPrimaryUnavailable("lobby");
+
+        assertTrue(fallback.server().isEmpty());
+        assertTrue(fallback.bothUnavailable());
+        fallback.close();
+    }
+
     private static LobbyProvider provider(
             String label,
             String serverName,
             RegisteredServer server,
+            List<String> starts
+    ) {
+        return provider(
+                label,
+                serverName,
+                server,
+                server == null ? LobbyStatus.STARTING : LobbyStatus.READY,
+                starts
+        );
+    }
+
+    private static LobbyProvider provider(
+            String label,
+            String serverName,
+            RegisteredServer server,
+            LobbyStatus status,
             List<String> starts
     ) {
         CompletableFuture<RegisteredServer> ready = server == null
@@ -107,7 +156,7 @@ class FallbackLobbyProviderTest {
 
             @Override
             public LobbyStatus status() {
-                return server == null ? LobbyStatus.STARTING : LobbyStatus.READY;
+                return status;
             }
 
             @Override
