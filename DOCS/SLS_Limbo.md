@@ -34,6 +34,13 @@ SLS-Limbo is appropriate when:
 Automatic handoff from SLS-Limbo applies only to players who had to enter it for
 one of these reasons.
 
+SLS-LITE tracks those players only until they reach the primary lobby or
+disconnect. Managed primaries publish lifecycle readiness after startup or
+recovery. Failed external primaries are checked with a lightweight Velocity
+server ping; SLS-LITE does not attempt the handoff until that probe succeeds.
+If the connection still fails, the player remains in SLS-Limbo and health
+checking resumes.
+
 ## How It Works
 
 SLS-LITE includes an unmodified, pinned NanoLimbo runtime inside the SLS-LITE
@@ -117,10 +124,8 @@ it must not be treated as automatic support for an unknown Minecraft release.
 
 - The SLS-Limbo process is started once per proxy lifecycle and is not yet
   restarted after its own crash.
-- External-primary health is detected reactively when Velocity fails a player
-  connection, not by active background probing.
-- Players waiting in SLS-Limbo are not automatically moved when the
-  primary becomes ready.
+- External-primary failure is detected reactively after a failed player
+  connection; once detected, recovery is checked with background pings.
 - Native and ViaVersion-translated client compatibility is not yet covered by
   the automated matrix.
 - If both the primary lobby and SLS-Limbo fail, players are disconnected with a
@@ -135,8 +140,11 @@ it must not be treated as automatic support for an unknown Minecraft release.
 4. Stop the external lobby, or stop the managed lobby process during recovery.
 5. Reconnect. Velocity should redirect you to `sls-limbo`.
 6. Run `/sls info`, `/sls list`, and an authorized administrative command.
-7. Restart the primary lobby and reconnect to verify it is preferred again.
-8. Shut down Velocity and confirm the SLS-Limbo child exits cleanly.
+7. Restart the primary lobby and remain connected to SLS-Limbo.
+8. Confirm SLS-LITE transfers you automatically after the primary responds.
+9. From a healthy backend, run a join command that starts another server and
+   confirm you remain on the current backend until the direct transfer.
+10. Shut down Velocity and confirm the SLS-Limbo child exits cleanly.
 
 For the local fixture, see
 [Pterodactyl_Local_Testing.md](Pterodactyl_Local_Testing.md).

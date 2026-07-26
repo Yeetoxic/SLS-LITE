@@ -152,6 +152,11 @@ public final class SLSLimboProvider implements LobbyProvider {
     }
 
     @Override
+    public boolean isHoldingLobby(String serverName) {
+        return isLobby(serverName);
+    }
+
+    @Override
     public CompletableFuture<Void> evacuate(String serverName) {
         if (isLobby(serverName)) {
             return CompletableFuture.failedFuture(

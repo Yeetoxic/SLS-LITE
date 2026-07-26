@@ -44,10 +44,9 @@ class FallbackLobbyProviderTest {
                 limboServer,
                 fallback.fallbackServer("lobby").orElseThrow()
         );
-        assertSame(
-                primaryServer,
-                fallback.fallbackServer("sls-limbo").orElseThrow()
-        );
+        assertEquals(Optional.empty(), fallback.primaryServer());
+        assertEquals(Optional.empty(), fallback.fallbackServer("sls-limbo"));
+        fallback.close();
     }
 
     @Test
@@ -75,6 +74,7 @@ class FallbackLobbyProviderTest {
 
         assertSame(limboServer, fallback.server().orElseThrow());
         assertSame(limboServer, fallback.readyFuture().join());
+        fallback.close();
     }
 
     private static LobbyProvider provider(

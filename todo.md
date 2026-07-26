@@ -493,7 +493,7 @@ the local implementation has equivalent behavior.
     SLS-Limbo as another mutually exclusive primary mode.
   - [x] Route players to SLS-Limbo whenever the primary is starting,
     recovering, offline, or otherwise unreachable.
-  - [ ] Keep players connected while managed-lobby recovery runs and transfer
+  - [x] Keep players connected while managed-lobby recovery runs and transfer
     only players already forced into SLS-Limbo when the primary becomes ready.
   - [x] Provide a minimal safe experience: a fixed spawn, movement, status message,
     and access to proxy-level `/sls` commands.

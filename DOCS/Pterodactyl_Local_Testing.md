@@ -74,6 +74,10 @@ client to `127.0.0.1:25565` and verify:
 6. Stopping the external lobby redirects new arrivals to SLS-Limbo rather than
    selecting an arbitrary game backend.
 7. `/sls info` and authorized proxy-level commands remain available there.
+8. Restarting the external lobby automatically moves tracked SLS-Limbo players
+   back after its health probe succeeds.
+9. A normal `/sls join` queue from a healthy backend leaves the player on that
+   backend until the requested destination is ready.
 
 After the test, start the external lobby again from its Panel console before
 continuing, or switch back to managed mode with the command above.

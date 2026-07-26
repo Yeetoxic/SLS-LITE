@@ -6,6 +6,7 @@ import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
+import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
@@ -29,6 +30,7 @@ import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.LobbyStatus;
 import net.slimelabs.slslite.lobby.LocalLobbyProvider;
 import net.slimelabs.slslite.lobby.SLSLimboProvider;
+import net.slimelabs.slslite.lobby.SLSLimboHandoffService;
 import net.slimelabs.slslite.lobby.FallbackLobbyProvider;
 import net.slimelabs.slslite.log.ConsoleBanner;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
@@ -66,6 +68,7 @@ public final class SLSLite {
     private InstanceManager instanceManager;
     private LocalJoinService joinService;
     private LobbyProvider lobbyProvider;
+    private SLSLimboHandoffService limboHandoff;
     private IdleInstanceReaper idleReaper;
     private HostCapabilityReport hostCapabilities;
     private AdministratorStore administrators;
@@ -192,6 +195,7 @@ public final class SLSLite {
                     primaryLobby,
                     slsLimbo
             );
+            limboHandoff = new SLSLimboHandoffService(lobbyProvider, logger);
             idleReaper = new IdleInstanceReaper(
                     proxy,
                     instanceManager,
@@ -297,7 +301,13 @@ public final class SLSLite {
         if (lobbyProvider != null) {
             var lobby = lobbyProvider.server();
             if (lobby.isPresent()) {
-                event.setInitialServer(lobby.orElseThrow());
+                var selected = lobby.orElseThrow();
+                if (lobbyProvider.isHoldingLobby(
+                        selected.getServerInfo().getName()
+                )) {
+                    limboHandoff.awaitPrimary(event.getPlayer());
+                }
+                event.setInitialServer(selected);
             } else {
                 event.getPlayer().disconnect(lobbyUnavailableMessage());
             }
@@ -318,8 +328,14 @@ public final class SLSLite {
                     event.getServer().getServerInfo().getName()
             );
             if (fallback.isPresent()) {
+                var selected = fallback.orElseThrow();
+                if (lobbyProvider.isHoldingLobby(
+                        selected.getServerInfo().getName()
+                )) {
+                    limboHandoff.awaitPrimary(event.getPlayer());
+                }
                 event.setResult(KickedFromServerEvent.RedirectPlayer.create(
-                        fallback.orElseThrow(),
+                        selected,
                         Component.text("Moving you to SLS-Limbo.")
                 ));
                 return;
@@ -331,8 +347,14 @@ public final class SLSLite {
         }
         var lobby = lobbyProvider.server();
         if (lobby.isPresent()) {
+            var selected = lobby.orElseThrow();
+            if (lobbyProvider.isHoldingLobby(
+                    selected.getServerInfo().getName()
+            )) {
+                limboHandoff.awaitPrimary(event.getPlayer());
+            }
             event.setResult(KickedFromServerEvent.RedirectPlayer.create(
-                    lobby.orElseThrow(),
+                    selected,
                     Component.text("Returning you to the lobby.")
             ));
         } else {
@@ -343,7 +365,17 @@ public final class SLSLite {
     }
 
     @Subscribe
+    public void onServerConnected(ServerConnectedEvent event) {
+        if (limboHandoff != null) {
+            limboHandoff.connected(event.getPlayer(), event.getServer());
+        }
+    }
+
+    @Subscribe
     public void onDisconnect(DisconnectEvent event) {
+        if (limboHandoff != null) {
+            limboHandoff.disconnect(event.getPlayer().getUniqueId());
+        }
         if (joinService != null) {
             joinService.disconnect(event.getPlayer().getUniqueId());
         }
@@ -353,6 +385,9 @@ public final class SLSLite {
     public void onProxyShutdown(ProxyShutdownEvent event) {
         if (idleReaper != null) {
             idleReaper.close();
+        }
+        if (limboHandoff != null) {
+            limboHandoff.close();
         }
         if (lobbyProvider != null) {
             lobbyProvider.close();
