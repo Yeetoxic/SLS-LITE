@@ -2,9 +2,20 @@
 
 ## Scope Classification
 
-Unchecked items tagged `[R1]` are required for the first usable public release.
-All other unchecked items are intentionally deferred until after that release.
-No unchecked item is implicitly part of the installer milestone.
+Stage tags identify the gate that requires an item:
+
+- `[S1]` Surface Level: prove the core SLS-LITE network model with our own
+  blueprints and worlds.
+- `[S2]` Compatibility Run: load and run the supported subset of modern SLS
+  configuration and blueprints.
+- `[S3]` Full Stack: validate the complete cohesive network and its failure
+  behavior.
+- `[S4]` Release Candidate: prepare and distribute an externally testable build.
+- `[S5]` Release: approve and publish the first public release.
+
+Work proceeds in stage order. An unchecked item without a stage tag is deferred
+unless it becomes necessary to satisfy the active stage. Stage 4 remains
+provisional until the project owner provides its final notes.
 
 ## Product Goal
 
@@ -614,7 +625,7 @@ the local implementation has equivalent behavior.
 
 ## Documentation and Public Release Preparation
 
-- [ ] [R1] Audit every existing file in `DOCS/` and classify it as current,
+- [ ] Audit every existing file in `DOCS/` and classify it as current,
       historical reference, material to rewrite, or obsolete material to remove.
 - [ ] Separate internal development notes and test-environment procedures from
       public operator documentation.
@@ -701,17 +712,124 @@ the local implementation has equivalent behavior.
         heightmap encoding.
 - [x] Add an integration fixture that launches Velocity and one lightweight
       backend in a constrained single-host environment.
-- [ ] [R1] Add CI for compilation, tests, packaging, and dependency checks.
+- [ ] Add CI for compilation, tests, packaging, and dependency checks.
 
-## First Usable Release
+## Release Stages
 
-- [ ] [R1] One plugin JAR and one documented configuration.
-- [x] One Velocity allocation can launch an isolated Paper lobby and at least one
-      additional managed backend.
-- [x] Players can join the lobby, request a blueprint, wait for startup, connect,
-      and return to the lobby after the backend stops.
-- [ ] [R1] External lobby mode works without SLS-LITE managing that lobby.
-- [x] Every child process shuts down cleanly with the proxy.
-- [x] Startup failures leave no registered ghost servers or corrupt instance
-      directories.
-- [ ] [R1] Installation and host-capability requirements are documented honestly.
+These are sequential acceptance gates. Completing a stage means its entire
+network scenario works, not merely that its individual classes compile.
+
+### Stage 1: The Surface Level
+
+Prove the core concept by operating our own small network entirely through
+SLS-LITE blueprints and locally supplied content. Compatibility with upstream
+SLS is not required at this gate.
+
+- [ ] [S1] Add the modern SLS `state.volumes` blueprint shape for locally
+      supplied worlds and other directory content, beginning with `cow` mode.
+- [ ] [S1] Implement the SLS-LITE local equivalent of `cow` by safely copying
+      each selected volume over the installed or manually prepared software base
+      when creating an isolated instance.
+- [ ] [S1] Resolve volume sources inside the SLS-LITE data directory, interpret
+      targets relative to the instance root, and add collision, traversal,
+      symlink, rollback, and copy-failure tests.
+- [ ] [S1] Upload several representative test worlds and define an SLS-LITE
+      network containing:
+  - A managed lobby.
+  - At least two user-defined registries.
+  - At least two playable blueprints backed by different worlds.
+- [ ] [S1] Start the network from one Velocity allocation, join every world,
+      switch between servers with `/sls join`, and return to the lobby.
+- [ ] [S1] Confirm instance isolation, capacity handling, persistence or
+      ephemeral cleanup, idle shutdown, and proxy shutdown with the test worlds.
+- [ ] [S1] Record the exact fixture configuration and manual acceptance results.
+
+### Stage 2: Compatibility Run
+
+Prove that SLS-LITE remains part of the SLS ecosystem by speaking the same
+configuration language wherever a distributed feature has a safe local
+equivalent.
+
+- [ ] [S2] Pin the modern SLS release and commit used for this compatibility run.
+- [ ] [S2] Compare modern SLS and SLS-LITE feature by feature across
+      configuration, blueprints, registries, matchmaking, lifecycle, commands,
+      permissions, observability, installation, storage, and integrations.
+- [ ] [S2] Classify every compared feature as `supported`, `adapted for local
+      mode`, `intentionally unsupported`, or `deferred`, with a reason for every
+      difference.
+- [ ] [S2] Perform a scope-balance review before Stage 3:
+  - Identify important shared SLS behavior that SLS-LITE is missing.
+  - Identify SLS-LITE behavior that is unnecessary, overbuilt, or outside its
+    single-host purpose.
+  - Confirm that retained features remain practical on constrained shared hosts.
+  - Obtain project-owner approval for the resulting scope and compatibility
+    matrix.
+- [ ] [S2] Define and publish the supported modern SLS configuration and blueprint
+      subset, including local adaptations and intentionally unsupported fields.
+- [ ] [S2] Load representative pre-made modern SLS software definitions,
+      configuration, and blueprints without requiring manual schema translation.
+- [ ] [S2] Map supported distributed concepts to their documented local
+      equivalents while rejecting unsupported behavior with actionable errors.
+- [ ] [S2] Preserve compatible names, annotations, registry types, limits,
+      lifecycle intentions, and content declarations.
+- [ ] [S2] Add upstream-derived compatibility fixtures and automated parser,
+      validation, and migration tests where licensing permits.
+- [ ] [S2] Run a multi-world network from those modern SLS fixtures and document
+      every supported, adapted, and rejected field.
+
+### Stage 3: The Full Stack
+
+Run the complete SLS-LITE product as one cohesive network. Expected failures
+must degrade cleanly without crashing Velocity, corrupting data, leaking child
+processes, or trapping players in unexplained states.
+
+- [ ] [S3] Verify every locally supported command, argument branch, selector,
+      permission, sender restriction, output, and tab-completion path.
+- [ ] [S3] Exercise managed lobby, external lobby, SLS-Limbo fallback, queues,
+      transfers, multiple registries, full-server provisioning, and forced
+      administrative operations in one test plan.
+- [ ] [S3] Exercise Paper and vanilla installation, manual custom software,
+      cache reuse, exact versions, Java selection, EULA gating, failed downloads,
+      retries, and incomplete-cache recovery.
+- [ ] [S3] Exercise normal shutdown, startup cancellation, process crashes,
+      readiness timeout, lobby recovery exhaustion, memory rejection, occupied
+      ports, proxy restart, and persistent-instance recovery.
+- [ ] [S3] Confirm every failure produces bounded, useful console, chat, action
+      bar, command, and temporary-log diagnostics without spam.
+- [ ] [S3] Confirm all children stop or are safely reconciled, all Velocity
+      registrations and ports are released, and no instance data is silently
+      corrupted.
+- [ ] [S3] Re-run the complete automated suite and the documented Pterodactyl
+      workflow with supported real clients.
+- [ ] [S3] External lobby mode works without SLS-LITE managing that lobby.
+- [ ] [S3] Resolve every release-blocking defect found by the full-stack run and
+      repeat affected scenarios.
+
+### Stage 4: Release Candidate
+
+This gate produces the build sent to external testers ahead of public release.
+Its final scope is intentionally waiting for project-owner notes.
+
+- [ ] [S4] Await and incorporate the project-owner release-candidate notes.
+- [ ] [S4] Produce one versioned plugin JAR and one canonical documented
+      configuration.
+- [ ] [S4] Document installation, host capabilities, supported runtimes,
+      compatibility boundaries, operations, recovery, and known limitations.
+- [ ] [S4] Complete the documentation audit, third-party source and license
+      obligations, compatibility matrix, and release notes.
+- [ ] [S4] Add CI for compilation, tests, packaging, and dependency checks.
+- [ ] [S4] Publish the candidate artifact and checksums to the selected external
+      testers with a structured feedback and reproduction template.
+- [ ] [S4] Triage external findings and identify which defects block release.
+
+### Stage 5: Release
+
+- [ ] [S5] Resolve all release-blocking candidate findings and rerun the affected
+      Stage 3 scenarios.
+- [ ] [S5] Complete the final security, licensing, documentation, compatibility,
+      artifact, and clean-install audit.
+- [ ] [S5] Build the release artifact from the approved source revision and
+      publish its checksum.
+- [ ] [S5] Publish the versioned documentation, source, license materials,
+      migration notes, and supported compatibility matrix.
+- [ ] [S5] Tag and publish the first public SLS-LITE release.
