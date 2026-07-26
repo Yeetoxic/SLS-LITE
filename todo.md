@@ -475,6 +475,15 @@ the local implementation has equivalent behavior.
     allocation as Velocity.
   - [x] Treat the active lobby as a reserved blueprint that normal stop commands
     cannot terminate.
+  - [ ] Add `/sls stop <server> --force` for administrators to intentionally stop
+        a protected managed server.
+    - Require an administrative force permission and exact instance resolution.
+    - Evacuate connected players to the primary fallback or SLS-Limbo when
+      possible, and clearly report when evacuation cannot be completed.
+    - Suppress automatic crash recovery for an intentional forced stop so the
+      supervisor does not immediately restart the server.
+    - Log the sender, target, and result, and cover permission denial, `this`
+      resolution, player evacuation, and recovery suppression with tests.
   - [x] Start it during proxy initialization and wait for readiness before routing
     players.
   - [x] Keep it running independently of normal matchmaking cleanup.
@@ -508,6 +517,11 @@ the local implementation has equivalent behavior.
     available in SLS-Limbo.
   - [x] Keep this feature isolated behind an interface so library or protocol changes
     do not affect the process supervisor.
+  - [x] Restart SLS-Limbo after unexpected process failures with configurable,
+    bounded exponential backoff and a stable-period retry reset.
+  - [x] Report SLS-Limbo state, memory, port, retry usage, last failure, and
+    dual-lobby availability through `/sls info`, `/sls system`, and console
+    diagnostics.
   - [ ] Refuse to start the proxy, with an actionable error, if both the primary and
     SLS-Limbo are unavailable; never silently route to a game
     backend.

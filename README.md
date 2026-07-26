@@ -130,6 +130,11 @@ lobby:
     enabled: true
     memory_mib: 96
     startup_timeout_seconds: 30
+    recovery:
+      max_attempts: 5
+      initial_backoff_seconds: 2
+      max_backoff_seconds: 30
+      stable_after_seconds: 120
 
 paths:
   instances: instances

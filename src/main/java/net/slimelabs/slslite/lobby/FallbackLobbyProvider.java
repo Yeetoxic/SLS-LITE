@@ -4,6 +4,7 @@ import com.velocitypowered.api.proxy.ConnectionRequestBuilder;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
+import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,24 +23,28 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     private final ProxyServer proxy;
     private final LobbyProvider primary;
     private final LobbyProvider limbo;
+    private final Logger logger;
     private final ScheduledExecutorService healthScheduler;
     private final List<Consumer<RegisteredServer>> primaryReadyListeners =
             new CopyOnWriteArrayList<>();
     private final CompletableFuture<RegisteredServer> ready = new CompletableFuture<>();
     private final AtomicBoolean externalProbeInFlight = new AtomicBoolean();
     private volatile boolean primaryAvailable;
+    private volatile boolean dualFailureReported;
     private boolean started;
     private volatile boolean closed;
 
     public FallbackLobbyProvider(
             ProxyServer proxy,
             LobbyProvider primary,
-            LobbyProvider limbo
+            LobbyProvider limbo,
+            Logger logger
     ) {
         this(
                 proxy,
                 primary,
                 limbo,
+                logger,
                 Executors.newSingleThreadScheduledExecutor(runnable -> {
                     Thread thread = new Thread(
                             runnable,
@@ -55,11 +60,13 @@ public final class FallbackLobbyProvider implements LobbyProvider {
             ProxyServer proxy,
             LobbyProvider primary,
             LobbyProvider limbo,
+            Logger logger,
             ScheduledExecutorService healthScheduler
     ) {
         this.proxy = proxy;
         this.primary = primary;
         this.limbo = limbo;
+        this.logger = logger;
         this.healthScheduler = healthScheduler;
     }
 
@@ -145,6 +152,16 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     }
 
     @Override
+    public Optional<SLSLimboDiagnostics> limboDiagnostics() {
+        return limbo.limboDiagnostics();
+    }
+
+    @Override
+    public boolean bothUnavailable() {
+        return primary.server().isEmpty() && limbo.server().isEmpty();
+    }
+
+    @Override
     public CompletableFuture<Void> evacuate(String serverName) {
         if (isLobby(serverName)) {
             return CompletableFuture.failedFuture(
@@ -209,6 +226,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
         if (closed) {
             return;
         }
+        reportDualFailureState();
         RegisteredServer candidate = primary.server().orElse(null);
         if (candidate == null) {
             primaryAvailable = false;
@@ -236,6 +254,28 @@ public final class FallbackLobbyProvider implements LobbyProvider {
                     });
         } catch (RuntimeException exception) {
             externalProbeInFlight.set(false);
+        }
+    }
+
+    private void reportDualFailureState() {
+        boolean terminalFailure = primary.status() == LobbyStatus.OFFLINE
+                && limbo.status() == LobbyStatus.OFFLINE;
+        if (terminalFailure && !dualFailureReported) {
+            dualFailureReported = true;
+            logger.error(
+                    "No safe lobby is available: primary={} and SLS-Limbo={}. "
+                            + "Players without a backend will be disconnected. "
+                            + "Check /sls system and the preceding startup errors.",
+                    primary.status(),
+                    limbo.status()
+            );
+        } else if (!terminalFailure && dualFailureReported) {
+            dualFailureReported = false;
+            logger.info(
+                    "Safe lobby service recovered: primary={}, SLS-Limbo={}",
+                    primary.status(),
+                    limbo.status()
+            );
         }
     }
 

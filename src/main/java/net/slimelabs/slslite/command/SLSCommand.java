@@ -23,6 +23,7 @@ import net.slimelabs.slslite.instance.InstanceLogPage;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.lobby.LobbyProvider;
+import net.slimelabs.slslite.lobby.SLSLimboDiagnostics;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.security.AdminClaimService;
 import net.slimelabs.slslite.security.Administrator;
@@ -472,6 +473,8 @@ public final class SLSCommand implements SimpleCommand {
                 .appendNewline()
                 .append(infoLine("Lobby status:", lobbyProvider.status().name()))
                 .appendNewline()
+                .append(infoLine("SLS-Limbo:", limboSummary()))
+                .appendNewline()
                 .append(infoLine("Queued players:", Integer.toString(
                         joinService.queuedPlayers().size()
                 )))
@@ -775,6 +778,13 @@ public final class SLSCommand implements SimpleCommand {
                         Integer.toString(instances.getAll().size())
                 ))
                 .appendNewline()
+                .append(infoLine(
+                        "Safe lobby:",
+                        lobbyProvider.bothUnavailable() ? "UNAVAILABLE" : "available"
+                ))
+                .appendNewline()
+                .append(infoLine("SLS-Limbo:", limboSummary()))
+                .appendNewline()
                 .append(infoLine("Java:", System.getProperty("java.version", "unknown")))
                 .appendNewline()
                 .append(infoLine(
@@ -795,11 +805,30 @@ public final class SLSCommand implements SimpleCommand {
                                         + " KiB/server)"
                                 : "disabled"
                 ));
+        lobbyProvider.limboDiagnostics()
+                .flatMap(SLSLimboDiagnostics::lastFailure)
+                .ifPresent(failure -> message.appendNewline()
+                        .append(infoLine("SLS-Limbo failure:", failure)));
         for (HostCapability capability : hostCapabilities.capabilities()) {
             message.appendNewline()
                     .append(capabilityLine(capability));
         }
         source.sendMessage(message.build());
+    }
+
+    private String limboSummary() {
+        return lobbyProvider.limboDiagnostics()
+                .map(diagnostics -> {
+                    String port = diagnostics.port().isPresent()
+                            ? Integer.toString(diagnostics.port().getAsInt())
+                            : "unassigned";
+                    return diagnostics.status().name()
+                            + ", " + diagnostics.memoryMiB() + " MiB"
+                            + ", port " + port
+                            + ", recovery " + diagnostics.recoveryAttempts()
+                            + "/" + diagnostics.maxRecoveryAttempts();
+                })
+                .orElse("not configured");
     }
 
     private static Component capabilityLine(HostCapability capability) {

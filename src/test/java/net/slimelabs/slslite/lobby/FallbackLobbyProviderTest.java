@@ -4,6 +4,7 @@ import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.server.ServerInfo;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
@@ -32,7 +33,8 @@ class FallbackLobbyProviderTest {
         FallbackLobbyProvider fallback = new FallbackLobbyProvider(
                 proxy(),
                 primary,
-                limbo
+                limbo,
+                LoggerFactory.getLogger(FallbackLobbyProviderTest.class)
         );
 
         fallback.start();
@@ -67,7 +69,8 @@ class FallbackLobbyProviderTest {
         FallbackLobbyProvider fallback = new FallbackLobbyProvider(
                 proxy(),
                 primary,
-                limbo
+                limbo,
+                LoggerFactory.getLogger(FallbackLobbyProviderTest.class)
         );
 
         fallback.start();

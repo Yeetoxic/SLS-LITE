@@ -41,6 +41,10 @@ class SLSConfigRepositoryTest {
         assertEquals(true, config.limbo().enabled());
         assertEquals(96, config.limbo().memoryMiB());
         assertEquals(30, config.limbo().startupTimeoutSeconds());
+        assertEquals(5, config.limbo().maxRestartAttempts());
+        assertEquals(2, config.limbo().initialBackoffSeconds());
+        assertEquals(30, config.limbo().maxBackoffSeconds());
+        assertEquals(120, config.limbo().stableAfterSeconds());
         assertEquals(LobbyMode.EXTERNAL, config.lobby().mode());
         assertEquals("lobby", config.lobby().registry());
         assertEquals("lobby", config.lobby().server());
@@ -151,6 +155,11 @@ class SLSConfigRepositoryTest {
                     enabled: false
                     memory_mib: 128
                     startup_timeout_seconds: 45
+                    recovery:
+                      max_attempts: 3
+                      initial_backoff_seconds: 4
+                      max_backoff_seconds: 16
+                      stable_after_seconds: 60
                 """);
         SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
 
@@ -160,6 +169,10 @@ class SLSConfigRepositoryTest {
         assertEquals(false, limbo.enabled());
         assertEquals(128, limbo.memoryMiB());
         assertEquals(45, limbo.startupTimeoutSeconds());
+        assertEquals(3, limbo.maxRestartAttempts());
+        assertEquals(4, limbo.initialBackoffSeconds());
+        assertEquals(16, limbo.maxBackoffSeconds());
+        assertEquals(60, limbo.stableAfterSeconds());
     }
 
     @Test
@@ -200,6 +213,20 @@ class SLSConfigRepositoryTest {
                 lobby:
                   limbo:
                     memory_mib: 63
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        assertThrows(ConfigurationException.class, repository::reload);
+    }
+
+    @Test
+    void rejectsSLSLimboMaximumBackoffBelowInitialBackoff() throws Exception {
+        writeConfig("""
+                lobby:
+                  limbo:
+                    recovery:
+                      initial_backoff_seconds: 10
+                      max_backoff_seconds: 5
                 """);
         SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
 

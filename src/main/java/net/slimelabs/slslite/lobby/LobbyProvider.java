@@ -37,6 +37,14 @@ public interface LobbyProvider extends AutoCloseable {
     default void markPrimaryUnavailable(String serverName) {
     }
 
+    default Optional<SLSLimboDiagnostics> limboDiagnostics() {
+        return Optional.empty();
+    }
+
+    default boolean bothUnavailable() {
+        return server().isEmpty();
+    }
+
     CompletableFuture<Void> evacuate(String serverName);
 
     @Override

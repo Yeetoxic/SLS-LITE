@@ -13,7 +13,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class SLSLimboHandoffService implements AutoCloseable {
 
@@ -74,7 +78,10 @@ public final class SLSLimboHandoffService implements AutoCloseable {
         if (entry == null) {
             return;
         }
-        actionBar.start(player);
+        player.sendActionBar(Component.text(
+                "Waiting for a safe destination...",
+                NamedTextColor.GOLD
+        ));
         lobbies.primaryServer().ifPresent(primary -> transfer(entry, primary));
     }
 
@@ -111,6 +118,9 @@ public final class SLSLimboHandoffService implements AutoCloseable {
     }
 
     private void transfer(WaitingPlayer entry, RegisteredServer primary) {
+        if (System.nanoTime() < entry.nextAttemptNanos().get()) {
+            return;
+        }
         if (!entry.transferring().compareAndSet(false, true)) {
             return;
         }
@@ -120,7 +130,11 @@ public final class SLSLimboHandoffService implements AutoCloseable {
                 .whenComplete((result, failure) -> {
                     entry.transferring().set(false);
                     if (failure != null) {
-                        transferFailed(player, primary, failure.getMessage());
+                        transferFailed(
+                                entry,
+                                primary,
+                                failure.getMessage()
+                        );
                         return;
                     }
                     if (result.getStatus() == ConnectionRequestBuilder.Status.SUCCESS
@@ -129,41 +143,123 @@ public final class SLSLimboHandoffService implements AutoCloseable {
                         remove(player.getUniqueId());
                         return;
                     }
-                    transferFailed(player, primary, result.getStatus().name());
+                    transferFailed(entry, primary, result.getStatus().name());
                 });
     }
 
     private void transferFailed(
-            Player player,
+            WaitingPlayer entry,
             RegisteredServer primary,
             String detail
     ) {
+        Player player = entry.player();
+        int failures = entry.failures().incrementAndGet();
+        long retrySeconds = Math.min(60L, 10L << Math.min(failures - 1, 3));
+        entry.nextAttemptNanos().set(
+                System.nanoTime() + TimeUnit.SECONDS.toNanos(retrySeconds)
+        );
         lobbies.markPrimaryUnavailable(primary.getServerInfo().getName());
+        actionBar.stop(player.getUniqueId());
         if (!closed && player.isActive()) {
-            actionBar.start(player);
-            player.sendMessage(Component.text(
-                    "Your destination is not ready yet. Remaining in SLS-Limbo.",
+            player.sendActionBar(Component.text(
+                    "Destination unavailable; staying in SLS-Limbo.",
                     NamedTextColor.YELLOW
             ));
+            if (entry.playerNotified().compareAndSet(false, true)) {
+                player.sendMessage(Component.text(
+                        "Your destination is not ready yet. You will remain "
+                                + "in SLS-Limbo while SLS-LITE checks it.",
+                        NamedTextColor.YELLOW
+                ));
+            }
         }
-        logger.warn(
-                "Unable to hand {} from SLS-Limbo to the primary lobby: {}",
-                player.getUsername(),
-                detail
-        );
+        scheduleRetry(entry, retrySeconds);
+        if (failures == 1) {
+            logger.warn(
+                    "Unable to hand {} from SLS-Limbo to the primary lobby: {}. "
+                            + "Retrying in {} seconds; repeated failures are "
+                            + "logged at debug level.",
+                    player.getUsername(),
+                    detail,
+                    retrySeconds
+            );
+        } else {
+            logger.debug(
+                    "SLS-Limbo handoff retry {} for {} failed: {}; next retry "
+                            + "in {} seconds",
+                    failures,
+                    player.getUsername(),
+                    detail,
+                    retrySeconds
+            );
+        }
+    }
+
+    private void scheduleRetry(WaitingPlayer entry, long delaySeconds) {
+        ScheduledFuture<?> previous = entry.retryTask();
+        if (previous != null) {
+            previous.cancel(false);
+        }
+        entry.retryTask(scheduler.schedule(
+                () -> {
+                    if (!closed
+                            && waiting.get(entry.player().getUniqueId()) == entry) {
+                        lobbies.primaryServer()
+                                .ifPresent(primary -> transfer(entry, primary));
+                    }
+                },
+                delaySeconds,
+                TimeUnit.SECONDS
+        ));
     }
 
     private void remove(UUID playerId) {
-        waiting.remove(playerId);
+        WaitingPlayer removed = waiting.remove(playerId);
+        if (removed != null && removed.retryTask() != null) {
+            removed.retryTask().cancel(false);
+        }
         actionBar.stop(playerId);
     }
 
-    private record WaitingPlayer(
-            Player player,
-            AtomicBoolean transferring
-    ) {
+    private static final class WaitingPlayer {
+
+        private final Player player;
+        private final AtomicBoolean transferring = new AtomicBoolean();
+        private final AtomicBoolean playerNotified = new AtomicBoolean();
+        private final AtomicInteger failures = new AtomicInteger();
+        private final AtomicLong nextAttemptNanos = new AtomicLong();
+        private volatile ScheduledFuture<?> retryTask;
+
         private WaitingPlayer(Player player) {
-            this(player, new AtomicBoolean());
+            this.player = player;
+        }
+
+        private Player player() {
+            return player;
+        }
+
+        private AtomicBoolean transferring() {
+            return transferring;
+        }
+
+        private AtomicBoolean playerNotified() {
+            return playerNotified;
+        }
+
+        private AtomicInteger failures() {
+            return failures;
+        }
+
+        private AtomicLong nextAttemptNanos() {
+            return nextAttemptNanos;
+        }
+
+        private ScheduledFuture<?> retryTask() {
+            return retryTask;
+        }
+
+        private void retryTask(ScheduledFuture<?> task) {
+            retryTask = task;
         }
     }
 }

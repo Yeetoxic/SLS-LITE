@@ -110,6 +110,22 @@ lobby:
     # report readiness before SLS-LITE terminates it and marks it unavailable.
     startup_timeout_seconds: 30
 
+    recovery:
+      # Non-negative integer. Maximum automatic restart attempts after an
+      # unexpected SLS-Limbo failure. Use 0 to disable automatic recovery.
+      max_attempts: 5
+
+      # Positive integer. Delay before the first restart attempt.
+      initial_backoff_seconds: 2
+
+      # Positive integer greater than or equal to initial_backoff_seconds.
+      # Exponential delays will not grow beyond this value.
+      max_backoff_seconds: 30
+
+      # Positive integer. Reset the used restart budget after SLS-Limbo remains
+      # ready for this many seconds.
+      stable_after_seconds: 120
+
   recovery:
     # Recovery settings apply only to managed mode.
 

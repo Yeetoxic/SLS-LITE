@@ -116,7 +116,7 @@ class ConfigurationValidatorTest {
                         temporaryDirectory.resolve("forwarding.secret")
                 ),
                 new SecurityConfig(false, 600),
-                new SLSLimboConfig(true, 96, 30),
+                new SLSLimboConfig(true, 96, 30, 5, 2, 30, 120),
                 new LobbyConfig(LobbyMode.EXTERNAL, "lobby", "lobby"),
                 temporaryDirectory.resolve("instances")
         );

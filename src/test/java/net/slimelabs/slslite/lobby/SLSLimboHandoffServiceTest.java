@@ -96,6 +96,35 @@ class SLSLimboHandoffServiceTest {
         handoff.close();
     }
 
+    @Test
+    void rateLimitsFailedHandoffsAndNotifiesPlayerOnce() {
+        RegisteredServer limbo = server("sls-limbo");
+        RegisteredServer primary = server("lobby");
+        AtomicReference<Optional<ServerConnection>> current =
+                new AtomicReference<>(Optional.of(connection(limbo)));
+        AtomicInteger transfers = new AtomicInteger();
+        AtomicInteger messages = new AtomicInteger();
+        Player player = player(
+                current,
+                transfers,
+                primary,
+                ConnectionRequestBuilder.Status.SERVER_DISCONNECTED,
+                messages
+        );
+        TestLobbyProvider lobbies = new TestLobbyProvider(limbo);
+        SLSLimboHandoffService handoff = service(lobbies);
+
+        handoff.awaitPrimary(player);
+        handoff.connected(player, limbo);
+        lobbies.publishPrimary(primary);
+        lobbies.publishPrimary(primary);
+
+        assertEquals(1, transfers.get());
+        assertEquals(1, messages.get());
+        assertEquals(1, handoff.waitingCount());
+        handoff.close();
+    }
+
     private SLSLimboHandoffService service(TestLobbyProvider lobbies) {
         return new SLSLimboHandoffService(
                 lobbies,
@@ -109,13 +138,29 @@ class SLSLimboHandoffServiceTest {
             AtomicInteger transfers,
             RegisteredServer primary
     ) {
+        return player(
+                current,
+                transfers,
+                primary,
+                ConnectionRequestBuilder.Status.SUCCESS,
+                new AtomicInteger()
+        );
+    }
+
+    private static Player player(
+            AtomicReference<Optional<ServerConnection>> current,
+            AtomicInteger transfers,
+            RegisteredServer primary,
+            ConnectionRequestBuilder.Status status,
+            AtomicInteger messages
+    ) {
         UUID playerId = UUID.randomUUID();
         ConnectionRequestBuilder.Result result =
                 (ConnectionRequestBuilder.Result) Proxy.newProxyInstance(
                         ConnectionRequestBuilder.Result.class.getClassLoader(),
                         new Class<?>[]{ConnectionRequestBuilder.Result.class},
                         (proxy, method, arguments) -> switch (method.getName()) {
-                            case "getStatus" -> ConnectionRequestBuilder.Status.SUCCESS;
+                            case "getStatus" -> status;
                             case "getAttemptedConnection" -> primary;
                             case "getReasonComponent" -> Optional.empty();
                             default -> defaultValue(method.getReturnType());
@@ -143,7 +188,11 @@ class SLSLimboHandoffServiceTest {
                     case "getCurrentServer" -> current.get();
                     case "createConnectionRequest" -> builder;
                     case "isActive" -> true;
-                    case "sendActionBar", "sendMessage" -> null;
+                    case "sendActionBar" -> null;
+                    case "sendMessage" -> {
+                        messages.incrementAndGet();
+                        yield null;
+                    }
                     default -> defaultValue(method.getReturnType());
                 }
         );

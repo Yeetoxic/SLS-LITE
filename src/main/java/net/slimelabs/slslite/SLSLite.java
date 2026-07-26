@@ -193,7 +193,8 @@ public final class SLSLite {
             lobbyProvider = new FallbackLobbyProvider(
                     proxy,
                     primaryLobby,
-                    slsLimbo
+                    slsLimbo,
+                    logger
             );
             limboHandoff = new SLSLimboHandoffService(lobbyProvider, logger);
             idleReaper = new IdleInstanceReaper(

@@ -29,6 +29,10 @@ public final class SLSConfigRepository {
     private static final boolean DEFAULT_LIMBO_ENABLED = true;
     private static final int DEFAULT_LIMBO_MEMORY_MIB = 96;
     private static final int DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS = 30;
+    private static final int DEFAULT_LIMBO_MAX_RESTART_ATTEMPTS = 5;
+    private static final int DEFAULT_LIMBO_INITIAL_BACKOFF_SECONDS = 2;
+    private static final int DEFAULT_LIMBO_MAX_BACKOFF_SECONDS = 30;
+    private static final int DEFAULT_LIMBO_STABLE_AFTER_SECONDS = 120;
     private static final String DEFAULT_LOBBY_MODE = "external";
     private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
     private static final String DEFAULT_LOBBY_SERVER = "lobby";
@@ -105,6 +109,8 @@ public final class SLSConfigRepository {
             Map<String, Object> limbo = lobby.containsKey("limbo")
                     ? YamlValues.optionalMap(lobby, "limbo", configPath)
                     : YamlValues.optionalMap(lobby, "emergency", configPath);
+            Map<String, Object> limboRecovery =
+                    YamlValues.optionalMap(limbo, "recovery", configPath);
             Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);
 
             int totalMemory = YamlValues.optionalPositiveInt(
@@ -245,6 +251,30 @@ public final class SLSConfigRepository {
                     DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS,
                     configPath
             );
+            int limboMaxRestartAttempts = YamlValues.optionalNonNegativeInt(
+                    limboRecovery,
+                    "max_attempts",
+                    DEFAULT_LIMBO_MAX_RESTART_ATTEMPTS,
+                    configPath
+            );
+            int limboInitialBackoff = YamlValues.optionalPositiveInt(
+                    limboRecovery,
+                    "initial_backoff_seconds",
+                    DEFAULT_LIMBO_INITIAL_BACKOFF_SECONDS,
+                    configPath
+            );
+            int limboMaxBackoff = YamlValues.optionalPositiveInt(
+                    limboRecovery,
+                    "max_backoff_seconds",
+                    DEFAULT_LIMBO_MAX_BACKOFF_SECONDS,
+                    configPath
+            );
+            int limboStableAfter = YamlValues.optionalPositiveInt(
+                    limboRecovery,
+                    "stable_after_seconds",
+                    DEFAULT_LIMBO_STABLE_AFTER_SECONDS,
+                    configPath
+            );
             String instances = YamlValues.optionalString(
                     paths,
                     "instances",
@@ -280,7 +310,11 @@ public final class SLSConfigRepository {
                         new SLSLimboConfig(
                                 limboEnabled,
                                 limboMemory,
-                                limboStartupTimeout
+                                limboStartupTimeout,
+                                limboMaxRestartAttempts,
+                                limboInitialBackoff,
+                                limboMaxBackoff,
+                                limboStableAfter
                         ),
                         new LobbyConfig(
                                 LobbyMode.parse(lobbyMode),

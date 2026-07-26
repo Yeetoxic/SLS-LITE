@@ -2,13 +2,12 @@ package net.slimelabs.slslite.lobby;
 
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
-import net.slimelabs.slslite.config.SLSLimboConfig;
 import net.slimelabs.slslite.config.ForwardingConfig;
+import net.slimelabs.slslite.config.SLSLimboConfig;
 import net.slimelabs.slslite.instance.InstanceLifecycle;
 import net.slimelabs.slslite.instance.InstanceState;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.ProcessSpec;
-import net.slimelabs.slslite.process.ProcessStartException;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.process.SupervisedProcess;
 import net.slimelabs.slslite.resource.ResourceBudget;
@@ -19,7 +18,14 @@ import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
@@ -38,6 +44,7 @@ public final class SLSLimboProvider implements LobbyProvider {
     private final ProcessSupervisor processes;
     private final BackendRegistry backends;
     private final Logger logger;
+    private final ScheduledExecutorService recoveryScheduler;
     private final CompletableFuture<RegisteredServer> ready = new CompletableFuture<>();
     private final AtomicBoolean resourcesReleased = new AtomicBoolean();
 
@@ -46,6 +53,16 @@ public final class SLSLimboProvider implements LobbyProvider {
     private volatile int port = -1;
     private volatile boolean registered;
     private volatile boolean closed;
+    private volatile String lastFailure;
+
+    private boolean started;
+    private boolean memoryReserved;
+    private volatile int recoveryAttempts;
+    private long generation;
+    private long handledGeneration = -1;
+    private ScheduledFuture<?> retryTask;
+    private ScheduledFuture<?> stableTask;
+    private SLSLimboInstaller.SLSLimboInstallation installation;
 
     public SLSLimboProvider(
             ProxyServer proxy,
@@ -58,6 +75,39 @@ public final class SLSLimboProvider implements LobbyProvider {
             BackendRegistry backends,
             Logger logger
     ) {
+        this(
+                proxy,
+                config,
+                forwarding,
+                dataDirectory,
+                resourceBudget,
+                ports,
+                processes,
+                backends,
+                logger,
+                Executors.newSingleThreadScheduledExecutor(runnable -> {
+                    Thread thread = new Thread(
+                            runnable,
+                            "sls-lite-limbo-recovery"
+                    );
+                    thread.setDaemon(true);
+                    return thread;
+                })
+        );
+    }
+
+    SLSLimboProvider(
+            ProxyServer proxy,
+            SLSLimboConfig config,
+            ForwardingConfig forwarding,
+            Path dataDirectory,
+            ResourceBudget resourceBudget,
+            LoopbackPortAllocator ports,
+            ProcessSupervisor processes,
+            BackendRegistry backends,
+            Logger logger,
+            ScheduledExecutorService recoveryScheduler
+    ) {
         this.proxy = proxy;
         this.config = config;
         this.forwarding = forwarding;
@@ -67,65 +117,26 @@ public final class SLSLimboProvider implements LobbyProvider {
         this.processes = processes;
         this.backends = backends;
         this.logger = logger;
+        this.recoveryScheduler = recoveryScheduler;
     }
 
     @Override
-    public synchronized void start() {
-        if (closed || status != LobbyStatus.OFFLINE) {
-            return;
-        }
-        if (!config.enabled()) {
-            ready.completeExceptionally(
-                    new IllegalStateException("SLS-Limbo is disabled")
-            );
-            return;
-        }
-        status = LobbyStatus.STARTING;
-        try {
-            if (!resourceBudget.tryReserve(SERVER_NAME, config.memoryMiB())) {
-                throw new IllegalStateException(
-                        "Insufficient managed memory for SLS-Limbo: "
-                                + config.memoryMiB() + " MiB"
-                );
+    public void start() {
+        synchronized (this) {
+            if (started || closed) {
+                return;
             }
-            port = ports.allocate();
-            SLSLimboInstaller.SLSLimboInstallation installation =
-                    installer.install(port, forwarding);
-            InstanceLifecycle lifecycle = new InstanceLifecycle(SERVER_NAME);
-            lifecycle.transitionTo(InstanceState.PREPARING);
-            process = processes.start(
-                    SERVER_NAME,
-                    processSpec(installation),
-                    lifecycle,
-                    line -> logger.info("[sls-limbo] {}", line)
-            );
-            process.readyFuture().whenComplete((ignored, failure) -> {
-                if (failure == null) {
-                    publishReady();
-                } else {
-                    fail(failure);
-                }
-            });
-            process.exitFuture().whenComplete((exitCode, failure) -> {
-                if (!closed && status == LobbyStatus.READY) {
-                    fail(failure == null
-                            ? new IllegalStateException(
-                                    "SLS-Limbo exited with code " + exitCode
-                            )
-                            : failure);
-                } else {
-                    releaseResources();
-                }
-            });
-            logger.info(
-                    "Starting SLS-Limbo runtime NanoLimbo {} ({}) with {} MiB",
-                    SLSLimboInstaller.NANOLIMBO_VERSION,
-                    SLSLimboInstaller.NANOLIMBO_COMMIT.substring(0, 8),
-                    config.memoryMiB()
-            );
-        } catch (Exception exception) {
-            fail(exception);
+            started = true;
+            if (!config.enabled()) {
+                ready.completeExceptionally(
+                        new IllegalStateException("SLS-Limbo is disabled")
+                );
+                return;
+            }
+            status = LobbyStatus.STARTING;
         }
+
+        prepareAndLaunch(false);
     }
 
     @Override
@@ -157,6 +168,19 @@ public final class SLSLimboProvider implements LobbyProvider {
     }
 
     @Override
+    public Optional<SLSLimboDiagnostics> limboDiagnostics() {
+        return Optional.of(new SLSLimboDiagnostics(
+                config.enabled(),
+                status,
+                config.memoryMiB(),
+                port < 0 ? OptionalInt.empty() : OptionalInt.of(port),
+                recoveryAttempts,
+                config.maxRestartAttempts(),
+                Optional.ofNullable(lastFailure)
+        ));
+    }
+
+    @Override
     public CompletableFuture<Void> evacuate(String serverName) {
         if (isLobby(serverName)) {
             return CompletableFuture.failedFuture(
@@ -171,73 +195,274 @@ public final class SLSLimboProvider implements LobbyProvider {
     }
 
     @Override
-    public synchronized void close() {
-        if (closed) {
-            return;
-        }
-        closed = true;
-        status = LobbyStatus.SHUTTING_DOWN;
-        unregister();
-        SupervisedProcess current = process;
-        if (current == null) {
-            releaseResources();
-        } else {
-            try {
-                current.stop();
-            } catch (IllegalStateException exception) {
-                current.forceStop();
+    public void close() {
+        SupervisedProcess current;
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            status = LobbyStatus.SHUTTING_DOWN;
+            cancel(retryTask);
+            cancel(stableTask);
+            unregister();
+            current = process;
+            if (!ready.isDone()) {
+                ready.completeExceptionally(
+                        new CancellationException("SLS-Limbo is shutting down")
+                );
             }
         }
-        if (!ready.isDone()) {
-            ready.completeExceptionally(
-                    new IllegalStateException("SLS-Limbo is shutting down")
-            );
-        }
-    }
-
-    private synchronized void publishReady() {
-        if (closed) {
+        recoveryScheduler.shutdownNow();
+        if (current == null) {
+            releaseResources();
             return;
         }
         try {
-            backends.register(
-                    SERVER_NAME,
-                    new InetSocketAddress("127.0.0.1", port)
-            );
-            registered = true;
-            RegisteredServer registeredServer = proxy.getServer(SERVER_NAME)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "SLS-Limbo was not registered with Velocity"
-                    ));
-            status = LobbyStatus.READY;
-            ready.complete(registeredServer);
-            logger.info("SLS-Limbo is ready on 127.0.0.1:{}", port);
-        } catch (RuntimeException exception) {
-            fail(exception);
+            current.stop();
+        } catch (IllegalStateException exception) {
+            current.forceStop();
+        }
+        current.exitFuture().whenComplete((exitCode, failure) -> releaseResources());
+    }
+
+    private synchronized void reserveResources() throws Exception {
+        if (closed) {
+            throw new CancellationException("SLS-Limbo is shutting down");
+        }
+        if (!memoryReserved) {
+            if (!resourceBudget.tryReserve(SERVER_NAME, config.memoryMiB())) {
+                throw new IllegalStateException(
+                        "Insufficient managed memory for SLS-Limbo: "
+                                + config.memoryMiB() + " MiB"
+                );
+            }
+            memoryReserved = true;
+        }
+        if (port < 0) {
+            port = ports.allocate();
+        }
+        if (installation == null) {
+            installation = installer.install(port, forwarding);
         }
     }
 
-    private synchronized void fail(Throwable failure) {
-        if (status == LobbyStatus.OFFLINE && ready.isCompletedExceptionally()) {
-            return;
+    private void prepareAndLaunch(boolean recovery) {
+        long attemptGeneration;
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            attemptGeneration = ++generation;
+            handledGeneration = -1;
+            status = recovery ? LobbyStatus.RECOVERING : LobbyStatus.STARTING;
+            retryTask = null;
         }
-        status = LobbyStatus.OFFLINE;
-        unregister();
-        SupervisedProcess current = process;
-        boolean awaitingExit = false;
-        if (current != null
-                && current.state() != InstanceState.STOPPED
-                && current.state() != InstanceState.STOPPING) {
-            current.forceStop();
-            awaitingExit = true;
-        } else if (current != null && current.state() == InstanceState.STOPPING) {
-            awaitingExit = true;
+
+        try {
+            reserveResources();
+            launch(recovery, attemptGeneration, installation);
+        } catch (Exception exception) {
+            handleFailure(null, attemptGeneration, exception);
         }
-        if (!awaitingExit) {
-            releaseResources();
+    }
+
+    private void launch(
+            boolean recovery,
+            long attemptGeneration,
+            SLSLimboInstaller.SLSLimboInstallation currentInstallation
+    ) {
+        synchronized (this) {
+            if (closed || generation != attemptGeneration) {
+                return;
+            }
         }
-        ready.completeExceptionally(failure);
-        logger.error("SLS-Limbo failed: {}", rootMessage(failure));
+        try {
+            InstanceLifecycle lifecycle = new InstanceLifecycle(SERVER_NAME);
+            lifecycle.transitionTo(InstanceState.PREPARING);
+            SupervisedProcess launched = processes.start(
+                    SERVER_NAME,
+                    processSpec(currentInstallation),
+                    lifecycle,
+                    line -> logger.info("[sls-limbo] {}", line)
+            );
+            synchronized (this) {
+                if (closed || generation != attemptGeneration) {
+                    launched.forceStop();
+                    return;
+                }
+                process = launched;
+            }
+            launched.readyFuture().whenComplete((ignored, failure) -> {
+                if (failure == null) {
+                    publishReady(launched, attemptGeneration);
+                } else {
+                    handleFailure(launched, attemptGeneration, failure);
+                }
+            });
+            launched.exitFuture().whenComplete((exitCode, failure) -> {
+                if (closed) {
+                    releaseResources();
+                    return;
+                }
+                Throwable cause = failure == null
+                        ? new IllegalStateException(
+                                "SLS-Limbo exited with code " + exitCode
+                        )
+                        : failure;
+                handleFailure(launched, attemptGeneration, cause);
+            });
+            logger.info(
+                    "{} SLS-Limbo runtime NanoLimbo {} ({}) with {} MiB",
+                    recovery ? "Recovering" : "Starting",
+                    SLSLimboInstaller.NANOLIMBO_VERSION,
+                    SLSLimboInstaller.NANOLIMBO_COMMIT.substring(0, 8),
+                    config.memoryMiB()
+            );
+        } catch (Exception exception) {
+            handleFailure(null, attemptGeneration, exception);
+        }
+    }
+
+    private void publishReady(
+            SupervisedProcess launched,
+            long attemptGeneration
+    ) {
+        RegisteredServer registeredServer;
+        try {
+            synchronized (this) {
+                if (closed
+                        || generation != attemptGeneration
+                        || handledGeneration == attemptGeneration
+                        || process != launched) {
+                    return;
+                }
+                backends.register(
+                        SERVER_NAME,
+                        new InetSocketAddress("127.0.0.1", port)
+                );
+                registered = true;
+                registeredServer = proxy.getServer(SERVER_NAME)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "SLS-Limbo was not registered with Velocity"
+                        ));
+                status = LobbyStatus.READY;
+                lastFailure = null;
+                ready.complete(registeredServer);
+                cancel(stableTask);
+                if (recoveryAttempts > 0) {
+                    stableTask = recoveryScheduler.schedule(
+                            () -> markStable(launched, attemptGeneration),
+                            config.stableAfterSeconds(),
+                            TimeUnit.SECONDS
+                    );
+                }
+            }
+            logger.info("SLS-Limbo is ready on 127.0.0.1:{}", port);
+        } catch (RuntimeException exception) {
+            handleFailure(launched, attemptGeneration, exception);
+        }
+    }
+
+    private void handleFailure(
+            SupervisedProcess failedProcess,
+            long attemptGeneration,
+            Throwable failure
+    ) {
+        int nextAttempt;
+        long delay;
+        boolean exhausted;
+        synchronized (this) {
+            if (closed
+                    || generation != attemptGeneration
+                    || handledGeneration == attemptGeneration
+                    || (failedProcess != null && process != failedProcess)) {
+                return;
+            }
+            handledGeneration = attemptGeneration;
+            cancel(stableTask);
+            stableTask = null;
+            unregister();
+            lastFailure = rootMessage(failure);
+            if (failedProcess != null
+                    && failedProcess.state() != InstanceState.STOPPED
+                    && failedProcess.state() != InstanceState.STOPPING) {
+                failedProcess.forceStop();
+            }
+
+            exhausted = recoveryAttempts >= config.maxRestartAttempts();
+            if (exhausted) {
+                status = LobbyStatus.OFFLINE;
+                nextAttempt = recoveryAttempts;
+                delay = 0;
+                if (!ready.isDone()) {
+                    ready.completeExceptionally(failure);
+                }
+            } else {
+                nextAttempt = ++recoveryAttempts;
+                delay = backoffSeconds(nextAttempt);
+                status = LobbyStatus.RECOVERING;
+                try {
+                    retryTask = recoveryScheduler.schedule(
+                            () -> prepareAndLaunch(true),
+                            delay,
+                            TimeUnit.SECONDS
+                    );
+                } catch (RejectedExecutionException exception) {
+                    status = LobbyStatus.OFFLINE;
+                    lastFailure = rootMessage(exception);
+                    exhausted = true;
+                    if (!ready.isDone()) {
+                        ready.completeExceptionally(exception);
+                    }
+                }
+            }
+        }
+
+        if (exhausted) {
+            logger.error(
+                    "SLS-Limbo is offline after {} recovery attempt(s): {}",
+                    nextAttempt,
+                    rootMessage(failure)
+            );
+        } else {
+            logger.warn(
+                    "SLS-Limbo unavailable; recovery attempt {}/{} starts "
+                            + "in {} second(s): {}",
+                    nextAttempt,
+                    config.maxRestartAttempts(),
+                    delay,
+                    rootMessage(failure)
+            );
+        }
+    }
+
+    private void markStable(
+            SupervisedProcess stableProcess,
+            long attemptGeneration
+    ) {
+        synchronized (this) {
+            if (closed
+                    || generation != attemptGeneration
+                    || process != stableProcess
+                    || status != LobbyStatus.READY) {
+                return;
+            }
+            recoveryAttempts = 0;
+            stableTask = null;
+        }
+        logger.info(
+                "SLS-Limbo has been stable for {} seconds; recovery budget reset",
+                config.stableAfterSeconds()
+        );
+    }
+
+    private long backoffSeconds(int attempt) {
+        long delay = config.initialBackoffSeconds();
+        for (int index = 1; index < attempt; index++) {
+            delay = Math.min(config.maxBackoffSeconds(), delay * 2);
+        }
+        return delay;
     }
 
     private void unregister() {
@@ -254,11 +479,14 @@ public final class SLSLimboProvider implements LobbyProvider {
         if (port >= 0) {
             ports.release(port);
         }
-        resourceBudget.release(SERVER_NAME);
+        if (memoryReserved) {
+            resourceBudget.release(SERVER_NAME);
+            memoryReserved = false;
+        }
     }
 
     private ProcessSpec processSpec(
-            SLSLimboInstaller.SLSLimboInstallation installation
+            SLSLimboInstaller.SLSLimboInstallation currentInstallation
     ) {
         return new ProcessSpec(
                 java.util.List.of(
@@ -266,9 +494,9 @@ public final class SLSLimboProvider implements LobbyProvider {
                         "-Xms32M",
                         "-Xmx" + config.memoryMiB() + "M",
                         "-jar",
-                        installation.runtimeJar().toString()
+                        currentInstallation.runtimeJar().toString()
                 ),
-                installation.workingDirectory(),
+                currentInstallation.workingDirectory(),
                 READY_PATTERN,
                 Duration.ofSeconds(config.startupTimeoutSeconds()),
                 "stop",
@@ -291,5 +519,11 @@ public final class SLSLimboProvider implements LobbyProvider {
         return current.getMessage() == null
                 ? current.getClass().getSimpleName()
                 : current.getMessage();
+    }
+
+    private static void cancel(ScheduledFuture<?> task) {
+        if (task != null) {
+            task.cancel(false);
+        }
     }
 }

@@ -41,6 +41,13 @@ server ping; SLS-LITE does not attempt the handoff until that probe succeeds.
 If the connection still fails, the player remains in SLS-Limbo and health
 checking resumes.
 
+Per-player handoff failures use exponential retry delays of 10, 20, 40, and
+then 60 seconds. The player receives one chat explanation per SLS-Limbo waiting
+episode; later failures use a static action-bar status. Only the first failure
+is logged as a warning, with repeated failures available at debug level. This
+also prevents an online but protocol-incompatible backend from creating a
+connection and notification loop.
+
 ## How It Works
 
 SLS-LITE includes an unmodified, pinned NanoLimbo runtime inside the SLS-LITE
@@ -77,11 +84,22 @@ lobby:
     enabled: true
     memory_mib: 96
     startup_timeout_seconds: 30
+    recovery:
+      max_attempts: 5
+      initial_backoff_seconds: 2
+      max_backoff_seconds: 30
+      stable_after_seconds: 120
 ```
 
 - `enabled`: starts the bundled fallback when `true`.
 - `memory_mib`: SLS-Limbo runtime heap reservation. Minimum: 64 MiB.
 - `startup_timeout_seconds`: maximum time allowed for its readiness message.
+- `recovery.max_attempts`: bounded retries after an unexpected failure. Set to
+  `0` to leave SLS-Limbo offline after the first failure.
+- `recovery.initial_backoff_seconds`: delay before the first retry.
+- `recovery.max_backoff_seconds`: cap for exponential retry delays.
+- `recovery.stable_after_seconds`: healthy period required to reset the used
+  retry budget.
 
 The SLS-Limbo reservation is included in `resources.total_memory_mib`. It also
 uses one port from `network.ports`. Its actual host usage includes JVM native
@@ -120,10 +138,20 @@ ViaVersion is not currently integrated into this path. A proxy-installed
 ViaVersion may help only after SLS-LITE has an explicit, tested integration;
 it must not be treated as automatic support for an unknown Minecraft release.
 
+## Recovery
+
+SLS-Limbo keeps its memory reservation and loopback port while replacing a
+failed child process. Recovery does not stop or restart Velocity, the primary
+lobby, or managed game servers. The backend is unregistered while offline and
+registered again only after the replacement runtime reports readiness.
+
+`/sls info` reports SLS-Limbo state, memory, port, and retry usage. `/sls system`
+adds the last failure and whether any safe lobby is currently available. If both
+the primary lobby and SLS-Limbo reach terminal `OFFLINE` states, SLS-LITE logs
+one actionable error and disconnects players who have no usable backend.
+
 ## Current Limitations
 
-- The SLS-Limbo process is started once per proxy lifecycle and is not yet
-  restarted after its own crash.
 - External-primary failure is detected reactively after a failed player
   connection; once detected, recovery is checked with background pings.
 - Native and ViaVersion-translated client compatibility is not yet covered by
@@ -145,6 +173,10 @@ it must not be treated as automatic support for an unknown Minecraft release.
 9. From a healthy backend, run a join command that starts another server and
    confirm you remain on the current backend until the direct transfer.
 10. Shut down Velocity and confirm the SLS-Limbo child exits cleanly.
+
+For a recovery fault test, terminate only the NanoLimbo child process. Confirm
+the primary lobby remains usable, the console schedules a bounded retry, and
+SLS-Limbo returns on the same loopback port without restarting Velocity.
 
 For the local fixture, see
 [Pterodactyl_Local_Testing.md](Pterodactyl_Local_Testing.md).
