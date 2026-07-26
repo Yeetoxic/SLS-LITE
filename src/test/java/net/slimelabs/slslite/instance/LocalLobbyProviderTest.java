@@ -98,6 +98,36 @@ class LocalLobbyProviderTest {
     }
 
     @Test
+    void evacuatesBackendPlayersToManagedLobby() throws Exception {
+        BlueprintRepository blueprints = blueprints();
+        FakeController controller = new FakeController(
+                blueprints.get("lobby", "lobby").orElseThrow(),
+                temporaryDirectory
+        );
+        AtomicReference<RegisteredServer> requestedServer = new AtomicReference<>();
+        Player player = player(requestedServer);
+        RegisteredServer game = registeredServer(List.of(player));
+        Map<String, RegisteredServer> servers = new LinkedHashMap<>();
+        servers.put("game.test01", game);
+        LocalLobbyProvider provider = new LocalLobbyProvider(
+                proxy(servers),
+                blueprints,
+                controller,
+                new LobbyConfig(LobbyMode.MANAGED, "lobby", "lobby"),
+                LoggerFactory.getLogger(LocalLobbyProviderTest.class)
+        );
+
+        provider.start();
+        ManagedInstance instance = controller.instance();
+        RegisteredServer lobby = registeredServer(List.of());
+        publishReady(instance, lobby, servers);
+        provider.evacuate("game.test01").get(1, TimeUnit.SECONDS);
+
+        assertSame(lobby, requestedServer.get());
+        provider.close();
+    }
+
+    @Test
     void restartsManagedLobbyAfterUnexpectedExit() throws Exception {
         BlueprintRepository blueprints = blueprints();
         FakeController controller = new FakeController(

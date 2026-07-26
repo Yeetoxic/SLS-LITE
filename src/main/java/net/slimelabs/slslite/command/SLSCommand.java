@@ -3,6 +3,7 @@ package net.slimelabs.slslite.command;
 import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.command.SimpleCommand;
 import com.velocitypowered.api.proxy.ConnectionRequestBuilder;
+import com.velocitypowered.api.proxy.ConsoleCommandSource;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import net.kyori.adventure.text.Component;
@@ -23,10 +24,14 @@ import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.resource.ResourceBudget;
+import net.slimelabs.slslite.security.AdminClaimService;
+import net.slimelabs.slslite.security.Administrator;
+import net.slimelabs.slslite.security.AdministratorStore;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import net.slimelabs.slslite.velocity.LocalJoinService;
 import org.slf4j.Logger;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -44,7 +49,10 @@ public final class SLSCommand implements SimpleCommand {
     private static final int MAX_LOG_LINES = 100;
 
     private static final List<String> PUBLIC_COMMANDS =
-            List.of("dequeue", "find", "info", "join", "list", "registries", "version");
+            List.of(
+                    "admin", "dequeue", "find", "info", "join", "list",
+                    "registries", "version"
+            );
     private static final List<String> ADMIN_COMMANDS =
             List.of(
                     "blueprint", "blueprints", "console", "create", "debug", "delete",
@@ -61,6 +69,9 @@ public final class SLSCommand implements SimpleCommand {
     private final LobbyProvider lobbyProvider;
     private final ManagedOutputConfig outputConfig;
     private final HostCapabilityReport hostCapabilities;
+    private final AdministratorStore administrators;
+    private final AdminClaimService adminClaims;
+    private final CommandAuthorizer authorizer;
     private final Logger logger;
 
     public SLSCommand(
@@ -73,6 +84,8 @@ public final class SLSCommand implements SimpleCommand {
             LobbyProvider lobbyProvider,
             ManagedOutputConfig outputConfig,
             HostCapabilityReport hostCapabilities,
+            AdministratorStore administrators,
+            AdminClaimService adminClaims,
             Logger logger
     ) {
         this.proxy = proxy;
@@ -84,6 +97,9 @@ public final class SLSCommand implements SimpleCommand {
         this.lobbyProvider = lobbyProvider;
         this.outputConfig = outputConfig;
         this.hostCapabilities = hostCapabilities;
+        this.administrators = administrators;
+        this.adminClaims = adminClaims;
+        this.authorizer = new CommandAuthorizer(administrators);
         this.logger = logger;
     }
 
@@ -96,6 +112,7 @@ public final class SLSCommand implements SimpleCommand {
         }
 
         switch (arguments[0].toLowerCase(Locale.ROOT)) {
+            case "admin" -> admin(invocation.source(), arguments);
             case "blueprints" -> sendBlueprints(invocation.source(), arguments);
             case "console" -> console(invocation.source(), arguments);
             case "dequeue" -> dequeue(invocation.source(), arguments);
@@ -129,7 +146,7 @@ public final class SLSCommand implements SimpleCommand {
         if (arguments.length <= 1) {
             List<String> suggestions = new java.util.ArrayList<>(PUBLIC_COMMANDS);
             ADMIN_COMMANDS.stream()
-                    .filter(command -> CommandPermissions.canAdminister(source, command))
+                    .filter(command -> authorizer.canAdminister(source, command))
                     .forEach(suggestions::add);
             return completed(suggestions);
         }
@@ -137,31 +154,32 @@ public final class SLSCommand implements SimpleCommand {
         String operation = arguments[0].toLowerCase(Locale.ROOT);
         if (arguments.length == 2) {
             return switch (operation) {
-                case "blueprints" -> CommandPermissions.canAdminister(source, "blueprints")
+                case "admin" -> completed(adminActions(source));
+                case "blueprints" -> authorizer.canAdminister(source, "blueprints")
                         ? completed(sorted(blueprints.getTypes()))
                         : completed(List.of());
                 case "console", "logs" ->
-                        CommandPermissions.canAdminister(source, operation)
+                        authorizer.canAdminister(source, operation)
                         ? completed(withPrefix("this", instanceIds()))
                         : completed(List.of());
                 case "find" -> completed(proxy.getAllPlayers().stream()
                         .map(Player::getUsername).sorted().toList());
                 case "join" -> completed(withPrefix("player", sorted(blueprints.getTypes())));
-                case "dequeue" -> CommandPermissions.canTargetOthers(source, "dequeue")
+                case "dequeue" -> authorizer.canTargetOthers(source, "dequeue")
                         ? completed(joinTargets())
                         : completed(List.of());
-                case "reload" -> CommandPermissions.canAdminister(source, "reload")
+                case "reload" -> authorizer.canAdminister(source, "reload")
                         ? completed(List.of("all", "blueprints", "software"))
                         : completed(List.of());
-                case "start" -> CommandPermissions.canAdminister(source, "start")
+                case "start" -> authorizer.canAdminister(source, "start")
                         ? completed(sorted(blueprints.getTypes()))
                         : completed(List.of());
                 case "reset", "restart" ->
-                        CommandPermissions.canAdminister(source, operation)
+                        authorizer.canAdminister(source, operation)
                                 ? completed(withPrefix("this", persistentInstanceIds()))
                                 : completed(List.of());
                 case "status", "stop", "info", "stats" ->
-                        CommandPermissions.canAdminister(source, operation)
+                        authorizer.canAdminister(source, operation)
                                 ? completed(withPrefix("this", instanceIds()))
                                 : completed(List.of());
                 default -> completed(List.of());
@@ -176,22 +194,33 @@ public final class SLSCommand implements SimpleCommand {
                     .map(Blueprint::id).toList());
         }
         if (arguments.length == 3 && "start".equals(operation)
-                && CommandPermissions.canAdminister(source, "start")) {
+                && authorizer.canAdminister(source, "start")) {
             return completed(blueprints.getByType(arguments[1]).stream()
                     .map(Blueprint::id).toList());
         }
+        if (arguments.length == 3 && "admin".equals(operation)
+                && authorizer.canAdminister(source, "admin")) {
+            if ("add".equalsIgnoreCase(arguments[1])) {
+                return completed(proxy.getAllPlayers().stream()
+                        .map(Player::getUsername).sorted().toList());
+            }
+            if ("remove".equalsIgnoreCase(arguments[1])) {
+                return completed(administrators.list().stream()
+                        .map(Administrator::lastKnownName).toList());
+            }
+        }
         if (arguments.length == 3 && "logs".equals(operation)
-                && CommandPermissions.canAdminister(source, "logs")) {
+                && authorizer.canAdminister(source, "logs")) {
             return completed(List.of("1"));
         }
         if (arguments.length == 4 && "logs".equals(operation)
-                && CommandPermissions.canAdminister(source, "logs")) {
+                && authorizer.canAdminister(source, "logs")) {
             return completed(List.of("50", "100", "max"));
         }
         if (arguments.length == 4 && "join".equals(operation)
-                && CommandPermissions.canTargetOthers(source, "join")) {
+                && authorizer.canTargetOthers(source, "join")) {
             if ("player".equalsIgnoreCase(arguments[1])) {
-                return CommandPermissions.canAdminister(source, "join")
+                return authorizer.canAdminister(source, "join")
                         ? completed(List.of("--force"))
                         : completed(List.of());
             }
@@ -200,9 +229,221 @@ public final class SLSCommand implements SimpleCommand {
         return completed(List.of());
     }
 
+    private List<String> adminActions(CommandSource source) {
+        List<String> actions = new java.util.ArrayList<>();
+        if (source instanceof Player) {
+            actions.add("claim");
+        }
+        if (authorizer.canAdminister(source, "admin")) {
+            actions.addAll(List.of("add", "list", "remove"));
+        }
+        if (source instanceof ConsoleCommandSource) {
+            actions.add("code");
+        }
+        return List.copyOf(actions);
+    }
+
+    private void admin(CommandSource source, String[] arguments) {
+        if (arguments.length < 2) {
+            source.sendMessage(CommandMessages.usage(
+                    "/sls admin", "claim <code>", "add <online-player>",
+                    "remove <player>", "list", "code"
+            ));
+            return;
+        }
+        String action = arguments[1].toLowerCase(Locale.ROOT);
+        switch (action) {
+            case "claim" -> claimAdministration(source, arguments);
+            case "add" -> addAdministrator(source, arguments);
+            case "remove" -> removeAdministrator(source, arguments);
+            case "list" -> listAdministrators(source, arguments);
+            case "code" -> issueAdminCode(source, arguments);
+            default -> source.sendMessage(CommandMessages.usage(
+                    "/sls admin", "claim <code>", "add <online-player>",
+                    "remove <player>", "list", "code"
+            ));
+        }
+    }
+
+    private void claimAdministration(CommandSource source, String[] arguments) {
+        if (!(source instanceof Player player)) {
+            source.sendMessage(CommandMessages.message(
+                    "Only a player can claim in-game administration.",
+                    NamedTextColor.RED
+            ));
+            return;
+        }
+        if (arguments.length != 3) {
+            source.sendMessage(CommandMessages.usage(
+                    "/sls admin claim", "<code>"
+            ));
+            return;
+        }
+        try {
+            AdminClaimService.ClaimResult result = adminClaims.claim(player, arguments[2]);
+            switch (result) {
+                case CLAIMED -> source.sendMessage(CommandMessages.message(
+                        "You are now an SLS-LITE administrator.",
+                        NamedTextColor.GREEN
+                ));
+                case ALREADY_ADMINISTRATOR -> source.sendMessage(CommandMessages.message(
+                        "You are already an SLS-LITE administrator.",
+                        NamedTextColor.YELLOW
+                ));
+                case INVALID -> source.sendMessage(CommandMessages.message(
+                        "That administrator claim code is invalid.",
+                        NamedTextColor.RED
+                ));
+                case EXPIRED -> source.sendMessage(CommandMessages.message(
+                        "That administrator claim code has expired. Generate another "
+                                + "from the proxy console.",
+                        NamedTextColor.RED
+                ));
+                case NO_ACTIVE_CODE -> source.sendMessage(CommandMessages.message(
+                        "No administrator claim code is active. Generate one from "
+                                + "the proxy console.",
+                        NamedTextColor.RED
+                ));
+                case OFFLINE_MODE_BLOCKED -> source.sendMessage(CommandMessages.message(
+                        "In-game administrator claims are disabled while Velocity "
+                                + "is in offline mode.",
+                        NamedTextColor.RED
+                ));
+            }
+        } catch (IOException exception) {
+            logger.error("Unable to persist claimed SLS-LITE administrator", exception);
+            source.sendMessage(CommandMessages.message(
+                    "Unable to save the administrator claim.",
+                    NamedTextColor.RED
+            ));
+        }
+    }
+
+    private void addAdministrator(CommandSource source, String[] arguments) {
+        if (!requireAdmin(source, "admin", "add an SLS-LITE administrator")) {
+            return;
+        }
+        if (arguments.length != 3) {
+            source.sendMessage(CommandMessages.usage(
+                    "/sls admin add", "<online-player>"
+            ));
+            return;
+        }
+        Player player = proxy.getPlayer(arguments[2]).orElse(null);
+        if (player == null) {
+            source.sendMessage(CommandMessages.message(
+                    "Online player not found: " + arguments[2],
+                    NamedTextColor.RED
+            ));
+            return;
+        }
+        try {
+            adminClaims.requireSecureIdentity();
+            administrators.add(player.getUniqueId(), player.getUsername());
+            source.sendMessage(CommandMessages.message(
+                    "Added SLS-LITE administrator " + player.getUsername() + ".",
+                    NamedTextColor.GREEN
+            ));
+        } catch (AdminClaimService.InsecureOfflineModeException exception) {
+            source.sendMessage(CommandMessages.message(
+                    exception.getMessage() + ".",
+                    NamedTextColor.RED
+            ));
+        } catch (IOException exception) {
+            logger.error("Unable to persist SLS-LITE administrator", exception);
+            source.sendMessage(CommandMessages.message(
+                    "Unable to save the administrator.",
+                    NamedTextColor.RED
+            ));
+        }
+    }
+
+    private void removeAdministrator(CommandSource source, String[] arguments) {
+        if (!requireAdmin(source, "admin", "remove an SLS-LITE administrator")) {
+            return;
+        }
+        if (arguments.length != 3) {
+            source.sendMessage(CommandMessages.usage(
+                    "/sls admin remove", "<player>"
+            ));
+            return;
+        }
+        try {
+            Optional<Administrator> removed = administrators.remove(arguments[2]);
+            if (removed.isEmpty()) {
+                source.sendMessage(CommandMessages.message(
+                        "SLS-LITE administrator not found: " + arguments[2],
+                        NamedTextColor.RED
+                ));
+                return;
+            }
+            source.sendMessage(CommandMessages.message(
+                    "Removed SLS-LITE administrator "
+                            + removed.get().lastKnownName() + ".",
+                    NamedTextColor.GREEN
+            ));
+        } catch (IOException exception) {
+            logger.error("Unable to remove SLS-LITE administrator", exception);
+            source.sendMessage(CommandMessages.message(
+                    "Unable to save the administrator change.",
+                    NamedTextColor.RED
+            ));
+        }
+    }
+
+    private void listAdministrators(CommandSource source, String[] arguments) {
+        if (!requireAdmin(source, "admin", "list SLS-LITE administrators")) {
+            return;
+        }
+        if (arguments.length != 2) {
+            source.sendMessage(CommandMessages.usage("/sls admin", "list"));
+            return;
+        }
+        List<Administrator> current = administrators.list();
+        String names = current.isEmpty()
+                ? "none"
+                : current.stream()
+                        .map(Administrator::lastKnownName)
+                        .reduce((left, right) -> left + ", " + right)
+                        .orElse("none");
+        source.sendMessage(CommandMessages.message(
+                "SLS-LITE administrators: " + names,
+                NamedTextColor.GRAY
+        ));
+    }
+
+    private void issueAdminCode(CommandSource source, String[] arguments) {
+        if (!(source instanceof ConsoleCommandSource)) {
+            source.sendMessage(CommandMessages.message(
+                    "Administrator claim codes can only be generated from "
+                            + "the proxy console.",
+                    NamedTextColor.RED
+            ));
+            return;
+        }
+        if (arguments.length != 2) {
+            source.sendMessage(CommandMessages.usage("/sls admin", "code"));
+            return;
+        }
+        try {
+            String code = adminClaims.issueCode();
+            source.sendMessage(CommandMessages.message(
+                    "Administrator claim code: " + code,
+                    NamedTextColor.GOLD
+            ));
+        } catch (AdminClaimService.InsecureOfflineModeException exception) {
+            source.sendMessage(CommandMessages.message(
+                    exception.getMessage()
+                            + ". Enable online mode or explicitly allow insecure "
+                            + "offline administrators in config.yml.",
+                    NamedTextColor.RED
+            ));
+        }
+    }
+
     private void sendRootHelp(CommandSource source) {
         source.sendMessage(CommandMessages.incorrectUsage());
-        if (source.hasPermission(CommandPermissions.ADMIN)) {
+        if (authorizer.canAdminister(source, "admin")) {
             source.sendMessage(CommandMessages.usage(
                     "/sls",
                     VSLSCommandContract.ADMIN_ROOT.toArray(String[]::new)
@@ -663,7 +904,7 @@ public final class SLSCommand implements SimpleCommand {
         }
         List<Player> targets;
         if (arguments.length == 4) {
-            if (!CommandPermissions.canTargetOthers(source, "join")) {
+            if (!authorizer.canTargetOthers(source, "join")) {
                 permissionDenied(source, "join other players");
                 return;
             }
@@ -738,7 +979,7 @@ public final class SLSCommand implements SimpleCommand {
                 ));
                 return;
             }
-            if (!CommandPermissions.canAdminister(source, "join")) {
+            if (!authorizer.canAdminister(source, "join")) {
                 permissionDenied(source, "force a player join");
                 return;
             }
@@ -797,7 +1038,7 @@ public final class SLSCommand implements SimpleCommand {
             }
             removed = joinService.dequeue(player.getUniqueId()).stream().toList();
         } else {
-            if (!CommandPermissions.canTargetOthers(source, "dequeue")) {
+            if (!authorizer.canTargetOthers(source, "dequeue")) {
                 permissionDenied(source, "dequeue other players");
                 return;
             }
@@ -1190,7 +1431,7 @@ public final class SLSCommand implements SimpleCommand {
     }
 
     private boolean requireAdmin(CommandSource source, String permission, String operation) {
-        if (CommandPermissions.canAdminister(source, permission)) {
+        if (authorizer.canAdminister(source, permission)) {
             return true;
         }
         permissionDenied(source, operation);

@@ -13,6 +13,13 @@ local-only aliases or options, but they must not replace or change an upstream
 form. Distributed operations that cannot work locally must retain their command
 shape and return a concise `not available in local mode` explanation.
 
+SLS-LITE also adds `/sls admin` as a local-only bootstrap command. A first-time
+operator claims administration with the short-lived code printed to the proxy
+console, then manages the built-in administrator role by online player name.
+UUIDs are retained internally so name changes do not remove access. Existing
+Velocity permission providers remain additive and `sls.command.admin` keeps its
+upstream umbrella behavior.
+
 ## Compatibility Status
 
 | vSLS command | Permission | SLS-LITE status | Remaining compatibility work |

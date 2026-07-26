@@ -38,6 +38,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     private final ServerController instances;
     private final Duration queueTimeout;
     private final ScheduledExecutorService scheduler;
+    private final TransferActionBar actionBar;
     private final Map<UUID, QueueEntry> queue = new HashMap<>();
     private final Set<String> queueOwnedInstances = new java.util.HashSet<>();
     private final Set<String> drainingInstances = new java.util.HashSet<>();
@@ -73,6 +74,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         this.instances = instances;
         this.queueTimeout = queueTimeout;
         this.scheduler = scheduler;
+        this.actionBar = new TransferActionBar(scheduler);
     }
 
     public JoinAttempt join(Player player, String registry, String server)
@@ -127,6 +129,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                     queueTimeout.toMillis(),
                     TimeUnit.MILLISECONDS
             );
+            actionBar.start(player);
         }
 
         entry.instance.readyFuture().whenComplete((ready, failure) -> {
@@ -175,10 +178,12 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                     "Instance is full: " + instance.id()
             );
         }
-        return new DirectJoin(
-                instance,
-                player.createConnectionRequest(registered).connect()
-        );
+        if (force) {
+            actionBar.forceJoining(player, instance.id());
+        } else {
+            actionBar.joining(player, instance.id());
+        }
+        return new DirectJoin(instance, player.createConnectionRequest(registered).connect());
     }
 
     public synchronized List<QueueTicket> queuedPlayers() {
@@ -205,6 +210,10 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     }
 
     public Optional<QueueTicket> dequeue(UUID playerId) {
+        return dequeue(playerId, true);
+    }
+
+    private Optional<QueueTicket> dequeue(UUID playerId, boolean showFeedback) {
         QueueEntry entry;
         synchronized (this) {
             entry = queue.remove(playerId);
@@ -213,6 +222,15 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
             return Optional.empty();
         }
         cancel(entry, "Matchmaking request was cancelled");
+        proxy.getPlayer(playerId)
+                .filter(Player::isActive)
+                .ifPresent(player -> {
+                    if (showFeedback) {
+                        actionBar.dequeued(player);
+                    } else {
+                        actionBar.stop(playerId);
+                    }
+                });
         stopOrphaned(entry.instance);
         return Optional.of(entry.ticket);
     }
@@ -234,7 +252,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     }
 
     public void disconnect(UUID playerId) {
-        dequeue(playerId);
+        dequeue(playerId, false);
     }
 
     public Optional<RegisteredServer> initialServer() {
@@ -263,6 +281,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                 .map(entry -> entry.instance)
                 .distinct()
                 .forEach(this::stopOrphaned);
+        actionBar.close();
         scheduler.shutdownNow();
     }
 
@@ -317,7 +336,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                 .filter(Player::isActive)
                 .orElse(null);
         if (player == null) {
-            dequeue(entry.ticket.playerId());
+            dequeue(entry.ticket.playerId(), false);
             return;
         }
 
@@ -328,6 +347,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
             ));
             return;
         }
+        actionBar.joining(player, instance.blueprint().name());
         player.createConnectionRequest(registered).connect()
                 .whenComplete((result, failure) -> finish(entry, result, failure));
     }
@@ -362,6 +382,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         if (!remove(entry)) {
             return;
         }
+        actionBar.stop(entry.ticket.playerId());
         entry.completion.completeExceptionally(new TimeoutException(
                 "Queue timed out after " + queueTimeout.toSeconds() + " seconds"
         ));
@@ -372,6 +393,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         if (!remove(entry)) {
             return;
         }
+        actionBar.stop(entry.ticket.playerId());
         entry.cancelTimeout();
         entry.completion.completeExceptionally(failure);
         synchronized (this) {
@@ -380,6 +402,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     }
 
     private void cancel(QueueEntry entry, String message) {
+        actionBar.stop(entry.ticket.playerId());
         entry.cancelTimeout();
         entry.completion.completeExceptionally(new QueueCancelledException(message));
     }

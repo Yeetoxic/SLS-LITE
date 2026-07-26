@@ -6,6 +6,8 @@ import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.server.ServerInfo;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.velocity.LocalJoinService;
@@ -24,11 +26,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -73,6 +78,24 @@ class LocalJoinServiceTest {
                     failure.getCause()
             );
             assertTrue(service.queuedPlayers().isEmpty());
+            assertEquals(
+                    Component.text("You have been dequeued.", NamedTextColor.RED),
+                    fixture.actionBars().getLast()
+            );
+        }
+    }
+
+    @Test
+    void queuedJoinDisplaysTheModernSlsLoadingAnimation() throws Exception {
+        Fixture fixture = fixture(Duration.ofSeconds(5));
+        try (LocalJoinService service = fixture.service()) {
+            service.join(fixture.player(), "test", "smoke");
+            awaitActionBars(fixture.actionBars(), 1);
+
+            assertEquals(
+                    Component.text("▇▆▅▃▂▂▂▂▂", NamedTextColor.GOLD),
+                    fixture.actionBars().getFirst()
+            );
         }
     }
 
@@ -150,6 +173,33 @@ class LocalJoinServiceTest {
             assertEquals(ConnectionRequestBuilder.Status.SUCCESS, result.getStatus());
             assertTrue(service.queuedPlayers().isEmpty());
             assertEquals(0, fixture.controller().stopCount());
+        }
+    }
+
+    @Test
+    void readyInstanceIsPreferredOverAnInstanceStillStarting() throws Exception {
+        Fixture fixture = fixture(Duration.ofSeconds(5));
+        try (LocalJoinService service = fixture.service()) {
+            ManagedInstance starting = fixture.controller().start("smoke");
+            starting.lifecycle().transitionTo(InstanceState.STARTING);
+            ManagedInstance ready = fixture.controller().start("smoke");
+            ready.lifecycle().transitionTo(InstanceState.STARTING);
+            ready.lifecycle().transitionTo(InstanceState.READY);
+            ready.readyFuture().complete(ready);
+
+            LocalJoinService.JoinAttempt attempt =
+                    service.join(fixture.player(), "test", "smoke");
+
+            assertEquals(ready.id(), attempt.instance().id());
+            assertFalse(attempt.created());
+            assertEquals(
+                    ConnectionRequestBuilder.Status.SUCCESS,
+                    attempt.connection().get(1, TimeUnit.SECONDS).getStatus()
+            );
+            assertEquals(
+                    Component.text("Joining Smoke", NamedTextColor.GREEN),
+                    fixture.actionBars().getLast()
+            );
         }
     }
 
@@ -323,19 +373,22 @@ class LocalJoinServiceTest {
         UUID playerId = UUID.randomUUID();
         RegisteredServer registeredServer = registeredServer(connectedPlayers);
         ConnectionRequestBuilder.Result result = connectionResult(registeredServer);
+        List<Component> actionBars = new CopyOnWriteArrayList<>();
         Player player = player(
                 playerId,
                 "QueueTester",
                 registeredServer,
                 result,
-                Optional.empty()
+                Optional.empty(),
+                actionBars::add
         );
         ProxyServer proxy = proxy(player, registeredServer);
         return new Fixture(
                 new LocalJoinService(proxy, blueprints, controller, timeout),
                 controller,
                 player,
-                playerId
+                playerId,
+                actionBars
         );
     }
 
@@ -345,6 +398,25 @@ class LocalJoinServiceTest {
             RegisteredServer registeredServer,
             ConnectionRequestBuilder.Result result,
             Optional<ServerConnection> currentServer
+    ) {
+        return player(
+                playerId,
+                username,
+                registeredServer,
+                result,
+                currentServer,
+                ignored -> {
+                }
+        );
+    }
+
+    private static Player player(
+            UUID playerId,
+            String username,
+            RegisteredServer registeredServer,
+            ConnectionRequestBuilder.Result result,
+            Optional<ServerConnection> currentServer,
+            Consumer<Component> actionBar
     ) {
         ConnectionRequestBuilder builder = (ConnectionRequestBuilder) Proxy.newProxyInstance(
                 ConnectionRequestBuilder.class.getClassLoader(),
@@ -365,6 +437,10 @@ class LocalJoinServiceTest {
                     case "isActive" -> true;
                     case "getCurrentServer" -> currentServer;
                     case "createConnectionRequest" -> builder;
+                    case "sendActionBar" -> {
+                        actionBar.accept((Component) arguments[0]);
+                        yield null;
+                    }
                     default -> defaultValue(method.getReturnType());
                 }
         );
@@ -446,11 +522,21 @@ class LocalJoinServiceTest {
         return null;
     }
 
+    private static void awaitActionBars(List<Component> messages, int expected)
+            throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (messages.size() < expected && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertTrue(messages.size() >= expected);
+    }
+
     private record Fixture(
             LocalJoinService service,
             FakeController controller,
             Player player,
-            UUID playerId
+            UUID playerId,
+            List<Component> actionBars
     ) {
     }
 

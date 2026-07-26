@@ -36,6 +36,8 @@ class SLSConfigRepositoryTest {
                 temporaryDirectory.resolve("forwarding.secret").toAbsolutePath().normalize(),
                 config.forwarding().secretFile()
         );
+        assertEquals(false, config.security().allowInsecureOfflineAdministrators());
+        assertEquals(600, config.security().claimCodeExpirySeconds());
         assertEquals(LobbyMode.EXTERNAL, config.lobby().mode());
         assertEquals("lobby", config.lobby().registry());
         assertEquals("lobby", config.lobby().server());
@@ -121,6 +123,32 @@ class SLSConfigRepositoryTest {
         assertEquals(2, lobby.initialBackoffSeconds());
         assertEquals(8, lobby.maxBackoffSeconds());
         assertEquals(30, lobby.stableAfterSeconds());
+    }
+
+    @Test
+    void loadsAdministratorSecurityPolicy() throws Exception {
+        writeConfig("""
+                security:
+                  allow_insecure_offline_administrators: true
+                  claim_code_expiry_seconds: 90
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        repository.reload();
+
+        assertEquals(true, repository.get().security().allowInsecureOfflineAdministrators());
+        assertEquals(90, repository.get().security().claimCodeExpirySeconds());
+    }
+
+    @Test
+    void rejectsNonPositiveClaimCodeExpiry() throws Exception {
+        writeConfig("""
+                security:
+                  claim_code_expiry_seconds: 0
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        assertThrows(ConfigurationException.class, repository::reload);
     }
 
     @Test

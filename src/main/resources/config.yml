@@ -68,6 +68,19 @@ forwarding:
   # paths and paths escaping the Velocity directory are rejected.
   secret_file: forwarding.secret
 
+security:
+  # Boolean: true or false. Persistent in-game SLS-LITE administrators are
+  # identified by the UUID supplied by Velocity. Keep false on production
+  # networks: offline-mode identities can be impersonated. Set true only for an
+  # isolated development proxy where velocity.toml has online-mode=false and
+  # you accept that risk. Console commands remain available either way.
+  allow_insecure_offline_administrators: false
+
+  # Positive integer. Lifetime, in seconds, of the one-time administrator claim
+  # code printed to the proxy console. A code is also invalidated immediately
+  # after one successful claim. Default: 600 seconds (10 minutes).
+  claim_code_expiry_seconds: 600
+
 lobby:
   # Lobby implementation. Valid values:
   #   external - use an existing backend already registered in velocity.toml.

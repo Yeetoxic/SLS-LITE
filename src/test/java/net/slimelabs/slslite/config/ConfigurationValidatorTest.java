@@ -60,6 +60,7 @@ class ConfigurationValidatorTest {
                 repositories.config().idleShutdownSeconds(),
                 repositories.config().managedOutput(),
                 repositories.config().forwarding(),
+                repositories.config().security(),
                 new LobbyConfig(LobbyMode.MANAGED, "lobby", "missing"),
                 repositories.config().instancesDirectory()
         );
@@ -113,6 +114,7 @@ class ConfigurationValidatorTest {
                         true,
                         temporaryDirectory.resolve("forwarding.secret")
                 ),
+                new SecurityConfig(false, 600),
                 new LobbyConfig(LobbyMode.EXTERNAL, "lobby", "lobby"),
                 temporaryDirectory.resolve("instances")
         );

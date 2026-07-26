@@ -62,6 +62,10 @@ matchmaking:
   queue_timeout_seconds: 180
 lifecycle:
   idle_shutdown_seconds: 20
+security:
+  # This fixture intentionally runs Velocity in offline mode for local testing.
+  allow_insecure_offline_administrators: true
+  claim_code_expiry_seconds: 600
 lobby:
   mode: managed
   registry: lobby
@@ -124,7 +128,7 @@ annotations:
     test-only: true
 '@
 
-Copy-Item -LiteralPath (Join-Path $repositoryRoot "scripts\fixtures\persistent-smoke.yml") `
+Copy-Item -LiteralPath (Join-Path $repository "scripts\fixtures\persistent-smoke.yml") `
     -Destination (Join-Path $pluginData "blueprints\persistent-smoke.yml") -Force
 
 Set-Content -LiteralPath (Join-Path $pluginData "software-profiles\paper.yml") `

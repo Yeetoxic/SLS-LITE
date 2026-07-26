@@ -17,6 +17,10 @@ The primary deployment must work with only:
 SLS-LITE must also continue to support conventional networks with separately
 hosted backend and lobby servers.
 
+Core SLS-LITE operation must require only the SLS-LITE plugin JAR. Optional
+integrations may improve interoperability, but lifecycle management, emergency
+lobby access, and SLS-LITE administration must not require another plugin.
+
 ## Hosting Feasibility
 
 - [x] Document the minimum host capabilities:
@@ -129,16 +133,53 @@ hosted backend and lobby servers.
 - [x] Add `/sls list`, `/sls start`, `/sls stop`, `/sls reload`, and
       `/sls status`.
 - [x] Add registry-aware `/sls join`.
+- [x] Match modern vSLS matchmaking action-bar feedback: animate the gold
+      loading wave while queued, replace it with the green joining message
+      before transfer, and clear it on dequeue, timeout, failure, or disconnect.
 - [x] Add `/sls dequeue` for self, named-player, `all`, and `local` queue
       cancellation.
 - [x] Add `/sls logs` with the vSLS-compatible
       `<server> [page] [lines]` arguments and bounded local retention.
 - [x] Require explicit permissions for administrative actions.
 - [x] Add permissions for other-player join actions.
+- [x] Add a small built-in SLS-LITE administrator store so core administration does
+      not require LuckPerms or another permission plugin.
+  - [x] When no administrator exists, print a random, single-use, short-lived claim
+    code to the proxy console.
+  - [x] Let an online player claim initial administration with
+    `/sls admin claim <code>` from the emergency lobby or another backend.
+  - [x] Store administrator identity by UUID internally, without requiring operators
+    to find or enter UUIDs themselves.
+  - [x] Add `/sls admin add <online-player>`, `remove`, and `list` with player-name
+    completion for normal administration.
+  - [x] Let the proxy console regenerate a recovery claim code and add or remove
+    administrators without already having an in-game administrator.
+  - [x] Continue honoring permissions supplied by Velocity permission providers.
+  - [x] Do not attempt to replace a general-purpose network permission plugin.
+  - [x] Invalidate claim codes after one successful use or their configured expiry,
+    never persist them, and omit them from user-facing diagnostics.
+  - [x] Warn that username-derived offline UUIDs are not a secure administrator
+    identity when the proxy permits unverified clients; require an explicit
+    insecure override before granting persistent in-game administration in
+    offline mode.
+  - [x] Manually verify claim, list, add/remove, and administrative command access
+    through the local Pterodactyl Velocity fixture.
+  - [ ] Add granular built-in node assignments only if real SLS-LITE use cases
+    require more than the administrator role and external permission providers.
 - [x] Support joining an existing instance or creating one from a blueprint.
 - [x] Add automatic idle shutdown with a configurable delay.
 - [ ] Add optional ViaVersion integration for backend protocol detection.
-- [ ] Avoid requiring PacketEvents unless a retained feature needs packet-level
+  - Let the embedded emergency lobby advertise one explicitly tested baseline
+    protocol and use proxy-installed ViaVersion, when available, to translate
+    newer supported clients to that baseline.
+  - Detect ViaVersion through its public API without making it a required
+    dependency; preserve native emergency-lobby operation when it is absent.
+  - Treat ViaBackwards and ViaRewind as optional operator choices for older
+    clients, not SLS-LITE requirements.
+  - Never report a newly released client as compatible until the installed
+    Velocity and ViaVersion versions both understand it and the complete
+    emergency-lobby transfer path has passed testing.
+- [x] Avoid requiring PacketEvents unless a retained feature needs packet-level
       control.
 
 ### Command and Permission Compatibility
@@ -372,7 +413,7 @@ the local implementation has equivalent behavior.
       matchmaking.
 - [ ] Add a pluggable blueprint selection strategy, starting with first-available
       and random selection.
-- [ ] Prefer existing ready instances with capacity before creating another.
+- [x] Prefer existing ready instances with capacity before creating another.
 - [x] Enforce per-blueprint player and instance limits during allocation.
 - [x] Cancel provisioning when its queue becomes empty when safe to do so.
 - [ ] Support blueprint `on-join` console actions with safe placeholders such as
@@ -414,6 +455,9 @@ the local implementation has equivalent behavior.
   - Request an instance and queue a player.
   - Subscribe to lifecycle events.
   - Stop or delete instances when authorized.
+  - Compile against a small versioned API artifact without depending on internal
+    process, configuration, or virtual-lobby implementation classes.
+  - Detect capabilities and API versions so optional integrations fail cleanly.
 - [ ] Add optional metrics with collection disabled by default and no sensitive
       host, path, player, or blueprint data.
 
@@ -440,25 +484,36 @@ the local implementation has equivalent behavior.
   - [x] Stop it gracefully during proxy shutdown.
   - [ ] Allow operators to disable automatic startup and manage it with commands.
 
-- [ ] Investigate `lobby.mode: virtual` as an optional proxy-native lobby.
-  - This is the only mode that would host the lobby experience directly in the
-    Velocity process without a Paper child process.
-  - Evaluate maintained virtual-server libraries such as LimboAPI or a compatible
-    lightweight implementation; do not build the Minecraft protocol from scratch.
+- [ ] Add an embedded emergency lobby that starts before the configured external
+      or managed primary lobby and is enabled by default.
+  - Keep `external` and `managed` as primary lobby modes; do not expose the
+    emergency lobby as another mutually exclusive primary mode.
+  - Route players to the emergency lobby whenever the primary is starting,
+    recovering, offline, or otherwise unreachable.
+  - Keep players connected while managed-lobby recovery runs, and optionally
+    transfer waiting players when the primary becomes ready.
+  - Provide a minimal safe experience: a fixed spawn, movement, status message,
+    and access to proxy-level `/sls` commands.
+  - Package the required runtime inside the SLS-LITE JAR so operators do not
+    install LimboAPI, PacketEvents, or another companion plugin.
+  - Evaluate a maintained embeddable virtual-server engine and its transitive
+    dependencies; do not implement the versioned Minecraft protocol from scratch.
   - Verify compatibility with the selected Velocity version and supported client
     versions.
   - Review dependency licensing before integration.
-  - Define the reduced feature set: spawn world, movement, chat, commands,
-    scoreboard, menus, server selector, and transfer to managed backends.
   - Clearly document that Bukkit/Paper plugins and full server mechanics are not
-    available in virtual mode.
+    available in the emergency lobby.
   - Keep this feature isolated behind an interface so library or protocol changes
     do not affect the process supervisor.
+  - Refuse to start the proxy, with an actionable error, if both the primary and
+    embedded emergency lobby are unavailable; never silently route to a game
+    backend.
 
 ### Lobby Routing
 
-- [x] Add a lobby provider interface shared by external, managed, and virtual
-      modes.
+- [x] Add a lobby provider interface for external and managed primary modes.
+- [ ] Add a fallback lobby coordinator that selects the healthy primary when
+      available and the embedded emergency lobby otherwise.
 - [x] Route first joins to the configured lobby provider.
 - [x] Route players back to the lobby when a managed game server stops or kicks
       them.
@@ -485,6 +540,52 @@ the local implementation has equivalent behavior.
   - [x] Probe child-process creation, writable paths, and loopback-port binding
         with actionable pass/fail results.
 
+## Documentation and Public Release Preparation
+
+- [ ] Audit every existing file in `DOCS/` and classify it as current,
+      historical reference, material to rewrite, or obsolete material to remove.
+- [ ] Separate internal development notes and test-environment procedures from
+      public operator documentation.
+- [ ] Replace legacy SLS-LITE terminology, commands, configuration examples, and
+      architecture descriptions that no longer match the implementation.
+- [ ] Preserve useful historical context in a clearly labeled archive instead of
+      presenting old behavior as current guidance.
+- [ ] Create a concise public README covering the project goal, supported
+      environments, current maturity, installation, quick start, and links to
+      detailed documentation.
+- [ ] Publish operator documentation for:
+  - Host requirements and shared-host limitations.
+  - Installation, first startup, updates, backups, and uninstallation.
+  - The complete commented `config.yml` reference and validation rules.
+  - Software profiles, blueprints, registries, instance IDs, and lifecycle.
+  - External and managed primary lobbies plus embedded emergency-lobby fallback.
+  - First-administrator claim codes, built-in SLS-LITE permissions, and optional
+    external permission providers.
+  - Commands, argument forms, selectors, output, permissions, and examples.
+  - Resource budgeting, cleanup, logs, recovery, and troubleshooting.
+  - Velocity forwarding, optional ViaVersion translation, supported protocol
+    states, and the new-Minecraft-release compatibility process.
+  - Pterodactyl and generic shared-host deployment without implying that host
+    restrictions can be bypassed.
+- [ ] Publish administrator migration guidance from historical SLS-LITE and the
+      compatible subset of modern SLS, with unsupported distributed features
+      identified explicitly.
+- [ ] Publish contributor and integration documentation for the versioned
+      SLS-LITE API, lifecycle events, capability detection, compatibility policy,
+      build process, tests, and release process.
+- [ ] Maintain a generated or test-verified command, permission, configuration,
+      and feature-compatibility reference so public docs cannot silently drift
+      from implemented behavior.
+- [ ] Add a supported Velocity, Java, Paper, Minecraft protocol, NanoLimbo-derived
+      runtime, and optional ViaVersion compatibility matrix for each release.
+- [ ] Add third-party notices, source links, pinned revisions, modification
+      summaries, and license obligations for bundled components.
+- [ ] Review all public documentation before each release and prevent unfinished
+      features from being documented as available.
+- [ ] Prepare a versioned public documentation site that can share common SLS
+      concepts while clearly labeling `SLS and SLS-LITE`, `Full SLS only`,
+      `SLS-LITE only`, and `Adapted for local mode` material.
+
 ## Testing
 
 - [x] Replace the current `main()` test classes with JUnit tests.
@@ -503,8 +604,9 @@ the local implementation has equivalent behavior.
 - [x] Test queue success, timeout, cancellation, disconnect, failed-start
       behavior, duplicate requests, and orphan cleanup.
 - [x] Test durable instance metadata and unclean-shutdown reconciliation.
-- [ ] Test external and managed lobby routing.
-- [ ] Add virtual lobby compatibility tests if that mode is adopted.
+- [x] Test external and managed lobby routing.
+- [ ] Add embedded emergency-lobby native and ViaVersion-translated protocol
+      compatibility tests.
 - [x] Add an integration fixture that launches Velocity and one lightweight
       backend in a constrained single-host environment.
 - [ ] Add CI for compilation, tests, packaging, and dependency checks.

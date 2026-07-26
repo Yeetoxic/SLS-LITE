@@ -10,6 +10,7 @@ public record SLSConfig(
         int idleShutdownSeconds,
         ManagedOutputConfig managedOutput,
         ForwardingConfig forwarding,
+        SecurityConfig security,
         LobbyConfig lobby,
         Path instancesDirectory
 ) {
@@ -37,6 +38,9 @@ public record SLSConfig(
         }
         if (forwarding == null) {
             throw new IllegalArgumentException("forwarding configuration is required");
+        }
+        if (security == null) {
+            throw new IllegalArgumentException("security configuration is required");
         }
         if (lobby == null) {
             throw new IllegalArgumentException("lobby configuration is required");

@@ -24,6 +24,8 @@ public final class SLSConfigRepository {
     private static final String DEFAULT_FORWARDING_MODE = "none";
     private static final boolean DEFAULT_FORWARDING_ONLINE_MODE = true;
     private static final String DEFAULT_FORWARDING_SECRET_FILE = "forwarding.secret";
+    private static final boolean DEFAULT_ALLOW_INSECURE_OFFLINE_ADMINISTRATORS = false;
+    private static final int DEFAULT_CLAIM_CODE_EXPIRY_SECONDS = 600;
     private static final String DEFAULT_LOBBY_MODE = "external";
     private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
     private static final String DEFAULT_LOBBY_SERVER = "lobby";
@@ -85,6 +87,8 @@ public final class SLSConfigRepository {
                     YamlValues.optionalMap(root, "managed_output", configPath);
             Map<String, Object> forwarding =
                     YamlValues.optionalMap(root, "forwarding", configPath);
+            Map<String, Object> security =
+                    YamlValues.optionalMap(root, "security", configPath);
             Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
             Map<String, Object> lobbyRecovery =
                     YamlValues.optionalMap(lobby, "recovery", configPath);
@@ -156,6 +160,18 @@ public final class SLSConfigRepository {
                     DEFAULT_FORWARDING_SECRET_FILE,
                     configPath
             );
+            boolean allowInsecureOfflineAdministrators = YamlValues.optionalBoolean(
+                    security,
+                    "allow_insecure_offline_administrators",
+                    DEFAULT_ALLOW_INSECURE_OFFLINE_ADMINISTRATORS,
+                    configPath
+            );
+            int claimCodeExpirySeconds = YamlValues.optionalPositiveInt(
+                    security,
+                    "claim_code_expiry_seconds",
+                    DEFAULT_CLAIM_CODE_EXPIRY_SECONDS,
+                    configPath
+            );
             String lobbyMode = YamlValues.optionalString(
                     lobby,
                     "mode",
@@ -225,6 +241,10 @@ public final class SLSConfigRepository {
                                         forwardingSecretFile,
                                         "forwarding.secret_file"
                                 )
+                        ),
+                        new SecurityConfig(
+                                allowInsecureOfflineAdministrators,
+                                claimCodeExpirySeconds
                         ),
                         new LobbyConfig(
                                 LobbyMode.parse(lobbyMode),

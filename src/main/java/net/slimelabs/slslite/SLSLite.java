@@ -33,6 +33,8 @@ import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.PaperProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.resource.ResourceBudget;
+import net.slimelabs.slslite.security.AdminClaimService;
+import net.slimelabs.slslite.security.AdministratorStore;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import net.slimelabs.slslite.velocity.LocalJoinService;
 import net.slimelabs.slslite.velocity.VelocityBackendRegistry;
@@ -64,6 +66,8 @@ public final class SLSLite {
     private LobbyProvider lobbyProvider;
     private IdleInstanceReaper idleReaper;
     private HostCapabilityReport hostCapabilities;
+    private AdministratorStore administrators;
+    private AdminClaimService adminClaims;
 
     @Inject
     public SLSLite(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -86,6 +90,16 @@ public final class SLSLite {
 
         try {
             configuration.initialize();
+            administrators = new AdministratorStore(dataDirectory);
+            administrators.initialize();
+            adminClaims = new AdminClaimService(
+                    administrators,
+                    proxy.getConfiguration().isOnlineMode(),
+                    configuration.get().security().allowInsecureOfflineAdministrators(),
+                    Duration.ofSeconds(
+                            configuration.get().security().claimCodeExpirySeconds()
+                    )
+            );
             softwareProfiles.initialize();
             blueprints.initialize();
             ConfigurationValidator.validate(
@@ -192,9 +206,12 @@ public final class SLSLite {
                         lobbyProvider,
                         configuration.get().managedOutput(),
                         hostCapabilities,
+                        administrators,
+                        adminClaims,
                         logger
                 )
         );
+        issueInitialAdministratorCode();
         lobbyProvider.start();
         idleReaper.start();
 
@@ -205,6 +222,28 @@ public final class SLSLite {
                 softwareProfiles.getAll().size(),
                 resourceBudget.totalMemoryMiB()
         );
+    }
+
+    private void issueInitialAdministratorCode() {
+        if (!administrators.isEmpty()) {
+            return;
+        }
+        try {
+            String code = adminClaims.issueCode();
+            logger.warn("No SLS-LITE administrator is configured");
+            logger.warn(
+                    "Join the proxy and run /sls admin claim {} within {} seconds",
+                    code,
+                    configuration.get().security().claimCodeExpirySeconds()
+            );
+        } catch (AdminClaimService.InsecureOfflineModeException exception) {
+            logger.warn("No SLS-LITE administrator is configured");
+            logger.warn(
+                    "Administrator claims are disabled because Velocity is in "
+                            + "offline mode. Enable online mode or explicitly set "
+                            + "security.allow_insecure_offline_administrators=true"
+            );
+        }
     }
 
     private void logHostCapabilities(HostCapabilityReport report) {
