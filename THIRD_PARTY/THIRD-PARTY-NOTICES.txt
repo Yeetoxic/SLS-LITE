@@ -1,0 +1,27 @@
+SLS-LITE Third-Party Notices
+============================
+
+This distribution includes the following third-party components.
+
+NanoLimbo 1.13.0
+----------------
+Source: https://github.com/Nan1t/NanoLimbo
+Pinned revision: d192d57d1d4a5fdc7b87643f453d82cb7b9b4242
+License: GNU General Public License version 3
+License file: META-INF/licenses/NanoLimbo-LICENSE.txt
+
+The unmodified NanoLimbo runtime is bundled as a nested JAR and launched as a
+separate child process to provide SLS-Limbo. Additional build and checksum
+details are available in THIRD_PARTY/NanoLimbo.md in the source distribution.
+
+SnakeYAML 2.6
+-------------
+Source: https://bitbucket.org/snakeyaml/snakeyaml/src/snakeyaml-2.6/
+License: Apache License 2.0
+License file: META-INF/licenses/SnakeYAML-LICENSE.txt
+
+SnakeYAML classes are relocated under net.slimelabs.slslite.libs.snakeyaml in
+the packaged SLS-LITE JAR.
+
+SLS-LITE itself is licensed under the GNU Affero General Public License
+version 3. Its full license is included at META-INF/LICENSE.

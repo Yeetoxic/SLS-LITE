@@ -594,7 +594,7 @@ the local implementation has equivalent behavior.
       public operator documentation.
 - [ ] Replace legacy SLS-LITE terminology, commands, configuration examples, and
       architecture descriptions that no longer match the implementation.
-- [ ] Preserve useful historical context in a clearly labeled archive instead of
+- [x] Preserve useful historical context in a clearly labeled archive instead of
       presenting old behavior as current guidance.
 - [ ] Create a concise public README covering the project goal, supported
       environments, current maturity, installation, quick start, and links to
@@ -626,6 +626,8 @@ the local implementation has equivalent behavior.
       runtime, and optional ViaVersion compatibility matrix for each release.
 - [x] Add initial third-party notices, source links, pinned revisions,
       modification summaries, and license obligations for bundled components.
+- [x] Package the SLS-LITE, NanoLimbo, and SnakeYAML licenses plus a consolidated
+      third-party notice in every shaded plugin JAR.
 - [ ] Mirror the exact corresponding NanoLimbo source in an SLS-LITE-controlled
       release location before distributing a public build with the bundled
       runtime.

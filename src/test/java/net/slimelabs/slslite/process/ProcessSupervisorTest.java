@@ -11,10 +11,12 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -180,6 +182,52 @@ class ProcessSupervisorTest {
                         }
                 )
         );
+    }
+
+    @Test
+    void releasesIdleOutputThreadsAfterProcessesExit() throws Exception {
+        supervisor = new ProcessSupervisor(2, Duration.ofMillis(100));
+        SupervisedProcess process = supervisor.start(
+                "test-output-thread-retirement",
+                spec("ready-stop", Duration.ofSeconds(5), Duration.ofSeconds(1)),
+                preparingLifecycle("test-output-thread-retirement"),
+                line -> {
+                }
+        );
+        process.readyFuture().get(5, TimeUnit.SECONDS);
+        assertTrue(supervisor.outputWorkerCount() > 0);
+
+        process.stop().get(5, TimeUnit.SECONDS);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (supervisor.outputWorkerCount() != 0 && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+
+        assertEquals(0, supervisor.outputWorkerCount());
+    }
+
+    @Test
+    void queuesReplacementReaderDuringOutputThreadHandoff() throws Exception {
+        supervisor = new ProcessSupervisor(1, Duration.ofSeconds(1));
+        CountDownLatch firstStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch replacementCompleted = new CountDownLatch(1);
+        supervisor.executeOutputReader(() -> {
+            firstStarted.countDown();
+            try {
+                releaseFirst.await();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        assertTrue(firstStarted.await(1, TimeUnit.SECONDS));
+
+        assertDoesNotThrow(() -> supervisor.executeOutputReader(
+                replacementCompleted::countDown
+        ));
+        releaseFirst.countDown();
+
+        assertTrue(replacementCompleted.await(1, TimeUnit.SECONDS));
     }
 
     private ProcessSpec spec(String mode, Duration startupTimeout, Duration stopTimeout) {

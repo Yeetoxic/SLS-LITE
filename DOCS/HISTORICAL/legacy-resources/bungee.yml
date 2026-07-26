@@ -1,0 +1,6 @@
+# HISTORICAL: legacy Bukkit/Bungee descriptor; not used by current SLS-LITE.
+name: SLS
+version: '${project.version}'
+main: net.slimelabs.SLS
+author: protoxon
+description: Server Management Plugin

@@ -90,7 +90,7 @@ public final class ConfigurationValidator {
                     "Managed lobby blueprint not found: "
                             + config.lobby().registry() + "/" + config.lobby().server()
             ));
-            int requiredMemory = limboMemory + lobbyBlueprint.memoryLimitMiB();
+            long requiredMemory = (long) limboMemory + lobbyBlueprint.memoryLimitMiB();
             if (requiredMemory > config.totalMemoryMiB()) {
                 throw new ConfigurationException(
                         "Managed lobby and SLS-Limbo require " + requiredMemory

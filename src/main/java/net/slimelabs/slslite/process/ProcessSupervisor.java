@@ -20,6 +20,8 @@ import java.util.function.Consumer;
 
 public final class ProcessSupervisor implements AutoCloseable {
 
+    private static final Duration DEFAULT_OUTPUT_THREAD_KEEP_ALIVE = Duration.ofSeconds(30);
+
     private final int maximumProcesses;
     private final ThreadPoolExecutor outputExecutor;
     private final ScheduledThreadPoolExecutor scheduler;
@@ -27,19 +29,28 @@ public final class ProcessSupervisor implements AutoCloseable {
     private boolean closed;
 
     public ProcessSupervisor(int maximumProcesses) {
+        this(maximumProcesses, DEFAULT_OUTPUT_THREAD_KEEP_ALIVE);
+    }
+
+    ProcessSupervisor(int maximumProcesses, Duration outputThreadKeepAlive) {
         if (maximumProcesses <= 0) {
             throw new IllegalArgumentException("maximumProcesses must be positive");
+        }
+        Objects.requireNonNull(outputThreadKeepAlive, "outputThreadKeepAlive");
+        if (outputThreadKeepAlive.isZero() || outputThreadKeepAlive.isNegative()) {
+            throw new IllegalArgumentException("outputThreadKeepAlive must be positive");
         }
         this.maximumProcesses = maximumProcesses;
         this.outputExecutor = new ThreadPoolExecutor(
                 maximumProcesses,
                 maximumProcesses,
-                0L,
+                outputThreadKeepAlive.toMillis(),
                 TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(maximumProcesses),
                 threadFactory("sls-lite-output-"),
                 new ThreadPoolExecutor.AbortPolicy()
         );
+        this.outputExecutor.allowCoreThreadTimeOut(true);
         this.scheduler = new ScheduledThreadPoolExecutor(
                 1,
                 threadFactory("sls-lite-deadline-")
@@ -100,6 +111,10 @@ public final class ProcessSupervisor implements AutoCloseable {
 
     public int maximumProcesses() {
         return maximumProcesses;
+    }
+
+    int outputWorkerCount() {
+        return outputExecutor.getPoolSize();
     }
 
     public void shutdown(Duration timeout) {

@@ -109,6 +109,27 @@ class ConfigurationValidatorTest {
     }
 
     @Test
+    void rejectsCombinedMemoryThatOverflowsAnInteger() throws Exception {
+        Repositories repositories = repositories(
+                "paper",
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE
+        );
+        SLSConfig config = withManagedLobby(
+                repositories.config(),
+                "game",
+                "test",
+                repositories.config().limbo()
+        );
+
+        assertThrows(ConfigurationException.class, () -> ConfigurationValidator.validate(
+                config,
+                repositories.blueprints(),
+                repositories.profiles()
+        ));
+    }
+
+    @Test
     void rejectsModernForwardingModeMismatch() throws Exception {
         Repositories repositories = repositories("paper", 1024, 2048);
         SLSConfig config = withForwarding(

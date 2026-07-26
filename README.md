@@ -161,6 +161,8 @@ limits, compatibility policy, and manual test are documented in
 [DOCS/SLS_Limbo.md](DOCS/SLS_Limbo.md). The bundled component's
 source, pinned revision, checksum, and GPL notice are recorded in
 [THIRD_PARTY/NanoLimbo.md](THIRD_PARTY/NanoLimbo.md).
+The packaged plugin also includes its AGPL license and the licenses and notices
+for bundled NanoLimbo and SnakeYAML components under `META-INF`.
 Native and translated client test results are tracked in
 [DOCS/Protocol_Compatibility.md](DOCS/Protocol_Compatibility.md).
 

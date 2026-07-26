@@ -68,6 +68,32 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.basedir}</directory>
+                <targetPath>META-INF</targetPath>
+                <includes>
+                    <include>LICENSE</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/THIRD_PARTY</directory>
+                <targetPath>META-INF/licenses</targetPath>
+                <includes>
+                    <include>*-LICENSE.txt</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/THIRD_PARTY</directory>
+                <targetPath>META-INF</targetPath>
+                <includes>
+                    <include>THIRD-PARTY-NOTICES.txt</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
