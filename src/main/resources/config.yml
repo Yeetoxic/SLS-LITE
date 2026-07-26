@@ -96,6 +96,20 @@ lobby:
   #   managed mode: blueprint ID inside the registry above.
   server: lobby
 
+  limbo:
+    # Boolean: true or false. Starts the bundled, minimal SLS-Limbo before
+    # checking the primary lobby. It provides a virtual placeholder while the
+    # network is being configured or a player's destination is not ready.
+    enabled: true
+
+    # Positive integer, at least 64. Heap reservation in MiB for SLS-Limbo's
+    # bundled NanoLimbo-derived runtime. Included in the managed memory budget.
+    memory_mib: 96
+
+    # Positive integer. Maximum seconds allowed for the SLS-Limbo runtime to
+    # report readiness before SLS-LITE terminates it and marks it unavailable.
+    startup_timeout_seconds: 30
+
   recovery:
     # Recovery settings apply only to managed mode.
 

@@ -20,6 +20,8 @@ implementation. The current development baseline provides:
 - Shell-free Paper command construction and managed process supervision.
 - Startup probes for child Java execution, writable instance storage, and
   loopback port binding.
+- A bundled, supervised SLS-Limbo virtual space for network setup, destination
+  startup, and safe placement between servers.
 - Bounded in-game and temporary-file process logs with optional proxy mirroring.
 - A shaded release JAR with isolated runtime dependencies.
 - JUnit coverage for the implemented foundation.
@@ -39,6 +41,7 @@ The intended deployment is:
 One hosting allocation
 |-- Velocity
 |-- SLS-LITE
+|-- Bundled SLS-Limbo
 |-- Optional managed Paper lobby
 `-- Paper servers launched on demand
 ```
@@ -123,16 +126,32 @@ lobby:
   mode: external
   registry: lobby
   server: lobby
+  limbo:
+    enabled: true
+    memory_mib: 96
+    startup_timeout_seconds: 30
 
 paths:
   instances: instances
 ```
 
 The memory value is the shared budget for managed backend processes and excludes
-Velocity itself. Managed paths must remain relative to the SLS-LITE data
+Velocity itself. SLS-Limbo reserves its configured heap from this
+same budget. Managed paths must remain relative to the SLS-LITE data
 directory. Managed instances reserve an available loopback port from this range
 and release it during cleanup. Matchmaking requests fail and clean themselves up
 after the configured timeout.
+
+SLS-Limbo is currently experimental. Its architecture, operational
+limits, compatibility policy, and manual test are documented in
+[DOCS/SLS_Limbo.md](DOCS/SLS_Limbo.md). The bundled component's
+source, pinned revision, checksum, and GPL notice are recorded in
+[THIRD_PARTY/NanoLimbo.md](THIRD_PARTY/NanoLimbo.md).
+
+Normal matchmaking does not pass through SLS-Limbo. Players remain on their
+current healthy backend while queued and transfer directly when the requested
+destination is ready. SLS-Limbo is reserved for cases where no safe normal
+backend is available.
 
 Managed process output always feeds the bounded `/sls logs` viewer. Proxy
 mirroring is disabled by default so Paper output does not flood the Velocity

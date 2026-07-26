@@ -1,0 +1,142 @@
+# SLS-Limbo
+
+## Status
+
+SLS-Limbo is SLS-LITE's default virtual lobby: a literal liminal space for a
+network that is not fully configured yet, a destination that is still starting,
+or a player moving between places. Players remain connected and can use
+Velocity-level `/sls` commands without requiring a Paper lobby to be ready.
+It is not yet production-ready; protocol compatibility and recovery testing
+remain release gates.
+
+SLS-Limbo complements the configured lobby rather than becoming a third primary
+lobby mode. `lobby.mode` remains either `external` or `managed`.
+
+## Routing Rule
+
+SLS-Limbo is used only when SLS-LITE cannot safely keep a player on their
+current backend or connect them to a usable primary lobby. It is not the normal
+matchmaking queue.
+
+When a player runs `/sls join` from a healthy server, they remain there and can
+move and play normally while SLS-LITE queues the request and starts the
+destination. Existing action-bar status updates continue on that server. The
+player transfers directly to the destination when it is ready.
+
+SLS-Limbo is appropriate when:
+
+- A player has no usable initial backend.
+- Their current backend stops or disconnects them and the primary lobby is not
+  ready.
+- SLS-LITE must preserve their proxy connection while a required safe
+  destination recovers.
+
+Automatic handoff from SLS-Limbo applies only to players who had to enter it for
+one of these reasons.
+
+## How It Works
+
+SLS-LITE includes an unmodified, pinned NanoLimbo runtime inside the SLS-LITE
+plugin JAR. On startup SLS-LITE:
+
+1. Verifies and extracts the runtime into
+   `plugins/sls-lite/sls-limbo/`.
+2. Reserves its configured heap from the same managed-memory budget used by
+   Paper instances.
+3. Allocates a loopback port from the configured SLS-LITE port range.
+4. Starts the runtime as a supervised child Java process.
+5. Registers the ready backend in Velocity as `sls-limbo`.
+6. Starts or selects the configured primary lobby.
+
+The runtime is a child process instead of an in-process Velocity library. This
+keeps its Netty, Adventure, logging, and configuration dependencies out of
+Velocity's plugin classloader. Operators still install only the SLS-LITE JAR.
+
+For a managed primary lobby, players can enter SLS-Limbo while Paper starts or
+recovers. For an external primary lobby, Velocity attempts the external backend
+first and redirects a failed connection to SLS-Limbo. It also provides the
+baseline in-game environment before an operator has completed the primary lobby
+setup. Once the primary is ready, new initial connections prefer it.
+
+## Configuration
+
+```yaml
+lobby:
+  mode: external
+  registry: lobby
+  server: lobby
+
+  limbo:
+    enabled: true
+    memory_mib: 96
+    startup_timeout_seconds: 30
+```
+
+- `enabled`: starts the bundled fallback when `true`.
+- `memory_mib`: SLS-Limbo runtime heap reservation. Minimum: 64 MiB.
+- `startup_timeout_seconds`: maximum time allowed for its readiness message.
+
+The SLS-Limbo reservation is included in `resources.total_memory_mib`. It also
+uses one port from `network.ports`. Its actual host usage includes JVM native
+memory in addition to the configured heap, just like every Java child process.
+
+## Player Experience
+
+The fallback provides a minimal static Minecraft environment, a status title and
+boss bar, and access to commands handled by Velocity. It does not run Bukkit,
+Paper, worlds, plugins, mobs, inventories, redstone, or normal server mechanics.
+Commands that are implemented by SLS-LITE at the proxy remain available,
+including the built-in administrator claim and management commands.
+
+## Forwarding and Security
+
+SLS-Limbo binds only to `127.0.0.1`. With `forwarding.mode: modern`, SLS-LITE
+copies the configured Velocity forwarding secret into the isolated SLS-Limbo
+runtime directory and references that file from generated settings. The secret
+is not embedded in generated YAML, command arguments, or normal logs.
+
+Do not expose a managed port publicly. In offline-mode test environments,
+built-in administrator claims remain disabled unless
+`security.allow_insecure_offline_administrators` is explicitly enabled.
+
+Development builds that used `lobby.emergency` are still accepted as a
+deprecated alias. New configurations and documentation use `lobby.limbo`.
+
+## Compatibility
+
+The bundled runtime is NanoLimbo 1.13.0 at commit
+`d192d57d1d4a5fdc7b87643f453d82cb7b9b4242`. Its binary is checked before each
+launch. See [the third-party notice](../THIRD_PARTY/NanoLimbo.md) for source,
+license, and checksum details.
+
+ViaVersion is not currently integrated into this path. A proxy-installed
+ViaVersion may help only after SLS-LITE has an explicit, tested integration;
+it must not be treated as automatic support for an unknown Minecraft release.
+
+## Current Limitations
+
+- The SLS-Limbo process is started once per proxy lifecycle and is not yet
+  restarted after its own crash.
+- External-primary health is detected reactively when Velocity fails a player
+  connection, not by active background probing.
+- Players waiting in SLS-Limbo are not automatically moved when the
+  primary becomes ready.
+- Native and ViaVersion-translated client compatibility is not yet covered by
+  the automated matrix.
+- If both the primary lobby and SLS-Limbo fail, players are disconnected with a
+  clear lobby-unavailable message. Proxy startup currently continues so the
+  operator can diagnose the failure from its console.
+
+## Manual Pterodactyl Test
+
+1. Build and deploy the current SLS-LITE JAR, then restart Velocity.
+2. Confirm the console reports `SLS-Limbo is ready`.
+3. Connect normally and verify the configured primary lobby is preferred.
+4. Stop the external lobby, or stop the managed lobby process during recovery.
+5. Reconnect. Velocity should redirect you to `sls-limbo`.
+6. Run `/sls info`, `/sls list`, and an authorized administrative command.
+7. Restart the primary lobby and reconnect to verify it is preferred again.
+8. Shut down Velocity and confirm the SLS-Limbo child exits cleanly.
+
+For the local fixture, see
+[Pterodactyl_Local_Testing.md](Pterodactyl_Local_Testing.md).

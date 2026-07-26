@@ -71,11 +71,15 @@ client to `127.0.0.1:25565` and verify:
 4. `/sls stop <instance-id>` returns you to the external lobby.
 5. Stopping or kicking from a managed backend redirects you to the external
    lobby without a reconnect loop.
-6. Stopping the external lobby disconnects new arrivals with the temporary
-   lobby-unavailable message rather than selecting an arbitrary backend.
+6. Stopping the external lobby redirects new arrivals to SLS-Limbo rather than
+   selecting an arbitrary game backend.
+7. `/sls info` and authorized proxy-level commands remain available there.
 
 After the test, start the external lobby again from its Panel console before
 continuing, or switch back to managed mode with the command above.
+
+The fallback's architecture, configuration, limitations, and full manual test
+are documented in [SLS_Limbo.md](SLS_Limbo.md).
 
 ## Manual Managed-Lobby Test
 

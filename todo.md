@@ -18,8 +18,8 @@ SLS-LITE must also continue to support conventional networks with separately
 hosted backend and lobby servers.
 
 Core SLS-LITE operation must require only the SLS-LITE plugin JAR. Optional
-integrations may improve interoperability, but lifecycle management, emergency
-lobby access, and SLS-LITE administration must not require another plugin.
+integrations may improve interoperability, but lifecycle management, SLS-Limbo
+access, and SLS-LITE administration must not require another plugin.
 
 ## Hosting Feasibility
 
@@ -147,7 +147,7 @@ lobby access, and SLS-LITE administration must not require another plugin.
   - [x] When no administrator exists, print a random, single-use, short-lived claim
     code to the proxy console.
   - [x] Let an online player claim initial administration with
-    `/sls admin claim <code>` from the emergency lobby or another backend.
+    `/sls admin claim <code>` from SLS-Limbo or another backend.
   - [x] Store administrator identity by UUID internally, without requiring operators
     to find or enter UUIDs themselves.
   - [x] Add `/sls admin add <online-player>`, `remove`, and `list` with player-name
@@ -169,16 +169,16 @@ lobby access, and SLS-LITE administration must not require another plugin.
 - [x] Support joining an existing instance or creating one from a blueprint.
 - [x] Add automatic idle shutdown with a configurable delay.
 - [ ] Add optional ViaVersion integration for backend protocol detection.
-  - Let the embedded emergency lobby advertise one explicitly tested baseline
+  - Let SLS-Limbo advertise one explicitly tested baseline
     protocol and use proxy-installed ViaVersion, when available, to translate
     newer supported clients to that baseline.
   - Detect ViaVersion through its public API without making it a required
-    dependency; preserve native emergency-lobby operation when it is absent.
+    dependency; preserve native SLS-Limbo operation when it is absent.
   - Treat ViaBackwards and ViaRewind as optional operator choices for older
     clients, not SLS-LITE requirements.
   - Never report a newly released client as compatible until the installed
     Velocity and ViaVersion versions both understand it and the complete
-    emergency-lobby transfer path has passed testing.
+    SLS-Limbo transfer path has passed testing.
 - [x] Avoid requiring PacketEvents unless a retained feature needs packet-level
       control.
 
@@ -484,36 +484,39 @@ the local implementation has equivalent behavior.
   - [x] Stop it gracefully during proxy shutdown.
   - [ ] Allow operators to disable automatic startup and manage it with commands.
 
-- [ ] Add an embedded emergency lobby that starts before the configured external
-      or managed primary lobby and is enabled by default.
-  - Keep `external` and `managed` as primary lobby modes; do not expose the
-    emergency lobby as another mutually exclusive primary mode.
-  - Route players to the emergency lobby whenever the primary is starting,
+- [ ] Add SLS-Limbo, a default embedded virtual lobby that starts before the
+      configured external or managed primary lobby.
+  - [x] Keep normal matchmaking queues on the player's current healthy backend;
+    never route through SLS-Limbo merely because a requested destination is
+    starting.
+  - [x] Keep `external` and `managed` as primary lobby modes; do not expose the
+    SLS-Limbo as another mutually exclusive primary mode.
+  - [x] Route players to SLS-Limbo whenever the primary is starting,
     recovering, offline, or otherwise unreachable.
-  - Keep players connected while managed-lobby recovery runs, and optionally
-    transfer waiting players when the primary becomes ready.
-  - Provide a minimal safe experience: a fixed spawn, movement, status message,
+  - [ ] Keep players connected while managed-lobby recovery runs and transfer
+    only players already forced into SLS-Limbo when the primary becomes ready.
+  - [x] Provide a minimal safe experience: a fixed spawn, movement, status message,
     and access to proxy-level `/sls` commands.
-  - Package the required runtime inside the SLS-LITE JAR so operators do not
+  - [x] Package the required runtime inside the SLS-LITE JAR so operators do not
     install LimboAPI, PacketEvents, or another companion plugin.
-  - Evaluate a maintained embeddable virtual-server engine and its transitive
+  - [x] Evaluate a maintained embeddable virtual-server engine and its transitive
     dependencies; do not implement the versioned Minecraft protocol from scratch.
-  - Verify compatibility with the selected Velocity version and supported client
+  - [ ] Verify compatibility with the selected Velocity version and supported client
     versions.
-  - Review dependency licensing before integration.
-  - Clearly document that Bukkit/Paper plugins and full server mechanics are not
-    available in the emergency lobby.
-  - Keep this feature isolated behind an interface so library or protocol changes
+  - [x] Review dependency licensing before integration.
+  - [x] Clearly document that Bukkit/Paper plugins and full server mechanics are not
+    available in SLS-Limbo.
+  - [x] Keep this feature isolated behind an interface so library or protocol changes
     do not affect the process supervisor.
-  - Refuse to start the proxy, with an actionable error, if both the primary and
-    embedded emergency lobby are unavailable; never silently route to a game
+  - [ ] Refuse to start the proxy, with an actionable error, if both the primary and
+    SLS-Limbo are unavailable; never silently route to a game
     backend.
 
 ### Lobby Routing
 
 - [x] Add a lobby provider interface for external and managed primary modes.
-- [ ] Add a fallback lobby coordinator that selects the healthy primary when
-      available and the embedded emergency lobby otherwise.
+- [x] Add a fallback lobby coordinator that selects the healthy primary when
+      available and SLS-Limbo otherwise.
 - [x] Route first joins to the configured lobby provider.
 - [x] Route players back to the lobby when a managed game server stops or kicks
       them.
@@ -558,7 +561,7 @@ the local implementation has equivalent behavior.
   - Installation, first startup, updates, backups, and uninstallation.
   - The complete commented `config.yml` reference and validation rules.
   - Software profiles, blueprints, registries, instance IDs, and lifecycle.
-  - External and managed primary lobbies plus embedded emergency-lobby fallback.
+  - External and managed primary lobbies plus SLS-Limbo.
   - First-administrator claim codes, built-in SLS-LITE permissions, and optional
     external permission providers.
   - Commands, argument forms, selectors, output, permissions, and examples.
@@ -578,8 +581,11 @@ the local implementation has equivalent behavior.
       from implemented behavior.
 - [ ] Add a supported Velocity, Java, Paper, Minecraft protocol, NanoLimbo-derived
       runtime, and optional ViaVersion compatibility matrix for each release.
-- [ ] Add third-party notices, source links, pinned revisions, modification
-      summaries, and license obligations for bundled components.
+- [x] Add initial third-party notices, source links, pinned revisions,
+      modification summaries, and license obligations for bundled components.
+- [ ] Mirror the exact corresponding NanoLimbo source in an SLS-LITE-controlled
+      release location before distributing a public build with the bundled
+      runtime.
 - [ ] Review all public documentation before each release and prevent unfinished
       features from being documented as available.
 - [ ] Prepare a versioned public documentation site that can share common SLS
@@ -605,7 +611,7 @@ the local implementation has equivalent behavior.
       behavior, duplicate requests, and orphan cleanup.
 - [x] Test durable instance metadata and unclean-shutdown reconciliation.
 - [x] Test external and managed lobby routing.
-- [ ] Add embedded emergency-lobby native and ViaVersion-translated protocol
+- [ ] Add SLS-Limbo native and ViaVersion-translated protocol
       compatibility tests.
 - [x] Add an integration fixture that launches Velocity and one lightweight
       backend in a constrained single-host environment.

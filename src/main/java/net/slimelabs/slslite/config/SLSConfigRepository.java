@@ -26,6 +26,9 @@ public final class SLSConfigRepository {
     private static final String DEFAULT_FORWARDING_SECRET_FILE = "forwarding.secret";
     private static final boolean DEFAULT_ALLOW_INSECURE_OFFLINE_ADMINISTRATORS = false;
     private static final int DEFAULT_CLAIM_CODE_EXPIRY_SECONDS = 600;
+    private static final boolean DEFAULT_LIMBO_ENABLED = true;
+    private static final int DEFAULT_LIMBO_MEMORY_MIB = 96;
+    private static final int DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS = 30;
     private static final String DEFAULT_LOBBY_MODE = "external";
     private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
     private static final String DEFAULT_LOBBY_SERVER = "lobby";
@@ -92,6 +95,16 @@ public final class SLSConfigRepository {
             Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
             Map<String, Object> lobbyRecovery =
                     YamlValues.optionalMap(lobby, "recovery", configPath);
+            if (lobby.containsKey("limbo") && lobby.containsKey("emergency")) {
+                throw YamlValues.error(
+                        configPath,
+                        "'lobby.limbo' and deprecated 'lobby.emergency' "
+                                + "cannot both be configured"
+                );
+            }
+            Map<String, Object> limbo = lobby.containsKey("limbo")
+                    ? YamlValues.optionalMap(lobby, "limbo", configPath)
+                    : YamlValues.optionalMap(lobby, "emergency", configPath);
             Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);
 
             int totalMemory = YamlValues.optionalPositiveInt(
@@ -214,6 +227,24 @@ public final class SLSConfigRepository {
                     DEFAULT_LOBBY_STABLE_AFTER_SECONDS,
                     configPath
             );
+            boolean limboEnabled = YamlValues.optionalBoolean(
+                    limbo,
+                    "enabled",
+                    DEFAULT_LIMBO_ENABLED,
+                    configPath
+            );
+            int limboMemory = YamlValues.optionalPositiveInt(
+                    limbo,
+                    "memory_mib",
+                    DEFAULT_LIMBO_MEMORY_MIB,
+                    configPath
+            );
+            int limboStartupTimeout = YamlValues.optionalPositiveInt(
+                    limbo,
+                    "startup_timeout_seconds",
+                    DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS,
+                    configPath
+            );
             String instances = YamlValues.optionalString(
                     paths,
                     "instances",
@@ -245,6 +276,11 @@ public final class SLSConfigRepository {
                         new SecurityConfig(
                                 allowInsecureOfflineAdministrators,
                                 claimCodeExpirySeconds
+                        ),
+                        new SLSLimboConfig(
+                                limboEnabled,
+                                limboMemory,
+                                limboStartupTimeout
                         ),
                         new LobbyConfig(
                                 LobbyMode.parse(lobbyMode),

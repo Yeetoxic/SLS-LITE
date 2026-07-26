@@ -38,6 +38,9 @@ class SLSConfigRepositoryTest {
         );
         assertEquals(false, config.security().allowInsecureOfflineAdministrators());
         assertEquals(600, config.security().claimCodeExpirySeconds());
+        assertEquals(true, config.limbo().enabled());
+        assertEquals(96, config.limbo().memoryMiB());
+        assertEquals(30, config.limbo().startupTimeoutSeconds());
         assertEquals(LobbyMode.EXTERNAL, config.lobby().mode());
         assertEquals("lobby", config.lobby().registry());
         assertEquals("lobby", config.lobby().server());
@@ -138,6 +141,69 @@ class SLSConfigRepositoryTest {
 
         assertEquals(true, repository.get().security().allowInsecureOfflineAdministrators());
         assertEquals(90, repository.get().security().claimCodeExpirySeconds());
+    }
+
+    @Test
+    void loadsSLSLimboPolicy() throws Exception {
+        writeConfig("""
+                lobby:
+                  limbo:
+                    enabled: false
+                    memory_mib: 128
+                    startup_timeout_seconds: 45
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        repository.reload();
+
+        SLSLimboConfig limbo = repository.get().limbo();
+        assertEquals(false, limbo.enabled());
+        assertEquals(128, limbo.memoryMiB());
+        assertEquals(45, limbo.startupTimeoutSeconds());
+    }
+
+    @Test
+    void loadsDeprecatedEmergencyAlias() throws Exception {
+        writeConfig("""
+                lobby:
+                  emergency:
+                    enabled: false
+                    memory_mib: 128
+                    startup_timeout_seconds: 45
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        repository.reload();
+
+        assertEquals(false, repository.get().limbo().enabled());
+        assertEquals(128, repository.get().limbo().memoryMiB());
+        assertEquals(45, repository.get().limbo().startupTimeoutSeconds());
+    }
+
+    @Test
+    void rejectsConflictingLimboAndDeprecatedEmergencyKeys() throws Exception {
+        writeConfig("""
+                lobby:
+                  limbo:
+                    enabled: true
+                  emergency:
+                    enabled: false
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        assertThrows(ConfigurationException.class, repository::reload);
+    }
+
+    @Test
+    void rejectsSLSLimboMemoryBelowMinimum() throws Exception {
+        writeConfig("""
+                lobby:
+                  limbo:
+                    memory_mib: 63
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        assertThrows(ConfigurationException.class, repository::reload);
     }
 
     @Test

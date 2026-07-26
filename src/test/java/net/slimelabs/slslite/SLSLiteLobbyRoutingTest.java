@@ -86,6 +86,26 @@ class SLSLiteLobbyRoutingTest {
     }
 
     @Test
+    void redirectsPrimaryLobbyKickToSLSLimbo() throws Exception {
+        RegisteredServer primary = server("lobby");
+        RegisteredServer limbo = server("sls-limbo");
+        SLSLite plugin = plugin(providerWithFallback(
+                primary,
+                limbo,
+                LobbyStatus.EXTERNAL
+        ));
+        KickedFromServerEvent event = kickEvent(primary);
+
+        plugin.onKickedFromServer(event);
+
+        KickedFromServerEvent.RedirectPlayer redirect = assertInstanceOf(
+                KickedFromServerEvent.RedirectPlayer.class,
+                event.getResult()
+        );
+        assertSame(limbo, redirect.getServer());
+    }
+
+    @Test
     void disconnectsInitialJoinWhileManagedLobbyIsRecovering() throws Exception {
         AtomicReference<Component> disconnectReason = new AtomicReference<>();
         SLSLite plugin = plugin(
@@ -161,6 +181,55 @@ class SLSLiteLobbyRoutingTest {
             @Override
             public boolean isLobby(String serverName) {
                 return lobbyName.equals(serverName);
+            }
+
+            @Override
+            public CompletableFuture<Void> evacuate(String serverName) {
+                return CompletableFuture.completedFuture(null);
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+    }
+
+    private static LobbyProvider providerWithFallback(
+            RegisteredServer primary,
+            RegisteredServer limbo,
+            LobbyStatus status
+    ) {
+        return new LobbyProvider() {
+            @Override
+            public void start() {
+            }
+
+            @Override
+            public Optional<RegisteredServer> server() {
+                return Optional.of(primary);
+            }
+
+            @Override
+            public CompletableFuture<RegisteredServer> readyFuture() {
+                return CompletableFuture.completedFuture(primary);
+            }
+
+            @Override
+            public LobbyStatus status() {
+                return status;
+            }
+
+            @Override
+            public boolean isLobby(String serverName) {
+                return "lobby".equals(serverName)
+                        || "sls-limbo".equals(serverName);
+            }
+
+            @Override
+            public Optional<RegisteredServer> fallbackServer(String failedLobbyName) {
+                return "lobby".equals(failedLobbyName)
+                        ? Optional.of(limbo)
+                        : Optional.empty();
             }
 
             @Override

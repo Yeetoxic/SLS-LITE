@@ -11,6 +11,7 @@ public record SLSConfig(
         ManagedOutputConfig managedOutput,
         ForwardingConfig forwarding,
         SecurityConfig security,
+        SLSLimboConfig limbo,
         LobbyConfig lobby,
         Path instancesDirectory
 ) {
@@ -41,6 +42,9 @@ public record SLSConfig(
         }
         if (security == null) {
             throw new IllegalArgumentException("security configuration is required");
+        }
+        if (limbo == null) {
+            throw new IllegalArgumentException("SLS-Limbo configuration is required");
         }
         if (lobby == null) {
             throw new IllegalArgumentException("lobby configuration is required");

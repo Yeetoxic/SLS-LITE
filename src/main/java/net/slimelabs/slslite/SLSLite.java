@@ -28,6 +28,8 @@ import net.slimelabs.slslite.instance.InstanceReconciliationReport;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.LobbyStatus;
 import net.slimelabs.slslite.lobby.LocalLobbyProvider;
+import net.slimelabs.slslite.lobby.SLSLimboProvider;
+import net.slimelabs.slslite.lobby.FallbackLobbyProvider;
 import net.slimelabs.slslite.log.ConsoleBanner;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.PaperProcessSpecFactory;
@@ -167,12 +169,28 @@ public final class SLSLite {
                     instanceManager,
                     Duration.ofSeconds(configuration.get().queueTimeoutSeconds())
             );
-            lobbyProvider = new LocalLobbyProvider(
+            LobbyProvider primaryLobby = new LocalLobbyProvider(
                     proxy,
                     blueprints,
                     instanceManager,
                     configuration.get().lobby(),
                     logger
+            );
+            LobbyProvider slsLimbo = new SLSLimboProvider(
+                    proxy,
+                    configuration.get().limbo(),
+                    configuration.get().forwarding(),
+                    dataDirectory,
+                    resourceBudget,
+                    portAllocator,
+                    processSupervisor,
+                    new VelocityBackendRegistry(proxy),
+                    logger
+            );
+            lobbyProvider = new FallbackLobbyProvider(
+                    proxy,
+                    primaryLobby,
+                    slsLimbo
             );
             idleReaper = new IdleInstanceReaper(
                     proxy,
@@ -296,6 +314,16 @@ public final class SLSLite {
             return;
         }
         if (lobbyProvider.isLobby(event.getServer().getServerInfo().getName())) {
+            var fallback = lobbyProvider.fallbackServer(
+                    event.getServer().getServerInfo().getName()
+            );
+            if (fallback.isPresent()) {
+                event.setResult(KickedFromServerEvent.RedirectPlayer.create(
+                        fallback.orElseThrow(),
+                        Component.text("Moving you to SLS-Limbo.")
+                ));
+                return;
+            }
             event.setResult(KickedFromServerEvent.DisconnectPlayer.create(
                     lobbyUnavailableMessage()
             ));

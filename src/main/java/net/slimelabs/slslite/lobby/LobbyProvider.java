@@ -17,6 +17,10 @@ public interface LobbyProvider extends AutoCloseable {
 
     boolean isLobby(String serverName);
 
+    default Optional<RegisteredServer> fallbackServer(String failedLobbyName) {
+        return Optional.empty();
+    }
+
     CompletableFuture<Void> evacuate(String serverName);
 
     @Override
