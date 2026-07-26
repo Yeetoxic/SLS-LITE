@@ -2,7 +2,7 @@ package net.slimelabs.slslite.host;
 
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.network.PortAllocationException;
-import net.slimelabs.slslite.process.PaperProcessSpecFactory;
+import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSpecificationException;
 import net.slimelabs.slslite.software.SoftwareProfile;
 
@@ -24,7 +24,7 @@ public final class HostCapabilityChecker {
             Path instancesDirectory,
             LoopbackPortAllocator portAllocator,
             Collection<SoftwareProfile> profiles,
-            PaperProcessSpecFactory processSpecFactory,
+            JavaJarProcessSpecFactory processSpecFactory,
             int managedMemoryMiB
     ) {
         List<HostCapability> results = new ArrayList<>();
@@ -72,13 +72,15 @@ public final class HostCapabilityChecker {
 
     private static List<HostCapability> checkJavaProcesses(
             Collection<SoftwareProfile> profiles,
-            PaperProcessSpecFactory processSpecFactory
+            JavaJarProcessSpecFactory processSpecFactory
     ) {
         Set<String> executables = new LinkedHashSet<>();
         List<HostCapability> results = new ArrayList<>();
         for (SoftwareProfile profile : profiles) {
             try {
-                executables.add(processSpecFactory.resolveJavaExecutable(profile));
+                executables.addAll(
+                        processSpecFactory.configuredJavaExecutables(profile)
+                );
             } catch (ProcessSpecificationException exception) {
                 results.add(failure(
                         "Java runtime " + profile.id(),

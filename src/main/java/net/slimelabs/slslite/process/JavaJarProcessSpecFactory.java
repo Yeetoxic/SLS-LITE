@@ -2,6 +2,7 @@ package net.slimelabs.slslite.process;
 
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.software.SoftwareProfile;
+import net.slimelabs.slslite.software.MinecraftJavaVersion;
 
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -11,21 +12,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-public final class PaperProcessSpecFactory {
+public final class JavaJarProcessSpecFactory {
 
     private static final Pattern VALID_VERSION = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
     private static final Pattern UNRESOLVED_PLACEHOLDER = Pattern.compile("\\{[^}]+}");
 
     private final Path dataDirectory;
 
-    public PaperProcessSpecFactory(Path dataDirectory) {
+    public JavaJarProcessSpecFactory(Path dataDirectory) {
         this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
     }
 
     public Path resolveBaseDirectory(SoftwareProfile profile, String version)
             throws ProcessSpecificationException {
         validateVersion(version);
-        String expanded = profile.baseDirectory().replace("{version}", version);
+        String expanded = profile.baseDirectory()
+                .replace("{version}", version)
+                .replace(
+                        "{channel}",
+                        profile.channel().name().toLowerCase(java.util.Locale.ROOT)
+                )
+                .replace(
+                        "{source}",
+                        profile.source().name().toLowerCase(java.util.Locale.ROOT)
+                );
+        if (UNRESOLVED_PLACEHOLDER.matcher(expanded).find()) {
+            throw new ProcessSpecificationException(
+                    "Unsupported software.base_directory placeholder: "
+                            + profile.baseDirectory()
+            );
+        }
         return resolveManagedPath(expanded, "software.base_directory");
     }
 
@@ -47,7 +63,10 @@ public final class PaperProcessSpecFactory {
                 expand(profile.serverJar(), placeholders(blueprint, instanceId, port)),
                 "software.server_jar"
         );
-        String javaExecutable = resolveJavaExecutable(profile);
+        String javaExecutable = resolveJavaExecutable(
+                profile,
+                blueprint.version()
+        );
         Map<String, String> placeholders = placeholders(blueprint, instanceId, port);
 
         List<String> command = new ArrayList<>();
@@ -73,7 +92,42 @@ public final class PaperProcessSpecFactory {
 
     public String resolveJavaExecutable(SoftwareProfile profile)
             throws ProcessSpecificationException {
+        return resolveJavaExecutable(profile, null);
+    }
+
+    public String resolveJavaExecutable(
+            SoftwareProfile profile,
+            String minecraftVersion
+    ) throws ProcessSpecificationException {
         String configured = profile.javaExecutable();
+        if (minecraftVersion != null && !profile.javaExecutables().isEmpty()) {
+            int required = MinecraftJavaVersion.requiredMajor(
+                    profile.configurator(),
+                    minecraftVersion
+            );
+            configured = profile.javaExecutables().getOrDefault(
+                    required,
+                    configured
+            );
+        }
+        return resolveJavaExecutable(configured);
+    }
+
+    public List<String> configuredJavaExecutables(SoftwareProfile profile)
+            throws ProcessSpecificationException {
+        List<String> configured = new ArrayList<>();
+        configured.add(resolveJavaExecutable(profile.javaExecutable()));
+        for (String executable : profile.javaExecutables().values()) {
+            String resolved = resolveJavaExecutable(executable);
+            if (!configured.contains(resolved)) {
+                configured.add(resolved);
+            }
+        }
+        return List.copyOf(configured);
+    }
+
+    private String resolveJavaExecutable(String configured)
+            throws ProcessSpecificationException {
         if (!configured.contains("/") && !configured.contains("\\")) {
             return configured;
         }

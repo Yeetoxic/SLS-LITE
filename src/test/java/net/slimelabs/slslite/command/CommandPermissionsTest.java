@@ -34,6 +34,14 @@ class CommandPermissionsTest {
                 sourceWith("sls.command.join.others"),
                 "stop"
         ));
+        assertFalse(CommandPermissions.canAdminister(
+                sourceWith("sls.command.stop"),
+                "stop.force"
+        ));
+        assertTrue(CommandPermissions.canAdminister(
+                sourceWith("sls.command.stop.force"),
+                "stop.force"
+        ));
     }
 
     private static CommandSource sourceWith(String... permissions) {

@@ -1,0 +1,26 @@
+software:
+  id: paper-auto
+  runtime: java-jar
+  configurator: paper
+  source: paper
+  channel: beta
+  # Test fixture only. The operator must review the Minecraft EULA first.
+  accept_eula: true
+  base_directory: software/paper-auto/{version}
+  server_jar: paper.jar
+
+launch:
+  java: java
+  jvm_arguments:
+    - "-Xms{memory_mib}M"
+    - "-Xmx{memory_mib}M"
+  server_arguments:
+    - "--nogui"
+
+readiness:
+  pattern: 'Done \([^)]+\)! For help'
+  timeout_seconds: 180
+
+shutdown:
+  command: stop
+  timeout_seconds: 30

@@ -5,9 +5,10 @@ import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.config.ForwardingConfig;
+import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.network.PortAllocationException;
-import net.slimelabs.slslite.process.PaperProcessSpecFactory;
+import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSpec;
 import net.slimelabs.slslite.process.ProcessSpecificationException;
 import net.slimelabs.slslite.process.ProcessStartException;
@@ -15,6 +16,7 @@ import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.process.SupervisedProcess;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.software.SoftwareProfile;
+import net.slimelabs.slslite.software.SoftwareConfigurator;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import net.slimelabs.slslite.velocity.BackendRegistry;
 import org.slf4j.Logger;
@@ -51,7 +53,8 @@ public final class InstanceManager implements ServerController {
     private final LoopbackPortAllocator portAllocator;
     private final InstanceDirectoryPreparer directoryPreparer;
     private final InstanceMetadataStore metadataStore;
-    private final PaperProcessSpecFactory processSpecFactory;
+    private final JavaJarProcessSpecFactory processSpecFactory;
+    private final SoftwareInstallationService installationService;
     private final ProcessSupervisor processSupervisor;
     private final BackendRegistry backendRegistry;
     private final Logger logger;
@@ -70,9 +73,39 @@ public final class InstanceManager implements ServerController {
             ForwardingConfig forwardingConfig,
             LoopbackPortAllocator portAllocator,
             InstanceDirectoryPreparer directoryPreparer,
-            PaperProcessSpecFactory processSpecFactory,
+            JavaJarProcessSpecFactory processSpecFactory,
             ProcessSupervisor processSupervisor,
             BackendRegistry backendRegistry,
+            Logger logger
+    ) {
+        this(
+                blueprints,
+                softwareProfiles,
+                resourceBudget,
+                outputConfig,
+                forwardingConfig,
+                portAllocator,
+                directoryPreparer,
+                processSpecFactory,
+                processSupervisor,
+                backendRegistry,
+                null,
+                logger
+        );
+    }
+
+    public InstanceManager(
+            BlueprintRepository blueprints,
+            SoftwareProfileRepository softwareProfiles,
+            ResourceBudget resourceBudget,
+            ManagedOutputConfig outputConfig,
+            ForwardingConfig forwardingConfig,
+            LoopbackPortAllocator portAllocator,
+            InstanceDirectoryPreparer directoryPreparer,
+            JavaJarProcessSpecFactory processSpecFactory,
+            ProcessSupervisor processSupervisor,
+            BackendRegistry backendRegistry,
+            SoftwareInstallationService installationService,
             Logger logger
     ) {
         this.blueprints = blueprints;
@@ -84,6 +117,7 @@ public final class InstanceManager implements ServerController {
         this.directoryPreparer = directoryPreparer;
         this.metadataStore = new InstanceMetadataStore(directoryPreparer.root());
         this.processSpecFactory = processSpecFactory;
+        this.installationService = installationService;
         this.processSupervisor = processSupervisor;
         this.backendRegistry = backendRegistry;
         this.logger = logger;
@@ -350,10 +384,7 @@ public final class InstanceManager implements ServerController {
         Blueprint blueprint = definition.blueprint();
         SoftwareProfile profile = definition.softwareProfile();
         try {
-            Path baseDirectory = processSpecFactory.resolveBaseDirectory(
-                    profile,
-                    blueprint.version()
-            );
+            Path baseDirectory = resolveBaseDirectory(profile, blueprint.version());
             InstanceMetadata stopped = metadata.withoutProcess(InstanceState.STOPPED);
             directoryPreparer.replace(
                     instanceId,
@@ -398,7 +429,7 @@ public final class InstanceManager implements ServerController {
                     );
                 }
             } else {
-                Path baseDirectory = processSpecFactory.resolveBaseDirectory(
+                Path baseDirectory = resolveBaseDirectory(
                         profile,
                         instance.blueprint().version()
                 );
@@ -414,7 +445,9 @@ public final class InstanceManager implements ServerController {
                     instance.port(),
                     instance.blueprint().maxPlayers()
             );
-            PaperForwardingEditor.apply(prepared, forwardingConfig);
+            if (profile.configurator() == SoftwareConfigurator.PAPER) {
+                PaperForwardingEditor.apply(prepared, forwardingConfig);
+            }
             ProcessSpec spec = processSpecFactory.create(
                     profile,
                     instance.blueprint(),
@@ -465,6 +498,28 @@ public final class InstanceManager implements ServerController {
             });
         } catch (Exception exception) {
             failPreparation(instance, exception);
+        }
+    }
+
+    private Path resolveBaseDirectory(
+            SoftwareProfile profile,
+            String version
+    ) throws ProcessSpecificationException {
+        if (installationService == null) {
+            return processSpecFactory.resolveBaseDirectory(profile, version);
+        }
+        try {
+            return installationService.ensureInstalled(profile, version).join();
+        } catch (java.util.concurrent.CompletionException exception) {
+            Throwable cause = exception.getCause() == null
+                    ? exception
+                    : exception.getCause();
+            throw new ProcessSpecificationException(
+                    cause.getMessage() == null
+                            ? "Software installation failed"
+                            : cause.getMessage(),
+                    cause
+            );
         }
     }
 

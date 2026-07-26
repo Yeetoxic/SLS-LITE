@@ -29,6 +29,9 @@ import net.slimelabs.slslite.instance.IdleInstanceReaper;
 import net.slimelabs.slslite.instance.InstanceManager;
 import net.slimelabs.slslite.instance.InstanceReconciler;
 import net.slimelabs.slslite.instance.InstanceReconciliationReport;
+import net.slimelabs.slslite.install.PaperInstallationProvider;
+import net.slimelabs.slslite.install.SoftwareInstallationService;
+import net.slimelabs.slslite.install.VanillaInstallationProvider;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.LobbyStatus;
 import net.slimelabs.slslite.lobby.LocalLobbyProvider;
@@ -37,7 +40,7 @@ import net.slimelabs.slslite.lobby.SLSLimboHandoffService;
 import net.slimelabs.slslite.lobby.FallbackLobbyProvider;
 import net.slimelabs.slslite.log.ConsoleBanner;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
-import net.slimelabs.slslite.process.PaperProcessSpecFactory;
+import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.security.AdminClaimService;
@@ -51,6 +54,7 @@ import org.slf4j.Logger;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 
 @Plugin(
         id = "sls-lite",
@@ -79,6 +83,7 @@ public final class SLSLite {
     private HostCapabilityReport hostCapabilities;
     private AdministratorStore administrators;
     private AdminClaimService adminClaims;
+    private SoftwareInstallationService installationService;
 
     @Inject
     public SLSLite(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -138,7 +143,8 @@ public final class SLSLite {
             InstanceDirectoryPreparer directoryPreparer = new InstanceDirectoryPreparer(
                     configuration.get().instancesDirectory()
             );
-            PaperProcessSpecFactory processSpecFactory = new PaperProcessSpecFactory(dataDirectory);
+            JavaJarProcessSpecFactory processSpecFactory =
+                    new JavaJarProcessSpecFactory(dataDirectory);
             hostCapabilities = new HostCapabilityChecker().check(
                     configuration.get().instancesDirectory(),
                     portAllocator,
@@ -171,6 +177,14 @@ public final class SLSLite {
             processSupervisor = new ProcessSupervisor(
                     configuration.get().maxManagedProcesses()
             );
+            installationService = new SoftwareInstallationService(
+                    processSpecFactory,
+                    List.of(
+                            new PaperInstallationProvider(),
+                            new VanillaInstallationProvider()
+                    ),
+                    logger
+            );
             BackendProtocolSynchronizer protocolSynchronizer =
                     ViaVersionProtocolSynchronizer.create(proxy, logger);
             instanceManager = new InstanceManager(
@@ -184,6 +198,7 @@ public final class SLSLite {
                     processSpecFactory,
                     processSupervisor,
                     new VelocityBackendRegistry(proxy, protocolSynchronizer),
+                    installationService,
                     logger
             );
             joinService = new LocalJoinService(
@@ -253,6 +268,7 @@ public final class SLSLite {
                         hostCapabilities,
                         administrators,
                         adminClaims,
+                        installationService,
                         logger
                 )
         );
@@ -424,6 +440,9 @@ public final class SLSLite {
                     instanceManager.getAll().size()
             );
             instanceManager.shutdown(Duration.ofSeconds(35));
+        }
+        if (installationService != null) {
+            installationService.close();
         }
         ConsoleBanner.logShutdown(logger);
     }

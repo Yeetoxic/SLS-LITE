@@ -2,11 +2,22 @@
 
 software:
   id: paper
+  runtime: java-jar
+  configurator: paper
+  source: paper
+  # stable (default), beta, or alpha. The blueprint version remains exact.
+  channel: stable
+  # Set true only after reviewing and accepting https://aka.ms/MinecraftEULA
+  accept_eula: false
   base_directory: software/paper/{version}
   server_jar: paper.jar
 
 launch:
   java: java
+  # Optional exact Java-major overrides, for example:
+  # java_versions:
+  #   "21": runtimes/java-21/bin/java
+  #   "25": runtimes/java-25/bin/java
   jvm_arguments:
     - "-Xms{memory_mib}M"
     - "-Xmx{memory_mib}M"

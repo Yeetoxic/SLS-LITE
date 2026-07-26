@@ -1,5 +1,11 @@
 # SLS-LITE Roadmap
 
+## Scope Classification
+
+Unchecked items tagged `[R1]` are required for the first usable public release.
+All other unchecked items are intentionally deferred until after that release.
+No unchecked item is implicitly part of the installer milestone.
+
 ## Product Goal
 
 SLS-LITE is a Velocity plugin for running a small, dynamic Minecraft network
@@ -82,7 +88,10 @@ access, and SLS-LITE administration must not require another plugin.
   - [ ] Add a blueprint-level base world or template directory.
 - [x] Validate all currently supported configuration before starting an instance.
 - [x] Use platform-independent `Path` handling.
-- [ ] Reload configuration without corrupting active instance state.
+- [x] Reload blueprint and software definitions as one validated, immutable
+      catalog revision without changing active instance definitions.
+- [ ] Reload host-wide `config.yml` services without corrupting active instance
+      state; until then require a Velocity restart for host configuration.
 - [ ] Preserve a migration path from the existing registry YAML files.
 
 ## Phase 3: Process Supervisor
@@ -92,7 +101,8 @@ access, and SLS-LITE administration must not require another plugin.
       and `FAILED`.
 - [x] Use a bounded executor for process and log supervision.
 - [x] Give every instance a unique ID, directory, Velocity server name, and port.
-- [ ] Implement a synchronized port allocator with startup retry handling.
+- [x] Implement a synchronized port allocator that probes availability, skips
+      occupied ports, and releases reservations during cleanup.
 - [x] Use one output reader per child process.
 - [x] Add configurable readiness and startup timeout handling.
 - [x] Send the configured stop command before forcefully terminating a process.
@@ -168,7 +178,7 @@ access, and SLS-LITE administration must not require another plugin.
     require more than the administrator role and external permission providers.
 - [x] Support joining an existing instance or creating one from a blueprint.
 - [x] Add automatic idle shutdown with a configurable delay.
-- [ ] Add optional ViaVersion integration for backend protocol detection.
+- [x] Add optional ViaVersion integration for backend protocol detection.
   - [x] Let SLS-Limbo advertise one explicitly tested baseline
     protocol and use proxy-installed ViaVersion, when available, to translate
     newer supported clients to that baseline.
@@ -231,6 +241,12 @@ access, and SLS-LITE administration must not require another plugin.
       player, other-player, force, invalid-usage, and tab-completion cases.
   - [x] Cover the shared `this` selector for console, external backends, and
         managed backends.
+  - [x] Cover protected-stop rejection, granular force permission, built-in
+        administrator `this` resolution, evacuation failure, and force
+        completion.
+  - [x] Drain protected lobbies before evacuation so new arrivals use SLS-Limbo,
+        reject overlapping forced stops, and restore primary routing when an
+        evacuation is cancelled.
 
 ## Modern SLS Features
 
@@ -339,7 +355,7 @@ the local implementation has equivalent behavior.
 
 ### Full Review Gate
 
-- [ ] Pause feature expansion and complete a full project review before beginning
+- [x] Pause feature expansion and complete a full project review before beginning
       automatic Paper downloads or any other provider-backed installer work.
   - [x] Resolve the first review's lifecycle and resource findings:
     reclaim verified orphan children, enforce `max_instances` in the controller,
@@ -349,31 +365,39 @@ the local implementation has equivalent behavior.
     validate mandatory lobby/Limbo capacity and Velocity forwarding mode, reject
     unknown structural YAML keys, install definitions through one atomic catalog,
     and replace the hidden process ceiling with a configured, reported limit.
-  - Review architecture, lifecycle ownership, concurrency, cleanup, path
+  - [x] Review architecture, lifecycle ownership, concurrency, cleanup, path
     security, resource accounting, configuration compatibility, commands,
     permissions, diagnostics, and public documentation.
-  - Re-run the complete automated suite and the documented manual Pterodactyl
+  - [ ] Re-run the documented manual Pterodactyl
     workflows for external lobby, managed lobby, SLS-Limbo, matchmaking,
-    recovery, shutdown, and protocol compatibility.
-  - Classify every remaining TODO as required for the first usable release,
+    recovery, shutdown, and protocol compatibility before the first public
+    release.
+  - [x] Re-run the complete automated suite after every review correction.
+  - [x] Classify every remaining TODO as required for the first usable release,
     intentionally deferred, or removed from scope.
-  - Require explicit project-owner approval before checking off or starting the
+  - [x] Require explicit project-owner approval before checking off or starting the
     provider-based Paper installer tasks below.
 
 ### Software Profiles and Installation
 
-- [ ] Add version-to-Java mappings so a software profile can select the correct
+- [x] Add version-to-Java mappings so a software profile can select the correct
       configured Java runtime for a Minecraft version.
-- [ ] Cache prepared server software by software ID and version.
-- [ ] Add provider-based installers for common software, beginning with Paper.
-- [ ] Verify downloaded artifacts with metadata or checksums when available.
-- [ ] Lock software installation so two instances cannot install the same version
+- [x] Cache prepared server software by software ID and version.
+- [x] Add provider-based installers for Paper and vanilla while preserving
+      manually prepared custom Java software.
+  - [x] Resolve the blueprint's exact Paper game version and allow explicit
+        stable, beta, or alpha selection without version fallback.
+- [x] Verify downloaded artifacts with provider size and checksum metadata.
+- [x] Lock software installation so two instances cannot install the same version
       concurrently.
-- [ ] Add installation state, timeout, progress, failure logs, and retry behavior.
-- [ ] Support an optional warmup step that accepts the EULA, generates required
-      base files, and stops before the template is used.
-- [ ] Keep manually prepared server directories fully supported.
-- [ ] Do not execute arbitrary shell installation scripts by default on shared
+- [x] Add installation state, timeout, progress, bounded failure logs, and retry
+      behavior.
+- [x] Require explicit profile-level EULA acceptance and write `eula.txt` only
+      after the operator opts in.
+- [ ] Add an optional warmup process that generates required base files and
+      stops before a reusable template is published.
+- [x] Keep manually prepared server directories fully supported.
+- [x] Do not execute arbitrary shell installation scripts by default on shared
       hosts.
 
 ### Config Patches and State
@@ -495,16 +519,18 @@ the local implementation has equivalent behavior.
   - Never start, stop, copy, or otherwise manage that server.
   - Preserve this as the conventional and maximum-compatibility option.
 
-- [ ] Support `lobby.mode: managed`.
+- [x] Support `lobby.mode: managed`.
   - [x] Start a Paper lobby as an SLS-LITE child process in the same hosting
     allocation as Velocity.
   - [x] Treat the active lobby as a reserved blueprint that normal stop commands
     cannot terminate.
-  - [ ] Add `/sls stop <server> --force` for administrators to intentionally stop
+  - [x] Add `/sls stop <server> --force` for administrators to intentionally stop
         a protected managed server.
     - Require an administrative force permission and exact instance resolution.
     - Evacuate connected players to the primary fallback or SLS-Limbo when
       possible, and clearly report when evacuation cannot be completed.
+    - Divert new arrivals while evacuation is in progress and restore normal
+      routing if the stop is cancelled.
     - Suppress automatic crash recovery for an intentional forced stop so the
       supervisor does not immediately restart the server.
     - Log the sender, target, and result, and cover permission denial, `this`
@@ -518,7 +544,7 @@ the local implementation has equivalent behavior.
   - [x] Stop it gracefully during proxy shutdown.
   - [ ] Allow operators to disable automatic startup and manage it with commands.
 
-- [ ] Add SLS-Limbo, a default embedded virtual lobby that starts before the
+- [x] Add SLS-Limbo, a default embedded virtual lobby that starts before the
       configured external or managed primary lobby.
   - [x] Keep normal matchmaking queues on the player's current healthy backend;
     never route through SLS-Limbo merely because a requested destination is
@@ -588,7 +614,7 @@ the local implementation has equivalent behavior.
 
 ## Documentation and Public Release Preparation
 
-- [ ] Audit every existing file in `DOCS/` and classify it as current,
+- [ ] [R1] Audit every existing file in `DOCS/` and classify it as current,
       historical reference, material to rewrite, or obsolete material to remove.
 - [ ] Separate internal development notes and test-environment procedures from
       public operator documentation.
@@ -675,17 +701,17 @@ the local implementation has equivalent behavior.
         heightmap encoding.
 - [x] Add an integration fixture that launches Velocity and one lightweight
       backend in a constrained single-host environment.
-- [ ] Add CI for compilation, tests, packaging, and dependency checks.
+- [ ] [R1] Add CI for compilation, tests, packaging, and dependency checks.
 
 ## First Usable Release
 
-- [ ] One plugin JAR and one documented configuration.
+- [ ] [R1] One plugin JAR and one documented configuration.
 - [x] One Velocity allocation can launch an isolated Paper lobby and at least one
       additional managed backend.
 - [x] Players can join the lobby, request a blueprint, wait for startup, connect,
       and return to the lobby after the backend stops.
-- [ ] External lobby mode works without SLS-LITE managing that lobby.
+- [ ] [R1] External lobby mode works without SLS-LITE managing that lobby.
 - [x] Every child process shuts down cleanly with the proxy.
 - [x] Startup failures leave no registered ghost servers or corrupt instance
       directories.
-- [ ] Installation and host-capability requirements are documented honestly.
+- [ ] [R1] Installation and host-capability requirements are documented honestly.

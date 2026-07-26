@@ -30,6 +30,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     private final CompletableFuture<RegisteredServer> ready = new CompletableFuture<>();
     private final AtomicBoolean externalProbeInFlight = new AtomicBoolean();
     private volatile boolean primaryAvailable;
+    private volatile String drainingPrimary;
     private volatile boolean dualFailureReported;
     private boolean started;
     private volatile boolean closed;
@@ -185,6 +186,69 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     }
 
     @Override
+    public CompletableFuture<Void> evacuateForIntentionalStop(String serverName) {
+        if (!isLobby(serverName)) {
+            return evacuate(serverName);
+        }
+        RegisteredServer target;
+        if (primary.isLobby(serverName)) {
+            target = limbo.server().orElse(null);
+        } else if (limbo.isLobby(serverName)) {
+            target = primaryServer().orElse(null);
+        } else {
+            target = null;
+        }
+        RegisteredServer source = proxy.getServer(serverName).orElse(null);
+        if (source == null || source.getPlayersConnected().isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        if (target == null) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("No alternate lobby is ready")
+            );
+        }
+        List<CompletableFuture<Void>> transfers = source.getPlayersConnected().stream()
+                .map(player -> transfer(player, target))
+                .toList();
+        return CompletableFuture.allOf(transfers.toArray(CompletableFuture[]::new));
+    }
+
+    @Override
+    public synchronized boolean beginIntentionalStop(String serverName) {
+        if (closed
+                || drainingPrimary != null
+                || !primary.isLobby(serverName)) {
+            return false;
+        }
+        drainingPrimary = serverName;
+        primaryAvailable = false;
+        return true;
+    }
+
+    @Override
+    public synchronized void cancelIntentionalStop(String serverName) {
+        if (!serverName.equals(drainingPrimary)) {
+            return;
+        }
+        drainingPrimary = null;
+        refreshPrimaryAvailability();
+    }
+
+    @Override
+    public synchronized boolean prepareIntentionalStop(String serverName) {
+        if (!serverName.equals(drainingPrimary)) {
+            return false;
+        }
+        boolean prepared = primary.prepareIntentionalStop(serverName);
+        drainingPrimary = null;
+        primaryAvailable = false;
+        if (!prepared) {
+            refreshPrimaryAvailability();
+        }
+        return prepared;
+    }
+
+    @Override
     public synchronized void close() {
         if (closed) {
             return;
@@ -223,7 +287,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     }
 
     void refreshPrimaryAvailability() {
-        if (closed) {
+        if (closed || drainingPrimary != null) {
             return;
         }
         reportDualFailureState();
@@ -280,6 +344,9 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     }
 
     private void publishPrimaryReady(RegisteredServer server) {
+        if (closed || drainingPrimary != null) {
+            return;
+        }
         boolean changed = !primaryAvailable;
         primaryAvailable = true;
         if (changed) {

@@ -47,6 +47,21 @@ public interface LobbyProvider extends AutoCloseable {
 
     CompletableFuture<Void> evacuate(String serverName);
 
+    default CompletableFuture<Void> evacuateForIntentionalStop(String serverName) {
+        return evacuate(serverName);
+    }
+
+    default boolean beginIntentionalStop(String serverName) {
+        return false;
+    }
+
+    default void cancelIntentionalStop(String serverName) {
+    }
+
+    default boolean prepareIntentionalStop(String serverName) {
+        return false;
+    }
+
     @Override
     void close();
 }

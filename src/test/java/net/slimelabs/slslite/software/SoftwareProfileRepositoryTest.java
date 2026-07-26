@@ -25,6 +25,10 @@ class SoftwareProfileRepositoryTest {
         repository.initialize();
 
         SoftwareProfile profile = repository.get("paper").orElseThrow();
+        assertEquals(SoftwareRuntime.JAVA_JAR, profile.runtime());
+        assertEquals(SoftwareConfigurator.PAPER, profile.configurator());
+        assertEquals(SoftwareSource.PAPER, profile.source());
+        assertEquals(SoftwareReleaseChannel.STABLE, profile.channel());
         assertEquals("java", profile.javaExecutable());
         assertEquals("software/paper/{version}", profile.baseDirectory());
         assertEquals("paper.jar", profile.serverJar());
@@ -43,6 +47,9 @@ class SoftwareProfileRepositoryTest {
                   server_jar: custom.jar
                 launch:
                   java: runtimes/java-25/bin/java
+                  java_versions:
+                    "21": runtimes/java-21/bin/java
+                    "25": runtimes/java-25/bin/java
                   jvm_arguments:
                     - "-Xmx{memory_mib}M"
                   server_arguments:
@@ -60,7 +67,12 @@ class SoftwareProfileRepositoryTest {
         repository.reload();
 
         SoftwareProfile profile = repository.get("custom").orElseThrow();
+        assertEquals(SoftwareSource.MANUAL, profile.source());
         assertEquals("runtimes/java-25/bin/java", profile.javaExecutable());
+        assertEquals(
+                "runtimes/java-21/bin/java",
+                profile.javaExecutables().get(21)
+        );
         assertEquals("Server ready", profile.readinessPattern());
         assertEquals(90, profile.startupTimeoutSeconds());
         assertEquals("end", profile.stopCommand());

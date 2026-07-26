@@ -220,6 +220,37 @@ class LocalLobbyProviderTest {
     }
 
     @Test
+    void intentionalManagedLobbyStopSuppressesRecoveryWithoutClosingProvider()
+            throws Exception {
+        BlueprintRepository blueprints = blueprints();
+        FakeController controller = new FakeController(
+                blueprints.get("lobby", "lobby").orElseThrow(),
+                temporaryDirectory
+        );
+        Map<String, RegisteredServer> servers = new LinkedHashMap<>();
+        LocalLobbyProvider provider = new LocalLobbyProvider(
+                proxy(servers),
+                blueprints,
+                controller,
+                recoveryConfig(2),
+                LoggerFactory.getLogger(LocalLobbyProviderTest.class)
+        );
+
+        provider.start();
+        ManagedInstance instance = controller.instance();
+        publishReady(instance, registeredServer(List.of()), servers);
+
+        assertTrue(provider.prepareIntentionalStop(instance.id()));
+        instance.stoppedFuture().complete(0);
+        Thread.sleep(1200);
+
+        assertEquals(1, controller.starts());
+        assertEquals(LobbyStatus.OFFLINE, provider.status());
+        assertTrue(provider.server().isEmpty());
+        provider.close();
+    }
+
+    @Test
     void stableRecoveryResetsTheRetryBudget() throws Exception {
         BlueprintRepository blueprints = blueprints();
         FakeController controller = new FakeController(

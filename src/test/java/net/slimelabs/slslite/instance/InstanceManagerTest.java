@@ -6,7 +6,7 @@ import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ForwardingMode;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.FixtureProcessMain;
-import net.slimelabs.slslite.process.PaperProcessSpecFactory;
+import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
@@ -296,7 +296,7 @@ class InstanceManagerTest {
                 ),
                 ports,
                 preparer,
-                new PaperProcessSpecFactory(temporaryDirectory),
+                new JavaJarProcessSpecFactory(temporaryDirectory),
                 supervisor,
                 backends,
                 LoggerFactory.getLogger(InstanceManagerTest.class)

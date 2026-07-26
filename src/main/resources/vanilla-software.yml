@@ -1,0 +1,29 @@
+# Optional vanilla profile. Vanilla does not support Velocity modern forwarding.
+
+software:
+  id: vanilla
+  runtime: java-jar
+  configurator: vanilla
+  source: vanilla
+  channel: stable
+  # Set true only after reviewing and accepting https://aka.ms/MinecraftEULA
+  accept_eula: false
+  base_directory: software/vanilla/{version}
+  server_jar: server.jar
+
+launch:
+  java: java
+  # java_versions may map required Java majors to configured executables.
+  jvm_arguments:
+    - "-Xms{memory_mib}M"
+    - "-Xmx{memory_mib}M"
+  server_arguments:
+    - "--nogui"
+
+readiness:
+  pattern: 'Done \([^)]+\)! For help'
+  timeout_seconds: 180
+
+shutdown:
+  command: stop
+  timeout_seconds: 30

@@ -20,6 +20,8 @@ import net.slimelabs.slslite.config.SLSConfig;
 import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityReport;
 import net.slimelabs.slslite.host.HostCapabilityStatus;
+import net.slimelabs.slslite.install.InstallationSnapshot;
+import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.InstanceLogPage;
 import net.slimelabs.slslite.instance.ManagedInstance;
@@ -77,6 +79,7 @@ public final class SLSCommand implements SimpleCommand {
     private final HostCapabilityReport hostCapabilities;
     private final AdministratorStore administrators;
     private final AdminClaimService adminClaims;
+    private final SoftwareInstallationService installationService;
     private final CommandAuthorizer authorizer;
     private final Logger logger;
 
@@ -96,6 +99,42 @@ public final class SLSCommand implements SimpleCommand {
             AdminClaimService adminClaims,
             Logger logger
     ) {
+        this(
+                proxy,
+                blueprints,
+                softwareProfiles,
+                resourceBudget,
+                processSupervisor,
+                instances,
+                joinService,
+                lobbyProvider,
+                outputConfig,
+                activeConfig,
+                hostCapabilities,
+                administrators,
+                adminClaims,
+                null,
+                logger
+        );
+    }
+
+    public SLSCommand(
+            ProxyServer proxy,
+            BlueprintRepository blueprints,
+            SoftwareProfileRepository softwareProfiles,
+            ResourceBudget resourceBudget,
+            ProcessSupervisor processSupervisor,
+            ServerController instances,
+            LocalJoinService joinService,
+            LobbyProvider lobbyProvider,
+            ManagedOutputConfig outputConfig,
+            SLSConfig activeConfig,
+            HostCapabilityReport hostCapabilities,
+            AdministratorStore administrators,
+            AdminClaimService adminClaims,
+            SoftwareInstallationService installationService,
+            Logger logger
+    ) {
         this.proxy = proxy;
         this.blueprints = blueprints;
         this.softwareProfiles = softwareProfiles;
@@ -109,6 +148,7 @@ public final class SLSCommand implements SimpleCommand {
         this.hostCapabilities = hostCapabilities;
         this.administrators = administrators;
         this.adminClaims = adminClaims;
+        this.installationService = installationService;
         this.authorizer = new CommandAuthorizer(administrators);
         this.logger = logger;
     }
@@ -128,6 +168,7 @@ public final class SLSCommand implements SimpleCommand {
             case "dequeue" -> dequeue(invocation.source(), arguments);
             case "find" -> find(invocation.source(), arguments);
             case "info" -> info(invocation.source(), arguments);
+            case "install" -> install(invocation.source(), arguments);
             case "join" -> join(invocation.source(), arguments);
             case "list" -> sendInstances(invocation.source());
             case "logs" -> logs(invocation.source(), arguments);
@@ -141,7 +182,7 @@ public final class SLSCommand implements SimpleCommand {
             case "stop" -> stop(invocation.source(), arguments);
             case "system" -> system(invocation.source(), arguments);
             case "version" -> sendVersion(invocation.source());
-            case "blueprint", "create", "debug", "delete", "install", "kill",
+            case "blueprint", "create", "debug", "delete", "kill",
                     "pause", "resume" ->
                     unavailable(invocation.source(), arguments[0], false);
             case "node" -> unavailable(invocation.source(), arguments[0], true);
@@ -175,6 +216,9 @@ public final class SLSCommand implements SimpleCommand {
                 case "find" -> completed(proxy.getAllPlayers().stream()
                         .map(Player::getUsername).sorted().toList());
                 case "join" -> completed(withPrefix("player", sorted(blueprints.getTypes())));
+                case "install" -> authorizer.canAdminister(source, "install")
+                        ? completed(List.of("info", "logs"))
+                        : completed(List.of());
                 case "dequeue" -> authorizer.canTargetOthers(source, "dequeue")
                         ? completed(joinTargets())
                         : completed(List.of());
@@ -208,6 +252,11 @@ public final class SLSCommand implements SimpleCommand {
             return completed(blueprints.getByType(arguments[1]).stream()
                     .map(Blueprint::id).toList());
         }
+        if (arguments.length == 3 && "install".equals(operation)
+                && "logs".equalsIgnoreCase(arguments[1])
+                && authorizer.canAdminister(source, "install")) {
+            return completed(installSoftwareIds());
+        }
         if (arguments.length == 3 && "admin".equals(operation)
                 && authorizer.canAdminister(source, "admin")) {
             if ("add".equalsIgnoreCase(arguments[1])) {
@@ -223,9 +272,18 @@ public final class SLSCommand implements SimpleCommand {
                 && authorizer.canAdminister(source, "logs")) {
             return completed(List.of("1"));
         }
+        if (arguments.length == 3 && "stop".equals(operation)
+                && authorizer.canAdminister(source, "stop.force")) {
+            return completed(List.of("--force"));
+        }
         if (arguments.length == 4 && "logs".equals(operation)
                 && authorizer.canAdminister(source, "logs")) {
             return completed(List.of("50", "100", "max"));
+        }
+        if (arguments.length == 4 && "install".equals(operation)
+                && "logs".equalsIgnoreCase(arguments[1])
+                && authorizer.canAdminister(source, "install")) {
+            return completed(installVersions(arguments[2]));
         }
         if (arguments.length == 4 && "join".equals(operation)
                 && authorizer.canTargetOthers(source, "join")) {
@@ -1224,38 +1282,122 @@ public final class SLSCommand implements SimpleCommand {
         if (!requireAdmin(source, "stop", "stop managed servers")) {
             return;
         }
-        if (arguments.length != 2) {
-            source.sendMessage(CommandMessages.usage("/sls stop", "server"));
+        if (arguments.length < 2 || arguments.length > 3
+                || arguments.length == 3
+                && !"--force".equalsIgnoreCase(arguments[2])) {
+            source.sendMessage(CommandMessages.usage(
+                    "/sls stop", "server", "server --force"
+            ));
+            return;
+        }
+        boolean force = arguments.length == 3;
+        if (force && !requireAdmin(
+                source,
+                "stop.force",
+                "force-stop protected managed servers"
+        )) {
             return;
         }
         ManagedInstance instance = resolveInstance(source, arguments[1]);
         if (instance == null) {
             return;
         }
-        if (lobbyProvider.isLobby(instance.id())) {
+        boolean protectedLobby = lobbyProvider.isLobby(instance.id());
+        if (protectedLobby && !force) {
             source.sendMessage(CommandMessages.message(
-                    "The active lobby cannot be stopped with /sls stop.",
+                    "The active lobby is protected. Use /sls stop "
+                            + instance.id() + " --force to stop it intentionally.",
                     NamedTextColor.RED
             ));
             return;
         }
+        if (force && !protectedLobby) {
+            source.sendMessage(CommandMessages.message(
+                    instance.id() + " is not protected; use /sls stop "
+                            + instance.id() + ".",
+                    NamedTextColor.YELLOW
+            ));
+            return;
+        }
+        if (force) {
+            logger.warn(
+                    "Forced managed lobby stop requested by {} for {}",
+                    commandSourceName(source),
+                    instance.id()
+            );
+            if (!lobbyProvider.beginIntentionalStop(instance.id())) {
+                logger.warn(
+                        "Forced managed lobby stop by {} for {} was cancelled because "
+                                + "the lobby is already stopping or changed",
+                        commandSourceName(source),
+                        instance.id()
+                );
+                source.sendMessage(CommandMessages.message(
+                        "Stop cancelled: the active lobby is already stopping or changed.",
+                        NamedTextColor.RED
+                ));
+                return;
+            }
+        }
         source.sendMessage(CommandMessages.message(
-                "Moving players to the lobby before stopping " + instance.id() + "...",
+                protectedLobby
+                        ? "Moving players to SLS-Limbo before stopping "
+                                + instance.id() + "..."
+                        : "Moving players to the lobby before stopping "
+                                + instance.id() + "...",
                 NamedTextColor.YELLOW
         ));
-        lobbyProvider.evacuate(instance.id()).whenComplete((ignored, evacuationFailure) -> {
+        CompletableFuture<Void> evacuation = protectedLobby
+                ? lobbyProvider.evacuateForIntentionalStop(instance.id())
+                : lobbyProvider.evacuate(instance.id());
+        evacuation.whenComplete((ignored, evacuationFailure) -> {
             if (evacuationFailure != null) {
+                if (force) {
+                    lobbyProvider.cancelIntentionalStop(instance.id());
+                    logger.warn(
+                            "Forced managed lobby stop by {} for {} was cancelled: {}",
+                            commandSourceName(source),
+                            instance.id(),
+                            rootMessage(evacuationFailure)
+                    );
+                }
                 source.sendMessage(CommandMessages.message(
                         "Stop cancelled: " + rootMessage(evacuationFailure),
                         NamedTextColor.RED
                 ));
                 return;
             }
-            stopInstance(source, instance.id());
+            if (protectedLobby
+                    && !lobbyProvider.prepareIntentionalStop(instance.id())) {
+                lobbyProvider.cancelIntentionalStop(instance.id());
+                logger.warn(
+                        "Forced managed lobby stop by {} for {} was cancelled because "
+                                + "the lobby changed during evacuation",
+                        commandSourceName(source),
+                        instance.id()
+                );
+                source.sendMessage(CommandMessages.message(
+                        "Stop cancelled: the active lobby changed during evacuation.",
+                        NamedTextColor.RED
+                ));
+                return;
+            }
+            if (protectedLobby) {
+                source.sendMessage(CommandMessages.message(
+                        "Automatic managed-lobby recovery is suppressed until "
+                                + "Velocity restarts.",
+                        NamedTextColor.GRAY
+                ));
+            }
+            stopInstance(source, instance.id(), force);
         });
     }
 
-    private void stopInstance(CommandSource source, String instanceId) {
+    private void stopInstance(
+            CommandSource source,
+            String instanceId,
+            boolean forcedProtectedStop
+    ) {
         try {
             source.sendMessage(CommandMessages.message(
                     "Stopping " + instanceId + "...", NamedTextColor.YELLOW
@@ -1266,13 +1408,38 @@ public final class SLSCommand implements SimpleCommand {
                             "Stopped " + instanceId + " with exit code " + exitCode + ".",
                             NamedTextColor.GREEN
                     ));
+                    if (forcedProtectedStop) {
+                        logger.info(
+                                "Forced managed lobby stop by {} for {} completed "
+                                        + "with exit code {}",
+                                commandSourceName(source),
+                                instanceId,
+                                exitCode
+                        );
+                    }
                 } else {
                     source.sendMessage(CommandMessages.message(
                             "Stop failed: " + rootMessage(failure), NamedTextColor.RED
                     ));
+                    if (forcedProtectedStop) {
+                        logger.warn(
+                                "Forced managed lobby stop by {} for {} failed: {}",
+                                commandSourceName(source),
+                                instanceId,
+                                rootMessage(failure)
+                        );
+                    }
                 }
             });
         } catch (InstanceOperationException exception) {
+            if (forcedProtectedStop) {
+                logger.warn(
+                        "Forced managed lobby stop by {} for {} failed: {}",
+                        commandSourceName(source),
+                        instanceId,
+                        exception.getMessage()
+                );
+            }
             source.sendMessage(CommandMessages.message(
                     exception.getMessage(), NamedTextColor.RED
             ));
@@ -1464,6 +1631,77 @@ public final class SLSCommand implements SimpleCommand {
         }
     }
 
+    private void install(CommandSource source, String[] arguments) {
+        if (!requireAdmin(source, "install", "inspect software installation")) {
+            return;
+        }
+        if (installationService == null) {
+            unavailable(source, "install", false);
+            return;
+        }
+        if (arguments.length == 2
+                && "info".equalsIgnoreCase(arguments[1])) {
+            List<InstallationSnapshot> snapshots = installationService.snapshots();
+            if (snapshots.isEmpty()) {
+                source.sendMessage(CommandMessages.message(
+                        "No software installation activity.", NamedTextColor.GRAY
+                ));
+                return;
+            }
+            source.sendMessage(CommandMessages.message(
+                    "Software installations:", NamedTextColor.DARK_AQUA
+            ));
+            for (InstallationSnapshot snapshot : snapshots) {
+                NamedTextColor color = switch (snapshot.state()) {
+                    case INSTALLING -> NamedTextColor.YELLOW;
+                    case READY -> NamedTextColor.GREEN;
+                    case FAILED -> NamedTextColor.RED;
+                };
+                source.sendMessage(CommandMessages.message(
+                        snapshot.key() + " - " + snapshot.state()
+                                + " - " + snapshot.detail(),
+                        color
+                ));
+            }
+            return;
+        }
+        if (arguments.length == 4
+                && "logs".equalsIgnoreCase(arguments[1])) {
+            InstallationSnapshot snapshot = installationService.snapshot(
+                    arguments[2],
+                    arguments[3]
+            );
+            if (snapshot == null) {
+                source.sendMessage(CommandMessages.message(
+                        "No installation record for " + arguments[2]
+                                + ":" + arguments[3] + ".",
+                        NamedTextColor.RED
+                ));
+                return;
+            }
+            source.sendMessage(CommandMessages.message(
+                    "Installation log for " + snapshot.key() + ":",
+                    NamedTextColor.DARK_AQUA
+            ));
+            int first = Math.max(0, snapshot.logs().size() - 10);
+            if (first > 0) {
+                source.sendMessage(Component.text(
+                        "Showing the latest 10 of " + snapshot.logs().size()
+                                + " retained lines.",
+                        NamedTextColor.DARK_GRAY
+                ));
+            }
+            snapshot.logs().subList(first, snapshot.logs().size())
+                    .forEach(line -> source.sendMessage(
+                    Component.text(line, NamedTextColor.GRAY)
+            ));
+            return;
+        }
+        source.sendMessage(CommandMessages.usage(
+                "/sls install", "info", "logs <software> <version>"
+        ));
+    }
+
     private void sendVersion(CommandSource source) {
         source.sendMessage(CommandMessages.prefix()
                 .append(Component.text("Version: ", NamedTextColor.DARK_AQUA)
@@ -1640,6 +1878,16 @@ public final class SLSCommand implements SimpleCommand {
         }
     }
 
+    private static String commandSourceName(CommandSource source) {
+        if (source instanceof Player player) {
+            return player.getUsername();
+        }
+        if (source instanceof ConsoleCommandSource) {
+            return "CONSOLE";
+        }
+        return source.getClass().getSimpleName();
+    }
+
     private static String formatDuration(long seconds) {
         long hours = seconds / 3600;
         long minutes = (seconds % 3600) / 60;
@@ -1724,6 +1972,34 @@ public final class SLSCommand implements SimpleCommand {
 
     private List<String> instanceIds() {
         return instances.getAll().stream().map(ManagedInstance::id).sorted().toList();
+    }
+
+    private List<String> installSoftwareIds() {
+        Set<String> ids = new LinkedHashSet<>();
+        softwareProfiles.getAll().stream()
+                .map(profile -> profile.id())
+                .forEach(ids::add);
+        if (installationService != null) {
+            installationService.snapshots().stream()
+                    .map(snapshot -> snapshot.key().softwareId())
+                    .forEach(ids::add);
+        }
+        return sorted(ids);
+    }
+
+    private List<String> installVersions(String softwareId) {
+        Set<String> versions = new LinkedHashSet<>();
+        blueprints.getAll().stream()
+                .filter(blueprint -> blueprint.software().equals(softwareId))
+                .map(Blueprint::version)
+                .forEach(versions::add);
+        if (installationService != null) {
+            installationService.snapshots().stream()
+                    .filter(snapshot -> snapshot.key().softwareId().equals(softwareId))
+                    .map(snapshot -> snapshot.key().version())
+                    .forEach(versions::add);
+        }
+        return sorted(versions);
     }
 
     private List<String> persistentInstanceIds() {

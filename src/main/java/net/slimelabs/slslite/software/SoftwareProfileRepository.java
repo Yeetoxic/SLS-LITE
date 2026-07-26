@@ -113,13 +113,15 @@ public final class SoftwareProfileRepository {
                     software,
                     "software",
                     path,
-                    "id", "base_directory", "server_jar"
+                    "id", "runtime", "configurator", "source", "channel",
+                    "accept_eula",
+                    "base_directory", "server_jar"
             );
             YamlValues.requireOnlyKeys(
                     launch,
                     "launch",
                     path,
-                    "java", "jvm_arguments", "server_arguments"
+                    "java", "java_versions", "jvm_arguments", "server_arguments"
             );
             YamlValues.requireOnlyKeys(
                     readiness,
@@ -141,6 +143,55 @@ public final class SoftwareProfileRepository {
 
             String javaExecutable = YamlValues.optionalString(
                     launch, "java", "java", path
+            );
+            Map<Integer, String> javaExecutables = javaExecutables(
+                    YamlValues.optionalMap(launch, "java_versions", path),
+                    path
+            );
+            SoftwareRuntime runtime = enumValue(
+                    YamlValues.optionalString(
+                            software, "runtime", "java-jar", path
+                    ),
+                    SoftwareRuntime.class,
+                    "software.runtime",
+                    path
+            );
+            SoftwareConfigurator configurator = enumValue(
+                    YamlValues.optionalString(
+                            software, "configurator", "paper", path
+                    ),
+                    SoftwareConfigurator.class,
+                    "software.configurator",
+                    path
+            );
+            SoftwareSource source = enumValue(
+                    YamlValues.optionalString(
+                            software, "source", "manual", path
+                    ),
+                    SoftwareSource.class,
+                    "software.source",
+                    path
+            );
+            SoftwareReleaseChannel channel = enumValue(
+                    YamlValues.optionalString(
+                            software, "channel", "stable", path
+                    ),
+                    SoftwareReleaseChannel.class,
+                    "software.channel",
+                    path
+            );
+            if (source != SoftwareSource.PAPER
+                    && channel != SoftwareReleaseChannel.STABLE) {
+                throw YamlValues.error(
+                        path,
+                        "software.channel is only configurable for source: paper"
+                );
+            }
+            boolean acceptEula = YamlValues.optionalBoolean(
+                    software,
+                    "accept_eula",
+                    false,
+                    path
             );
             String baseDirectory = YamlValues.requiredString(
                     software, "base_directory", path
@@ -171,7 +222,13 @@ public final class SoftwareProfileRepository {
             try {
                 return new SoftwareProfile(
                         id,
+                        runtime,
+                        configurator,
+                        source,
+                        channel,
+                        acceptEula,
                         javaExecutable,
+                        javaExecutables,
                         baseDirectory,
                         serverJar,
                         jvmArguments,
@@ -207,6 +264,53 @@ public final class SoftwareProfileRepository {
         }
     }
 
+    private static <E extends Enum<E>> E enumValue(
+            String value,
+            Class<E> type,
+            String key,
+            Path path
+    ) throws ConfigurationException {
+        try {
+            return Enum.valueOf(
+                    type,
+                    value.replace('-', '_').toUpperCase(Locale.ROOT)
+            );
+        } catch (IllegalArgumentException exception) {
+            throw YamlValues.error(
+                    path,
+                    key + " has unsupported value '" + value + "'"
+            );
+        }
+    }
+
+    private static Map<Integer, String> javaExecutables(
+            Map<String, Object> values,
+            Path path
+    ) throws ConfigurationException {
+        Map<Integer, String> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : values.entrySet()) {
+            int major;
+            try {
+                major = Integer.parseInt(entry.getKey());
+            } catch (NumberFormatException exception) {
+                throw YamlValues.error(
+                        path,
+                        "launch.java_versions keys must be Java major versions"
+                );
+            }
+            if (major < 8 || !(entry.getValue() instanceof String executable)
+                    || executable.isBlank()) {
+                throw YamlValues.error(
+                        path,
+                        "launch.java_versions." + entry.getKey()
+                                + " must be a non-empty Java executable"
+                );
+            }
+            result.put(major, executable);
+        }
+        return Map.copyOf(result);
+    }
+
     private List<Path> profileFiles() throws IOException {
         try (Stream<Path> files = Files.list(directory)) {
             return files.filter(Files::isRegularFile)
@@ -227,6 +331,13 @@ public final class SoftwareProfileRepository {
                 throw new IOException("Bundled paper-software.yml is missing");
             }
             Files.copy(source, directory.resolve("paper.yml"));
+        }
+        try (InputStream source = getClass().getClassLoader()
+                .getResourceAsStream("vanilla-software.yml")) {
+            if (source == null) {
+                throw new IOException("Bundled vanilla-software.yml is missing");
+            }
+            Files.copy(source, directory.resolve("vanilla.yml"));
         }
     }
 

@@ -154,6 +154,34 @@ public final class LocalLobbyProvider implements LobbyProvider {
     }
 
     @Override
+    public synchronized boolean prepareIntentionalStop(String serverName) {
+        ManagedInstance instance = managedInstance;
+        if (config.mode() != LobbyMode.MANAGED
+                || instance == null
+                || !instance.id().equals(serverName)
+                || closed) {
+            return false;
+        }
+
+        generation++;
+        cancel(retryTask);
+        cancel(stableTask);
+        retryTask = null;
+        stableTask = null;
+        status = LobbyStatus.OFFLINE;
+        CompletableFuture<RegisteredServer> unavailable = new CompletableFuture<>();
+        unavailable.completeExceptionally(new CancellationException(
+                "Managed lobby was intentionally stopped: " + serverName
+        ));
+        ready = unavailable;
+        logger.warn(
+                "Managed lobby {} was marked for an intentional stop; recovery is suppressed",
+                serverName
+        );
+        return true;
+    }
+
+    @Override
     public void close() {
         synchronized (this) {
             if (closed) {

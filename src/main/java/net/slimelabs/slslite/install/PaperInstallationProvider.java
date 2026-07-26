@@ -1,0 +1,278 @@
+package net.slimelabs.slslite.install;
+
+import net.slimelabs.slslite.BuildInfo;
+import net.slimelabs.slslite.software.SoftwareProfile;
+import net.slimelabs.slslite.software.SoftwareSource;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.time.Duration;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+
+public final class PaperInstallationProvider
+        implements SoftwareInstallationProvider {
+
+    private static final URI API =
+            URI.create("https://fill.papermc.io/v3/projects/paper/versions/");
+    private static final String USER_AGENT = "SLS-LITE/" + BuildInfo.VERSION
+            + " (https://github.com/Yeetoxic/SLS-LITE)";
+    private static final long MAX_DOWNLOAD_BYTES = 256L * 1024L * 1024L;
+
+    private final HttpClient client;
+    private final URI api;
+    private final boolean requireOfficialHosts;
+
+    public PaperInstallationProvider() {
+        this(
+                HttpClient.newBuilder()
+                        .followRedirects(HttpClient.Redirect.NEVER)
+                        .connectTimeout(Duration.ofSeconds(15))
+                        .build(),
+                API,
+                true
+        );
+    }
+
+    PaperInstallationProvider(
+            HttpClient client,
+            URI api,
+            boolean requireOfficialHosts
+    ) {
+        this.client = client;
+        this.api = api;
+        this.requireOfficialHosts = requireOfficialHosts;
+    }
+
+    @Override
+    public SoftwareSource source() {
+        return SoftwareSource.PAPER;
+    }
+
+    @Override
+    public InstallationArtifact install(
+            SoftwareProfile profile,
+            String version,
+            Path stagingDirectory,
+            Consumer<String> log
+    ) throws Exception {
+        PaperDownload download = resolve(version, profile.channel().name());
+        log.accept("Selected " + profile.channel().name().toLowerCase()
+                + " Paper build " + download.build() + " for exact version "
+                + version);
+        if (download.size() <= 0 || download.size() > MAX_DOWNLOAD_BYTES) {
+            throw new SoftwareInstallationException(
+                    "Paper artifact size is outside the allowed range: "
+                            + download.size()
+            );
+        }
+        Path destination = stagingDirectory.resolve(profile.serverJar()).normalize();
+        if (!destination.startsWith(stagingDirectory.normalize())) {
+            throw new SoftwareInstallationException(
+                    "Software JAR escapes the staging directory"
+            );
+        }
+        Files.createDirectories(destination.getParent());
+        HttpRequest request = request(download.url())
+                .timeout(Duration.ofMinutes(3))
+                .build();
+        HttpResponse<InputStream> response = client.send(
+                request,
+                HttpResponse.BodyHandlers.ofInputStream()
+        );
+        requireSuccess(response.statusCode(), "Paper artifact");
+        long actualSize;
+        try (InputStream input = response.body()) {
+            actualSize = copyBounded(input, destination, download.size());
+        }
+        if (actualSize != download.size()) {
+            throw new SoftwareInstallationException(
+                    "Paper artifact size mismatch: expected " + download.size()
+                            + ", received " + actualSize
+            );
+        }
+        String actualHash = sha256(destination);
+        if (!MessageDigest.isEqual(
+                actualHash.getBytes(StandardCharsets.US_ASCII),
+                download.sha256().getBytes(StandardCharsets.US_ASCII)
+        )) {
+            throw new SoftwareInstallationException(
+                    "Paper artifact SHA-256 mismatch"
+            );
+        }
+        log.accept("Verified SHA-256 " + actualHash);
+        return new InstallationArtifact(actualSize, "SHA-256", actualHash);
+    }
+
+    private PaperDownload resolve(String version, String channel) throws Exception {
+        String encoded = URLEncoder.encode(version, StandardCharsets.UTF_8);
+        URI endpoint = api.resolve(encoded + "/builds");
+        HttpResponse<InputStream> response = client.send(
+                request(endpoint).timeout(Duration.ofSeconds(30)).build(),
+                HttpResponse.BodyHandlers.ofInputStream()
+        );
+        requireSuccess(response.statusCode(), "Paper build metadata");
+        String body;
+        try (InputStream input = response.body()) {
+            body = new String(readBounded(input, 1024 * 1024), StandardCharsets.UTF_8);
+        }
+
+        LoaderOptions options = new LoaderOptions();
+        options.setAllowDuplicateKeys(false);
+        Object parsed = new Yaml(new SafeConstructor(options)).load(body);
+        if (!(parsed instanceof List<?> builds)) {
+            throw new SoftwareInstallationException(
+                    "Paper build metadata has an unexpected format"
+            );
+        }
+        for (Object value : builds) {
+            if (!(value instanceof Map<?, ?> build)
+                    || !channel.equalsIgnoreCase(
+                            String.valueOf(build.get("channel"))
+                    )) {
+                continue;
+            }
+            Map<?, ?> downloads = map(build.get("downloads"), "downloads");
+            Map<?, ?> artifact = map(
+                    downloads.get("server:default"),
+                    "server:default"
+            );
+            Map<?, ?> checksums = map(artifact.get("checksums"), "checksums");
+            URI url = URI.create(required(artifact, "url"));
+            validateDownloadUrl(url);
+            return new PaperDownload(
+                    String.valueOf(build.get("id")),
+                    url,
+                    Long.parseLong(String.valueOf(artifact.get("size"))),
+                    required(checksums, "sha256").toLowerCase()
+            );
+        }
+        throw new SoftwareInstallationException(
+                "No " + channel.toLowerCase()
+                        + " Paper build is available for exact version " + version
+        );
+    }
+
+    private HttpRequest.Builder request(URI uri) {
+        return HttpRequest.newBuilder(uri)
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "application/json");
+    }
+
+    private void validateDownloadUrl(URI uri)
+            throws SoftwareInstallationException {
+        String host = uri.getHost();
+        if (requireOfficialHosts
+                && (!"https".equalsIgnoreCase(uri.getScheme())
+                || host == null
+                || !(host.equals("papermc.io")
+                || host.endsWith(".papermc.io")))) {
+            throw new SoftwareInstallationException(
+                    "Paper returned an untrusted download URL"
+            );
+        }
+    }
+
+    private static Map<?, ?> map(Object value, String field)
+            throws SoftwareInstallationException {
+        if (value instanceof Map<?, ?> map) {
+            return map;
+        }
+        throw new SoftwareInstallationException(
+                "Paper metadata is missing " + field
+        );
+    }
+
+    private static String required(Map<?, ?> map, String field)
+            throws SoftwareInstallationException {
+        Object value = map.get(field);
+        if (value == null || value.toString().isBlank()) {
+            throw new SoftwareInstallationException(
+                    "Paper metadata is missing " + field
+            );
+        }
+        return value.toString();
+    }
+
+    private static void requireSuccess(int status, String operation)
+            throws SoftwareInstallationException {
+        if (status < 200 || status >= 300) {
+            throw new SoftwareInstallationException(
+                    operation + " request failed with HTTP " + status
+            );
+        }
+    }
+
+    private static String sha256(Path path) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (var input = Files.newInputStream(path)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                digest.update(buffer, 0, read);
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static long copyBounded(
+            InputStream input,
+            Path destination,
+            long expected
+    ) throws Exception {
+        long maximum = Math.min(MAX_DOWNLOAD_BYTES, expected);
+        long total = 0;
+        try (var output = Files.newOutputStream(destination)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                total += read;
+                if (total > maximum) {
+                    throw new SoftwareInstallationException(
+                            "Paper artifact exceeded its declared size"
+                    );
+                }
+                output.write(buffer, 0, read);
+            }
+        }
+        return total;
+    }
+
+    private static byte[] readBounded(InputStream input, int maximum)
+            throws Exception {
+        var output = new java.io.ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = input.read(buffer)) >= 0) {
+            if (output.size() + read > maximum) {
+                throw new SoftwareInstallationException(
+                        "Paper metadata response is too large"
+                );
+            }
+            output.write(buffer, 0, read);
+        }
+        return output.toByteArray();
+    }
+
+    private record PaperDownload(
+            String build,
+            URI url,
+            long size,
+            String sha256
+    ) {
+    }
+}

@@ -5,6 +5,7 @@ import net.slimelabs.slslite.blueprint.BlueprintLifecyclePolicy;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import net.slimelabs.slslite.software.SoftwareProfile;
+import net.slimelabs.slslite.software.SoftwareConfigurator;
 
 import java.util.Collection;
 import java.util.Map;
@@ -60,10 +61,19 @@ public final class ConfigurationValidator {
                         "Blueprint '" + blueprint.id() + "': " + exception.getMessage()
                 );
             }
-            if (!profilesById.containsKey(blueprint.software())) {
+            SoftwareProfile profile = profilesById.get(blueprint.software());
+            if (profile == null) {
                 throw new ConfigurationException(
                         "Blueprint '" + blueprint.id() + "' references missing software profile '"
                                 + blueprint.software() + "'"
+                );
+            }
+            if (config.forwarding().mode() == ForwardingMode.MODERN
+                    && profile.configurator() == SoftwareConfigurator.VANILLA) {
+                throw new ConfigurationException(
+                        "Blueprint '" + blueprint.id()
+                                + "' uses vanilla software, which does not support "
+                                + "Velocity modern forwarding"
                 );
             }
             if (blueprint.memoryLimitMiB() > config.totalMemoryMiB()) {

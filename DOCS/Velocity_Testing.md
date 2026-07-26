@@ -143,6 +143,29 @@ target player to be on a ready, registered SLS-LITE instance. Verify the same
 command without `--force` returns `Instance is full` when that instance has
 reached `max_players`.
 
+### Forced Managed-Lobby Stop
+
+Use this only while testing a managed primary lobby and a healthy SLS-Limbo:
+
+1. Join the managed lobby and confirm `/sls info this` identifies its exact
+   `<blueprint>.<id>` instance.
+2. Run `/sls stop this` and confirm SLS-LITE rejects the protected stop.
+3. Run `/sls stop this --force` as a built-in administrator or with
+   `sls.command.stop.force`.
+4. While evacuation is in progress, connect another player and confirm that
+   player routes to SLS-Limbo instead of the draining managed lobby.
+5. Confirm the player already on the managed lobby transfers to SLS-Limbo
+   before Paper receives its stop command.
+6. If evacuation fails, confirm the stop is cancelled and the managed lobby
+   becomes the preferred lobby again.
+7. Confirm the proxy log records the sender, target, and final exit code.
+6. Wait longer than the configured managed-lobby recovery backoff and confirm
+   no replacement lobby starts.
+7. Restart Velocity and confirm normal managed-lobby startup resumes.
+
+If SLS-Limbo is unavailable while players remain on the managed lobby, the
+command must cancel the stop and report that no alternate lobby is ready.
+
 ## Persistent Lifecycle Test
 
 Start and join the persistent fixture:

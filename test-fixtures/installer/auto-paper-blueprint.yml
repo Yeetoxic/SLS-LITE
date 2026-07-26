@@ -1,0 +1,21 @@
+blueprint:
+  id: auto-paper
+  name: Auto-installed Paper
+  type: smoke
+
+server:
+  software: paper-auto
+  version: "26.2"
+  limits:
+    max_players: 5
+    max_instances: 1
+    memory_limit: 768
+
+save: false
+
+annotations:
+  sls-lite:
+    keep-alive: false
+    idle-shutdown-seconds: 120
+    start-on-proxy-start: false
+    stop-when-empty: true

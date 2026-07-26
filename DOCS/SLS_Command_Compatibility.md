@@ -38,7 +38,7 @@ upstream umbrella behavior.
 | `delete <server\|all>` | Admin | Planned | Define safe persistent and ephemeral deletion behavior. |
 | `logs <server> [page] [lines]` | Admin | Adapted | vSLS pagination is backed by a bounded 1,000-line local process-output buffer. |
 | `reload [all\|config\|blueprints\|software]` | Admin | Adapted | Blueprint/software candidates are cross-validated and installed as one immutable catalog revision. Add upstream `config` mode only when host-wide services can be rebuilt safely; until then `config.yml` requires a Velocity restart. |
-| `stop <server\|all> [force]` | Admin | Adapted | Add `all` and compatible `force` behavior. |
+| `stop <server\|all> [force]` | Admin | Adapted | Local servers stop gracefully after evacuation. `/sls stop <server> --force` bypasses managed-lobby protection, requires `sls.command.stop.force` or the umbrella admin permission, diverts new arrivals and evacuates connected players to SLS-Limbo, restores primary routing if evacuation fails, suppresses recovery after a successful drain, and writes an audit log. Add `all` and the upstream non-dashed alias only after their exact behavior is confirmed. |
 | `kill <server\|all> [force]` | Admin | Planned | Add explicit force-termination behavior. |
 | `dequeue [all\|local\|player]` | Self public; others admin | Adapted | Match final vSLS feedback and queue context. |
 | `status <server> [remote]` | Admin | Adapted | Local status output matched; add the `remote` local-mode response. |
@@ -48,7 +48,7 @@ upstream umbrella behavior.
 | `resume <server>` | Admin | Compatibility response | Local process resumption is not implemented yet. |
 | `restart <server>` | Admin | Adapted | Evacuates an active persistent server and restarts the same ID and directory; stopped instances can be recovered after a proxy restart. |
 | `reset <server>` | Admin | Adapted | Uses rollback-protected template restoration, retains the same ID, and starts the reset server. |
-| `install <info\|logs>` | Admin | Compatibility response | Define whether software installation has a safe local equivalent. |
+| `install <info\|logs>` | Admin | Adapted | `/sls install info` lists local installation state and `/sls install logs <software> <version>` shows the bounded provider log. Start and join requests trigger missing provider-backed software automatically. |
 
 ## Presentation Contract
 
@@ -81,3 +81,9 @@ falling through as an unknown command.
 6. Test the complete tree against a versioned command fixture before release.
 7. Review the upstream command implementation and documentation whenever the
    pinned SLS target changes.
+
+SLS-LITE granular stop permissions are additive:
+
+- `sls.command.stop` permits normal graceful stops.
+- `sls.command.stop.force` permits the protected managed-lobby override.
+- `sls.command.admin` and built-in SLS-LITE administrators permit both.

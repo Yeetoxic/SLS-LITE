@@ -12,6 +12,8 @@ implementation. The current development baseline provides:
 - A Java 21-compatible Velocity 4.1 plugin foundation.
 - Modern SLS-style blueprint metadata.
 - Validated host configuration and software launch profiles.
+- Locked and verified Paper and vanilla installation with manual custom
+  software support.
 - Validated YAML loading and reload support.
 - Explicit server-instance lifecycle states.
 - Configurable idle shutdown for empty ephemeral instances.
@@ -32,6 +34,14 @@ with Velocity, and connect requested players after an instance becomes ready.
 Matchmaking queues, capacity enforcement, persistent-instance restart/reset,
 and external or managed lobby routing are implemented. Production hardening is
 not complete. Do not deploy this development version to a production network.
+
+Managed lobbies are protected from ordinary stop commands. An administrator can
+intentionally stop one with `/sls stop <instance> --force`; connected players
+are moved to SLS-Limbo first and new arrivals are diverted there while the lobby
+drains. A failed evacuation restores normal lobby routing. After evacuation,
+automatic recovery is suppressed and the action is recorded in the proxy log.
+The override requires `sls.command.stop.force`, the umbrella
+`sls.command.admin` permission, or built-in administration.
 
 ## Goal
 
@@ -257,6 +267,12 @@ SLS-LITE also creates `software-profiles/paper.yml`:
 ```yaml
 software:
   id: paper
+  runtime: java-jar
+  configurator: paper
+  source: paper
+  channel: stable
+  # Set true only after reviewing https://aka.ms/MinecraftEULA
+  accept_eula: false
   base_directory: software/paper/{version}
   server_jar: paper.jar
 
@@ -277,10 +293,12 @@ shutdown:
   timeout_seconds: 30
 ```
 
-Launch arguments are represented as YAML lists so future process creation can
-pass them directly to Java without invoking a command shell. The first process
-supervisor will support manually prepared Paper installations at
-`software/paper/{version}/paper.jar`.
+Launch arguments are YAML lists and are passed directly to Java without a
+command shell. Set `accept_eula: true` only after reviewing the Minecraft EULA.
+Missing provider-backed software is installed by the first start or join
+request. Existing profiles without `source` remain manual. Custom Java servers
+remain supported with `source: manual` and `configurator: generic`. See
+[DOCS/Software_Installation.md](DOCS/Software_Installation.md).
 
 ## Build
 

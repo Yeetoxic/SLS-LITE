@@ -13,14 +13,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class PaperProcessSpecFactoryTest {
+class JavaJarProcessSpecFactoryTest {
 
     @TempDir
     Path temporaryDirectory;
 
     @Test
     void buildsShellFreePaperCommandWithExpandedArguments() throws Exception {
-        PaperProcessSpecFactory factory = new PaperProcessSpecFactory(temporaryDirectory);
+        JavaJarProcessSpecFactory factory = new JavaJarProcessSpecFactory(temporaryDirectory);
         Path instanceDirectory = temporaryDirectory.resolve("instances/game-abc123");
 
         ProcessSpec spec = factory.create(
@@ -42,7 +42,7 @@ class PaperProcessSpecFactoryTest {
 
     @Test
     void resolvesVersionedSoftwareDirectoryUnderDataDirectory() throws Exception {
-        PaperProcessSpecFactory factory = new PaperProcessSpecFactory(temporaryDirectory);
+        JavaJarProcessSpecFactory factory = new JavaJarProcessSpecFactory(temporaryDirectory);
 
         Path result = factory.resolveBaseDirectory(profile("paper.jar"), "26.1");
 
@@ -53,8 +53,39 @@ class PaperProcessSpecFactoryTest {
     }
 
     @Test
+    void resolvesSourceAndChannelSoftwareDirectoryPlaceholders() throws Exception {
+        JavaJarProcessSpecFactory factory = new JavaJarProcessSpecFactory(
+                temporaryDirectory
+        );
+        SoftwareProfile profile = new SoftwareProfile(
+                "paper",
+                net.slimelabs.slslite.software.SoftwareRuntime.JAVA_JAR,
+                net.slimelabs.slslite.software.SoftwareConfigurator.PAPER,
+                net.slimelabs.slslite.software.SoftwareSource.PAPER,
+                net.slimelabs.slslite.software.SoftwareReleaseChannel.BETA,
+                true,
+                "java",
+                Map.of(),
+                "software/{source}/{channel}/{version}",
+                "paper.jar",
+                List.of(),
+                List.of(),
+                "Done",
+                180,
+                "stop",
+                30
+        );
+
+        assertEquals(
+                temporaryDirectory.resolve("software/paper/beta/26.2")
+                        .toAbsolutePath().normalize(),
+                factory.resolveBaseDirectory(profile, "26.2")
+        );
+    }
+
+    @Test
     void rejectsUnsafeVersionAndJarTraversal() {
-        PaperProcessSpecFactory factory = new PaperProcessSpecFactory(temporaryDirectory);
+        JavaJarProcessSpecFactory factory = new JavaJarProcessSpecFactory(temporaryDirectory);
         Path instanceDirectory = temporaryDirectory.resolve("instances/game-abc123");
 
         assertThrows(
@@ -75,7 +106,7 @@ class PaperProcessSpecFactoryTest {
 
     @Test
     void rejectsUnknownArgumentPlaceholder() {
-        PaperProcessSpecFactory factory = new PaperProcessSpecFactory(temporaryDirectory);
+        JavaJarProcessSpecFactory factory = new JavaJarProcessSpecFactory(temporaryDirectory);
         SoftwareProfile profile = new SoftwareProfile(
                 "paper",
                 "java",

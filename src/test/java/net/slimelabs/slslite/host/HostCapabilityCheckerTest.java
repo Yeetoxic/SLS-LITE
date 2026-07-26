@@ -1,7 +1,7 @@
 package net.slimelabs.slslite.host;
 
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
-import net.slimelabs.slslite.process.PaperProcessSpecFactory;
+import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.software.SoftwareProfile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -25,7 +25,7 @@ class HostCapabilityCheckerTest {
                 temporaryDirectory.resolve("instances"),
                 ports,
                 List.of(profile(javaExecutable())),
-                new PaperProcessSpecFactory(temporaryDirectory),
+                new JavaJarProcessSpecFactory(temporaryDirectory),
                 1024
         );
 
@@ -42,7 +42,7 @@ class HostCapabilityCheckerTest {
                 temporaryDirectory.resolve("instances"),
                 new LoopbackPortAllocator(31171, 31270),
                 List.of(profile("definitely-not-a-java-runtime")),
-                new PaperProcessSpecFactory(temporaryDirectory),
+                new JavaJarProcessSpecFactory(temporaryDirectory),
                 1024
         );
 

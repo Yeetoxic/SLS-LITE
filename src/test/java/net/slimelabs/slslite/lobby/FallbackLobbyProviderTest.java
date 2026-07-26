@@ -1,5 +1,7 @@
 package net.slimelabs.slslite.lobby;
 
+import com.velocitypowered.api.proxy.ConnectionRequestBuilder;
+import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.server.ServerInfo;
@@ -9,11 +11,16 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -113,6 +120,67 @@ class FallbackLobbyProviderTest {
         fallback.close();
     }
 
+    @Test
+    void forcedPrimaryStopEvacuatesPlayersToSLSLimbo() {
+        AtomicReference<RegisteredServer> requestedServer = new AtomicReference<>();
+        Player player = player(requestedServer);
+        RegisteredServer primaryServer = server("lobby", List.of(player));
+        RegisteredServer limboServer = server("sls-limbo");
+        Map<String, RegisteredServer> servers = new LinkedHashMap<>();
+        servers.put("lobby", primaryServer);
+        servers.put("sls-limbo", limboServer);
+        LobbyProvider primary = provider(
+                "primary", "lobby", primaryServer, new ArrayList<>()
+        );
+        LobbyProvider limbo = provider(
+                "limbo", "sls-limbo", limboServer, new ArrayList<>()
+        );
+        FallbackLobbyProvider fallback = new FallbackLobbyProvider(
+                proxy(servers),
+                primary,
+                limbo,
+                LoggerFactory.getLogger(FallbackLobbyProviderTest.class)
+        );
+        fallback.start();
+
+        assertTrue(fallback.beginIntentionalStop("lobby"));
+        assertSame(limboServer, fallback.server().orElseThrow());
+        fallback.refreshPrimaryAvailability();
+        assertSame(limboServer, fallback.server().orElseThrow());
+        fallback.evacuateForIntentionalStop("lobby").join();
+
+        assertSame(limboServer, requestedServer.get());
+        fallback.close();
+    }
+
+    @Test
+    void cancelledPrimaryStopRestoresPrimaryRouting() {
+        RegisteredServer primaryServer = server("lobby");
+        RegisteredServer limboServer = server("sls-limbo");
+        LobbyProvider primary = provider(
+                "primary", "lobby", primaryServer, new ArrayList<>()
+        );
+        LobbyProvider limbo = provider(
+                "limbo", "sls-limbo", limboServer, new ArrayList<>()
+        );
+        FallbackLobbyProvider fallback = new FallbackLobbyProvider(
+                proxy(),
+                primary,
+                limbo,
+                LoggerFactory.getLogger(FallbackLobbyProviderTest.class)
+        );
+        fallback.start();
+
+        assertTrue(fallback.beginIntentionalStop("lobby"));
+        assertFalse(fallback.beginIntentionalStop("lobby"));
+        assertSame(limboServer, fallback.server().orElseThrow());
+
+        fallback.cancelIntentionalStop("lobby");
+
+        assertSame(primaryServer, fallback.server().orElseThrow());
+        fallback.close();
+    }
+
     private static LobbyProvider provider(
             String label,
             String serverName,
@@ -176,14 +244,25 @@ class FallbackLobbyProviderTest {
     }
 
     private static ProxyServer proxy() {
+        return proxy(Map.of());
+    }
+
+    private static ProxyServer proxy(Map<String, RegisteredServer> servers) {
         return (ProxyServer) Proxy.newProxyInstance(
                 ProxyServer.class.getClassLoader(),
                 new Class<?>[]{ProxyServer.class},
-                (proxy, method, arguments) -> defaultValue(method.getReturnType())
+                (proxy, method, arguments) -> switch (method.getName()) {
+                    case "getServer" -> Optional.ofNullable(servers.get(arguments[0]));
+                    default -> defaultValue(method.getReturnType());
+                }
         );
     }
 
     private static RegisteredServer server(String name) {
+        return server(name, List.of());
+    }
+
+    private static RegisteredServer server(String name, Collection<Player> players) {
         ServerInfo info = new ServerInfo(
                 name,
                 InetSocketAddress.createUnresolved("127.0.0.1", 25566)
@@ -191,9 +270,51 @@ class FallbackLobbyProviderTest {
         return (RegisteredServer) Proxy.newProxyInstance(
                 RegisteredServer.class.getClassLoader(),
                 new Class<?>[]{RegisteredServer.class},
-                (proxy, method, arguments) -> "getServerInfo".equals(method.getName())
-                        ? info
-                        : defaultValue(method.getReturnType())
+                (proxy, method, arguments) -> switch (method.getName()) {
+                    case "getServerInfo" -> info;
+                    case "getPlayersConnected" -> players;
+                    default -> defaultValue(method.getReturnType());
+                }
+        );
+    }
+
+    private static Player player(AtomicReference<RegisteredServer> requestedServer) {
+        ConnectionRequestBuilder.Result result =
+                (ConnectionRequestBuilder.Result) Proxy.newProxyInstance(
+                        ConnectionRequestBuilder.Result.class.getClassLoader(),
+                        new Class<?>[]{ConnectionRequestBuilder.Result.class},
+                        (proxy, method, arguments) -> switch (method.getName()) {
+                            case "getStatus" -> ConnectionRequestBuilder.Status.SUCCESS;
+                            case "getReasonComponent" -> Optional.empty();
+                            default -> defaultValue(method.getReturnType());
+                        }
+                );
+        return (Player) Proxy.newProxyInstance(
+                Player.class.getClassLoader(),
+                new Class<?>[]{Player.class},
+                (proxy, method, arguments) -> {
+                    if ("getUsername".equals(method.getName())) {
+                        return "FallbackTester";
+                    }
+                    if ("createConnectionRequest".equals(method.getName())) {
+                        requestedServer.set((RegisteredServer) arguments[0]);
+                        return connectionRequest(result);
+                    }
+                    return defaultValue(method.getReturnType());
+                }
+        );
+    }
+
+    private static ConnectionRequestBuilder connectionRequest(
+            ConnectionRequestBuilder.Result result
+    ) {
+        return (ConnectionRequestBuilder) Proxy.newProxyInstance(
+                ConnectionRequestBuilder.class.getClassLoader(),
+                new Class<?>[]{ConnectionRequestBuilder.class},
+                (proxy, method, arguments) -> switch (method.getName()) {
+                    case "connect" -> CompletableFuture.completedFuture(result);
+                    default -> defaultValue(method.getReturnType());
+                }
         );
     }
 
