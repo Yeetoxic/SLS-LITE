@@ -40,6 +40,10 @@ public final class BlueprintRepository {
     }
 
     public synchronized void reload() throws IOException, BlueprintException {
+        install(loadSnapshot());
+    }
+
+    public Snapshot loadSnapshot() throws IOException, BlueprintException {
         Map<String, Blueprint> loaded = new LinkedHashMap<>();
 
         for (Path path : blueprintFiles()) {
@@ -49,8 +53,15 @@ public final class BlueprintRepository {
                 throw new BlueprintException("Duplicate blueprint id '" + blueprint.id() + "'");
             }
         }
+        return new Snapshot(loaded);
+    }
 
-        blueprints = Map.copyOf(loaded);
+    public Snapshot snapshot() {
+        return new Snapshot(blueprints);
+    }
+
+    public synchronized void install(Snapshot snapshot) {
+        blueprints = snapshot.values();
     }
 
     public Optional<Blueprint> get(String id) {
@@ -248,5 +259,15 @@ public final class BlueprintRepository {
 
     private static BlueprintException error(Path path, String message) {
         return new BlueprintException(path + ": " + message);
+    }
+
+    public record Snapshot(Map<String, Blueprint> values) {
+        public Snapshot {
+            values = Map.copyOf(values);
+        }
+
+        public Collection<Blueprint> getAll() {
+            return values.values();
+        }
     }
 }

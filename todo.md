@@ -341,6 +341,10 @@ the local implementation has equivalent behavior.
 
 - [ ] Pause feature expansion and complete a full project review before beginning
       automatic Paper downloads or any other provider-backed installer work.
+  - [x] Resolve the first review's lifecycle and resource findings:
+    reclaim verified orphan children, enforce `max_instances` in the controller,
+    cross-validate definition reloads before installation, and release terminal
+    SLS-Limbo reservations.
   - Review architecture, lifecycle ownership, concurrency, cleanup, path
     security, resource accounting, configuration compatibility, commands,
     permissions, diagnostics, and public documentation.
@@ -404,7 +408,9 @@ the local implementation has equivalent behavior.
       allowing existing instances to finish.
 - [x] Add startup reconciliation with durable ownership metadata so SLS-LITE
       removes confirmed dead ephemeral directories after an unclean shutdown
-      while preserving persistent, live, malformed, and legacy directories.
+      and reclaims surviving children only when PID and process start time both
+      match, while preserving persistent data, ambiguous live processes,
+      malformed metadata, and legacy directories.
 - [x] Probe loopback ports during allocation so ports retained by surviving
       processes are skipped after restart.
 - [ ] Reconcile plugin-owned Velocity registrations if supported plugin hot

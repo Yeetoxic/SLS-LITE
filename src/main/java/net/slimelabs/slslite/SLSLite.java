@@ -234,6 +234,7 @@ public final class SLSLite {
                         joinService,
                         lobbyProvider,
                         configuration.get().managedOutput(),
+                        configuration.get(),
                         hostCapabilities,
                         administrators,
                         adminClaims,

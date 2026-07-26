@@ -115,6 +115,7 @@ public final class InstanceManager implements ServerController {
             if (closed) {
                 throw new InstanceOperationException("Instance manager is shutting down");
             }
+            enforceInstanceLimit(blueprint, null);
             instanceId = uniqueInstanceId(blueprint.id());
             if (!resourceBudget.tryReserve(instanceId, blueprint.memoryLimitMiB())) {
                 throw new InstanceOperationException(
@@ -611,6 +612,7 @@ public final class InstanceManager implements ServerController {
                         "Instance is already active: " + instanceId
                 );
             }
+            enforceInstanceLimit(blueprint, instanceId);
             if (!resourceBudget.tryReserve(instanceId, blueprint.memoryLimitMiB())) {
                 throw new InstanceOperationException(
                         "Insufficient managed memory for "
@@ -724,6 +726,25 @@ public final class InstanceManager implements ServerController {
             }
         }
         throw new InstanceOperationException("Unable to generate a unique instance ID");
+    }
+
+    private void enforceInstanceLimit(Blueprint blueprint, String restartingId)
+            throws InstanceOperationException {
+        long active = instances.values().stream()
+                .filter(instance -> instance.blueprint().id().equals(blueprint.id()))
+                .filter(instance -> restartingId == null
+                        || !instance.id().equals(restartingId))
+                .filter(instance -> instance.state() != InstanceState.STOPPING
+                        && instance.state() != InstanceState.STOPPED
+                        && instance.state() != InstanceState.FAILED)
+                .count();
+        if (active >= blueprint.maxInstances()) {
+            throw new InstanceOperationException(
+                    "Blueprint " + blueprint.type() + "/" + blueprint.id()
+                            + " has reached its limit of "
+                            + blueprint.maxInstances() + " active instance(s)"
+            );
+        }
     }
 
     private void writeMetadata(

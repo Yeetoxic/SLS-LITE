@@ -92,12 +92,14 @@ Unclean-shutdown reconciliation checks:
    `.sls-lite-instance.properties`.
 2. Terminate the test allocation without a graceful proxy shutdown, then start
    it again.
-3. The startup reconciliation summary must report the dead ephemeral instance
-   as removed before the managed lobby starts.
-4. An unmarked legacy directory and any `save: true` directory must remain and
-   be reported as preserved.
-5. A loopback port still owned by a surviving process must be skipped by the
-   allocator.
+3. If the child process survived, SLS-LITE must stop it only after matching both
+   its recorded PID and process start time.
+4. The startup reconciliation summary must report the ephemeral instance as
+   removed before the managed lobby starts.
+5. A verified surviving `save: true` child must be stopped while its directory
+   remains and its metadata is normalized to `STOPPED`.
+6. An unmarked legacy directory and live processes without verifiable identity
+   data must remain and be reported as preserved.
 
 Managed-lobby recovery checks:
 

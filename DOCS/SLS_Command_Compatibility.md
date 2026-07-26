@@ -37,7 +37,7 @@ upstream umbrella behavior.
 | `debug` | Public, player-only | Planned | Add per-player local lifecycle diagnostics. |
 | `delete <server\|all>` | Admin | Planned | Define safe persistent and ephemeral deletion behavior. |
 | `logs <server> [page] [lines]` | Admin | Adapted | vSLS pagination is backed by a bounded 1,000-line local process-output buffer. |
-| `reload [all\|config\|blueprints\|software]` | Admin | Adapted | Add the upstream `config` mode. |
+| `reload [all\|config\|blueprints\|software]` | Admin | Adapted | Blueprint/software candidates are cross-validated before either is installed. Add upstream `config` mode only when host-wide services can be rebuilt safely; until then `config.yml` requires a Velocity restart. |
 | `stop <server\|all> [force]` | Admin | Adapted | Add `all` and compatible `force` behavior. |
 | `kill <server\|all> [force]` | Admin | Planned | Add explicit force-termination behavior. |
 | `dequeue [all\|local\|player]` | Self public; others admin | Adapted | Match final vSLS feedback and queue context. |

@@ -3,6 +3,7 @@ package net.slimelabs.slslite.instance;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
+import net.slimelabs.slslite.process.FixtureProcessMain;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,33 +43,43 @@ final class InstanceReconcilerTest {
         ));
 
         Path running = directory(root, "game.abcd89");
-        ProcessHandle current = ProcessHandle.current();
+        Process process = fixtureProcess();
         metadata.write(running, record(
                 "game.abcd89",
                 false,
                 InstanceState.READY,
-                current.pid(),
-                current.info().startInstant().orElse(null)
+                process.pid(),
+                process.info().startInstant().orElseThrow()
         ));
 
         Path unknown = directory(root, "legacy.abc012");
         Files.writeString(unknown.resolve("server.properties"), "server-port=25565");
 
-        InstanceReconciliationReport report = new InstanceReconciler(
-                preparer,
-                LoggerFactory.getLogger(InstanceReconcilerTest.class)
-        ).reconcile();
+        InstanceReconciliationReport report;
+        try {
+            report = new InstanceReconciler(
+                    preparer,
+                    LoggerFactory.getLogger(InstanceReconcilerTest.class)
+            ).reconcile();
+            process.onExit().get(2, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+                process.onExit().get(2, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        }
 
         assertEquals(4, report.inspected());
-        assertEquals(1, report.removedEphemeral());
+        assertEquals(2, report.removedEphemeral());
         assertEquals(1, report.preservedPersistent());
-        assertEquals(1, report.preservedRunning());
+        assertEquals(0, report.preservedRunning());
         assertEquals(1, report.preservedUnknown());
         assertEquals(0, report.failures());
         assertFalse(Files.exists(ephemeral));
         assertTrue(Files.isDirectory(persistent));
-        assertTrue(Files.isDirectory(running));
+        assertFalse(Files.exists(running));
         assertTrue(Files.isDirectory(unknown));
+        assertFalse(process.isAlive());
     }
 
     @Test
@@ -89,8 +100,84 @@ final class InstanceReconcilerTest {
         assertTrue(Files.isDirectory(malformed));
     }
 
+    @Test
+    void stopsVerifiedPersistentChildAndKeepsWorldAsStopped() throws Exception {
+        Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+        Path persistent = directory(root, "survival.abc123");
+        Process process = fixtureProcess();
+        InstanceMetadataStore metadata = new InstanceMetadataStore(root);
+        metadata.write(persistent, record(
+                "survival.abc123",
+                true,
+                InstanceState.READY,
+                process.pid(),
+                process.info().startInstant().orElseThrow()
+        ));
+
+        InstanceReconciliationReport report;
+        try {
+            report = new InstanceReconciler(
+                    new InstanceDirectoryPreparer(root),
+                    LoggerFactory.getLogger(InstanceReconcilerTest.class)
+            ).reconcile();
+            process.onExit().get(2, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+                process.onExit().get(2, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        }
+
+        InstanceMetadata normalized = metadata.read(persistent).orElseThrow();
+        assertEquals(1, report.preservedPersistent());
+        assertTrue(Files.isDirectory(persistent));
+        assertEquals(InstanceState.STOPPED, normalized.state());
+        assertEquals(null, normalized.processId());
+    }
+
+    @Test
+    void preservesLiveProcessWhenStartIdentityIsMissing() throws Exception {
+        Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+        Path ambiguous = directory(root, "game.abc123");
+        ProcessHandle current = ProcessHandle.current();
+        new InstanceMetadataStore(root).write(ambiguous, record(
+                "game.abc123",
+                false,
+                InstanceState.READY,
+                current.pid(),
+                null
+        ));
+
+        InstanceReconciliationReport report = new InstanceReconciler(
+                new InstanceDirectoryPreparer(root),
+                LoggerFactory.getLogger(InstanceReconcilerTest.class)
+        ).reconcile();
+
+        assertEquals(1, report.preservedRunning());
+        assertTrue(Files.isDirectory(ambiguous));
+        assertTrue(current.isAlive());
+    }
+
     private static Path directory(Path root, String name) throws Exception {
         return Files.createDirectories(root.resolve(name));
+    }
+
+    private static Process fixtureProcess() throws Exception {
+        boolean windows = System.getProperty("os.name")
+                .toLowerCase(java.util.Locale.ROOT)
+                .contains("windows");
+        String executable = Path.of(
+                System.getProperty("java.home"),
+                "bin",
+                windows ? "java.exe" : "java"
+        ).toString();
+        return new ProcessBuilder(
+                executable,
+                "-cp",
+                System.getProperty("java.class.path"),
+                FixtureProcessMain.class.getName(),
+                "silent"
+        ).start();
     }
 
     private static InstanceMetadata record(

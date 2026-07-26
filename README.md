@@ -193,12 +193,12 @@ matchmaking request from being assigned while shutdown begins.
 
 Each managed instance contains an internal `.sls-lite-instance.properties`
 ownership record. On startup, SLS-LITE uses that record to remove confirmed
-stale ephemeral directories left by an unclean shutdown. Persistent instances,
-matching live child processes, malformed records, and directories from older
-versions without metadata are preserved and reported rather than deleted.
-Loopback ports are probed before allocation, so a surviving process cannot be
-assigned a conflicting port. Persistent instances are not automatically resumed
-yet.
+stale ephemeral directories left by an unclean shutdown. A live child is stopped
+only when both its PID and recorded start time match; its ephemeral directory is
+then removed, or its persistent directory is normalized to `STOPPED`. Live
+processes without enough identity data, malformed records, and directories from
+older versions without metadata are preserved and reported. Persistent
+instances are not automatically resumed yet.
 
 Administrators can recover or cycle a persistent instance using its original
 composite ID:
@@ -320,7 +320,8 @@ annotations:
 `max_players` applies to each instance and is written to `server.properties`.
 Queued joins reserve slots before the backend is ready. When all instances are
 full, SLS-LITE may start another instance up to `max_instances`; afterward it
-rejects the join with a capacity error. Memory admission can still reject a
+rejects the join with a capacity error. The same limit applies to direct
+administrative starts and internal callers. Memory admission can still reject a
 permitted instance when the host-wide managed-memory budget is exhausted.
 
 ## Roadmap

@@ -47,6 +47,10 @@ public final class SoftwareProfileRepository {
     }
 
     public synchronized void reload() throws IOException, ConfigurationException {
+        install(loadSnapshot());
+    }
+
+    public Snapshot loadSnapshot() throws IOException, ConfigurationException {
         Map<String, SoftwareProfile> loaded = new LinkedHashMap<>();
         for (Path path : profileFiles()) {
             SoftwareProfile profile = read(path);
@@ -57,7 +61,15 @@ public final class SoftwareProfileRepository {
                 );
             }
         }
-        profiles = Map.copyOf(loaded);
+        return new Snapshot(loaded);
+    }
+
+    public Snapshot snapshot() {
+        return new Snapshot(profiles);
+    }
+
+    public synchronized void install(Snapshot snapshot) {
+        profiles = snapshot.values();
     }
 
     public Optional<SoftwareProfile> get(String id) {
@@ -181,5 +193,15 @@ public final class SoftwareProfileRepository {
     private static boolean isYaml(Path path) {
         String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
         return name.endsWith(".yml") || name.endsWith(".yaml");
+    }
+
+    public record Snapshot(Map<String, SoftwareProfile> values) {
+        public Snapshot {
+            values = Map.copyOf(values);
+        }
+
+        public Collection<SoftwareProfile> getAll() {
+            return values.values();
+        }
     }
 }

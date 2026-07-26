@@ -15,6 +15,8 @@ import net.slimelabs.slslite.BuildInfo;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
+import net.slimelabs.slslite.config.DefinitionReloader;
+import net.slimelabs.slslite.config.SLSConfig;
 import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityReport;
 import net.slimelabs.slslite.host.HostCapabilityStatus;
@@ -69,6 +71,7 @@ public final class SLSCommand implements SimpleCommand {
     private final LocalJoinService joinService;
     private final LobbyProvider lobbyProvider;
     private final ManagedOutputConfig outputConfig;
+    private final SLSConfig activeConfig;
     private final HostCapabilityReport hostCapabilities;
     private final AdministratorStore administrators;
     private final AdminClaimService adminClaims;
@@ -84,6 +87,7 @@ public final class SLSCommand implements SimpleCommand {
             LocalJoinService joinService,
             LobbyProvider lobbyProvider,
             ManagedOutputConfig outputConfig,
+            SLSConfig activeConfig,
             HostCapabilityReport hostCapabilities,
             AdministratorStore administrators,
             AdminClaimService adminClaims,
@@ -97,6 +101,7 @@ public final class SLSCommand implements SimpleCommand {
         this.joinService = joinService;
         this.lobbyProvider = lobbyProvider;
         this.outputConfig = outputConfig;
+        this.activeConfig = activeConfig;
         this.hostCapabilities = hostCapabilities;
         this.administrators = administrators;
         this.adminClaims = adminClaims;
@@ -1423,18 +1428,23 @@ public final class SLSCommand implements SimpleCommand {
             return;
         }
         try {
-            if ("all".equals(mode) || "software".equals(mode)) {
-                softwareProfiles.reload();
-            }
-            if ("all".equals(mode) || "blueprints".equals(mode)) {
-                blueprints.reload();
-            }
+            DefinitionReloader.reload(
+                    activeConfig,
+                    blueprints,
+                    softwareProfiles,
+                    "all".equals(mode) || "blueprints".equals(mode),
+                    "all".equals(mode) || "software".equals(mode)
+            );
             source.sendMessage(CommandMessages.message(
                     "Reloaded " + mode + ": " + blueprints.getTypes().size()
                             + " registries, " + blueprints.getAll().size()
                             + " blueprints, " + softwareProfiles.getAll().size()
                             + " software profiles.",
                     NamedTextColor.GREEN
+            ));
+            source.sendMessage(CommandMessages.message(
+                    "Host config changes require a Velocity restart.",
+                    NamedTextColor.GRAY
             ));
         } catch (Exception exception) {
             logger.error("Unable to reload SLS-LITE " + mode, exception);

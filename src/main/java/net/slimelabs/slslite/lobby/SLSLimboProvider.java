@@ -431,6 +431,7 @@ public final class SLSLimboProvider implements LobbyProvider {
                     nextAttempt,
                     rootMessage(failure)
             );
+            releaseAfterTerminalFailure(failedProcess);
         } else {
             logger.warn(
                     "SLS-Limbo unavailable; recovery attempt {}/{} starts "
@@ -482,13 +483,25 @@ public final class SLSLimboProvider implements LobbyProvider {
         if (!resourcesReleased.compareAndSet(false, true)) {
             return;
         }
-        if (port >= 0) {
-            ports.release(port);
+        int reservedPort = port;
+        port = -1;
+        if (reservedPort >= 0) {
+            ports.release(reservedPort);
         }
         if (memoryReserved) {
             resourceBudget.release(SERVER_NAME);
             memoryReserved = false;
         }
+    }
+
+    private void releaseAfterTerminalFailure(SupervisedProcess failedProcess) {
+        if (failedProcess == null) {
+            releaseResources();
+            return;
+        }
+        failedProcess.exitFuture().whenComplete(
+                (exitCode, exitFailure) -> releaseResources()
+        );
     }
 
     private ProcessSpec processSpec(

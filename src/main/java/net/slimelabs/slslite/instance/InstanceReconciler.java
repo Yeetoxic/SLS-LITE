@@ -10,8 +10,12 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public final class InstanceReconciler {
+
+    private static final long PROCESS_STOP_TIMEOUT_SECONDS = 5;
 
     private final InstanceDirectoryPreparer directoryPreparer;
     private final InstanceMetadataStore metadataStore;
@@ -75,21 +79,51 @@ public final class InstanceReconciler {
             );
             return;
         }
-        if (metadata.persistent()) {
-            report.preservedPersistent++;
-            logger.info(
-                    "Preserving persistent instance {} from blueprint {}",
-                    metadata.instanceId(),
-                    metadata.blueprintId()
+        Optional<ProcessHandle> verifiedProcess = verifiedRecordedProcess(metadata);
+        if (verifiedProcess.isPresent()) {
+            try {
+                terminate(verifiedProcess.orElseThrow(), metadata.instanceId());
+                logger.warn(
+                        "Stopped orphaned managed process for instance {} during reconciliation",
+                        metadata.instanceId()
+                );
+            } catch (Exception exception) {
+                report.failures++;
+                logger.error(
+                        "Unable to stop orphaned managed process for instance "
+                                + metadata.instanceId(),
+                        exception
+                );
+                return;
+            }
+        } else if (hasAmbiguousLiveProcess(metadata)) {
+            report.preservedRunning++;
+            logger.warn(
+                    "Preserving instance {} because its live process identity "
+                            + "cannot be verified safely",
+                    metadata.instanceId()
             );
             return;
         }
-        if (isRecordedProcessRunning(metadata)) {
-            report.preservedRunning++;
-            logger.warn(
-                    "Preserving ephemeral instance {} because its recorded process is still running",
-                    metadata.instanceId()
-            );
+        if (metadata.persistent()) {
+            try {
+                metadataStore.write(
+                        directory,
+                        metadata.withoutProcess(InstanceState.STOPPED)
+                );
+                report.preservedPersistent++;
+                logger.info(
+                        "Preserving persistent instance {} from blueprint {}",
+                        metadata.instanceId(),
+                        metadata.blueprintId()
+                );
+            } catch (IOException exception) {
+                report.failures++;
+                logger.error(
+                        "Unable to normalize persistent instance " + metadata.instanceId(),
+                        exception
+                );
+            }
             return;
         }
         if (metadata.processId() == null && metadata.state() != InstanceState.PREPARING) {
@@ -115,7 +149,20 @@ public final class InstanceReconciler {
         }
     }
 
-    private static boolean isRecordedProcessRunning(InstanceMetadata metadata) {
+    private static Optional<ProcessHandle> verifiedRecordedProcess(
+            InstanceMetadata metadata
+    ) {
+        if (metadata.processId() == null || metadata.processStartedAt() == null) {
+            return Optional.empty();
+        }
+        return ProcessHandle.of(metadata.processId())
+                .filter(ProcessHandle::isAlive)
+                .filter(handle -> handle.info().startInstant()
+                        .map(metadata.processStartedAt()::equals)
+                        .orElse(false));
+    }
+
+    private static boolean hasAmbiguousLiveProcess(InstanceMetadata metadata) {
         if (metadata.processId() == null) {
             return false;
         }
@@ -123,12 +170,25 @@ public final class InstanceReconciler {
         if (process.isEmpty() || !process.orElseThrow().isAlive()) {
             return false;
         }
-        if (metadata.processStartedAt() == null) {
-            return true;
-        }
         Optional<Instant> actualStart = process.orElseThrow().info().startInstant();
-        return actualStart.isEmpty()
-                || actualStart.orElseThrow().equals(metadata.processStartedAt());
+        return metadata.processStartedAt() == null || actualStart.isEmpty();
+    }
+
+    private static void terminate(ProcessHandle process, String instanceId)
+            throws Exception {
+        if (process.pid() == ProcessHandle.current().pid()) {
+            throw new IllegalStateException(
+                    "Refusing to terminate the current process for " + instanceId
+            );
+        }
+        process.destroy();
+        try {
+            process.onExit().get(PROCESS_STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            return;
+        } catch (TimeoutException ignored) {
+            process.destroyForcibly();
+        }
+        process.onExit().get(PROCESS_STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     private static final class MutableReport {

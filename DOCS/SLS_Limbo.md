@@ -148,7 +148,9 @@ detection nor a newly released client is treated as automatic compatibility.
 SLS-Limbo keeps its memory reservation and loopback port while replacing a
 failed child process. Recovery does not stop or restart Velocity, the primary
 lobby, or managed game servers. The backend is unregistered while offline and
-registered again only after the replacement runtime reports readiness.
+registered again only after the replacement runtime reports readiness. When the
+configured retry budget is exhausted, SLS-LITE releases the reservation and
+port after the final child exits.
 
 `/sls info` reports SLS-Limbo state, memory, port, and retry usage. `/sls system`
 adds the last failure and whether any safe lobby is currently available. If both

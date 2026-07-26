@@ -213,6 +213,21 @@ class InstanceManagerTest {
         assertFalse(Files.exists(instance.directory()));
     }
 
+    @Test
+    void enforcesBlueprintInstanceLimitForDirectStarts() throws Exception {
+        createContext(false, true);
+        ManagedInstance first = manager.start("fixture");
+        first.readyFuture().get(10, TimeUnit.SECONDS);
+
+        InstanceOperationException exception = assertThrows(
+                InstanceOperationException.class,
+                () -> manager.start("fixture")
+        );
+
+        assertTrue(exception.getMessage().contains("limit of 1"));
+        manager.stop(first.id()).get(10, TimeUnit.SECONDS);
+    }
+
     private TestContext createContext(boolean save, boolean includeJar) throws Exception {
         Path blueprintsDirectory = Files.createDirectories(
                 temporaryDirectory.resolve("blueprints")
