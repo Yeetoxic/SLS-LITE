@@ -2,11 +2,10 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-state_dir="${PTERO_STATE_DIR:-/srv/pterodactyl-docker}"
-environment_file="${state_dir}/.env"
+environment_file="${PTERO_ENV_FILE:-${script_dir}/.env.local}"
 
 if [[ ! -f "${environment_file}" ]]; then
-    echo "Missing ${environment_file}; run migrate-from-wsl.sh first." >&2
+    echo "Missing ${environment_file}; create it from .env.example first." >&2
     exit 1
 fi
 

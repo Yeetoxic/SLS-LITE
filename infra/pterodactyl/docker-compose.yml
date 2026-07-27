@@ -24,6 +24,7 @@ services:
       retries: 30
     networks:
       - control
+      - pterodactyl
 
   cache:
     image: redis:7-alpine
@@ -113,7 +114,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - ${PTERO_STATE_DIR}/wings:/etc/pterodactyl
-      - /var/lib/pterodactyl:/var/lib/pterodactyl
+      # Wings and Docker must see the same absolute host path for game binds.
+      - ${PTERO_STATE_DIR}/game-data:${PTERO_DAEMON_DATA_DIR}
       - /var/log/pterodactyl:/var/log/pterodactyl
       - /tmp/pterodactyl:/tmp/pterodactyl
       - /run/wings:/run/wings

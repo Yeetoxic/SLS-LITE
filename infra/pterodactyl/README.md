@@ -40,6 +40,14 @@ sudo ./manage.sh down
 sudo ./manage.sh up -d
 ```
 
-Persistent control-plane state and the uncommitted environment file live under
-`/srv/pterodactyl-docker`. The original WSL services are disabled but their
-files remain available for rollback.
+Persistent control-plane state lives in the gitignored `state/` directory next
+to the Compose file. Local secrets live in the gitignored `.env.local` file.
+Keeping this state on the Windows-backed project filesystem prevents Docker
+Desktop from resolving `/srv` inside a different WSL or Docker VM after a
+restart. The original Ubuntu WSL files remain available under
+`/srv/pterodactyl-docker` for rollback.
+
+`PTERO_DAEMON_DATA_DIR` must be Docker Desktop's Linux VM path for the same
+Windows `state/game-data` directory. Wings uses this identical absolute path
+when it asks the Docker daemon to bind a game server's files into
+`/home/container`.
