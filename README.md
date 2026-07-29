@@ -24,6 +24,8 @@ product: full SLS is not a runtime dependency or operating mode.
 - Capacity-aware matchmaking, queues, direct transfers, and action-bar status.
 - Managed or external primary lobbies.
 - Bundled SLS-Limbo fallback when no normal backend is safe.
+- Optional proxy-installed ViaVersion integration for SLS-Limbo translation and
+  dynamic managed-backend protocol synchronization.
 - Persistent managed instances, restart/reset, crash reconciliation, and idle
   cleanup for ephemeral servers.
 - Bounded in-game logs, temporary log files, lifecycle logging, resource
@@ -32,6 +34,12 @@ product: full SLS is not a runtime dependency or operating mode.
 
 The exact current scope and intentional limitations are listed in
 [Compatibility](DOCS/Compatibility.md).
+
+ViaVersion is detected when the operator installs it on Velocity; it is not
+bundled or required by SLS-LITE. Detection alone does not make an untested
+Minecraft client version supported. See
+[Protocol Compatibility](DOCS/Protocol_Compatibility.md) for validated native
+and translated paths.
 
 ## Requirements
 
