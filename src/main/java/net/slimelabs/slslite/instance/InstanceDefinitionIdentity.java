@@ -65,6 +65,7 @@ public record InstanceDefinitionIdentity(
                 writeValue(output, blueprint.save());
                 writeValue(output, blueprint.serverProperties());
                 writeValue(output, blueprint.yamlConfigs());
+                writeValue(output, blueprint.textFileConfigs());
                 writeValue(output, blueprint.annotations());
                 writeValue(output, blueprint.volumes().stream()
                         .map(InstanceDefinitionIdentity::volumeValues)

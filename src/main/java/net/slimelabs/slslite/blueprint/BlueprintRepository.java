@@ -208,6 +208,7 @@ public final class BlueprintRepository {
                     save,
                     parsedConfigs.serverProperties(),
                     parsedConfigs.yamlConfigs(),
+                    parsedConfigs.textFileConfigs(),
                     annotations,
                     volumes
             );
@@ -453,13 +454,17 @@ public final class BlueprintRepository {
     ) throws BlueprintException {
         Map<String, Object> configs = optionalMap(server, "configs", path);
         if (configs.isEmpty()) {
-            return new ParsedConfigs(Map.of(), Map.of());
+            return new ParsedConfigs(Map.of(), Map.of(), Map.of());
         }
 
         Map<String, String> properties = new LinkedHashMap<>();
         Map<String, Map<String, Object>> yamlConfigs = new LinkedHashMap<>();
+        Map<String, Map<String, String>> textFileConfigs = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : configs.entrySet()) {
             String target = entry.getKey();
+            if (target.isBlank()) {
+                throw error(path, "'server.configs target' must not be blank");
+            }
             validateRelativePath(target, "server.configs target", path);
             Map<String, Object> config = asMap(
                     entry.getValue(),
@@ -489,6 +494,12 @@ public final class BlueprintRepository {
                     throw error(path, "YAML config target must end in .yml or .yaml");
                 }
                 yamlConfigs.put(target, validateYamlMap(find, target, path));
+            } else if (parser.equalsIgnoreCase("file")) {
+                textFileConfigs.put(target, parseTextFileReplacements(
+                        find,
+                        target,
+                        path
+                ));
             } else {
                 throw error(
                         path,
@@ -496,7 +507,41 @@ public final class BlueprintRepository {
                 );
             }
         }
-        return new ParsedConfigs(Map.copyOf(properties), Map.copyOf(yamlConfigs));
+        return new ParsedConfigs(
+                Map.copyOf(properties),
+                Map.copyOf(yamlConfigs),
+                java.util.Collections.unmodifiableMap(textFileConfigs)
+        );
+    }
+
+    private static Map<String, String> parseTextFileReplacements(
+            Map<String, Object> configured,
+            String target,
+            Path path
+    ) throws BlueprintException {
+        Map<String, String> replacements = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : configured.entrySet()) {
+            String match = entry.getKey();
+            if (match.isEmpty() || match.contains("\n") || match.contains("\r")) {
+                throw error(
+                        path,
+                        "'server.configs." + target
+                                + ".find' keys must be non-empty single-line prefixes"
+                );
+            }
+            Object value = entry.getValue();
+            if (!(value instanceof String
+                    || value instanceof Number
+                    || value instanceof Boolean)) {
+                throw error(
+                        path,
+                        "'server.configs." + target + ".find." + match
+                                + "' must be a string, number, or boolean"
+                );
+            }
+            replacements.put(match, value.toString());
+        }
+        return java.util.Collections.unmodifiableMap(replacements);
     }
 
     private static Map<String, String> parseProperties(
@@ -607,7 +652,8 @@ public final class BlueprintRepository {
 
     private record ParsedConfigs(
             Map<String, String> serverProperties,
-            Map<String, Map<String, Object>> yamlConfigs
+            Map<String, Map<String, Object>> yamlConfigs,
+            Map<String, Map<String, String>> textFileConfigs
     ) {
     }
 

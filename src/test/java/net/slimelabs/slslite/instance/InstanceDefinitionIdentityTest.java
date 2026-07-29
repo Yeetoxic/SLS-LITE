@@ -142,6 +142,29 @@ final class InstanceDefinitionIdentityTest {
                         profile()
                 )
         );
+
+        Blueprint changedTextPatch = new Blueprint(
+                original.id(),
+                original.name(),
+                original.type(),
+                original.software(),
+                original.version(),
+                original.image(),
+                original.softwarePath(),
+                original.memoryLimitMiB(),
+                original.maxPlayers(),
+                original.maxInstances(),
+                original.save(),
+                original.serverProperties(),
+                original.yamlConfigs(),
+                Map.of("whitelist.json", Map.of("[]", "[{\"name\":\"admin\"}]")),
+                original.annotations(),
+                original.volumes()
+        );
+        assertNotEquals(
+                InstanceDefinitionIdentity.from(original, profile()),
+                InstanceDefinitionIdentity.from(changedTextPatch, profile())
+        );
     }
 
     private static Blueprint blueprint(

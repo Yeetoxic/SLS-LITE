@@ -42,7 +42,7 @@ fixtures exercise each row.
 | `server.configs.server.properties` with `parser: properties` | Supported | Applied atomically to the private instance. |
 | Other `properties` targets | Deferred | Parser exists conceptually; safe generic target handling is not implemented. |
 | `parser: yaml` | Adapted | Nested map patches for contained `.yml`/`.yaml` files merge recursively and write atomically. |
-| `parser: file` | Deferred | Requires explicit safe replacement semantics. |
+| `parser: file` | Adapted | Contained UTF-8 line-prefix replacement with an 8 MiB limit and atomic target swap. Missing targets become empty files; absent prefixes are not inserted. |
 | `state.volumes` mapping form with `mode: cow` | Adapted | Portable transactional private copy. |
 | Volume shorthand `name:source:target[:mode]` | Supported | Omitted mode defaults to `cow`. |
 | Multiple `cow` volumes targeting one directory | Adapted | Deterministic declaration-order merge; first source wins collisions, matching SLS v0.2.0 OverlayFS lower-layer precedence. |
@@ -144,7 +144,7 @@ corpus unchanged:
   COW volumes.
 
 Volume source directories were intentionally not required for this parser run.
-The pinned upstream example harness loaded 5 of 6 examples independently. This
-includes duplicate/multi-source COW merge and `ro`/`rw` definitions. The sole
-expected rejection is `example_config_patches.yaml`, which uses the separately
-deferred `parser: file` contract.
+The pinned upstream example harness loaded all 6 examples independently. This
+includes duplicate/multi-source COW merge, `ro`/`rw` definitions, properties,
+YAML, and text-file patches. Runtime volume sources remain a separate launch
+gate.

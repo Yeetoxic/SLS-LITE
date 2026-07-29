@@ -7,6 +7,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,5 +57,39 @@ class ServerPropertiesEditorTest {
         assertFalse(Files.exists(
                 temporaryDirectory.resolve("server.properties.tmp")
         ));
+    }
+
+    @Test
+    void managedNetworkSettingsOverrideEarlierGenericTextPatch() throws Exception {
+        Files.writeString(
+                temporaryDirectory.resolve("server.properties"),
+                "server-port=25565\nonline-mode=true\nmotd=Original\n"
+        );
+        TextFileConfigEditor.apply(
+                temporaryDirectory,
+                Map.of("server.properties", Map.of(
+                        "server-port=", "server-port=12345",
+                        "online-mode=", "online-mode=true"
+                ))
+        );
+
+        ServerPropertiesEditor.applyManagedNetworkSettings(
+                temporaryDirectory,
+                25571,
+                12,
+                Map.of()
+        );
+
+        Properties properties = new Properties();
+        try (Reader input = Files.newBufferedReader(
+                temporaryDirectory.resolve("server.properties"),
+                StandardCharsets.UTF_8
+        )) {
+            properties.load(input);
+        }
+        assertEquals("25571", properties.getProperty("server-port"));
+        assertEquals("false", properties.getProperty("online-mode"));
+        assertEquals("127.0.0.1", properties.getProperty("server-ip"));
+        assertEquals("Original", properties.getProperty("motd"));
     }
 }

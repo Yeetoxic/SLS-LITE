@@ -250,6 +250,84 @@ class BlueprintRepositoryTest {
     }
 
     @Test
+    void loadsModernTextFileConfigPatches() throws Exception {
+        write("survival.yml", """
+                blueprint:
+                  id: survival
+                  name: Survival
+                  type: survival
+                server:
+                  software: paper
+                  version: "1.21.11"
+                  configs:
+                    whitelist.json:
+                      parser: file
+                      find:
+                        "[]": '[{"name":"protoxon"}]'
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        assertEquals(
+                Map.of("[]", "[{\"name\":\"protoxon\"}]"),
+                repository.get("survival")
+                        .orElseThrow()
+                        .textFileConfigs()
+                        .get("whitelist.json")
+        );
+    }
+
+    @Test
+    void rejectsUnsafeTextFileReplacementDefinitions() throws Exception {
+        write("survival.yml", """
+                blueprint:
+                  id: survival
+                  name: Survival
+                  type: survival
+                server:
+                  software: paper
+                  version: "1.21.11"
+                  configs:
+                    whitelist.json:
+                      parser: file
+                      find:
+                        "": replacement
+                """);
+
+        BlueprintException emptyPrefix = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(emptyPrefix.getMessage().contains("non-empty single-line prefixes"));
+
+        Files.delete(temporaryDirectory.resolve("survival.yml"));
+        write("survival.yml", """
+                blueprint:
+                  id: survival
+                  name: Survival
+                  type: survival
+                server:
+                  software: paper
+                  version: "1.21.11"
+                  configs:
+                    whitelist.json:
+                      parser: file
+                      find:
+                        "[]":
+                          invalid: object
+                """);
+
+        BlueprintException objectValue = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(objectValue.getMessage().contains(
+                "must be a string, number, or boolean"
+        ));
+    }
+
+    @Test
     void rejectsUnsafeSoftwarePathAndMalformedVolumeShorthand() throws Exception {
         write("unsafe-path.yml", """
                 blueprint:

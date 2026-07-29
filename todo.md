@@ -938,6 +938,9 @@ equivalent.
       including Java image selectors, a contained software path override,
       shorthand COW volumes, distributed limit metadata, and nested YAML
       config patches. Missing optional world sources remain a launch-time gate.
+- [x] [S2] Implement modern `parser: file` line-prefix replacement with
+      contained UTF-8 targets, atomic writes, persistent-definition
+      fingerprinting, and failure-preservation tests.
 - [ ] [S2] Compare modern SLS and SLS-LITE feature by feature across
       configuration, blueprints, registries, matchmaking, lifecycle, commands,
       permissions, observability, installation, storage, and integrations.
@@ -953,7 +956,7 @@ equivalent.
     matrix.
 - [ ] [S2] Define and publish the supported modern SLS configuration and blueprint
       subset, including local adaptations and intentionally unsupported fields.
-- [ ] [S2] Load representative pre-made modern SLS software definitions,
+- [x] [S2] Load representative pre-made modern SLS software definitions,
       configuration, and blueprints without requiring manual schema translation.
 - [ ] [S2] Map supported distributed concepts to their documented local
       equivalents while rejecting unsupported behavior with actionable errors.

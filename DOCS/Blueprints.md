@@ -128,8 +128,32 @@ server:
 
 SLS-LITE recursively merges the configured map into the existing file and
 writes it atomically. Target traversal, symbolic links, non-map YAML roots, and
-unsupported value types are rejected. JSON, TOML, `file`, and arbitrary
-properties targets remain unsupported.
+unsupported value types are rejected. JSON, TOML, and arbitrary properties
+targets remain unsupported.
+
+### Text File Patches
+
+Modern SLS `parser: file` performs line-prefix replacement:
+
+```yaml
+server:
+  configs:
+    whitelist.json:
+      parser: file
+      find:
+        "[]": '[{"uuid":"...","name":"admin"}]'
+```
+
+For every existing line beginning with a `find` key, SLS-LITE replaces the
+whole line with the mapped scalar value. It does not append a replacement when
+the prefix is absent. A missing target is created as an empty file, matching
+SLS v0.2.0 behavior.
+
+Targets must remain inside the instance and may not traverse symbolic links.
+Files must be UTF-8 regular files no larger than 8 MiB. Writes use a sibling
+temporary file and atomic replacement when supported; failures preserve the
+original target. Output line endings are normalized to LF with a final newline
+when the input contained at least one line.
 
 ## Volumes
 

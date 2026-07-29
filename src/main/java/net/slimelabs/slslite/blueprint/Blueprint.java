@@ -17,6 +17,7 @@ public record Blueprint(
         boolean save,
         Map<String, String> serverProperties,
         Map<String, Map<String, Object>> yamlConfigs,
+        Map<String, Map<String, String>> textFileConfigs,
         Map<String, Object> annotations,
         List<BlueprintVolume> volumes
 ) {
@@ -29,8 +30,46 @@ public record Blueprint(
         softwarePath = normalizeOptional(softwarePath);
         serverProperties = Map.copyOf(serverProperties);
         yamlConfigs = copyYamlConfigs(yamlConfigs);
+        textFileConfigs = copyTextFileConfigs(textFileConfigs);
         annotations = Map.copyOf(annotations);
         volumes = List.copyOf(volumes);
+    }
+
+    public Blueprint(
+            String id,
+            String name,
+            String type,
+            String software,
+            String version,
+            String image,
+            String softwarePath,
+            int memoryLimitMiB,
+            int maxPlayers,
+            int maxInstances,
+            boolean save,
+            Map<String, String> serverProperties,
+            Map<String, Map<String, Object>> yamlConfigs,
+            Map<String, Object> annotations,
+            List<BlueprintVolume> volumes
+    ) {
+        this(
+                id,
+                name,
+                type,
+                software,
+                version,
+                image,
+                softwarePath,
+                memoryLimitMiB,
+                maxPlayers,
+                maxInstances,
+                save,
+                serverProperties,
+                yamlConfigs,
+                Map.of(),
+                annotations,
+                volumes
+        );
     }
 
     public Blueprint(
@@ -63,6 +102,7 @@ public record Blueprint(
                 save,
                 serverProperties,
                 Map.of(),
+                Map.of(),
                 annotations,
                 volumes
         );
@@ -96,6 +136,7 @@ public record Blueprint(
                 save,
                 serverProperties,
                 Map.of(),
+                Map.of(),
                 annotations,
                 volumes
         );
@@ -128,6 +169,7 @@ public record Blueprint(
                 save,
                 Map.of(),
                 Map.of(),
+                Map.of(),
                 annotations,
                 volumes
         );
@@ -159,6 +201,7 @@ public record Blueprint(
                 save,
                 Map.of(),
                 Map.of(),
+                Map.of(),
                 annotations,
                 List.of()
         );
@@ -188,6 +231,7 @@ public record Blueprint(
                 save,
                 Map.of(),
                 Map.of(),
+                Map.of(),
                 annotations,
                 List.of()
         );
@@ -204,6 +248,20 @@ public record Blueprint(
                 new java.util.LinkedHashMap<>();
         configured.forEach((target, values) -> copied.put(target, copyMap(values)));
         return Map.copyOf(copied);
+    }
+
+    private static Map<String, Map<String, String>> copyTextFileConfigs(
+            Map<String, Map<String, String>> configured
+    ) {
+        java.util.LinkedHashMap<String, Map<String, String>> copied =
+                new java.util.LinkedHashMap<>();
+        configured.forEach((target, replacements) -> copied.put(
+                target,
+                java.util.Collections.unmodifiableMap(
+                        new java.util.LinkedHashMap<>(replacements)
+                )
+        ));
+        return java.util.Collections.unmodifiableMap(copied);
     }
 
     private static Map<String, Object> copyMap(Map<String, Object> values) {

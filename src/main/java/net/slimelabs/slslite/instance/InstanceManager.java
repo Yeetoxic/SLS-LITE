@@ -545,6 +545,10 @@ public final class InstanceManager implements ServerController {
                     profile.serverProperties()
             );
             configuredProperties.putAll(instance.blueprint().serverProperties());
+            TextFileConfigEditor.apply(
+                    prepared,
+                    instance.blueprint().textFileConfigs()
+            );
             ServerPropertiesEditor.applyManagedNetworkSettings(
                     prepared,
                     instance.port(),

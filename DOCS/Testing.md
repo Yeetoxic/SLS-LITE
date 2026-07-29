@@ -70,12 +70,13 @@ Run each example from the pinned SLS checkout independently:
 
 ```powershell
 mvn "-Dtest=BlueprintExamplesCompatibilityIT" `
-  "-Dsls.compatibility.examples=target/upstream-sls-v0.2.0/examples" `
-  "-Dsls.compatibility.expectedRejected=example_config_patches.yaml" test
+  "-Dsls.compatibility.examples=target/upstream-sls-v0.2.0/examples" test
 ```
 
-The expected-rejection list is exact: the test fails if a new example is
-rejected or if a listed gap starts loading and the list is not updated.
+If a deliberately unsupported example is added later, use the exact
+`sls.compatibility.expectedRejected` filename list. The test fails if a new
+example is rejected or if a listed gap starts loading without updating that
+list.
 
 ## Historical-World Fixture
 
