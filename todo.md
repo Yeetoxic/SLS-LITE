@@ -131,12 +131,26 @@ access, and SLS-LITE administration must not require another plugin.
 - [x] Support ephemeral instances that are deleted after shutdown.
 - [x] Support persistent instances that can be stopped and restarted.
 - [x] Add an explicit reset operation that restores an instance from its template.
-- [ ] Investigate optional copy-on-write optimizations:
-  - Linux OverlayFS when mounting is permitted.
-  - Reflinks when supported by the host filesystem.
-  - Hard links only for files that the server will never modify.
-- [ ] Automatically fall back to portable copying when an optimization is
-      unavailable.
+- [ ] Implement optional true copy-on-write volume preparation:
+  - Define `auto`, `copy`, `reflink`, and `overlay` storage strategies without
+    changing the meaning of modern SLS copy-on-write volume intent.
+  - Probe capabilities per configured storage location and filesystem, not only
+    once per host, and repeat the probe when the path or filesystem identity
+    changes.
+  - Verify candidate reflink support by proving that a write to the clone does
+    not alter its source; do not trust command success alone.
+  - Probe Linux OverlayFS or rootless FUSE overlays only when explicitly enabled,
+    including mount, write isolation, unmount, and cleanup checks.
+  - Keep every shared lower/source world immutable while instances are active.
+  - Cache successful capability results and report the selected strategy in
+    startup diagnostics and `/sls system`.
+  - Let operators require a strategy or permit automatic fallback through
+    validated configuration.
+  - Reconcile stale overlay mounts and writable layers after an unclean proxy
+    shutdown without deleting the immutable source.
+  - Never hard-link files that a managed server may modify.
+- [ ] Automatically fall back to tested portable copying when an optimization is
+      unavailable, unless configuration explicitly requires that strategy.
 - [ ] Apply required `server.properties` values to the instance copy, including
       loopback address, allocated port, forwarding settings, and view distance.
   - [x] Apply loopback address, allocated port, offline backend mode, and
@@ -234,6 +248,11 @@ access, and SLS-LITE administration must not require another plugin.
 - [x] Match the pinned vSLS command presentation for implemented commands:
       prefix, usage grammar, list framing, status colors, player/server hover
       details, version metadata, and action-bar feedback.
+- [x] Add operational blueprint hover details and click-to-suggest join actions,
+      including software, limits, persistence, active instances, and volumes.
+- [x] Add concise proxy-console lifecycle events for accepted start, join,
+      stop, restart, reset, console, software-install, readiness, connection,
+      and process-exit operations without mirroring managed server output.
 - [x] Mirror the complete vSLS `v0.2.0` top-level tree, including `system` and
       `node`; keep SLS-LITE-only commands such as `registries` and `blueprints`
       as additive aliases rather than replacements for upstream commands.
@@ -258,6 +277,11 @@ access, and SLS-LITE administration must not require another plugin.
   - [x] Drain protected lobbies before evacuation so new arrivals use SLS-Limbo,
         reject overlapping forced stops, and restore primary routing when an
         evacuation is cancelled.
+  - [x] Add permission-gated `--force` modifiers for protected managed-lobby
+        restart and reset, with SLS-Limbo evacuation and lobby-provider-owned
+        replacement tracking.
+  - [x] Automatically track every player who actually enters SLS-Limbo so
+        command-driven lobby evacuation returns them when the primary is ready.
 
 ## Modern SLS Features
 
@@ -405,6 +429,14 @@ the local implementation has equivalent behavior.
       behavior.
 - [x] Require explicit profile-level EULA acceptance and write `eula.txt` only
       after the operator opts in.
+- [ ] Add an operator-triggered software-cache cleanup command with dry-run
+      output, a configurable minimum age, and explicit confirmation. Treat
+      versions referenced by loaded blueprints, active or persistent instances,
+      and in-progress installations as live; never purge them automatically.
+- [ ] Evaluate verified Java-runtime acquisition for hosts that provide only one
+      Java version. Cache runtimes by exact major/version, record checksums and
+      upstream terms, retain manual runtime paths, and require an explicit
+      operator action before downloading or pruning a runtime.
 - [ ] Add an optional warmup process that generates required base files and
       stops before a reusable template is published.
 - [x] Keep manually prepared server directories fully supported.
@@ -429,6 +461,19 @@ the local implementation has equivalent behavior.
       blueprint assets.
 - [ ] Add optional environment variables without allowing blueprints to replace
       protected process or host variables.
+- [ ] Add first-class per-blueprint client resource-pack configuration:
+  - Reuse modern SLS fields where an upstream contract exists.
+  - Validate a client-reachable HTTP(S) URL and SHA-1 without downloading or
+    silently modifying the operator's pack.
+  - Support required/optional behavior and a prompt only on Minecraft versions
+    that implement those fields.
+  - Apply, replace, or clear the active pack during Velocity server transfers so
+    a pack from one minigame does not leak into another.
+  - Keep normal `server.properties` resource-pack keys supported as the portable
+    fallback.
+  - Document that Minecraft clients fetch packs over HTTP(S); SLS-LITE cannot
+    make a panel-private file client-reachable without an exposed web endpoint.
+  - Do not require a separate Velocity or Paper plugin for core pack switching.
 
 ### Events and Lifecycle
 
@@ -476,6 +521,12 @@ the local implementation has equivalent behavior.
 - [x] Prefer existing ready instances with capacity before creating another.
 - [x] Enforce per-blueprint player and instance limits during allocation.
 - [x] Cancel provisioning when its queue becomes empty when safe to do so.
+  - [x] Request cancellation for queue-owned PREPARING and STARTING instances
+        immediately when the last queued player leaves instead of allowing an
+        orphan to finish booting.
+  - [x] Make volume preparation cooperatively cancellable between files and
+        retry waits so PREPARING cancellation does not finish copying an entire
+        world before rollback.
 - [ ] Support blueprint `on-join` console actions with safe placeholders such as
       player name and UUID.
 - [x] Add a force-join permission that can bypass blueprint capacity for
@@ -499,6 +550,9 @@ the local implementation has equivalent behavior.
   - [x] Add configurable proxy-console mirroring and a bounded temporary
         per-instance log file that does not create unbounded archives.
   - [ ] Add an opt-in live console follow mode without blocking Velocity threads.
+- [x] Retain bounded failed-start diagnostics outside ephemeral instance
+      directories, including the failure phase and recent managed output, and
+      prune old reports automatically.
 - [x] Add line-oriented console command execution through the supervised process
       input without competing with the process log reader.
 - [ ] Add bounded output capture for `/sls console` so the invoking player sees
@@ -508,6 +562,8 @@ the local implementation has equivalent behavior.
 - [ ] Add per-instance reset, restart, delete, and force-kill operations.
   - [x] Add persistent restart with same-ID directory reuse and lobby evacuation.
   - [x] Add rollback-protected persistent reset from the current template.
+  - [x] Allow explicit forced restart and reset of the protected managed lobby
+        without bypassing SLS-Limbo evacuation or lobby-provider ownership.
   - [ ] Add persistent delete and explicit force-kill operations.
 - [ ] Add software and blueprint reload commands with detailed validation errors.
 - [ ] Add a public Java API so other Velocity plugins can:
@@ -520,6 +576,47 @@ the local implementation has equivalent behavior.
   - Detect capabilities and API versions so optional integrations fail cleanly.
 - [ ] Add optional metrics with collection disabled by default and no sensitive
       host, path, player, or blueprint data.
+
+### Constrained-Host Performance
+
+- [x] Log instance preparation and readiness durations separately so slow file
+      preparation can be distinguished from slow server-software startup.
+- [x] Start managed JVMs with a small initial heap while preserving the
+      blueprint memory limit as `-Xmx` and as the SLS-LITE admission budget.
+- [x] Promote reusable Paper runtime libraries and caches from completed
+      instances back into the versioned software cache.
+- [x] Avoid unnecessary source-attribute preservation during portable instance
+      copying and report software resolution, file preparation, and process
+      readiness as separate timings.
+- [x] Resume a persistent managed lobby by its existing instance ID instead of
+      copying its world again after every Velocity restart.
+- [ ] Benchmark representative small, medium, and large worlds on native Linux
+      storage and on the supported local test environment. Record preparation,
+      process readiness, idle memory, loaded memory, and first-player transfer
+      time.
+- [ ] Document practical minimum and recommended memory allocations for
+      Velocity, SLS-Limbo, legacy Paper, current Paper, and common small-network
+      layouts. Treat these as measured guidance rather than enforced guarantees.
+- [ ] Document that Docker Desktop bind mounts and other remote or translated
+      filesystems can heavily penalize world copying and Paper region-file
+      startup, and recommend native Linux storage where the operator controls it.
+- [ ] Add optional per-blueprint warm pools with a configurable minimum number
+      of ready instances, strict memory and process-budget accounting, bounded
+      replenishment, and no warm instance creation for unused blueprints by
+      default.
+- [ ] Add blueprint-level view-distance and simulation-distance settings, safe
+      version-aware property application, validation, and constrained-host
+      recommendations.
+- [ ] Build an explicit offline world-optimization workflow that can copy and
+      prune unused legacy regions without modifying the operator's source world
+      or archive. Require a dry run, backup destination, and manual approval
+      before deleting data from the optimized copy.
+- [ ] Complete the true copy-on-write implementation in Phase 4, benchmark
+      reflink and overlay preparation where supported, compare startup time and
+      physical disk usage against portable copies, and retain portable copying
+      as the tested fallback.
+- [ ] Add a repeatable startup-performance acceptance test and define regression
+      thresholds only after native-Linux baseline measurements exist.
 
 ## Lobby Support
 
@@ -623,6 +720,41 @@ the local implementation has equivalent behavior.
   - [x] Probe child-process creation, writable paths, and loopback-port binding
         with actionable pass/fail results.
 
+## Code Maintainability and Manual Modification
+
+Perform this cleanup incrementally after the Stage 2 compatibility boundary is
+stable. Refactoring must preserve command output, configuration compatibility,
+data layout, lifecycle behavior, and the passing test suite.
+
+- [ ] Audit large or multi-purpose classes and document their current
+      responsibilities before moving code.
+- [ ] Decompose the command implementation into focused subcommand handlers
+      without changing the vSLS-compatible command tree, permissions, messages,
+      sender restrictions, or tab completion.
+- [ ] Clarify package ownership for configuration, blueprint parsing,
+      installation, instance lifecycle, matchmaking, lobby routing, Velocity
+      integration, and operator-facing presentation.
+- [ ] Replace unclear names, duplicated control flow, and unnecessary coupling
+      with small, explicit abstractions only where they reduce real complexity.
+- [ ] Remove confirmed dead compatibility code and obsolete resources only after
+      tests or migration documentation prove they are no longer required.
+- [ ] Add concise comments and Javadocs around lifecycle invariants, concurrency
+      boundaries, resource accounting, path security, and compatibility
+      adaptations that are not evident from the code.
+- [ ] Organize bundled defaults, templates, examples, protocol data, and
+      third-party resources into predictable locations without silently changing
+      generated operator paths or supported configuration keys.
+- [ ] Make operator-edited YAML files consistent in layout, ordering, comments,
+      valid-value examples, and validation diagnostics.
+- [ ] Add a short contributor architecture guide showing the normal modification
+      points for commands, blueprints, software installers, lifecycle behavior,
+      lobby providers, messages, and tests.
+- [ ] Add automated formatting and lightweight static analysis only after their
+      rules are agreed upon; apply them in a dedicated reviewable change rather
+      than mixing broad formatting churn with behavior changes.
+- [ ] Complete the cleanup in small reviewable passes, with focused regression
+      tests and manual compatibility checks for every affected subsystem.
+
 ## Documentation and Public Release Preparation
 
 - [ ] Audit every existing file in `DOCS/` and classify it as current,
@@ -725,24 +857,58 @@ Prove the core concept by operating our own small network entirely through
 SLS-LITE blueprints and locally supplied content. Compatibility with upstream
 SLS is not required at this gate.
 
-- [ ] [S1] Add the modern SLS `state.volumes` blueprint shape for locally
+- [x] [S1] Add the modern SLS `state.volumes` blueprint shape for locally
       supplied worlds and other directory content, beginning with `cow` mode.
-- [ ] [S1] Implement the SLS-LITE local equivalent of `cow` by safely copying
+- [x] [S1] Implement the SLS-LITE local equivalent of `cow` by safely copying
       each selected volume over the installed or manually prepared software base
       when creating an isolated instance.
-- [ ] [S1] Resolve volume sources inside the SLS-LITE data directory, interpret
+- [x] [S1] Resolve volume sources inside the SLS-LITE data directory, interpret
       targets relative to the instance root, and add collision, traversal,
       symlink, rollback, and copy-failure tests.
-- [ ] [S1] Upload several representative test worlds and define an SLS-LITE
+- [x] [S1] Upload several representative test worlds and define an SLS-LITE
       network containing:
-  - A managed lobby.
-  - At least two user-defined registries.
-  - At least two playable blueprints backed by different worlds.
-- [ ] [S1] Start the network from one Velocity allocation, join every world,
+  - [x] Copy and verify all 21 top-level world roots from the legacy backup in
+        the durable test allocation without modifying their source archive.
+  - [x] Promote the verified roots into modern-style `worlds/lobbies`,
+        `worlds/minigames`, and `worlds/adventures` paths while retaining the
+        immutable legacy mirror.
+  - [x] Load blueprints recursively from organized category folders.
+  - [x] Define 11 exact-version legacy blueprints across `lobby`, `minigame`,
+        and `adventure` registries.
+  - [x] Start the historical 1.18.2 lobby as the managed primary using cached
+        exact Paper build 388 and Java 17.
+  - [x] Define at least two user-defined registries.
+  - [x] Define at least two blueprints backed by different promoted worlds.
+  - [x] Join and verify at least two promoted game worlds in a real client.
+- [x] [S1] Start the network from one Velocity allocation, join every world,
       switch between servers with `/sls join`, and return to the lobby.
-- [ ] [S1] Confirm instance isolation, capacity handling, persistence or
+  - [x] Verify the lobby and eight promoted game worlds in a real client.
+  - [x] Retry Meteor Miners after addressing transient volume-copy I/O failures;
+        retain enough bounded failure evidence to distinguish damaged source
+        data from translated-filesystem errors.
+    - [x] Retry transient per-file `FileSystemException` copy failures with
+          bounded backoff, remove partial targets, and preserve rollback after
+          the retry budget is exhausted.
+      - [x] Extend the translated-filesystem retry window to eight seconds after
+            Combat Cube reproduced a longer Docker Desktop bind-mount I/O stall.
+    - [x] Preserve bounded failed-start reports after ephemeral cleanup.
+  - [x] Verify Missile Wars Paper 1.16.5 starts and accepts a player after
+        correcting dynamic ViaVersion registration.
+    - [x] Confirm exact Paper 1.16.5 installation and subsequent cache reuse.
+    - [x] Restart Velocity with the fixture's 600-second queue timeout active.
+    - [x] Log the effective per-request queue timeout and per-process readiness
+          timeout so runtime behavior can be compared directly with configuration.
+    - [x] Identify the 40-60 second cutoff: Paper reached readiness, but the
+          subsequent two-second ViaVersion protocol-detection ping timed out and
+          registration forcibly stopped the otherwise-started process.
+    - [x] Resolve known blueprint Minecraft versions through ViaVersion's
+          protocol catalog before registration, retaining backend ping detection
+          only for custom or unknown versions.
+    - [x] Retain registration failures and non-ready failed process exits before
+          ephemeral cleanup so the child server output survives future failures.
+- [x] [S1] Confirm instance isolation, capacity handling, persistence or
       ephemeral cleanup, idle shutdown, and proxy shutdown with the test worlds.
-- [ ] [S1] Record the exact fixture configuration and manual acceptance results.
+- [x] [S1] Record the exact fixture configuration and manual acceptance results.
 
 ### Stage 2: Compatibility Run
 
@@ -772,6 +938,9 @@ equivalent.
       equivalents while rejecting unsupported behavior with actionable errors.
 - [ ] [S2] Preserve compatible names, annotations, registry types, limits,
       lifecycle intentions, and content declarations.
+- [ ] [S2] Define the modern SLS copy-on-write volume compatibility contract:
+      preserve its isolation intent while documenting `reflink`, `overlay`, and
+      portable-copy implementations as host-dependent local adaptations.
 - [ ] [S2] Add upstream-derived compatibility fixtures and automated parser,
       validation, and migration tests where licensing permits.
 - [ ] [S2] Run a multi-world network from those modern SLS fixtures and document
@@ -791,6 +960,10 @@ processes, or trapping players in unexplained states.
 - [ ] [S3] Exercise Paper and vanilla installation, manual custom software,
       cache reuse, exact versions, Java selection, EULA gating, failed downloads,
       retries, and incomplete-cache recovery.
+- [ ] [S3] Exercise automatic and explicitly required COW strategies across
+      supported and unsupported filesystems; verify instance isolation, immutable
+      source worlds, fallback behavior, physical disk savings, mount cleanup, and
+      unclean-shutdown reconciliation.
 - [ ] [S3] Exercise normal shutdown, startup cancellation, process crashes,
       readiness timeout, lobby recovery exhaustion, memory rejection, occupied
       ports, proxy restart, and persistent-instance recovery.

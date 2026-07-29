@@ -249,6 +249,42 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     }
 
     @Override
+    public CompletableFuture<RegisteredServer> cyclePrimary(
+            String serverName,
+            boolean reset
+    ) {
+        synchronized (this) {
+            if (closed
+                    || !serverName.equals(drainingPrimary)
+                    || !primary.isLobby(serverName)) {
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException(
+                                "The active primary lobby is not prepared for "
+                                        + (reset ? "reset" : "restart")
+                        )
+                );
+            }
+        }
+
+        CompletableFuture<RegisteredServer> cycle =
+                primary.cyclePrimary(serverName, reset);
+        cycle.whenComplete((server, failure) -> {
+            synchronized (this) {
+                if (!serverName.equals(drainingPrimary)) {
+                    return;
+                }
+                drainingPrimary = null;
+                if (failure == null && !closed) {
+                    publishPrimaryReady(server);
+                } else {
+                    primaryAvailable = false;
+                }
+            }
+        });
+        return cycle;
+    }
+
+    @Override
     public synchronized void close() {
         if (closed) {
             return;

@@ -204,16 +204,12 @@ class LocalJoinServiceTest {
     }
 
     @Test
-    void lastCancellationStopsQueueOwnedInstanceAfterReadiness() throws Exception {
+    void lastCancellationImmediatelyStopsQueueOwnedInstance() throws Exception {
         Fixture fixture = fixture(Duration.ofSeconds(5));
         try (LocalJoinService service = fixture.service()) {
             service.join(fixture.player(), "test", "smoke");
-            ManagedInstance instance = fixture.controller().instance();
 
             service.dequeue(fixture.playerId());
-            instance.lifecycle().transitionTo(InstanceState.STARTING);
-            instance.lifecycle().transitionTo(InstanceState.READY);
-            instance.readyFuture().complete(instance);
 
             assertEquals(1, fixture.controller().stopCount());
         }

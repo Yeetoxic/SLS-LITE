@@ -22,8 +22,10 @@ software:
 - `configurator` is `paper`, `vanilla`, or `generic`. Paper forwarding files
   are only edited for `paper`.
 - `source` is `manual`, `paper`, or `vanilla`.
-- `channel` is `stable`, `beta`, or `alpha` for Paper. It defaults to
-  `stable`; non-stable channels must be selected explicitly.
+- `channel` is `stable`, `beta`, or `alpha` for Paper. It is the maximum
+  allowed instability: `beta` accepts stable or beta builds, and `alpha`
+  accepts stable, beta, or alpha builds. It defaults to `stable`; non-stable
+  channels must be selected explicitly.
 - `accept_eula` must be set to `true` before a provider download can begin.
   This records the operator's choice; SLS-LITE does not accept the Minecraft
   EULA by default.
@@ -52,9 +54,10 @@ Profiles created before provider support remain `manual` unless their
 
 ## Providers
 
-The Paper provider requests the newest build in the selected channel for the
-exact blueprint Minecraft version from PaperMC's Downloads Service. It never
-substitutes another game version. It identifies SLS-LITE,
+The Paper provider requests the newest build allowed by the selected channel
+for the exact blueprint Minecraft version from PaperMC's Downloads Service. A
+more stable build is preferred when it is the newest compatible result. It
+never substitutes another game version. It identifies SLS-LITE,
 accepts only HTTPS PaperMC hosts, enforces a 256 MiB limit, and verifies artifact
 size and SHA-256 metadata. Missing version/channel combinations fail explicitly.
 

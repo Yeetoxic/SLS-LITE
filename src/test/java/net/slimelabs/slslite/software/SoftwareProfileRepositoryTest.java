@@ -32,8 +32,9 @@ class SoftwareProfileRepositoryTest {
         assertEquals("java", profile.javaExecutable());
         assertEquals("software/paper/{version}", profile.baseDirectory());
         assertEquals("paper.jar", profile.serverJar());
-        assertEquals(List.of("-Xms{memory_mib}M", "-Xmx{memory_mib}M"),
+        assertEquals(List.of("-Xms128M", "-Xmx{memory_mib}M"),
                 profile.jvmArguments());
+        assertEquals(List.of(), profile.serverArguments());
         assertEquals("stop", profile.stopCommand());
         assertTrue(Files.isRegularFile(temporaryDirectory.resolve("paper.yml")));
     }

@@ -33,6 +33,15 @@ final class InstanceReconcilerTest {
                 null
         ));
 
+        Path cancelled = directory(root, "cancelled.abc123");
+        metadata.write(cancelled, record(
+                "cancelled.abc123",
+                false,
+                InstanceState.STOPPING,
+                null,
+                null
+        ));
+
         Path persistent = directory(root, "survival.def456");
         metadata.write(persistent, record(
                 "survival.def456",
@@ -69,13 +78,14 @@ final class InstanceReconcilerTest {
             }
         }
 
-        assertEquals(4, report.inspected());
-        assertEquals(2, report.removedEphemeral());
+        assertEquals(5, report.inspected());
+        assertEquals(3, report.removedEphemeral());
         assertEquals(1, report.preservedPersistent());
         assertEquals(0, report.preservedRunning());
         assertEquals(1, report.preservedUnknown());
         assertEquals(0, report.failures());
         assertFalse(Files.exists(ephemeral));
+        assertFalse(Files.exists(cancelled));
         assertTrue(Files.isDirectory(persistent));
         assertFalse(Files.exists(running));
         assertTrue(Files.isDirectory(unknown));

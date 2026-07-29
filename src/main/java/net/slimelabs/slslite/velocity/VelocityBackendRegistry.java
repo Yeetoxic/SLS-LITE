@@ -7,6 +7,7 @@ import com.velocitypowered.api.proxy.server.ServerInfo;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 
 public final class VelocityBackendRegistry implements BackendRegistry {
@@ -29,7 +30,7 @@ public final class VelocityBackendRegistry implements BackendRegistry {
 
     @Override
     public synchronized void register(String name, InetSocketAddress address) {
-        register(name, address, OptionalInt.empty());
+        register(name, address, OptionalInt.empty(), Optional.empty());
     }
 
     @Override
@@ -41,14 +42,31 @@ public final class VelocityBackendRegistry implements BackendRegistry {
         register(
                 name,
                 address,
-                protocol > 0 ? OptionalInt.of(protocol) : OptionalInt.empty()
+                protocol > 0 ? OptionalInt.of(protocol) : OptionalInt.empty(),
+                Optional.empty()
+        );
+    }
+
+    @Override
+    public synchronized void register(
+            String name,
+            InetSocketAddress address,
+            String minecraftVersion
+    ) {
+        register(
+                name,
+                address,
+                OptionalInt.empty(),
+                Optional.ofNullable(minecraftVersion)
+                        .filter(version -> !version.isBlank())
         );
     }
 
     private void register(
             String name,
             InetSocketAddress address,
-            OptionalInt protocol
+            OptionalInt protocol,
+            Optional<String> minecraftVersion
     ) {
         if (registrations.containsKey(name) || proxy.getServer(name).isPresent()) {
             throw new IllegalStateException("Velocity server name is already registered: " + name);
@@ -56,7 +74,12 @@ public final class VelocityBackendRegistry implements BackendRegistry {
         ServerInfo serverInfo = new ServerInfo(name, address);
         RegisteredServer registeredServer = proxy.registerServer(serverInfo);
         try {
-            protocols.synchronize(name, registeredServer, protocol);
+            protocols.synchronize(
+                    name,
+                    registeredServer,
+                    protocol,
+                    minecraftVersion
+            );
         } catch (RuntimeException exception) {
             proxy.unregisterServer(serverInfo);
             throw exception;

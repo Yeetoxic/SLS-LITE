@@ -8,6 +8,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -23,6 +24,8 @@ import java.util.stream.Stream;
 public final class BlueprintRepository {
 
     private static final Pattern VALID_ID = Pattern.compile("[a-z0-9][a-z0-9_-]{0,63}");
+    private static final Pattern VALID_PROPERTY_KEY =
+            Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]*");
     private static final int DEFAULT_MEMORY_MIB = 1024;
     private static final int DEFAULT_MAX_PLAYERS = 20;
     private static final int DEFAULT_MAX_INSTANCES = 1;
@@ -102,8 +105,8 @@ public final class BlueprintRepository {
     }
 
     private List<Path> blueprintFiles() throws IOException {
-        try (Stream<Path> files = Files.list(directory)) {
-            return files.filter(Files::isRegularFile)
+        try (Stream<Path> files = Files.walk(directory)) {
+            return files.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
                     .filter(BlueprintRepository::isYaml)
                     .sorted()
                     .toList();
@@ -134,15 +137,23 @@ public final class BlueprintRepository {
             Map<String, Object> metadata = requiredMap(root, "blueprint", path);
             Map<String, Object> server = requiredMap(root, "server", path);
             Map<String, Object> limits = optionalMap(server, "limits", path);
+            Map<String, String> serverProperties = parseServerProperties(server, path);
+            Map<String, Object> state = optionalMap(root, "state", path);
             Map<String, Object> annotations = optionalMap(root, "annotations", path);
             requireOnlyKeys(
                     root,
                     "",
                     path,
-                    "blueprint", "server", "save", "annotations"
+                    "blueprint", "server", "state", "save", "annotations"
             );
             requireOnlyKeys(metadata, "blueprint", path, "id", "name", "type");
-            requireOnlyKeys(server, "server", path, "software", "version", "limits");
+            requireOnlyKeys(
+                    server,
+                    "server",
+                    path,
+                    "software", "version", "limits", "configs"
+            );
+            requireOnlyKeys(state, "state", path, "volumes");
             requireOnlyKeys(
                     limits,
                     "server.limits",
@@ -173,6 +184,7 @@ public final class BlueprintRepository {
                     path
             );
             boolean save = optionalBoolean(root, "save", false, path);
+            List<BlueprintVolume> volumes = parseVolumes(state, path);
 
             return new Blueprint(
                     id,
@@ -184,7 +196,9 @@ public final class BlueprintRepository {
                     maxPlayers,
                     maxInstances,
                     save,
-                    annotations
+                    serverProperties,
+                    annotations,
+                    volumes
             );
         } catch (IOException exception) {
             throw new BlueprintException("Unable to read blueprint " + path, exception);
@@ -279,6 +293,104 @@ public final class BlueprintRepository {
             throw error(path, "'" + key + "' must be true or false");
         }
         return booleanValue;
+    }
+
+    private static List<BlueprintVolume> parseVolumes(
+            Map<String, Object> state,
+            Path path
+    ) throws BlueprintException {
+        Object configured = state.get("volumes");
+        if (configured == null) {
+            return List.of();
+        }
+        if (!(configured instanceof List<?> rawVolumes)) {
+            throw error(path, "'state.volumes' must be a list");
+        }
+
+        java.util.ArrayList<BlueprintVolume> volumes = new java.util.ArrayList<>();
+        Set<String> names = new java.util.HashSet<>();
+        for (int index = 0; index < rawVolumes.size(); index++) {
+            String section = "state.volumes[" + index + "]";
+            Map<String, Object> volume = asMap(rawVolumes.get(index), section, path);
+            requireOnlyKeys(volume, section, path, "name", "source", "target", "mode");
+
+            String name = requiredString(volume, "name", path);
+            if (!names.add(name)) {
+                throw error(path, "duplicate volume name '" + name + "'");
+            }
+            String source = requiredString(volume, "source", path);
+            String target = requiredString(volume, "target", path);
+            String mode = requiredString(volume, "mode", path);
+            if (!mode.equalsIgnoreCase("cow")) {
+                throw error(
+                        path,
+                        "'" + section + ".mode' must be 'cow'; SLS-LITE does not "
+                                + "support host-mounted '" + mode + "' volumes"
+                );
+            }
+            volumes.add(new BlueprintVolume(
+                    name,
+                    source,
+                    target,
+                    BlueprintVolume.Mode.COW
+            ));
+        }
+        return List.copyOf(volumes);
+    }
+
+    private static Map<String, String> parseServerProperties(
+            Map<String, Object> server,
+            Path path
+    ) throws BlueprintException {
+        Map<String, Object> configs = optionalMap(server, "configs", path);
+        requireOnlyKeys(configs, "server.configs", path, "server.properties");
+        if (configs.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, Object> config = requiredMap(configs, "server.properties", path);
+        requireOnlyKeys(
+                config,
+                "server.configs.server.properties",
+                path,
+                "parser", "find"
+        );
+        String parser = requiredString(config, "parser", path);
+        if (!parser.equalsIgnoreCase("properties")) {
+            throw error(
+                    path,
+                    "'server.configs.server.properties.parser' must be 'properties'"
+            );
+        }
+
+        Map<String, Object> configured = optionalMap(config, "find", path);
+        Map<String, String> properties = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : configured.entrySet()) {
+            String key = entry.getKey();
+            if (!VALID_PROPERTY_KEY.matcher(key).matches()) {
+                throw error(path, "invalid server.properties key '" + key + "'");
+            }
+            Object value = entry.getValue();
+            if (!(value instanceof String
+                    || value instanceof Number
+                    || value instanceof Boolean)) {
+                throw error(
+                        path,
+                        "'server.configs.server.properties.find." + key
+                                + "' must be a string, number, or boolean"
+                );
+            }
+            String rendered = value.toString();
+            if (rendered.contains("\n") || rendered.contains("\r")) {
+                throw error(
+                        path,
+                        "'server.configs.server.properties.find." + key
+                                + "' must be a single-line value"
+                );
+            }
+            properties.put(key, rendered);
+        }
+        return Map.copyOf(properties);
     }
 
     private static void requireOnlyKeys(

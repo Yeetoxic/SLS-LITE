@@ -46,8 +46,8 @@ upstream umbrella behavior.
 | `version` | Public | Adapted | vSLS label, emphasis, author metadata, and colors matched. |
 | `pause <server>` | Admin | Compatibility response | Local process suspension is not implemented yet. |
 | `resume <server>` | Admin | Compatibility response | Local process resumption is not implemented yet. |
-| `restart <server>` | Admin | Adapted | Evacuates an active persistent server and restarts the same ID and directory; stopped instances can be recovered after a proxy restart. |
-| `reset <server>` | Admin | Adapted | Uses rollback-protected template restoration, retains the same ID, and starts the reset server. |
+| `restart <server> [--force]` | Admin | Adapted | Evacuates an active persistent server and restarts the same ID and directory; stopped instances can be recovered after a proxy restart. `--force` requires `sls.command.restart.force` and lets an administrator drain the protected managed lobby to SLS-Limbo, restart it through the lobby provider, restore primary routing only after readiness, and automatically return every player holding in SLS-Limbo. |
+| `reset <server> [--force]` | Admin | Adapted | Uses rollback-protected template restoration, retains the same ID, and starts the reset server. `--force` requires `sls.command.reset.force` and applies the same protected-lobby drain, ownership, and automatic handoff rules before restoring its template. |
 | `install <info\|logs>` | Admin | Adapted | `/sls install info` lists local installation state and `/sls install logs <software> <version>` shows the bounded provider log. Start and join requests trigger missing provider-backed software automatically. |
 
 ## Presentation Contract
@@ -58,8 +58,10 @@ The implemented command output follows the pinned vSLS component structure:
 - Dark-aqua labels, gray values, gold/yellow composite instance IDs, and
   lifecycle-aware status colors.
 - vSLS usage grammar: `Usage: /sls <option | option>`.
-- Server and player hover details, list framing, and player-facing action-bar
-  feedback.
+- Server, player, and blueprint hover details, list framing, and player-facing
+  action-bar feedback. Blueprint rows expose registry, software version,
+  capacity, instance limit, persistence, active instances, and mounted volumes;
+  clicking a row suggests its join command.
 - vSLS wording is retained verbatim where the behavior is equivalent.
   `SLS-LITE` replaces `vSLS` branding, and daemon-only metrics or actions are
   replaced with truthful local equivalents.
@@ -82,8 +84,13 @@ falling through as an unknown command.
 7. Review the upstream command implementation and documentation whenever the
    pinned SLS target changes.
 
-SLS-LITE granular stop permissions are additive:
+SLS-LITE granular lifecycle permissions are additive:
 
 - `sls.command.stop` permits normal graceful stops.
 - `sls.command.stop.force` permits the protected managed-lobby override.
-- `sls.command.admin` and built-in SLS-LITE administrators permit both.
+- `sls.command.restart` and `sls.command.reset` permit ordinary persistent
+  cycles.
+- `sls.command.restart.force` and `sls.command.reset.force` permit protected
+  managed-lobby cycles.
+- `sls.command.admin` and built-in SLS-LITE administrators permit all of these
+  operations.

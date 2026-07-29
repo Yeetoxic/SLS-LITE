@@ -67,7 +67,8 @@ client to `127.0.0.1:25565` and verify:
 
 1. The first connection lands on `SLS-LITE External Lobby`.
 2. `/sls info` reports the lobby as external.
-3. `/sls join test smoke` starts and transfers you to a managed Paper server.
+3. `/sls join minigame biome_run` starts and transfers you to a managed Paper
+   server.
 4. `/sls stop <instance-id>` returns you to the external lobby.
 5. Stopping or kicking from a managed backend redirects you to the external
    lobby without a reconnect loop.
@@ -90,15 +91,18 @@ are documented in [SLS_Limbo.md](SLS_Limbo.md).
 Switch to managed mode, connect to `127.0.0.1:25565`, and verify:
 
 ```text
-/sls start smoke
+/sls blueprints minigame
+/sls start minigame biome_run
 /sls list
 /sls status <instance-id>
 /sls stop <instance-id>
 ```
 
-The `smoke` blueprint launches Paper inside the same Pterodactyl allocation as
+The historical SLS v2.1.2 network is the primary local fixture. Its lobby,
+minigames, and adventure launch inside the same Pterodactyl allocation as
 Velocity. The 6 GiB Pterodactyl memory limit applies to Velocity and all child
-processes together.
+processes together. See [Velocity_Testing.md](Velocity_Testing.md) for the
+version matrix and complete run.
 
 If the Panel loads but its console reports a connection problem, hard-refresh
 the page after confirming that `sls-ptero-panel` and `sls-ptero-wings` are

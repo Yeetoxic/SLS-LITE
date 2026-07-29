@@ -170,6 +170,26 @@ class InstanceManagerTest {
     }
 
     @Test
+    void resetRestoresBlueprintCowVolume() throws Exception {
+        createContext(true, true, true);
+
+        ManagedInstance original = manager.start("fixture");
+        original.readyFuture().get(10, TimeUnit.SECONDS);
+        Path instanceWorld = original.directory().resolve("world/level.dat");
+        assertEquals("clean world", Files.readString(instanceWorld));
+        Files.writeString(instanceWorld, "player changes");
+
+        ManagedInstance reset = manager.reset(original.id()).get(10, TimeUnit.SECONDS);
+        reset.readyFuture().get(10, TimeUnit.SECONDS);
+
+        assertEquals("clean world", Files.readString(reset.directory().resolve("world/level.dat")));
+        assertEquals(
+                "clean world",
+                Files.readString(temporaryDirectory.resolve("worlds/fixture/level.dat"))
+        );
+    }
+
+    @Test
     void sendsNormalizedSingleLineConsoleCommands() throws Exception {
         createContext(false, true);
         ManagedInstance instance = manager.start("fixture");
@@ -214,6 +234,30 @@ class InstanceManagerTest {
     }
 
     @Test
+    void proxyShutdownDuringPreparationDoesNotLaunchAfterSupervisorCloses()
+            throws Exception {
+        TestContext context = createContext(false, true, true);
+        ManagedInstance instance = manager.start("fixture");
+
+        manager.shutdown(Duration.ofSeconds(3));
+        manager = null;
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while ((!context.ports().reservations().isEmpty()
+                || context.budget().reservedMemoryMiB() != 0
+                || Files.exists(instance.directory()))
+                && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+        }
+
+        assertTrue(instance.readyFuture().isCompletedExceptionally());
+        assertTrue(context.backends().registrations.isEmpty());
+        assertTrue(context.ports().reservations().isEmpty());
+        assertEquals(0, context.budget().reservedMemoryMiB());
+        assertFalse(Files.exists(instance.directory()));
+    }
+
+    @Test
     void enforcesBlueprintInstanceLimitForDirectStarts() throws Exception {
         createContext(false, true);
         ManagedInstance first = manager.start("fixture");
@@ -229,6 +273,14 @@ class InstanceManagerTest {
     }
 
     private TestContext createContext(boolean save, boolean includeJar) throws Exception {
+        return createContext(save, includeJar, false);
+    }
+
+    private TestContext createContext(
+            boolean save,
+            boolean includeJar,
+            boolean includeVolume
+    ) throws Exception {
         Path blueprintsDirectory = Files.createDirectories(
                 temporaryDirectory.resolve("blueprints")
         );
@@ -240,6 +292,12 @@ class InstanceManagerTest {
         );
         if (includeJar) {
             createFixtureJar(softwareDirectory.resolve("fixture.jar"));
+        }
+        if (includeVolume) {
+            Path world = Files.createDirectories(
+                    temporaryDirectory.resolve("worlds/fixture")
+            );
+            Files.writeString(world.resolve("level.dat"), "clean world");
         }
 
         Files.writeString(blueprintsDirectory.resolve("fixture.yml"), """
@@ -253,7 +311,20 @@ class InstanceManagerTest {
                   limits:
                     memory_limit: 256
                 save: %s
-                """.formatted(save));
+                %s
+                """.formatted(
+                save,
+                includeVolume
+                        ? """
+                        state:
+                          volumes:
+                            - name: world
+                              source: worlds/fixture
+                              target: /world
+                              mode: cow
+                        """
+                        : ""
+        ));
         Files.writeString(profilesDirectory.resolve("paper.yml"), """
                 software:
                   id: paper
@@ -280,7 +351,8 @@ class InstanceManagerTest {
         int port = findAvailablePort();
         LoopbackPortAllocator ports = new LoopbackPortAllocator(port, port);
         InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(
-                temporaryDirectory.resolve("instances")
+                temporaryDirectory.resolve("instances"),
+                temporaryDirectory
         );
         ProcessSupervisor supervisor = new ProcessSupervisor(2);
         FakeBackendRegistry backends = new FakeBackendRegistry();

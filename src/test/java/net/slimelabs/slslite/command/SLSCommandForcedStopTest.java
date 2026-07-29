@@ -194,6 +194,103 @@ class SLSCommandForcedStopTest {
         assertEquals(List.of("--force"), forceSuggestions);
     }
 
+    @Test
+    void protectedLobbyRestartRequiresForceModifierAndPermission() {
+        TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+        SLSCommand command = command(new TrackingController(instance), lobby);
+
+        command.execute(invocation(
+                source(Set.of("sls.command.restart"), new ArrayList<>()),
+                "restart",
+                INSTANCE_ID
+        ));
+        command.execute(invocation(
+                source(Set.of("sls.command.restart"), new ArrayList<>()),
+                "restart",
+                INSTANCE_ID,
+                "--force"
+        ));
+
+        assertEquals(0, lobby.evacuations);
+        assertEquals(0, lobby.cycles);
+    }
+
+    @Test
+    void forcedLobbyRestartDrainsAndCyclesPrimary() {
+        TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+        SLSCommand command = command(new TrackingController(instance), lobby);
+
+        command.execute(invocation(
+                source(
+                        Set.of(
+                                "sls.command.restart",
+                                "sls.command.restart.force"
+                        ),
+                        new ArrayList<>()
+                ),
+                "restart",
+                INSTANCE_ID,
+                "--force"
+        ));
+
+        assertEquals(1, lobby.begins);
+        assertEquals(1, lobby.evacuations);
+        assertEquals(1, lobby.cycles);
+        assertFalse(lobby.lastReset);
+    }
+
+    @Test
+    void forcedLobbyResetUsesResetCycle() {
+        TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+        SLSCommand command = command(new TrackingController(instance), lobby);
+
+        command.execute(invocation(
+                source(
+                        Set.of(
+                                "sls.command.reset",
+                                "sls.command.reset.force"
+                        ),
+                        new ArrayList<>()
+                ),
+                "reset",
+                INSTANCE_ID,
+                "--force"
+        ));
+
+        assertEquals(1, lobby.cycles);
+        assertTrue(lobby.lastReset);
+    }
+
+    @Test
+    void restartForceSuggestionIsHiddenWithoutForcePermission() {
+        SLSCommand command = command(
+                new TrackingController(instance),
+                new TrackingLobby(INSTANCE_ID)
+        );
+
+        List<String> normalSuggestions = command.suggestAsync(invocation(
+                source(Set.of("sls.command.restart"), new ArrayList<>()),
+                "restart",
+                INSTANCE_ID,
+                ""
+        )).join();
+        List<String> forceSuggestions = command.suggestAsync(invocation(
+                source(
+                        Set.of(
+                                "sls.command.restart",
+                                "sls.command.restart.force"
+                        ),
+                        new ArrayList<>()
+                ),
+                "restart",
+                INSTANCE_ID,
+                ""
+        )).join();
+
+        assertTrue(normalSuggestions.isEmpty());
+        assertEquals(List.of("--force"), forceSuggestions);
+    }
+
     private SLSCommand command(
             TrackingController controller,
             TrackingLobby lobby
@@ -349,8 +446,10 @@ class SLSCommandForcedStopTest {
         private int evacuations;
         private int begins;
         private int cancellations;
+        private int cycles;
         private boolean draining;
         private boolean prepared;
+        private boolean lastReset;
 
         private TrackingLobby(String lobbyId) {
             this.lobbyId = lobbyId;
@@ -415,6 +514,15 @@ class SLSCommandForcedStopTest {
             prepared = draining && lobbyId.equals(serverName);
             draining = false;
             return prepared;
+        }
+
+        @Override
+        public CompletableFuture<com.velocitypowered.api.proxy.server.RegisteredServer>
+        cyclePrimary(String serverName, boolean reset) {
+            cycles++;
+            lastReset = reset;
+            draining = false;
+            return CompletableFuture.completedFuture(null);
         }
 
         @Override

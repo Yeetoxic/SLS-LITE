@@ -142,6 +142,10 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         return new JoinAttempt(entry.ticket, entry.instance, created, entry.completion);
     }
 
+    public long queueTimeoutSeconds() {
+        return queueTimeout.toSeconds();
+    }
+
     public synchronized Optional<QueueTicket> queued(UUID playerId) {
         QueueEntry entry = queue.get(playerId);
         return entry == null ? Optional.empty() : Optional.of(entry.ticket);
@@ -423,16 +427,11 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                 return;
             }
         }
-        instance.readyFuture().whenComplete((ready, failure) -> {
-            if (failure != null) {
-                return;
-            }
-            try {
-                instances.stop(ready.id());
-            } catch (InstanceOperationException ignored) {
-                // The process may have exited between readiness and this stop request.
-            }
-        });
+        try {
+            instances.stop(instance.id());
+        } catch (InstanceOperationException ignored) {
+            // The process may have exited between queue removal and this stop request.
+        }
     }
 
     private static ThreadFactory threadFactory() {

@@ -81,8 +81,9 @@ Distributed SLS features are adapted to a single host:
 - Node allocation becomes local memory, directory, and port admission.
 - Container limits become JVM limits and local resource accounting.
 - Remote event streams become in-process lifecycle events.
-- Overlay volumes use a portable copy baseline with optional local
-  copy-on-write optimizations planned later.
+- `state.volumes` with `mode: cow` uses a transactional portable directory-copy
+  baseline. See
+  [DOCS/Blueprint_Volumes.md](DOCS/Blueprint_Volumes.md).
 
 ## Requirements
 
@@ -101,6 +102,11 @@ runtime referenced by a software profile. Managed initialization fails with a
 specific diagnostic if a required probe fails. Provider memory limits cannot be
 discovered portably, so `resources.total_memory_mib` remains an operator-declared
 admission budget.
+
+SLS-LITE uses the same top-level storage concepts as modern SLS: blueprints,
+worlds, reusable software, and runtime instances remain separate. Blueprint
+YAML files can be grouped recursively by category. The complete recommended
+tree is documented in [DOCS/Data_Layout.md](DOCS/Data_Layout.md).
 
 ## Configuration
 
@@ -279,14 +285,13 @@ software:
 launch:
   java: java
   jvm_arguments:
-    - "-Xms{memory_mib}M"
+    - "-Xms128M"
     - "-Xmx{memory_mib}M"
-  server_arguments:
-    - "--nogui"
+  server_arguments: []
 
 readiness:
   pattern: 'Done \([^)]+\)! For help'
-  timeout_seconds: 180
+  timeout_seconds: 600
 
 shutdown:
   command: stop
@@ -314,8 +319,11 @@ target/sls-lite-0.1.0-SNAPSHOT.jar
 
 ## Velocity Test
 
-A reproducible local Velocity and Paper smoke environment is documented in
-[DOCS/Velocity_Testing.md](DOCS/Velocity_Testing.md). Set it up with:
+A local Velocity and Paper environment is documented in
+[DOCS/Velocity_Testing.md](DOCS/Velocity_Testing.md). The primary integration
+fixture is the preserved SLS v2.1.2 minigame network, using organized modern
+blueprints and exact Paper versions. A synthetic fixture can still be created
+for isolated development with:
 
 ```powershell
 .\scripts\setup-velocity-test.ps1
@@ -324,7 +332,9 @@ A reproducible local Velocity and Paper smoke environment is documented in
 ## Blueprint
 
 On first initialization, SLS-LITE installs a template under its `blueprints`
-data directory:
+data directory. Blueprint YAML files may be grouped into nested category
+directories such as `blueprints/lobbies`, `blueprints/minigames`, and
+`blueprints/adventures`; SLS-LITE discovers them recursively:
 
 ```yaml
 blueprint:

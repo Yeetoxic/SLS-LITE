@@ -2,6 +2,7 @@ package net.slimelabs.slslite.velocity;
 
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 
 public interface BackendProtocolSynchronizer {
@@ -9,7 +10,8 @@ public interface BackendProtocolSynchronizer {
     void synchronize(
             String name,
             RegisteredServer server,
-            OptionalInt knownProtocol
+            OptionalInt knownProtocol,
+            Optional<String> knownMinecraftVersion
     );
 
     void remove(String name);
@@ -26,7 +28,8 @@ public interface BackendProtocolSynchronizer {
                     public void synchronize(
                             String name,
                             RegisteredServer server,
-                            OptionalInt knownProtocol
+                            OptionalInt knownProtocol,
+                            Optional<String> knownMinecraftVersion
                     ) {
                     }
 

@@ -141,7 +141,8 @@ public final class SLSLite {
                     configuration.get().portRangeEnd()
             );
             InstanceDirectoryPreparer directoryPreparer = new InstanceDirectoryPreparer(
-                    configuration.get().instancesDirectory()
+                    configuration.get().instancesDirectory(),
+                    dataDirectory
             );
             JavaJarProcessSpecFactory processSpecFactory =
                     new JavaJarProcessSpecFactory(dataDirectory);

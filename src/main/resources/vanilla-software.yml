@@ -15,7 +15,7 @@ launch:
   java: java
   # java_versions may map required Java majors to configured executables.
   jvm_arguments:
-    - "-Xms{memory_mib}M"
+    - "-Xms128M"
     - "-Xmx{memory_mib}M"
   server_arguments:
     - "--nogui"

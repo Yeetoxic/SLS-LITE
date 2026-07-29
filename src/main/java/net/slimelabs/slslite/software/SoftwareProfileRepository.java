@@ -27,8 +27,8 @@ public final class SoftwareProfileRepository {
 
     private static final Pattern VALID_ID = Pattern.compile("[a-z0-9][a-z0-9_-]{0,63}");
     private static final List<String> DEFAULT_JVM_ARGUMENTS =
-            List.of("-Xms{memory_mib}M", "-Xmx{memory_mib}M");
-    private static final List<String> DEFAULT_SERVER_ARGUMENTS = List.of("--nogui");
+            List.of("-Xms128M", "-Xmx{memory_mib}M");
+    private static final List<String> DEFAULT_SERVER_ARGUMENTS = List.of();
     private static final String DEFAULT_READINESS_PATTERN = "Done \\([^)]+\\)! For help";
     private static final int DEFAULT_STARTUP_TIMEOUT_SECONDS = 180;
     private static final String DEFAULT_STOP_COMMAND = "stop";

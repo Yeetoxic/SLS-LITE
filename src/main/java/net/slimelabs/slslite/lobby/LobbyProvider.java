@@ -62,6 +62,15 @@ public interface LobbyProvider extends AutoCloseable {
         return false;
     }
 
+    default CompletableFuture<RegisteredServer> cyclePrimary(
+            String serverName,
+            boolean reset
+    ) {
+        return CompletableFuture.failedFuture(
+                new IllegalStateException("Managed lobby cycling is unavailable")
+        );
+    }
+
     @Override
     void close();
 }

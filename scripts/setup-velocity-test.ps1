@@ -142,8 +142,7 @@ launch:
   jvm_arguments:
     - "-Xms{memory_mib}M"
     - "-Xmx{memory_mib}M"
-  server_arguments:
-    - "--nogui"
+  server_arguments: []
 readiness:
   pattern: 'Done \([^)]+\)! For help'
   timeout_seconds: 180

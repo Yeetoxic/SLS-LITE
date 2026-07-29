@@ -154,6 +154,69 @@ public final class LocalLobbyProvider implements LobbyProvider {
     }
 
     @Override
+    public CompletableFuture<RegisteredServer> cyclePrimary(
+            String serverName,
+            boolean reset
+    ) {
+        ManagedInstance current;
+        long attemptGeneration;
+        CompletableFuture<RegisteredServer> cycleReady;
+        synchronized (this) {
+            current = managedInstance;
+            if (config.mode() != LobbyMode.MANAGED
+                    || current == null
+                    || !current.id().equals(serverName)
+                    || closed) {
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException(
+                                "Managed lobby is unavailable for "
+                                        + (reset ? "reset" : "restart")
+                        )
+                );
+            }
+            attemptGeneration = ++generation;
+            handledGeneration = -1;
+            cancel(retryTask);
+            cancel(stableTask);
+            retryTask = null;
+            stableTask = null;
+            status = LobbyStatus.RECOVERING;
+            cycleReady = new CompletableFuture<>();
+            ready = cycleReady;
+        }
+
+        logger.warn(
+                "{} managed lobby {} by explicit administrative request",
+                reset ? "Resetting" : "Restarting",
+                serverName
+        );
+        CompletableFuture<ManagedInstance> cycle;
+        try {
+            cycle = reset
+                    ? instances.reset(serverName)
+                    : instances.restart(serverName);
+        } catch (InstanceOperationException exception) {
+            handleLoss(current, attemptGeneration, exception);
+            return cycleReady;
+        }
+        cycle.whenComplete((replacement, failure) -> {
+            if (failure != null) {
+                handleLoss(null, attemptGeneration, failure);
+                return;
+            }
+            synchronized (this) {
+                if (closed || generation != attemptGeneration) {
+                    stopSuperseded(replacement);
+                    return;
+                }
+                managedInstance = replacement;
+            }
+            observeManagedInstance(replacement, attemptGeneration);
+        });
+        return cycleReady;
+    }
+
+    @Override
     public synchronized boolean prepareIntentionalStop(String serverName) {
         ManagedInstance instance = managedInstance;
         if (config.mode() != LobbyMode.MANAGED
@@ -233,7 +296,7 @@ public final class LocalLobbyProvider implements LobbyProvider {
                             "Managed lobby blueprint not found: "
                                     + config.registry() + "/" + config.server()
                     ));
-            ManagedInstance instance = instances.start(blueprint.id());
+            ManagedInstance instance = provisionInstance(blueprint, recovery);
             synchronized (this) {
                 if (closed || generation != attemptGeneration) {
                     stopSuperseded(instance);
@@ -248,23 +311,72 @@ public final class LocalLobbyProvider implements LobbyProvider {
                     config.registry(),
                     config.server()
             );
-            instance.readyFuture().whenComplete((lobby, failure) -> {
-                if (failure == null) {
-                    publishReady(instance, attemptGeneration);
-                } else {
-                    handleLoss(instance, attemptGeneration, failure);
-                }
-            });
-            instance.stoppedFuture().whenComplete((exitCode, failure) -> {
-                Throwable cause = failure != null
-                        ? failure
-                        : new IllegalStateException(
-                                "Lobby process exited with code " + exitCode
-                        );
-                handleLoss(instance, attemptGeneration, cause);
-            });
+            observeManagedInstance(instance, attemptGeneration);
         } catch (InstanceOperationException exception) {
             handleLoss(null, attemptGeneration, exception);
+        }
+    }
+
+    private void observeManagedInstance(
+            ManagedInstance instance,
+            long attemptGeneration
+    ) {
+        instance.readyFuture().whenComplete((lobby, failure) -> {
+            if (failure == null) {
+                publishReady(instance, attemptGeneration);
+            } else {
+                handleLoss(instance, attemptGeneration, failure);
+            }
+        });
+        instance.stoppedFuture().whenComplete((exitCode, failure) -> {
+            Throwable cause = failure != null
+                    ? failure
+                    : new IllegalStateException(
+                            "Lobby process exited with code " + exitCode
+                    );
+            handleLoss(instance, attemptGeneration, cause);
+        });
+    }
+
+    private ManagedInstance provisionInstance(Blueprint blueprint, boolean recovery)
+            throws InstanceOperationException {
+        if (!blueprint.save()) {
+            return instances.start(blueprint.id());
+        }
+
+        String persistentId = null;
+        ManagedInstance previous = managedInstance;
+        if (recovery && previous != null
+                && previous.blueprint().id().equals(blueprint.id())) {
+            persistentId = previous.id();
+        }
+        if (persistentId == null) {
+            persistentId = instances.persistentInstanceIds(blueprint.id()).stream()
+                    .sorted()
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (persistentId == null) {
+            return instances.start(blueprint.id());
+        }
+
+        try {
+            logger.info(
+                    "Resuming persistent managed lobby {} from {}/{}",
+                    persistentId,
+                    config.registry(),
+                    config.server()
+            );
+            return instances.restart(persistentId).join();
+        } catch (CompletionException exception) {
+            Throwable cause = exception.getCause() == null
+                    ? exception
+                    : exception.getCause();
+            throw new InstanceOperationException(
+                    "Unable to resume persistent managed lobby "
+                            + persistentId + ": " + rootMessage(cause),
+                    cause
+            );
         }
     }
 

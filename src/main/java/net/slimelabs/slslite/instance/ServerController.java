@@ -17,6 +17,10 @@ public interface ServerController {
         return List.of();
     }
 
+    default Collection<String> persistentInstanceIds(String blueprintId) {
+        return List.of();
+    }
+
     default void sendCommand(String instanceId, String command)
             throws InstanceOperationException {
         throw new InstanceOperationException(

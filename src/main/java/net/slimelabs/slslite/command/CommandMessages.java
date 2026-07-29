@@ -3,16 +3,20 @@ package net.slimelabs.slslite.command;
 import com.velocitypowered.api.proxy.Player;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.slimelabs.slslite.BuildInfo;
+import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import net.slimelabs.slslite.instance.InstanceState;
 import net.slimelabs.slslite.instance.ManagedInstance;
 
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 
 final class CommandMessages {
 
@@ -77,16 +81,9 @@ final class CommandMessages {
         int separator = id.lastIndexOf('.');
         String prefix = separator < 0 ? id : id.substring(0, separator);
         String suffix = separator < 0 ? "" : id.substring(separator);
-        Component tooltip = labelValue("Name:", instance.blueprint().name())
-                .appendNewline()
-                .append(labelValue("Blueprint:", instance.blueprint().id()))
-                .appendNewline()
-                .append(labelValue("Status:", statusName(instance.state())))
-                .appendNewline()
-                .append(labelValue("Players:", Integer.toString(playerCount)));
         return Component.text(prefix, NamedTextColor.GOLD)
                 .append(Component.text(suffix, NamedTextColor.YELLOW))
-                .hoverEvent(HoverEvent.showText(tooltip));
+                .hoverEvent(HoverEvent.showText(instanceDetails(instance, playerCount)));
     }
 
     static Component listEntry(
@@ -100,9 +97,7 @@ final class CommandMessages {
         Component displayName = Component.text(
                 instance.blueprint().name(),
                 statusColor(instance.state())
-        ).hoverEvent(HoverEvent.showText(
-                Component.text(instance.id(), statusColor(instance.state()))
-        ));
+        ).hoverEvent(HoverEvent.showText(instanceDetails(instance, count)));
         Component playerCount = Component.text(
                 count + (count == 1 ? " player" : " players"),
                 NamedTextColor.DARK_AQUA
@@ -111,6 +106,96 @@ final class CommandMessages {
                 .append(displayName)
                 .append(Component.text(": ", NamedTextColor.WHITE))
                 .append(playerCount);
+    }
+
+    static Component blueprint(
+            Blueprint blueprint,
+            Collection<ManagedInstance> activeInstances
+    ) {
+        List<ManagedInstance> active = activeInstances.stream()
+                .filter(instance -> instance.blueprint().id().equals(blueprint.id()))
+                .toList();
+        TextComponent.Builder tooltip = Component.text()
+                .append(labelValue("Name:", blueprint.name()))
+                .appendNewline()
+                .append(labelValue(
+                        "Blueprint:",
+                        blueprint.type() + "/" + blueprint.id()
+                ))
+                .appendNewline()
+                .append(labelValue(
+                        "Software:",
+                        blueprint.software() + " " + blueprint.version()
+                ))
+                .appendNewline()
+                .append(labelValue(
+                        "Memory:",
+                        blueprint.memoryLimitMiB() + " MiB"
+                ))
+                .appendNewline()
+                .append(labelValue(
+                        "Capacity:",
+                        blueprint.maxPlayers() + " players per instance"
+                ))
+                .appendNewline()
+                .append(labelValue(
+                        "Instance limit:",
+                        Integer.toString(blueprint.maxInstances())
+                ))
+                .appendNewline()
+                .append(labelValue(
+                        "Persistence:",
+                        blueprint.save() ? "persistent" : "ephemeral"
+                ))
+                .appendNewline()
+                .append(labelValue(
+                        "Active:",
+                        active.isEmpty()
+                                ? "none"
+                                : active.stream()
+                                        .map(instance -> instance.id() + " ["
+                                                + statusName(instance.state()) + "]")
+                                        .reduce((left, right) -> left + ", " + right)
+                                        .orElse("none")
+                ));
+        if (blueprint.volumes().isEmpty()) {
+            tooltip.appendNewline().append(labelValue("Volumes:", "none"));
+        } else {
+            tooltip.appendNewline().append(labelValue(
+                    "Volumes:",
+                    Integer.toString(blueprint.volumes().size())
+            ));
+            for (BlueprintVolume volume : blueprint.volumes()) {
+                tooltip.appendNewline().append(Component.text(
+                        "  " + volume.name() + ": " + volume.source()
+                                + " -> " + volume.target()
+                                + " [" + volume.mode().name().toLowerCase() + "]",
+                        NamedTextColor.DARK_PURPLE
+                ));
+            }
+        }
+        tooltip.appendNewline().append(Component.text(
+                "Click to prepare or join this blueprint",
+                NamedTextColor.YELLOW
+        ));
+
+        Component interactiveName = Component.text(
+                        blueprint.type() + " " + blueprint.id(),
+                        NamedTextColor.GOLD
+                )
+                .hoverEvent(HoverEvent.showText(tooltip.build()))
+                .clickEvent(ClickEvent.suggestCommand(
+                        "/sls join " + blueprint.type() + " " + blueprint.id()
+                ));
+        Component summary = Component.text(
+                        " (" + blueprint.software() + " " + blueprint.version()
+                                + ", " + blueprint.memoryLimitMiB() + " MiB)",
+                        NamedTextColor.GRAY
+                );
+        return Component.text()
+                .append(interactiveName)
+                .append(summary)
+                .build();
     }
 
     static Component listHeader() {
@@ -147,6 +232,45 @@ final class CommandMessages {
     static Component labelValue(String label, String value) {
         return Component.text(label, NamedTextColor.DARK_GRAY)
                 .append(Component.text(" " + value, NamedTextColor.GRAY));
+    }
+
+    private static Component instanceDetails(
+            ManagedInstance instance,
+            int playerCount
+    ) {
+        Blueprint blueprint = instance.blueprint();
+        return labelValue("Instance:", instance.id())
+                .appendNewline()
+                .append(labelValue("Name:", blueprint.name()))
+                .appendNewline()
+                .append(labelValue(
+                        "Blueprint:",
+                        blueprint.type() + "/" + blueprint.id()
+                ))
+                .appendNewline()
+                .append(labelValue("Status:", statusName(instance.state())))
+                .appendNewline()
+                .append(labelValue(
+                        "Players:",
+                        playerCount + "/" + blueprint.maxPlayers()
+                ))
+                .appendNewline()
+                .append(labelValue(
+                        "Software:",
+                        blueprint.software() + " " + blueprint.version()
+                ))
+                .appendNewline()
+                .append(labelValue(
+                        "Memory:",
+                        blueprint.memoryLimitMiB() + " MiB"
+                ))
+                .appendNewline()
+                .append(labelValue("Port:", Integer.toString(instance.port())))
+                .appendNewline()
+                .append(labelValue(
+                        "Persistence:",
+                        blueprint.save() ? "persistent" : "ephemeral"
+                ));
     }
 
     private static Component joinedPlayerNames(Collection<Player> players) {

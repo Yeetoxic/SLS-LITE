@@ -19,14 +19,19 @@ launch:
   #   "21": runtimes/java-21/bin/java
   #   "25": runtimes/java-25/bin/java
   jvm_arguments:
-    - "-Xms{memory_mib}M"
+    # Keep idle and startup memory low; the blueprint reservation remains Xmx.
+    - "-Xms128M"
     - "-Xmx{memory_mib}M"
-  server_arguments:
-    - "--nogui"
+  # Paper is already headless. Do not add --nogui: legacy CraftBukkit/Paper
+  # releases such as 1.11.2 reject that argument and exit after printing help.
+  server_arguments: []
 
 readiness:
   pattern: 'Done \([^)]+\)! For help'
-  timeout_seconds: 180
+  # Historical Paperclip builds can spend several minutes preparing their first
+  # runtime on a constrained host. This is only an upper bound; ready servers do
+  # not wait for the full timeout.
+  timeout_seconds: 600
 
 shutdown:
   command: stop

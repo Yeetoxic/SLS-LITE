@@ -24,7 +24,16 @@ class ServerPropertiesEditorTest {
                 StandardCharsets.UTF_8
         );
 
-        ServerPropertiesEditor.applyManagedNetworkSettings(temporaryDirectory, 25571, 12);
+        ServerPropertiesEditor.applyManagedNetworkSettings(
+                temporaryDirectory,
+                25571,
+                12,
+                java.util.Map.of(
+                        "enable-command-block", "true",
+                        "motd", "Blueprint Server",
+                        "server-port", "12345"
+                )
+        );
 
         Properties properties = new Properties();
         try (Reader input = Files.newBufferedReader(
@@ -33,7 +42,8 @@ class ServerPropertiesEditorTest {
         )) {
             properties.load(input);
         }
-        assertEquals("Test Server", properties.getProperty("motd"));
+        assertEquals("Blueprint Server", properties.getProperty("motd"));
+        assertEquals("true", properties.getProperty("enable-command-block"));
         assertEquals("false", properties.getProperty("online-mode"));
         assertEquals("12", properties.getProperty("max-players"));
         assertEquals("127.0.0.1", properties.getProperty("server-ip"));

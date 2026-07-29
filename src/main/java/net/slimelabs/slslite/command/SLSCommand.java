@@ -276,6 +276,11 @@ public final class SLSCommand implements SimpleCommand {
                 && authorizer.canAdminister(source, "stop.force")) {
             return completed(List.of("--force"));
         }
+        if (arguments.length == 3
+                && ("restart".equals(operation) || "reset".equals(operation))
+                && authorizer.canAdminister(source, operation + ".force")) {
+            return completed(List.of("--force"));
+        }
         if (arguments.length == 4 && "logs".equals(operation)
                 && authorizer.canAdminister(source, "logs")) {
             return completed(List.of("50", "100", "max"));
@@ -603,13 +608,11 @@ public final class SLSCommand implements SimpleCommand {
         source.sendMessage(CommandMessages.message("Blueprints", NamedTextColor.GREEN));
         selected.forEach(blueprint ->
                 source.sendMessage(CommandMessages.prefix()
-                        .append(Component.text(
-                                "- " + blueprint.type() + " " + blueprint.id(),
-                                NamedTextColor.GOLD
-                        )).append(Component.text(
-                        " (" + blueprint.software() + " " + blueprint.version()
-                                + ", " + blueprint.memoryLimitMiB() + " MiB)"
-                ).color(NamedTextColor.GRAY))));
+                        .append(Component.text("- ", NamedTextColor.GOLD))
+                        .append(CommandMessages.blueprint(
+                                blueprint,
+                                instances.getAll()
+                        ))));
     }
 
     private void sendInstances(CommandSource source) {
@@ -655,6 +658,11 @@ public final class SLSCommand implements SimpleCommand {
         );
         try {
             instances.sendCommand(instance.id(), command);
+            logger.info(
+                    "Console command sent by {} to {}",
+                    commandSourceName(source),
+                    instance.id()
+            );
             source.sendMessage(CommandMessages.message(
                     "Command executed successfully", NamedTextColor.GRAY
             ));
@@ -966,6 +974,13 @@ public final class SLSCommand implements SimpleCommand {
 
         try {
             ManagedInstance instance = instances.start(blueprint.get().id());
+            logger.info(
+                    "Start command accepted from {} for {}/{} as {}",
+                    commandSourceName(source),
+                    blueprint.get().type(),
+                    blueprint.get().id(),
+                    instance.id()
+            );
             source.sendMessage(CommandMessages.message(
                     "Preparing " + instance.id() + " from "
                             + blueprint.get().type() + "/" + blueprint.get().id() + "...",
@@ -1034,6 +1049,17 @@ public final class SLSCommand implements SimpleCommand {
                 LocalJoinService.JoinAttempt attempt =
                         joinService.join(target, arguments[1], arguments[2]);
                 ManagedInstance instance = attempt.instance();
+                logger.info(
+                        "Join requested by {} for player {} to {}/{} via {} "
+                                + "({}, queue timeout {} seconds)",
+                        commandSourceName(source),
+                        target.getUsername(),
+                        arguments[1],
+                        arguments[2],
+                        instance.id(),
+                        attempt.created() ? "created" : "existing",
+                        joinService.queueTimeoutSeconds()
+                );
                 String action = attempt.created() ? "Preparing" : "Queued for";
                 source.sendMessage(CommandMessages.prefix()
                         .append(Component.text(
@@ -1215,8 +1241,19 @@ public final class SLSCommand implements SimpleCommand {
     ) {
         if (failure != null) {
             if (rootCause(failure) instanceof LocalJoinService.QueueCancelledException) {
+                logger.info(
+                        "Join for player {} to {} was cancelled",
+                        target.getUsername(),
+                        instance.id()
+                );
                 return;
             }
+            logger.warn(
+                    "Join failed for player {} to {}: {}",
+                    target.getUsername(),
+                    instance.id(),
+                    rootMessage(failure)
+            );
             source.sendMessage(CommandMessages.message(
                     "Unable to connect " + target.getUsername() + ": "
                             + rootMessage(failure),
@@ -1226,12 +1263,24 @@ public final class SLSCommand implements SimpleCommand {
         }
         if (result.isSuccessful()
                 || result.getStatus() == ConnectionRequestBuilder.Status.ALREADY_CONNECTED) {
+            logger.info(
+                    "Player {} connected to {} ({})",
+                    target.getUsername(),
+                    instance.id(),
+                    result.getStatus()
+            );
             source.sendMessage(CommandMessages.message(
                     "Connected " + target.getUsername() + " to " + instance.id() + ".",
                     NamedTextColor.GREEN
             ));
             return;
         }
+        logger.warn(
+                "Connection failed for player {} to {}: {}",
+                target.getUsername(),
+                instance.id(),
+                result.getStatus()
+        );
         source.sendMessage(CommandMessages.message(
                 "Connection to " + instance.id() + " failed: " + result.getStatus(),
                 NamedTextColor.RED
@@ -1399,6 +1448,12 @@ public final class SLSCommand implements SimpleCommand {
             boolean forcedProtectedStop
     ) {
         try {
+            logger.info(
+                    "Stop command accepted from {} for {}{}",
+                    commandSourceName(source),
+                    instanceId,
+                    forcedProtectedStop ? " (forced protected stop)" : ""
+            );
             source.sendMessage(CommandMessages.message(
                     "Stopping " + instanceId + "...", NamedTextColor.YELLOW
             ));
@@ -1467,11 +1522,22 @@ public final class SLSCommand implements SimpleCommand {
         )) {
             return;
         }
-        if (arguments.length != 2) {
+        if (arguments.length < 2 || arguments.length > 3
+                || arguments.length == 3
+                && !"--force".equalsIgnoreCase(arguments[2])) {
             source.sendMessage(CommandMessages.usage(
                     "/sls " + operation,
-                    "server"
+                    "server",
+                    "server --force"
             ));
+            return;
+        }
+        boolean force = arguments.length == 3;
+        if (force && !requireAdmin(
+                source,
+                operation + ".force",
+                "force-" + operation + " protected managed servers"
+        )) {
             return;
         }
 
@@ -1486,17 +1552,39 @@ public final class SLSCommand implements SimpleCommand {
         } else {
             active = findInstanceOrNull(instanceId);
         }
-        if (active != null && lobbyProvider.isLobby(active.id())) {
+        boolean protectedLobby = active != null && lobbyProvider.isLobby(active.id());
+        if (protectedLobby && !force) {
             source.sendMessage(CommandMessages.message(
-                    "The active lobby cannot be " + operation + " manually.",
+                    "The active lobby is protected. Use /sls " + operation + " "
+                            + active.id() + " --force to "
+                            + operation + " it intentionally.",
                     NamedTextColor.RED
             ));
+            return;
+        }
+        if (force && !protectedLobby) {
+            source.sendMessage(CommandMessages.message(
+                    instanceId + " is not protected; use /sls " + operation
+                            + " " + instanceId + ".",
+                    NamedTextColor.YELLOW
+            ));
+            return;
+        }
+
+        if (protectedLobby) {
+            cycleProtectedLobby(source, active, reset);
             return;
         }
 
         String targetId = instanceId;
         Runnable beginRestart = () -> {
             try {
+                logger.info(
+                        "{} command accepted from {} for {}",
+                        capitalize(operation),
+                        commandSourceName(source),
+                        targetId
+                );
                 source.sendMessage(CommandMessages.message(
                         (reset ? "Resetting" : "Restarting")
                                 + " persistent server " + targetId + "...",
@@ -1557,6 +1645,67 @@ public final class SLSCommand implements SimpleCommand {
                 ));
             }
         });
+    }
+
+    private void cycleProtectedLobby(
+            CommandSource source,
+            ManagedInstance instance,
+            boolean reset
+    ) {
+        String operation = reset ? "reset" : "restart";
+        if (!lobbyProvider.beginIntentionalStop(instance.id())) {
+            source.sendMessage(CommandMessages.message(
+                    "The active lobby is already draining or changed.",
+                    NamedTextColor.RED
+            ));
+            return;
+        }
+        logger.warn(
+                "Forced managed lobby {} requested by {} for {}",
+                operation,
+                commandSourceName(source),
+                instance.id()
+        );
+        source.sendMessage(CommandMessages.message(
+                "Moving players to SLS-Limbo before "
+                        + (reset ? "resetting " : "restarting ")
+                        + instance.id() + "...",
+                NamedTextColor.YELLOW
+        ));
+        lobbyProvider.evacuateForIntentionalStop(instance.id())
+                .whenComplete((ignored, evacuationFailure) -> {
+                    if (evacuationFailure != null) {
+                        lobbyProvider.cancelIntentionalStop(instance.id());
+                        source.sendMessage(CommandMessages.message(
+                                capitalize(operation) + " cancelled: "
+                                        + rootMessage(evacuationFailure),
+                                NamedTextColor.RED
+                        ));
+                        return;
+                    }
+                    source.sendMessage(CommandMessages.message(
+                            (reset ? "Resetting" : "Restarting")
+                                    + " protected lobby " + instance.id() + "...",
+                            NamedTextColor.YELLOW
+                    ));
+                    lobbyProvider.cyclePrimary(instance.id(), reset)
+                            .whenComplete((server, cycleFailure) -> {
+                                if (cycleFailure == null) {
+                                    source.sendMessage(CommandMessages.message(
+                                            "Server " + instance.id() + " "
+                                                    + (reset ? "reset" : "restarted")
+                                                    + ".",
+                                            NamedTextColor.GREEN
+                                    ));
+                                } else {
+                                    source.sendMessage(CommandMessages.message(
+                                            capitalize(operation) + " failed: "
+                                                    + rootMessage(cycleFailure),
+                                            NamedTextColor.RED
+                                    ));
+                                }
+                            });
+                });
     }
 
     private void status(CommandSource source, String[] arguments) {

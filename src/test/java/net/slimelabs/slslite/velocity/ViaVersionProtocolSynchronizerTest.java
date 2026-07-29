@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Proxy;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,11 +31,34 @@ class ViaVersionProtocolSynchronizerTest {
         synchronizer.synchronize(
                 "sls-limbo",
                 server(770, pings),
-                OptionalInt.of(770)
+                OptionalInt.of(770),
+                Optional.empty()
         );
 
         assertEquals("sls-limbo", synchronizedName.get());
         assertEquals(770, synchronizedProtocol.get());
+        assertEquals(0, pings.get());
+    }
+
+    @Test
+    void resolvesKnownMinecraftVersionWithoutPingingBackend() {
+        AtomicReference<String> synchronizedName = new AtomicReference<>();
+        AtomicInteger synchronizedProtocol = new AtomicInteger();
+        AtomicInteger pings = new AtomicInteger();
+        ViaVersionProtocolSynchronizer synchronizer = synchronizer(
+                synchronizedName,
+                synchronizedProtocol
+        );
+
+        synchronizer.synchronize(
+                "missile_wars.abc123",
+                server(0, pings),
+                OptionalInt.empty(),
+                Optional.of("1.16.5")
+        );
+
+        assertEquals("missile_wars.abc123", synchronizedName.get());
+        assertEquals(754, synchronizedProtocol.get());
         assertEquals(0, pings.get());
     }
 
@@ -51,7 +75,8 @@ class ViaVersionProtocolSynchronizerTest {
         synchronizer.synchronize(
                 "lobby.abc123",
                 server(775, pings),
-                OptionalInt.empty()
+                OptionalInt.empty(),
+                Optional.empty()
         );
 
         assertEquals("lobby.abc123", synchronizedName.get());

@@ -52,6 +52,40 @@ class VelocityBackendRegistryTest {
     }
 
     @Test
+    void passesKnownMinecraftVersionToProtocolSynchronization() {
+        Map<String, ServerInfo> registered = new HashMap<>();
+        AtomicReference<Optional<String>> synchronizedVersion =
+                new AtomicReference<>();
+        BackendProtocolSynchronizer protocols = new BackendProtocolSynchronizer() {
+            @Override
+            public void synchronize(
+                    String name,
+                    RegisteredServer server,
+                    OptionalInt knownProtocol,
+                    Optional<String> knownMinecraftVersion
+            ) {
+                synchronizedVersion.set(knownMinecraftVersion);
+            }
+
+            @Override
+            public void remove(String name) {
+            }
+        };
+        VelocityBackendRegistry registry = new VelocityBackendRegistry(
+                proxy(registered),
+                protocols
+        );
+
+        registry.register(
+                "missile_wars.abc123",
+                new InetSocketAddress("127.0.0.1", 25602),
+                "1.16.5"
+        );
+
+        assertEquals(Optional.of("1.16.5"), synchronizedVersion.get());
+    }
+
+    @Test
     void rollsBackVelocityRegistrationWhenSynchronizationFails() {
         Map<String, ServerInfo> registered = new HashMap<>();
         VelocityBackendRegistry registry = new VelocityBackendRegistry(
@@ -85,7 +119,8 @@ class VelocityBackendRegistryTest {
             public void synchronize(
                     String name,
                     RegisteredServer server,
-                    OptionalInt protocol
+                    OptionalInt protocol,
+                    Optional<String> minecraftVersion
             ) {
                 if (fail) {
                     throw new IllegalStateException("test failure");

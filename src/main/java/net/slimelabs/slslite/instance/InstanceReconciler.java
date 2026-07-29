@@ -126,7 +126,8 @@ public final class InstanceReconciler {
             }
             return;
         }
-        if (metadata.processId() == null && metadata.state() != InstanceState.PREPARING) {
+        if (metadata.processId() == null
+                && !isSafeProcesslessEphemeralState(metadata.state())) {
             report.preservedUnknown++;
             logger.warn(
                     "Preserving ambiguous ephemeral instance {} in state {} without process identity",
@@ -147,6 +148,13 @@ public final class InstanceReconciler {
                     exception
             );
         }
+    }
+
+    private static boolean isSafeProcesslessEphemeralState(InstanceState state) {
+        return state == InstanceState.PREPARING
+                || state == InstanceState.STOPPING
+                || state == InstanceState.STOPPED
+                || state == InstanceState.FAILED;
     }
 
     private static Optional<ProcessHandle> verifiedRecordedProcess(

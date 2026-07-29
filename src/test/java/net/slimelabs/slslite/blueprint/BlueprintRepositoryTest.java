@@ -27,6 +27,12 @@ class BlueprintRepositoryTest {
                 server:
                   software: paper
                   version: "26.1"
+                  configs:
+                    server.properties:
+                      parser: properties
+                      find:
+                        enable-command-block: true
+                        view-distance: 8
                   limits:
                     memory_limit: 1536
                     max_players: 32
@@ -48,7 +54,96 @@ class BlueprintRepositoryTest {
         assertEquals(1536, blueprint.memoryLimitMiB());
         assertEquals(32, blueprint.maxPlayers());
         assertEquals(3, blueprint.maxInstances());
+        assertEquals("true", blueprint.serverProperties().get("enable-command-block"));
+        assertEquals("8", blueprint.serverProperties().get("view-distance"));
         assertFalse(blueprint.save());
+    }
+
+    @Test
+    void loadsModernStateVolumes() throws Exception {
+        write("world.yml", """
+                blueprint:
+                  id: survival
+                  name: Survival
+                  type: games
+                server:
+                  software: paper
+                  version: "26.1"
+                state:
+                  volumes:
+                    - name: world
+                      source: worlds/survival/main
+                      target: /world
+                      mode: cow
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        BlueprintVolume volume = repository.get("survival")
+                .orElseThrow()
+                .volumes()
+                .getFirst();
+        assertEquals("world", volume.name());
+        assertEquals("worlds/survival/main", volume.source());
+        assertEquals("/world", volume.target());
+        assertEquals(BlueprintVolume.Mode.COW, volume.mode());
+    }
+
+    @Test
+    void rejectsUnsupportedVolumeMode() throws Exception {
+        write("world.yml", """
+                blueprint:
+                  id: survival
+                  name: Survival
+                  type: games
+                server:
+                  software: paper
+                  version: "26.1"
+                state:
+                  volumes:
+                    - name: world
+                      source: worlds/survival/main
+                      target: /world
+                      mode: rw
+                """);
+
+        BlueprintException exception = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+
+        assertTrue(exception.getMessage().contains("must be 'cow'"));
+    }
+
+    @Test
+    void rejectsDuplicateVolumeNames() throws Exception {
+        write("world.yml", """
+                blueprint:
+                  id: survival
+                  name: Survival
+                  type: games
+                server:
+                  software: paper
+                  version: "26.1"
+                state:
+                  volumes:
+                    - name: world
+                      source: worlds/one
+                      target: /world
+                      mode: cow
+                    - name: world
+                      source: worlds/two
+                      target: /world_nether
+                      mode: cow
+                """);
+
+        BlueprintException exception = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+
+        assertTrue(exception.getMessage().contains("duplicate volume name 'world'"));
     }
 
     @Test
@@ -63,6 +158,36 @@ class BlueprintRepositoryTest {
     }
 
     @Test
+    void loadsBlueprintsFromCategoryDirectories() throws Exception {
+        write("minigames/block-hunt.yml", """
+                blueprint:
+                  id: block-hunt
+                  name: Block Hunt
+                  type: minigames
+                server:
+                  software: paper
+                  version: "26.1"
+                """);
+        write("lobbies/main.yml", """
+                blueprint:
+                  id: main-lobby
+                  name: Main Lobby
+                  type: lobbies
+                server:
+                  software: paper
+                  version: "26.1"
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.initialize();
+
+        assertEquals(2, repository.getAll().size());
+        assertTrue(repository.get("minigames", "block-hunt").isPresent());
+        assertTrue(repository.get("lobbies", "main-lobby").isPresent());
+        assertFalse(Files.exists(temporaryDirectory.resolve("template.yml")));
+    }
+
+    @Test
     void rejectsDuplicateBlueprintIds() throws Exception {
         String yaml = """
                 blueprint:
@@ -73,8 +198,8 @@ class BlueprintRepositoryTest {
                   software: paper
                   version: "26.1"
                 """;
-        write("one.yml", yaml);
-        write("two.yml", yaml);
+        write("minigames/one.yml", yaml);
+        write("archives/two.yml", yaml);
 
         BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
 
@@ -172,6 +297,8 @@ class BlueprintRepositoryTest {
     }
 
     private void write(String name, String content) throws IOException {
-        Files.writeString(temporaryDirectory.resolve(name), content);
+        Path target = temporaryDirectory.resolve(name);
+        Files.createDirectories(target.getParent());
+        Files.writeString(target, content);
     }
 }

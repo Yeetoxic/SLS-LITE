@@ -1,19 +1,63 @@
 package net.slimelabs.slslite.instance;
 
+import net.slimelabs.slslite.blueprint.BlueprintVolume;
+
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.BooleanSupplier;
 
 public final class InstanceDirectoryPreparer {
 
+    private static final long[] COPY_RETRY_DELAYS_MILLIS = {
+        250,
+        750,
+        2_000,
+        5_000
+    };
+
     private final Path instancesRoot;
+    private final Path contentRoot;
+    private final FileCopyOperation fileCopy;
+    private final RetrySleeper retrySleeper;
 
     public InstanceDirectoryPreparer(Path instancesRoot) {
+        this(instancesRoot, instancesRoot);
+    }
+
+    public InstanceDirectoryPreparer(Path instancesRoot, Path contentRoot) {
+        this(
+                instancesRoot,
+                contentRoot,
+                Files::copy,
+                Thread::sleep
+        );
+    }
+
+    InstanceDirectoryPreparer(
+            Path instancesRoot,
+            Path contentRoot,
+            FileCopyOperation fileCopy,
+            RetrySleeper retrySleeper
+    ) {
         this.instancesRoot = instancesRoot.toAbsolutePath().normalize();
+        this.contentRoot = contentRoot.toAbsolutePath().normalize();
+        this.fileCopy = java.util.Objects.requireNonNull(fileCopy, "fileCopy");
+        this.retrySleeper = java.util.Objects.requireNonNull(
+                retrySleeper,
+                "retrySleeper"
+        );
     }
 
     public Path root() {
@@ -22,8 +66,29 @@ public final class InstanceDirectoryPreparer {
 
     public Path prepare(String instanceId, Path sourceDirectory)
             throws InstancePreparationException {
+        return prepare(instanceId, sourceDirectory, List.of());
+    }
+
+    public Path prepare(
+            String instanceId,
+            Path sourceDirectory,
+            List<BlueprintVolume> volumes
+    ) throws InstancePreparationException {
+        return prepare(instanceId, sourceDirectory, volumes, () -> false);
+    }
+
+    Path prepare(
+            String instanceId,
+            Path sourceDirectory,
+            List<BlueprintVolume> volumes,
+            BooleanSupplier cancellationRequested
+    ) throws InstancePreparationException {
         Path destination = destination(instanceId);
         Path source = sourceDirectory.toAbsolutePath().normalize();
+        java.util.Objects.requireNonNull(
+                cancellationRequested,
+                "cancellationRequested"
+        );
 
         if (!Files.isDirectory(source)) {
             throw new InstancePreparationException(
@@ -42,17 +107,22 @@ public final class InstanceDirectoryPreparer {
         }
 
         try {
+            checkCancelled(cancellationRequested);
+            List<ResolvedVolume> resolvedVolumes = resolveVolumes(volumes, destination);
             Files.createDirectories(instancesRoot);
-            copyDirectory(source, destination);
+            copyDirectory(source, destination, cancellationRequested);
+            applyVolumes(resolvedVolumes, cancellationRequested);
+            checkCancelled(cancellationRequested);
             return destination;
-        } catch (IOException exception) {
+        } catch (IOException | InstancePreparationException exception) {
             try {
                 deleteDirectory(destination);
             } catch (IOException cleanupException) {
                 exception.addSuppressed(cleanupException);
             }
             throw new InstancePreparationException(
-                    "Unable to prepare instance directory " + destination,
+                    "Unable to prepare instance directory " + destination
+                            + ": " + exception.getMessage(),
                     exception
             );
         }
@@ -73,6 +143,15 @@ public final class InstanceDirectoryPreparer {
     public void replace(
             String instanceId,
             Path sourceDirectory,
+            DirectoryInitializer initializer
+    ) throws InstancePreparationException {
+        replace(instanceId, sourceDirectory, List.of(), initializer);
+    }
+
+    public void replace(
+            String instanceId,
+            Path sourceDirectory,
+            List<BlueprintVolume> volumes,
             DirectoryInitializer initializer
     ) throws InstancePreparationException {
         Path destination = destination(instanceId);
@@ -100,7 +179,9 @@ public final class InstanceDirectoryPreparer {
         boolean replacementMoved = false;
         boolean initialized = false;
         try {
-            copyDirectory(source, staging);
+            List<ResolvedVolume> resolvedVolumes = resolveVolumes(volumes, staging);
+            copyDirectory(source, staging, () -> false);
+            applyVolumes(resolvedVolumes, () -> false);
             moveDirectory(destination, backup);
             originalMoved = true;
             moveDirectory(staging, destination);
@@ -134,6 +215,181 @@ public final class InstanceDirectoryPreparer {
         }
     }
 
+    private List<ResolvedVolume> resolveVolumes(
+            List<BlueprintVolume> volumes,
+            Path destination
+    ) throws IOException, InstancePreparationException {
+        if (volumes.isEmpty()) {
+            return List.of();
+        }
+
+        Path realContentRoot = contentRoot.toRealPath();
+        Path normalizedInstancesRoot = Files.exists(instancesRoot)
+                ? instancesRoot.toRealPath()
+                : instancesRoot.toAbsolutePath().normalize();
+        List<ResolvedVolume> resolved = new ArrayList<>();
+        for (BlueprintVolume volume : volumes) {
+            if (volume.mode() != BlueprintVolume.Mode.COW) {
+                throw new InstancePreparationException(
+                        "Unsupported volume mode for '" + volume.name() + "': "
+                                + volume.mode()
+                );
+            }
+
+            Path source = resolveVolumeSource(volume, realContentRoot);
+            Path target = resolveVolumeTarget(volume, destination);
+            if (source.startsWith(normalizedInstancesRoot)) {
+                throw new InstancePreparationException(
+                        "Volume source '" + volume.source()
+                                + "' must not read from the instances directory"
+                );
+            }
+            for (ResolvedVolume previous : resolved) {
+                if (target.startsWith(previous.target())
+                        || previous.target().startsWith(target)) {
+                    throw new InstancePreparationException(
+                            "Volume targets overlap: '" + previous.volume().target()
+                                    + "' and '" + volume.target() + "'"
+                    );
+                }
+            }
+            resolved.add(new ResolvedVolume(volume, source, target));
+        }
+        return List.copyOf(resolved);
+    }
+
+    private Path resolveVolumeSource(
+            BlueprintVolume volume,
+            Path realContentRoot
+    ) throws IOException, InstancePreparationException {
+        String configured = portablePath(volume.source(), "source", volume.name());
+        Path relative = configuredPath(configured, "source", volume.name());
+        if (relative.isAbsolute()) {
+            throw new InstancePreparationException(
+                    "Volume source must be relative to " + contentRoot + ": "
+                            + volume.source()
+            );
+        }
+
+        Path source = contentRoot.resolve(relative).normalize();
+        if (source.equals(contentRoot) || !source.startsWith(contentRoot)) {
+            throw new InstancePreparationException(
+                    "Volume source must stay inside " + contentRoot + ": "
+                            + volume.source()
+            );
+        }
+        if (!Files.isDirectory(source)) {
+            throw new InstancePreparationException(
+                    "Volume source directory does not exist: " + source
+            );
+        }
+
+        rejectSymbolicPathSegments(contentRoot, source);
+        Path realSource = source.toRealPath();
+        if (!realSource.startsWith(realContentRoot)) {
+            throw new InstancePreparationException(
+                    "Volume source resolves outside " + contentRoot + ": "
+                            + volume.source()
+            );
+        }
+        return realSource;
+    }
+
+    private static void rejectSymbolicPathSegments(Path root, Path source)
+            throws IOException, InstancePreparationException {
+        Path current = root;
+        for (Path segment : root.relativize(source)) {
+            current = current.resolve(segment);
+            BasicFileAttributes attributes = Files.readAttributes(
+                    current,
+                    BasicFileAttributes.class,
+                    LinkOption.NOFOLLOW_LINKS
+            );
+            if (attributes.isSymbolicLink() || attributes.isOther()) {
+                throw new InstancePreparationException(
+                        "Volume source paths must not contain symbolic links or "
+                                + "special filesystem entries: " + current
+                );
+            }
+        }
+    }
+
+    private static Path resolveVolumeTarget(
+            BlueprintVolume volume,
+            Path destination
+    ) throws InstancePreparationException {
+        String configured = portablePath(volume.target(), "target", volume.name());
+        if (configured.startsWith("//")) {
+            throw new InstancePreparationException(
+                    "Volume target must be an instance path such as '/world': "
+                            + volume.target()
+            );
+        }
+        String instanceRelative = configured.startsWith("/")
+                ? configured.substring(1)
+                : configured;
+        Path relative = configuredPath(instanceRelative, "target", volume.name());
+        if (relative.isAbsolute() || instanceRelative.isBlank()) {
+            throw new InstancePreparationException(
+                    "Volume target must identify a directory inside the instance: "
+                            + volume.target()
+            );
+        }
+
+        Path target = destination.resolve(relative).normalize();
+        if (target.equals(destination) || !target.startsWith(destination)) {
+            throw new InstancePreparationException(
+                    "Volume target must stay inside the instance: " + volume.target()
+            );
+        }
+        return target;
+    }
+
+    private static String portablePath(String configured, String field, String name)
+            throws InstancePreparationException {
+        String value = configured.trim();
+        if (value.indexOf('\\') >= 0) {
+            throw new InstancePreparationException(
+                    "Volume " + field + " for '" + name
+                            + "' must use portable '/' separators: " + configured
+            );
+        }
+        return value;
+    }
+
+    private static Path configuredPath(String value, String field, String name)
+            throws InstancePreparationException {
+        try {
+            return Path.of(value);
+        } catch (InvalidPathException exception) {
+            throw new InstancePreparationException(
+                    "Invalid volume " + field + " for '" + name + "': " + value,
+                    exception
+            );
+        }
+    }
+
+    private void applyVolumes(
+            List<ResolvedVolume> volumes,
+            BooleanSupplier cancellationRequested
+    )
+            throws IOException, InstancePreparationException {
+        for (ResolvedVolume volume : volumes) {
+            checkCancelled(cancellationRequested);
+            if (Files.exists(volume.target())) {
+                throw new InstancePreparationException(
+                        "Volume target collides with existing instance content: "
+                                + volume.volume().target()
+                );
+            }
+            copyDirectory(
+                    volume.source(),
+                    volume.target(),
+                    cancellationRequested
+            );
+        }
+    }
+
     private Path destination(String instanceId) throws InstancePreparationException {
         if (!InstanceIdGenerator.isValid(instanceId)) {
             throw new InstancePreparationException("Invalid instance ID: " + instanceId);
@@ -148,11 +404,16 @@ public final class InstanceDirectoryPreparer {
         return destination;
     }
 
-    private static void copyDirectory(Path source, Path destination) throws IOException {
+    private void copyDirectory(
+            Path source,
+            Path destination,
+            BooleanSupplier cancellationRequested
+    ) throws IOException {
         Files.walkFileTree(source, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attrs)
                     throws IOException {
+                checkCancelled(cancellationRequested);
                 rejectSymbolicLink(directory, attrs);
                 Path relative = source.relativize(directory);
                 Files.createDirectories(destination.resolve(relative));
@@ -162,16 +423,90 @@ public final class InstanceDirectoryPreparer {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
                     throws IOException {
+                checkCancelled(cancellationRequested);
                 rejectSymbolicLink(file, attrs);
                 Path target = destination.resolve(source.relativize(file));
-                Files.copy(
+                copyFileWithRetry(
                         file,
                         target,
-                        StandardCopyOption.COPY_ATTRIBUTES
+                        cancellationRequested
                 );
                 return FileVisitResult.CONTINUE;
             }
         });
+    }
+
+    private void copyFileWithRetry(
+            Path source,
+            Path target,
+            BooleanSupplier cancellationRequested
+    ) throws IOException {
+        IOException lastFailure = null;
+        for (int attempt = 0; attempt <= COPY_RETRY_DELAYS_MILLIS.length; attempt++) {
+            checkCancelled(cancellationRequested);
+            try {
+                fileCopy.copy(source, target);
+                checkCancelled(cancellationRequested);
+                return;
+            } catch (IOException exception) {
+                if (exception instanceof PreparationCancelledException) {
+                    throw exception;
+                }
+                lastFailure = exception;
+                if (attempt == COPY_RETRY_DELAYS_MILLIS.length
+                        || !isRetryableCopyFailure(exception)) {
+                    throw exception;
+                }
+                try {
+                    Files.deleteIfExists(target);
+                } catch (IOException cleanupFailure) {
+                    exception.addSuppressed(cleanupFailure);
+                    throw exception;
+                }
+                try {
+                    sleepWithCancellation(
+                            COPY_RETRY_DELAYS_MILLIS[attempt],
+                            cancellationRequested
+                    );
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    IOException failure = new IOException(
+                            "Interrupted while retrying file copy: " + source,
+                            interrupted
+                    );
+                    failure.addSuppressed(exception);
+                    throw failure;
+                }
+            }
+        }
+        throw lastFailure;
+    }
+
+    private void sleepWithCancellation(
+            long milliseconds,
+            BooleanSupplier cancellationRequested
+    ) throws InterruptedException, PreparationCancelledException {
+        long remaining = milliseconds;
+        while (remaining > 0) {
+            checkCancelled(cancellationRequested);
+            long slice = Math.min(remaining, 100);
+            retrySleeper.sleep(slice);
+            remaining -= slice;
+        }
+        checkCancelled(cancellationRequested);
+    }
+
+    private static void checkCancelled(BooleanSupplier cancellationRequested)
+            throws PreparationCancelledException {
+        if (cancellationRequested.getAsBoolean()) {
+            throw new PreparationCancelledException();
+        }
+    }
+
+    private static boolean isRetryableCopyFailure(IOException exception) {
+        return exception instanceof FileSystemException
+                && !(exception instanceof FileAlreadyExistsException)
+                && !(exception instanceof NoSuchFileException);
     }
 
     private static void moveDirectory(Path source, Path destination) throws IOException {
@@ -184,8 +519,11 @@ public final class InstanceDirectoryPreparer {
 
     private static void rejectSymbolicLink(Path path, BasicFileAttributes attrs)
             throws IOException {
-        if (attrs.isSymbolicLink()) {
-            throw new IOException("Symbolic links are not allowed in software templates: " + path);
+        if (attrs.isSymbolicLink() || attrs.isOther()) {
+            throw new IOException(
+                    "Symbolic links and special filesystem entries are not allowed "
+                            + "in copied directories: " + path
+            );
         }
     }
 
@@ -217,5 +555,29 @@ public final class InstanceDirectoryPreparer {
     @FunctionalInterface
     public interface DirectoryInitializer {
         void initialize(Path directory) throws Exception;
+    }
+
+    @FunctionalInterface
+    interface FileCopyOperation {
+        void copy(Path source, Path target) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface RetrySleeper {
+        void sleep(long milliseconds) throws InterruptedException;
+    }
+
+    private static final class PreparationCancelledException extends IOException {
+
+        private PreparationCancelledException() {
+            super("Instance preparation was cancelled");
+        }
+    }
+
+    private record ResolvedVolume(
+            BlueprintVolume volume,
+            Path source,
+            Path target
+    ) {
     }
 }

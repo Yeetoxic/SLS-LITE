@@ -5,6 +5,8 @@ import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.slimelabs.slslite.instance.InstanceState;
+import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -12,6 +14,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommandMessagesTest {
 
@@ -69,6 +72,48 @@ class CommandMessagesTest {
                 VSLSCommandContract.PUBLIC_ROOT
         );
         assertFalse(VSLSCommandContract.ADMIN_ROOT.isEmpty());
+    }
+
+    @Test
+    void blueprintHoverProvidesOperationalDetails() {
+        Blueprint blueprint = new Blueprint(
+                "blastoff",
+                "Legacy Blastoff",
+                "minigame",
+                "paper-auto",
+                "1.11.2",
+                1024,
+                8,
+                2,
+                false,
+                java.util.Map.of(),
+                List.of(new BlueprintVolume(
+                        "world",
+                        "worlds/minigames/blastoff",
+                        "/world",
+                        BlueprintVolume.Mode.COW
+                ))
+        );
+
+        Component component = CommandMessages.blueprint(blueprint, List.of());
+        assertEquals(null, component.hoverEvent());
+        assertEquals(null, component.clickEvent());
+        assertEquals(2, component.children().size());
+        Component interactiveName = component.children().get(0);
+        Component summary = component.children().get(1);
+        assertNotNull(interactiveName.hoverEvent());
+        assertNotNull(interactiveName.clickEvent());
+        assertEquals(null, summary.hoverEvent());
+        assertEquals(null, summary.clickEvent());
+        Component hover = (Component) interactiveName.hoverEvent().value();
+        String text = plainText(hover);
+
+        assertTrue(text.contains("Blueprint: minigame/blastoff"));
+        assertTrue(text.contains("Software: paper-auto 1.11.2"));
+        assertTrue(text.contains("Capacity: 8 players per instance"));
+        assertTrue(text.contains(
+                "world: worlds/minigames/blastoff -> /world [cow]"
+        ));
     }
 
     private static String plainText(Component component) {

@@ -75,10 +75,10 @@ public final class SLSLimboHandoffService implements AutoCloseable {
             }
             return;
         }
-        WaitingPlayer entry = waiting.get(playerId);
-        if (entry == null) {
-            return;
-        }
+        WaitingPlayer entry = waiting.computeIfAbsent(
+                playerId,
+                ignored -> new WaitingPlayer(player)
+        );
         player.sendActionBar(Component.text(
                 "Waiting for a safe destination...",
                 NamedTextColor.GOLD

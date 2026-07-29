@@ -71,7 +71,7 @@ public final class PaperInstallationProvider
             Consumer<String> log
     ) throws Exception {
         PaperDownload download = resolve(version, profile.channel().name());
-        log.accept("Selected " + profile.channel().name().toLowerCase()
+        log.accept("Selected " + download.channel().toLowerCase()
                 + " Paper build " + download.build() + " for exact version "
                 + version);
         if (download.size() <= 0 || download.size() > MAX_DOWNLOAD_BYTES) {
@@ -140,10 +140,11 @@ public final class PaperInstallationProvider
             );
         }
         for (Object value : builds) {
-            if (!(value instanceof Map<?, ?> build)
-                    || !channel.equalsIgnoreCase(
-                            String.valueOf(build.get("channel"))
-                    )) {
+            if (!(value instanceof Map<?, ?> build)) {
+                continue;
+            }
+            String buildChannel = String.valueOf(build.get("channel"));
+            if (!channelAllowed(channel, buildChannel)) {
                 continue;
             }
             Map<?, ?> downloads = map(build.get("downloads"), "downloads");
@@ -156,15 +157,32 @@ public final class PaperInstallationProvider
             validateDownloadUrl(url);
             return new PaperDownload(
                     String.valueOf(build.get("id")),
+                    buildChannel,
                     url,
                     Long.parseLong(String.valueOf(artifact.get("size"))),
                     required(checksums, "sha256").toLowerCase()
             );
         }
         throw new SoftwareInstallationException(
-                "No " + channel.toLowerCase()
-                        + " Paper build is available for exact version " + version
+                "No Paper build compatible with the " + channel.toLowerCase()
+                        + " channel is available for exact version " + version
         );
+    }
+
+    private static boolean channelAllowed(String requested, String available) {
+        int requestedRank = channelRank(requested);
+        int availableRank = channelRank(available);
+        return requestedRank >= 0 && availableRank >= 0
+                && availableRank <= requestedRank;
+    }
+
+    private static int channelRank(String channel) {
+        return switch (channel.toUpperCase(java.util.Locale.ROOT)) {
+            case "STABLE" -> 0;
+            case "BETA" -> 1;
+            case "ALPHA" -> 2;
+            default -> -1;
+        };
     }
 
     private HttpRequest.Builder request(URI uri) {
@@ -270,6 +288,7 @@ public final class PaperInstallationProvider
 
     private record PaperDownload(
             String build,
+            String channel,
             URI url,
             long size,
             String sha256

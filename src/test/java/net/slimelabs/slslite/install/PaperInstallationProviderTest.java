@@ -136,6 +136,73 @@ class PaperInstallationProviderTest {
         throw new AssertionError("Expected untrusted host rejection");
     }
 
+    @Test
+    void betaProfileFallsBackToStableBuild() throws Exception {
+        byte[] artifact = "stable-paper".getBytes(StandardCharsets.UTF_8);
+        String hash = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(artifact)
+        );
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/artifact.jar", exchange -> {
+            exchange.sendResponseHeaders(200, artifact.length);
+            exchange.getResponseBody().write(artifact);
+            exchange.close();
+        });
+        server.createContext("/v3/projects/paper/versions/1.0/builds", exchange -> {
+            String base = "http://127.0.0.1:" + server.getAddress().getPort();
+            byte[] body = ("""
+                    [
+                      {
+                        "id": 388,
+                        "channel": "STABLE",
+                        "downloads": {
+                          "server:default": {
+                            "url": "%s/artifact.jar",
+                            "size": %d,
+                            "checksums": {"sha256": "%s"}
+                          }
+                        }
+                      }
+                    ]
+                    """).formatted(base, artifact.length, hash)
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+        try {
+            PaperInstallationProvider provider = new PaperInstallationProvider(
+                    HttpClient.newHttpClient(),
+                    URI.create(
+                            "http://127.0.0.1:" + server.getAddress().getPort()
+                                    + "/v3/projects/paper/versions/"
+                    ),
+                    false
+            );
+            List<String> logs = new ArrayList<>();
+
+            provider.install(
+                    profile(net.slimelabs.slslite.software
+                            .SoftwareReleaseChannel.BETA),
+                    "1.0",
+                    temporaryDirectory,
+                    logs::add
+            );
+
+            assertArrayEquals(
+                    artifact,
+                    Files.readAllBytes(temporaryDirectory.resolve("paper.jar"))
+            );
+            assertTrue(logs.stream().anyMatch(
+                    line -> line.contains("stable Paper build 388")
+            ));
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private SoftwareProfile profile() {
         return profile(net.slimelabs.slslite.software
                 .SoftwareReleaseChannel.STABLE);

@@ -55,34 +55,10 @@ lobby = "$LobbyAddress"
 try = ["lobby"]
 
 "@
-        $lobby = @"
-lobby:
-  mode: external
-  registry: lobby
-  server: lobby
-  recovery:
-    max_attempts: 3
-    initial_backoff_seconds: 2
-    max_backoff_seconds: 8
-    stable_after_seconds: 20
-
-"@
     } else {
         $servers = @"
 [servers]
 try = []
-
-"@
-        $lobby = @"
-lobby:
-  mode: managed
-  registry: lobby
-  server: lobby
-  recovery:
-    max_attempts: 3
-    initial_backoff_seconds: 2
-    max_backoff_seconds: 8
-    stable_after_seconds: 20
 
 "@
     }
@@ -92,10 +68,16 @@ lobby:
         '(?ms)^\[servers\]\r?\n.*?(?=^\[forced-hosts\])',
         $servers
     )
-    $sls = [regex]::Replace(
+    $lobbyModePattern = [regex]::new(
+        '(?ms)(^lobby:\r?\n.*?^  mode:\s*)(external|managed)'
+    )
+    if (-not $lobbyModePattern.IsMatch($sls)) {
+        throw "Could not locate lobby.mode in the current SLS-LITE config."
+    }
+    $sls = $lobbyModePattern.Replace(
         $sls,
-        '(?ms)^lobby:\r?\n.*?(?=^paths:)',
-        $lobby
+        "`${1}$LobbyMode",
+        1
     )
 
     $temporaryVelocity = Join-Path $env:TEMP "sls-lite-velocity.toml"

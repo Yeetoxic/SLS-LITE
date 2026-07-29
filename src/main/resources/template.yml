@@ -8,6 +8,18 @@ blueprint:
 server:
   software: paper
   version: "26.1"
+  # Optional modern SLS-compatible server.properties overrides.
+  configs:
+    server.properties:
+      parser: properties
+      find:
+        # Boolean, number, or single-line string. Disabled by default by Minecraft.
+        enable-command-block: false
+        # Resource packs require a client-reachable HTTP(S) URL. A copied
+        # world/resources.zip is preserved but is not automatically public.
+        # resource-pack: "https://cdn.example.net/packs/example.zip"
+        # resource-pack-sha1: "0123456789abcdef0123456789abcdef01234567"
+        # require-resource-pack: false
   limits:
     # Positive integer. Player slots available on each running instance.
     max_players: 20
@@ -17,6 +29,16 @@ server:
     memory_limit: 2048
 
 save: false
+
+# Modern SLS state volume shape. Uncomment after placing the source directory
+# under the SLS-LITE plugin data directory. SLS-LITE currently supports only
+# mode: cow and creates a private portable copy for every new instance.
+# state:
+#   volumes:
+#     - name: world
+#       source: worlds/example
+#       target: /world
+#       mode: cow
 
 annotations:
   sls-lite:

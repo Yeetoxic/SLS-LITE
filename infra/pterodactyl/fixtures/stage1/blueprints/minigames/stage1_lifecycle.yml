@@ -1,0 +1,36 @@
+blueprint:
+  id: stage1_lifecycle
+  name: Stage 1 Lifecycle Acceptance
+  type: minigame
+
+server:
+  software: paper-auto
+  version: "1.18.2"
+  configs:
+    server.properties:
+      parser: properties
+      find:
+        enable-command-block: true
+  limits:
+    memory_limit: 1024
+    max_players: 1
+    max_instances: 2
+
+state:
+  volumes:
+    - name: world
+      source: worlds/minigames/biome_run
+      target: /world
+      mode: cow
+    - name: world_the_end
+      source: worlds/minigames/biome_run_the_end
+      target: /world_the_end
+      mode: cow
+
+save: false
+
+annotations:
+  sls-lite:
+    acceptance-fixture: stage1
+    idle-shutdown-seconds: 60
+    stop-when-empty: true

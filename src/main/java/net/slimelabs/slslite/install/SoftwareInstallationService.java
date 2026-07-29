@@ -180,6 +180,13 @@ public final class SoftwareInstallationService implements AutoCloseable {
                 "." + target.getFileName() + ".installing-" + System.nanoTime()
         );
         try {
+            logger.info(
+                    "Software installation started: {} {} from {} ({})",
+                    profile.id(),
+                    version,
+                    profile.source().name().toLowerCase(Locale.ROOT),
+                    profile.channel().name().toLowerCase(Locale.ROOT)
+            );
             if (Files.exists(target)) {
                 throw new SoftwareInstallationException(
                         "Installation target exists but is incomplete: " + target

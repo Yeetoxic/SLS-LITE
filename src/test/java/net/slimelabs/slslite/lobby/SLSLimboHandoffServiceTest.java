@@ -57,7 +57,7 @@ class SLSLimboHandoffServiceTest {
     }
 
     @Test
-    void doesNotTransferUntrackedPlayerFromSLSLimbo() {
+    void automaticallyTracksAndTransfersPlayerConnectedToSLSLimbo() {
         RegisteredServer limbo = server("sls-limbo");
         RegisteredServer primary = server("lobby");
         AtomicReference<Optional<ServerConnection>> current =
@@ -70,7 +70,7 @@ class SLSLimboHandoffServiceTest {
         handoff.connected(player, limbo);
         lobbies.publishPrimary(primary);
 
-        assertEquals(0, transfers.get());
+        assertEquals(1, transfers.get());
         assertEquals(0, handoff.waitingCount());
         handoff.close();
     }

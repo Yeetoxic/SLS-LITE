@@ -69,6 +69,67 @@ class LocalLobbyProviderTest {
     }
 
     @Test
+    void resumesPersistentManagedLobbyInsteadOfPreparingAnotherCopy() throws Exception {
+        BlueprintRepository blueprints = persistentBlueprints();
+        FakeController controller = new FakeController(
+                blueprints.get("lobby", "lobby").orElseThrow(),
+                temporaryDirectory
+        );
+        controller.persistentId = "lobby.saved01";
+        LocalLobbyProvider provider = new LocalLobbyProvider(
+                proxy(new LinkedHashMap<>()),
+                blueprints,
+                controller,
+                new LobbyConfig(LobbyMode.MANAGED, "lobby", "lobby"),
+                LoggerFactory.getLogger(LocalLobbyProviderTest.class)
+        );
+
+        provider.start();
+
+        assertEquals("lobby.saved01", controller.instance().id());
+        assertEquals(0, controller.starts());
+        assertEquals(1, controller.restarts);
+        provider.close();
+    }
+
+    @Test
+    void explicitCycleAdoptsReplacementManagedLobby() throws Exception {
+        BlueprintRepository blueprints = persistentBlueprints();
+        FakeController controller = new FakeController(
+                blueprints.get("lobby", "lobby").orElseThrow(),
+                temporaryDirectory
+        );
+        controller.persistentId = "lobby.saved01";
+        Map<String, RegisteredServer> servers = new LinkedHashMap<>();
+        LocalLobbyProvider provider = new LocalLobbyProvider(
+                proxy(servers),
+                blueprints,
+                controller,
+                new LobbyConfig(LobbyMode.MANAGED, "lobby", "lobby"),
+                LoggerFactory.getLogger(LocalLobbyProviderTest.class)
+        );
+        provider.start();
+        ManagedInstance first = controller.instance();
+        RegisteredServer firstServer = registeredServer(List.of());
+        publishReady(first, firstServer, servers);
+
+        CompletableFuture<RegisteredServer> cycled =
+                provider.cyclePrimary(first.id(), false);
+        ManagedInstance replacement = controller.instance();
+        RegisteredServer replacementServer = registeredServer(List.of());
+        servers.put(replacement.id(), replacementServer);
+        replacement.lifecycle().transitionTo(InstanceState.STARTING);
+        replacement.lifecycle().transitionTo(InstanceState.READY);
+        replacement.readyFuture().complete(replacement);
+
+        assertSame(replacementServer, cycled.get(1, TimeUnit.SECONDS));
+        assertSame(replacementServer, provider.server().orElseThrow());
+        assertTrue(provider.isLobby(replacement.id()));
+        assertEquals(2, controller.restarts);
+        provider.close();
+    }
+
+    @Test
     void evacuatesExternalBackendPlayersToConfiguredLobby() throws Exception {
         BlueprintRepository blueprints = blueprints();
         AtomicReference<RegisteredServer> requestedServer = new AtomicReference<>();
@@ -283,6 +344,14 @@ class LocalLobbyProviderTest {
     }
 
     private BlueprintRepository blueprints() throws Exception {
+        return blueprints(false);
+    }
+
+    private BlueprintRepository persistentBlueprints() throws Exception {
+        return blueprints(true);
+    }
+
+    private BlueprintRepository blueprints(boolean save) throws Exception {
         Path directory = Files.createDirectories(temporaryDirectory.resolve("blueprints"));
         Files.writeString(directory.resolve("lobby.yml"), """
                 blueprint:
@@ -294,7 +363,8 @@ class LocalLobbyProviderTest {
                   version: "26.1"
                   limits:
                     memory_limit: 512
-                """);
+                save: %s
+                """.formatted(save));
         BlueprintRepository repository = new BlueprintRepository(directory);
         repository.reload();
         return repository;
@@ -413,6 +483,8 @@ class LocalLobbyProviderTest {
         private final Path directory;
         private ManagedInstance instance;
         private int starts;
+        private int restarts;
+        private String persistentId;
 
         private FakeController(Blueprint blueprint, Path directory) {
             this.blueprint = blueprint;
@@ -437,6 +509,26 @@ class LocalLobbyProviderTest {
         @Override
         public Collection<ManagedInstance> getAll() {
             return instance == null ? List.of() : List.of(instance);
+        }
+
+        @Override
+        public Collection<String> persistentInstanceIds(String blueprintId) {
+            return persistentId == null ? List.of() : List.of(persistentId);
+        }
+
+        @Override
+        public CompletableFuture<ManagedInstance> restart(String instanceId) {
+            restarts++;
+            InstanceLifecycle lifecycle = new InstanceLifecycle(instanceId);
+            lifecycle.transitionTo(InstanceState.PREPARING);
+            instance = new ManagedInstance(
+                    instanceId,
+                    blueprint,
+                    25600,
+                    directory.resolve(instanceId),
+                    lifecycle
+            );
+            return CompletableFuture.completedFuture(instance);
         }
 
         @Override

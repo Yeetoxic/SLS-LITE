@@ -14,5 +14,13 @@ public interface BackendRegistry {
         register(name, address);
     }
 
+    default void register(
+            String name,
+            InetSocketAddress address,
+            String minecraftVersion
+    ) {
+        register(name, address);
+    }
+
     void unregister(String name);
 }

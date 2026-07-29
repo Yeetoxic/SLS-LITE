@@ -2,10 +2,12 @@ package net.slimelabs.slslite.velocity;
 
 import com.viaversion.viaversion.api.Via;
 import com.viaversion.viaversion.api.platform.ProtocolDetectorService;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import org.slf4j.Logger;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
@@ -61,17 +63,28 @@ public final class ViaVersionProtocolSynchronizer
     public void synchronize(
             String name,
             RegisteredServer server,
-            OptionalInt knownProtocol
+            OptionalInt knownProtocol,
+            Optional<String> knownMinecraftVersion
     ) {
         int protocol = knownProtocol.isPresent()
                 ? knownProtocol.getAsInt()
-                : detectProtocol(name, server);
+                : knownMinecraftVersion
+                        .flatMap(ViaVersionProtocolSynchronizer::resolveProtocol)
+                        .orElseGet(() -> detectProtocol(name, server));
         protocols().setProtocolVersion(name, protocol);
         logger.info(
                 "Synchronized ViaVersion backend {} to protocol {}",
                 name,
                 protocol
         );
+    }
+
+    private static Optional<Integer> resolveProtocol(String minecraftVersion) {
+        ProtocolVersion version = ProtocolVersion.getClosest(minecraftVersion);
+        if (version == null || !version.isKnown()) {
+            return Optional.empty();
+        }
+        return Optional.of(version.getVersion());
     }
 
     @Override

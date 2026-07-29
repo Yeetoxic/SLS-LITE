@@ -32,6 +32,8 @@ public final class ManagedInstance {
     private volatile boolean outputDisabled;
     private volatile boolean registered;
     private volatile boolean stopRequested;
+    private volatile boolean preparationRunning;
+    private boolean failedStartDiagnosticsRecorded;
 
     ManagedInstance(
             String id,
@@ -210,5 +212,25 @@ public final class ManagedInstance {
 
     void requestStop() {
         stopRequested = true;
+    }
+
+    boolean preparationRunning() {
+        return preparationRunning;
+    }
+
+    void preparationStarted() {
+        preparationRunning = true;
+    }
+
+    void preparationFinished() {
+        preparationRunning = false;
+    }
+
+    synchronized boolean markFailedStartDiagnosticsRecorded() {
+        if (failedStartDiagnosticsRecorded) {
+            return false;
+        }
+        failedStartDiagnosticsRecorded = true;
+        return true;
     }
 }

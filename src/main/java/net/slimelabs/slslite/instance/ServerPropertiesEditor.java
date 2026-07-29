@@ -6,6 +6,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Properties;
 
 public final class ServerPropertiesEditor {
@@ -16,7 +17,8 @@ public final class ServerPropertiesEditor {
     public static void applyManagedNetworkSettings(
             Path instanceDirectory,
             int port,
-            int maxPlayers
+            int maxPlayers,
+            Map<String, String> configuredProperties
     )
             throws IOException {
         if (port < 1024 || port > 65535) {
@@ -35,6 +37,9 @@ public final class ServerPropertiesEditor {
             }
         }
 
+        configuredProperties.forEach(properties::setProperty);
+
+        // Proxy-owned values must win over blueprint configuration.
         properties.setProperty("server-ip", "127.0.0.1");
         properties.setProperty("server-port", Integer.toString(port));
         properties.setProperty("online-mode", "false");

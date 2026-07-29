@@ -181,6 +181,34 @@ class FallbackLobbyProviderTest {
         fallback.close();
     }
 
+    @Test
+    void completedPrimaryCycleRestoresPrimaryRouting() {
+        RegisteredServer primaryServer = server("lobby");
+        RegisteredServer limboServer = server("sls-limbo");
+        LobbyProvider primary = provider(
+                "primary", "lobby", primaryServer, new ArrayList<>()
+        );
+        LobbyProvider limbo = provider(
+                "limbo", "sls-limbo", limboServer, new ArrayList<>()
+        );
+        FallbackLobbyProvider fallback = new FallbackLobbyProvider(
+                proxy(),
+                primary,
+                limbo,
+                LoggerFactory.getLogger(FallbackLobbyProviderTest.class)
+        );
+        fallback.start();
+
+        assertTrue(fallback.beginIntentionalStop("lobby"));
+        assertSame(limboServer, fallback.server().orElseThrow());
+        assertSame(
+                primaryServer,
+                fallback.cyclePrimary("lobby", false).join()
+        );
+        assertSame(primaryServer, fallback.server().orElseThrow());
+        fallback.close();
+    }
+
     private static LobbyProvider provider(
             String label,
             String serverName,
@@ -235,6 +263,18 @@ class FallbackLobbyProviderTest {
             @Override
             public CompletableFuture<Void> evacuate(String candidate) {
                 return CompletableFuture.completedFuture(null);
+            }
+
+            @Override
+            public CompletableFuture<RegisteredServer> cyclePrimary(
+                    String candidate,
+                    boolean reset
+            ) {
+                return serverName.equals(candidate) && server != null
+                        ? CompletableFuture.completedFuture(server)
+                        : CompletableFuture.failedFuture(
+                                new IllegalStateException("Primary is unavailable")
+                        );
             }
 
             @Override
