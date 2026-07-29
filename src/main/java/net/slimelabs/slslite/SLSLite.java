@@ -151,6 +151,7 @@ public final class SLSLite {
             hostCapabilities = new HostCapabilityChecker().check(
                     configuration.get().instancesDirectory(),
                     portAllocator,
+                    blueprints.getAll(),
                     softwareProfiles.getAll(),
                     processSpecFactory,
                     configuration.get().totalMemoryMiB()

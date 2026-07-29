@@ -1,0 +1,18 @@
+blueprint:
+  id: "stage2_reject_rw"
+  name: "Stage 2 Rejected Shared RW"
+  type: "compatibility"
+
+server:
+  software: "paper"
+  version: "1.18.2"
+  limits:
+    memory_limit: 1024
+
+state:
+  volumes:
+    - name: "shared"
+      source: "worlds/adventures/undead"
+      target: "/world"
+      mode: "rw"
+

@@ -1,6 +1,6 @@
 # SLS v0.2.0 Compatibility Matrix
 
-This is the Stage 2 source contract for SLS-LITE.
+This is the pinned modern SLS source contract for SLS-LITE.
 
 - Upstream repository: `https://github.com/jessefaler/SLS`
 - Release/tag: `v0.2.0`
@@ -9,8 +9,8 @@ This is the Stage 2 source contract for SLS-LITE.
 - Upstream license: GNU AGPL v3.0
 
 The matrix is based on the pinned source models, parsers, bundled examples,
-software definitions, and vSLS implementation. It will be updated as Stage 2
-fixtures exercise each row.
+software definitions, vSLS implementation, automated corpus tests, and the
+deployed multi-world validation run.
 
 ## Status Terms
 
@@ -30,8 +30,8 @@ Review completed on 2026-07-29 against:
 - the copied 54-blueprint SlimeLabs corpus;
 - the current SLS-LITE parser, command, lifecycle, storage, and process code.
 
-SLS `v0.2.0` is still the latest published upstream release. The pin therefore
-remains both reproducible and current for this Stage 2 run.
+SLS `v0.2.0` was the latest published upstream release at review time. The pin
+keeps this contract reproducible even after upstream development continues.
 
 ### Resolved Findings
 
@@ -53,7 +53,7 @@ The compatibility pass closed five shared behavior gaps and one fixture defect:
 
 ### Scope Decision
 
-| Area | Stage 2 decision |
+| Area | Compatibility decision |
 | --- | --- |
 | Blueprint metadata, registries, software/version, config patches, state declarations, persistence, and vSLS lifecycle/capacity annotations | Shared contract; preserve names and operator intent. |
 | Software memory defaults and version-to-Java mappings | Implemented local adaptations, covered by parser and atomic-reload tests. |
@@ -64,10 +64,10 @@ The compatibility pass closed five shared behavior gaps and one fixture defect:
 | Nodes, load balancing, Protocube API, daemon event stream, and container administration | Intentionally unsupported; these define full SLS rather than SLS-LITE. |
 | Public Java/API integration contract | Deferred until the local lifecycle is stable; do not expose internal classes as an accidental API. |
 | Resource-pack conversion | Intentionally separate from SLS-LITE. Preserve annotations and support normal Minecraft URLs; conversion belongs in SlimePacks or another pack service. |
-| Resource-pack discovery/serving for local test worlds | Useful local integration, but not part of the shared SLS blueprint contract and not a Stage 2 schema blocker. |
+| Resource-pack discovery/serving for local test worlds | Useful local integration, but not part of the shared SLS blueprint contract. |
 | SLS-Limbo, built-in administrator claims, local lobby recovery, provider-backed Paper/vanilla installation, and bounded local logs | Retained SLS-LITE extensions needed for a self-contained constrained-host product. |
 | True OverlayFS/reflink COW | Performance work after schema compatibility; portable transactional copy remains the required fallback. |
-| `create`, `delete`, `kill`, `blueprint`, `debug`, and complete command-output parity | Stage 3 command gate. Preserve roots now; implement only meaningful and safe local semantics. |
+| `create`, `delete`, `kill`, `blueprint`, `debug`, and complete command-output parity | Full-stack command work. Preserve roots now; implement only meaningful and safe local semantics. |
 | `pause` and `resume` | Do not prioritize. Portable process suspension is unsafe and low-value for the constrained-host goal. |
 | `node` | Keep the explicit local-mode response; never emulate distributed node control. |
 
@@ -190,10 +190,10 @@ configuration language; host topology does not.
 The pinned vSLS root names remain the command vocabulary. Compatibility is
 split deliberately:
 
-- Stage 2 requires blueprint/software language and runtime intent, not every
-  administrative command.
-- Stage 3 verifies every supported command branch, selector, permission,
-  completion, and message.
+- The compatibility contract covers blueprint/software language and runtime
+  intent, not every administrative command.
+- Full-stack validation must verify every supported command branch, selector,
+  permission, completion, and message.
 - Distributed-only `node` behavior remains unavailable in local mode.
 - SLS-LITE additions such as `admin`, `registries`, `blueprints`, granular
   lifecycle permissions, `--force` lobby protection, and install diagnostics
@@ -214,14 +214,17 @@ accepted without enforcement.
 ## Acceptance Boundary
 
 The parser, inheritance, mappings, annotation behavior, actionable rejection,
-and exact-ID corpus gates are complete. Stage 2 can complete after:
+exact-ID corpus, and deployed multi-world gates are complete. The final code
+review identified and resolved three correctness gaps:
 
-1. the deployed modern multi-world fixture runs and its accepted, adapted, and
-   rejected behavior is recorded;
-2. the project owner approves this scope boundary.
+1. overlapping `parser: file` prefixes are rejected before file preparation;
+2. interpreted vSLS lifecycle, capacity, and matchmaking annotations enforce
+   their documented types and positive integer ranges;
+3. host preflight requires Java runtimes selected by active resolved
+   blueprints while treating other configured runtimes as optional warnings.
 
 Command completion, destructive bulk commands, public APIs, true filesystem
-COW, native-Linux performance work, and release hardening remain later gates.
+COW, native-Linux performance work, and release hardening remain roadmap work.
 
 ## Fields Not In The Pin
 
@@ -229,16 +232,60 @@ COW, native-Linux performance work, and release hardening remain later gates.
 examples, or vSLS implementation. It is treated as announced/deferred work and
 will be reconsidered only after an upstream schema and behavior stabilize.
 
-## Stage 2 Acceptance
-
-Before this matrix is final:
+## Validation Record
 
 1. Pinned, attributed accepted and rejected fixtures: complete.
-2. Automated coverage for the Stage 2 supported/adapted rows: complete.
+2. Automated coverage for the supported/adapted rows: complete.
 3. Exact-ID loading of the project owner's copied modern blueprints: complete.
 4. Required local compatibility gaps: implemented.
-5. Resulting multi-world network: pending deployed/manual verification.
-6. Project-owner scope approval before Stage 3: pending.
+5. Resulting multi-world network: complete; evidence is recorded below.
+6. Final compatibility code-review corrections: complete and deployed.
+7. Project-owner scope approval: granted on 2026-07-29.
+
+## Deployed Integration Evidence
+
+The 2026-07-29 local Docker Desktop/Pterodactyl run used SLS-LITE
+`0.1.0-SNAPSHOT` with SHA-256
+`F335058F554693F047D7D1754B8336C9BB23470248DD38C5F1D12E5AFDD42644`.
+The regular Maven suite passed 302 tests, and the separate corpus integration
+gate passed its test with all 54 expected blueprint IDs.
+
+The managed Paper 1.18.2 lobby, the `stage2_undead` Paper 1.18.2 fixture, and an
+unchanged modern `wildfire` Paper 1.15.2 blueprint all launched and accepted a
+real client through Velocity. Transfers into both registries and back to the
+lobby succeeded. The run verified:
+
+- Java 17 and Java 8 selection from modern software mappings;
+- software-cache reuse;
+- COW world preparation, `state.copy`, and `state.env`;
+- `server.properties` patches, including command blocks and MOTD;
+- vSLS lifecycle, matchmaking, and one-shot `on-join` behavior;
+- graceful manual and idle shutdown with ephemeral directory cleanup;
+- atomic rejection of host mounts and launch-time rejection of shared `rw`
+  volumes without leaked instances or processes.
+
+Wildfire software resolution took 1.159 seconds, private world preparation took
+60.189 seconds, and total readiness took 185.483 seconds on Windows-backed
+Docker storage. These measurements pass compatibility and provide the
+full-stack performance baseline.
+
+The old Undead world emitted a legacy `set_data` loot-table warning unrelated
+to SLS-LITE lifecycle behavior. Pterodactyl Wings also logged a harmless
+disk-usage scan race when an ephemeral directory disappeared during its walk;
+the instance still exited and cleaned up correctly.
+
+The final review-correction build was packaged and deployed separately with
+SHA-256
+`0C6A9C7811D8C98DA5346104E91153D99FA15F17D029308821E3934E35AF1C1F`.
+Its regular suite passed 308 tests, the exact 54-ID corpus gate passed, and the
+Pterodactyl startup verified:
+
+- required Java 8, 11, 16, and 17 runtimes and the selected default runtime
+  passed preflight;
+- configured but unused Java 21 and 25 runtimes produced warnings without
+  disabling SLS-LITE;
+- 13 blueprints and 2 software profiles initialized;
+- SLS-Limbo and persistent managed lobby `lobby.97f1ae` reached `READY`.
 
 ## Corpus Evidence
 

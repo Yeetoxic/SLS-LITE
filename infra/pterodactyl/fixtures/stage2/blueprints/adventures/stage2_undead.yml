@@ -1,0 +1,47 @@
+blueprint:
+  id: "stage2_undead"
+  name: "Stage 2 Undead"
+  type: "adventure"
+
+server:
+  software: "paper"
+  version: "1.18.2"
+  limits:
+    memory_limit: 1024
+    max_players: 8
+  configs:
+    server.properties:
+      parser: properties
+      find:
+        enable-command-block: true
+        motd: "SLS-LITE Stage 2 Compatibility"
+
+state:
+  volumes:
+    - name: "world"
+      source: "worlds/adventures/undead"
+      target: "/world"
+      mode: "cow"
+  copy:
+    - source: "files/stage2/marker.txt"
+      target: "plugins/sls-lite-stage2/marker.txt"
+  env:
+    STAGE2_COMPATIBILITY: "state-env-ok"
+
+save: false
+
+annotations:
+  vsls:
+    dont-stop-when-empty: false
+    max-instances: 2
+    on-join:
+      - run: "say Stage 2 join action accepted for {PLAYER_NAME}"
+    matchmaking:
+      maxPlayers: 8
+      gameType: "stage2-adventure"
+  sls-lite:
+    acceptance-fixture: "stage2"
+    idle-shutdown-seconds: 600
+  compatibility:
+    nested-null: null
+    source-contract: "SLS v0.2.0"

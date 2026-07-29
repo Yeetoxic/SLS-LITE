@@ -125,6 +125,18 @@ class SoftwareProfileRepositoryTest {
                 "java_25",
                 profile.imageForVersion("1.21.12").orElseThrow()
         );
+        assertEquals(
+                "runtimes/java-8/bin/java",
+                profile.javaExecutables().get(8)
+        );
+        assertEquals(
+                "runtimes/java-17/bin/java",
+                profile.javaExecutables().get(17)
+        );
+        assertEquals(
+                "runtimes/java-25/bin/java",
+                profile.javaExecutables().get(25)
+        );
     }
 
     @Test

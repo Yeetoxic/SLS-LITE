@@ -637,6 +637,21 @@ public final class BlueprintRepository {
             }
             replacements.put(match, value.toString());
         }
+        List<String> prefixes = List.copyOf(replacements.keySet());
+        for (int left = 0; left < prefixes.size(); left++) {
+            for (int right = left + 1; right < prefixes.size(); right++) {
+                String first = prefixes.get(left);
+                String second = prefixes.get(right);
+                if (first.startsWith(second) || second.startsWith(first)) {
+                    throw error(
+                            path,
+                            "'server.configs." + target
+                                    + ".find' prefixes overlap: '" + first
+                                    + "' and '" + second + "'"
+                    );
+                }
+            }
+        }
         return java.util.Collections.unmodifiableMap(replacements);
     }
 

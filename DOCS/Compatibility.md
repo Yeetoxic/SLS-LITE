@@ -4,12 +4,12 @@ SLS-LITE is an independent, single-host implementation of useful SLS concepts.
 It does not run under full SLS and does not require Protocube, a daemon, S4J,
 Docker, or another SLS installation.
 
-Stage 2 is pinned to SLS `v0.2.0` at commit
+The compatibility contract is pinned to SLS `v0.2.0` at commit
 `8e8b1e3cf7d2157887764c16f11b8901f8241121`. The working field-level comparison
-and evidence tracker is
-[SLS v0.2.0 Compatibility Matrix](SLS_v0.2.0_Compatibility.md). This overview
-summarizes the current boundary while that detailed Stage 2 gate remains in
-progress.
+and recorded integration evidence are in the
+[SLS v0.2.0 Compatibility Matrix](SLS_v0.2.0_Compatibility.md). The schema and
+multi-world compatibility runs, final review corrections, and project-owner
+scope approval were completed on 2026-07-29.
 
 ## Current Feature Matrix
 
@@ -71,7 +71,7 @@ single-host migration behavior is summarized in [Migration](Migration.md).
 | Velocity API build used for compilation | Exact timestamped 4.1.0 snapshot pinned in `pom.xml` |
 | ViaVersion fixture | 5.11.0, optional |
 | SLS-Limbo | NanoLimbo 1.13.0 at `d192d57d` |
-| Historical managed servers | Exact Paper versions from 1.11.2 through 1.18.2 in the Stage 1 fixture |
+| Historical managed servers | Exact Paper versions from 1.11.2 through 1.18.2 in the preserved historical-world fixture |
 | Newer protocol smoke coverage | See `Protocol_Compatibility.md` |
 | Host environment | Local Docker Desktop/Pterodactyl on Windows-backed storage |
 
@@ -80,9 +80,9 @@ mean every world, plugin, Java combination, forwarding mode, or client protocol
 is supported. Native-Linux performance and broad current-Paper compatibility
 remain later test gates.
 
-## Stage 2 Contract
+## Compatibility Contract
 
-Stage 2 must:
+The compatibility work must:
 
 - pin the modern SLS revision used for the run;
 - compare configuration, blueprints, commands, permissions, lifecycle,
@@ -93,5 +93,5 @@ Stage 2 must:
 - document every accepted, translated, and rejected field;
 - identify both missing shared functionality and unnecessary SLS-LITE scope.
 
-Until that gate passes, do not describe SLS-LITE as generally compatible with
-all modern SLS configuration.
+SLS-LITE supports the documented subset. It must not be described as compatible
+with every modern SLS configuration or distributed full-SLS feature.

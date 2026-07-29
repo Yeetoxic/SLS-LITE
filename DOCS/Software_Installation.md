@@ -50,8 +50,10 @@ launch:
 ```
 
 SLS-LITE derives the required major from the Minecraft version and
-configurator. Every configured executable is included in startup capability
-checks.
+configurator. Startup capability checks fail only when a runtime selected by an
+active resolved blueprint is unavailable. Other configured runtimes are probed
+and reported as optional warnings, so an unused missing Java version does not
+disable the proxy.
 
 Profiles created before provider support remain `manual` unless their
 `software.source` is changed explicitly. Existing software is never replaced.
@@ -62,7 +64,7 @@ structural keys fail profile loading.
 ## Modern SLS Definitions
 
 SLS-LITE directly recognizes the modern SLS `software:` shape documented by
-SLS and pinned for Stage 2 at `v0.2.0`:
+SLS and pinned in the compatibility contract at `v0.2.0`:
 
 ```yaml
 software:

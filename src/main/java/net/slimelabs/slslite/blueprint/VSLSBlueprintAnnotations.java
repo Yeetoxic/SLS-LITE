@@ -1,5 +1,6 @@
 package net.slimelabs.slslite.blueprint;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -16,22 +17,42 @@ public final class VSLSBlueprintAnnotations {
 
     public static boolean dontStopWhenEmpty(Map<String, Object> annotations) {
         Object value = namespace(annotations).get("dont-stop-when-empty");
-        return value instanceof Boolean booleanValue && booleanValue;
+        if (value == null) {
+            return false;
+        }
+        if (!(value instanceof Boolean booleanValue)) {
+            throw new IllegalArgumentException(
+                    "annotations.vsls.dont-stop-when-empty must be a boolean"
+            );
+        }
+        return booleanValue;
     }
 
     public static OptionalInt maxInstances(Map<String, Object> annotations) {
-        return positiveInteger(namespace(annotations).get("max-instances"));
+        return positiveInteger(
+                namespace(annotations).get("max-instances"),
+                "annotations.vsls.max-instances"
+        );
     }
 
     public static OptionalInt maxPlayers(Map<String, Object> annotations) {
         Map<?, ?> matchmaking = matchmaking(annotations);
-        return positiveInteger(matchmaking.get("maxPlayers"));
+        return positiveInteger(
+                matchmaking.get("maxPlayers"),
+                "annotations.vsls.matchmaking.maxPlayers"
+        );
     }
 
     public static Optional<String> gameType(Map<String, Object> annotations) {
         Object value = matchmaking(annotations).get("gameType");
-        if (!(value instanceof String configured) || configured.isBlank()) {
+        if (value == null) {
             return Optional.empty();
+        }
+        if (!(value instanceof String configured) || configured.isBlank()) {
+            throw new IllegalArgumentException(
+                    "annotations.vsls.matchmaking.gameType must be a "
+                            + "non-blank string"
+            );
         }
         return Optional.of(configured.trim());
     }
@@ -81,25 +102,58 @@ public final class VSLSBlueprintAnnotations {
     }
 
     public static void validate(Map<String, Object> annotations) {
+        dontStopWhenEmpty(annotations);
+        maxInstances(annotations);
+        maxPlayers(annotations);
         gameType(annotations);
         onJoinCommands(annotations);
     }
 
     private static Map<?, ?> matchmaking(Map<String, Object> annotations) {
         Object value = namespace(annotations).get(MATCHMAKING);
-        return value instanceof Map<?, ?> map ? map : Map.of();
+        if (value == null) {
+            return Map.of();
+        }
+        if (!(value instanceof Map<?, ?> map)) {
+            throw new IllegalArgumentException(
+                    "annotations.vsls.matchmaking must be an object"
+            );
+        }
+        return map;
     }
 
     private static Map<?, ?> namespace(Map<String, Object> annotations) {
         Object value = annotations.get(NAMESPACE);
-        return value instanceof Map<?, ?> map ? map : Map.of();
+        if (value == null) {
+            return Map.of();
+        }
+        if (!(value instanceof Map<?, ?> map)) {
+            throw new IllegalArgumentException("annotations.vsls must be an object");
+        }
+        return map;
     }
 
-    private static OptionalInt positiveInteger(Object value) {
-        if (!(value instanceof Number number)) {
+    private static OptionalInt positiveInteger(Object value, String path) {
+        if (value == null) {
             return OptionalInt.empty();
         }
-        int parsed = number.intValue();
-        return parsed > 0 ? OptionalInt.of(parsed) : OptionalInt.empty();
+        BigInteger parsed;
+        if (value instanceof Byte || value instanceof Short
+                || value instanceof Integer || value instanceof Long) {
+            parsed = BigInteger.valueOf(((Number) value).longValue());
+        } else if (value instanceof BigInteger integer) {
+            parsed = integer;
+        } else {
+            throw new IllegalArgumentException(
+                    path + " must be a positive integer"
+            );
+        }
+        if (parsed.signum() <= 0
+                || parsed.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) > 0) {
+            throw new IllegalArgumentException(
+                    path + " must be between 1 and " + Integer.MAX_VALUE
+            );
+        }
+        return OptionalInt.of(parsed.intValue());
     }
 }

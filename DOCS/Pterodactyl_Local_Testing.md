@@ -107,6 +107,24 @@ If the Panel loads but its console reports a connection problem, hard-refresh
 the page after confirming that `sls-ptero-panel` and `sls-ptero-wings` are
 running.
 
+## Console Automation
+
+`infra/pterodactyl/send-command.php` sends one console command to the local
+Velocity allocation identified by external ID `sls-lite-local-velocity`. It is
+for repeatable local integration tests; it is not a production Panel extension
+or a remote administration endpoint.
+
+Copy it into the Panel container, then pass the console command as arguments:
+
+```powershell
+docker cp infra/pterodactyl/send-command.php sls-ptero-panel:/tmp/sls-lite-send-command.php
+docker exec -e PANEL_ROOT=/app sls-ptero-panel php /tmp/sls-lite-send-command.php sls info
+```
+
+The helper uses the Panel's existing internal Wings repository and contains no
+credentials. Keep it available only to users who already have local Docker
+access.
+
 ## Reprovisioning
 
 The Docker migration and management scripts are documented in

@@ -96,7 +96,7 @@ final class ModernSLSSoftwareAdapter {
                 SoftwareReleaseChannel.STABLE,
                 false,
                 invocation.javaExecutable(),
-                Map.of(),
+                localJavaExecutables(images),
                 "software/" + id + "/{version}",
                 invocation.serverJar(),
                 invocation.jvmArguments(),
@@ -111,6 +111,26 @@ final class ModernSLSSoftwareAdapter {
                 mappings.entries(),
                 mappings.defaultImage()
         );
+    }
+
+    private static Map<Integer, String> localJavaExecutables(
+            Map<String, String> images
+    ) {
+        Map<Integer, String> executables = new LinkedHashMap<>();
+        for (String image : images.keySet()) {
+            if (!image.startsWith("java_")) {
+                continue;
+            }
+            try {
+                int major = Integer.parseInt(image.substring("java_".length()));
+                if (major > 0) {
+                    executables.put(major, "runtimes/java-" + major + "/bin/java");
+                }
+            } catch (NumberFormatException ignored) {
+                // Nonstandard image selectors remain visible metadata.
+            }
+        }
+        return Map.copyOf(executables);
     }
 
     private static SoftwareConfigurator configurator(String id) {

@@ -54,7 +54,7 @@ network.
 
 ## Modern Blueprint Corpus
 
-Run the opt-in Stage 2 parser harness against a copied blueprint directory:
+Run the opt-in modern SLS corpus harness against a copied blueprint directory:
 
 ```powershell
 mvn "-Dtest=BlueprintCorpusCompatibilityIT" `

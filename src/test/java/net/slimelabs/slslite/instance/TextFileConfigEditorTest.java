@@ -6,12 +6,14 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TextFileConfigEditorTest {
 
@@ -111,5 +113,26 @@ class TextFileConfigEditorTest {
                 "occupied",
                 Files.readString(temporaryDirectory.resolve("config.txt.tmp"))
         );
+    }
+
+    @Test
+    void overlappingPrefixesAreRejectedBeforeWriting() throws Exception {
+        Path target = temporaryDirectory.resolve("config.txt");
+        Files.writeString(target, "server-port=25565\n");
+        Map<String, String> replacements = new LinkedHashMap<>();
+        replacements.put("server-", "first");
+        replacements.put("server-port=", "second");
+
+        java.io.IOException exception = assertThrows(
+                java.io.IOException.class,
+                () -> TextFileConfigEditor.apply(
+                        temporaryDirectory,
+                        Map.of("config.txt", replacements)
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("prefixes overlap"));
+        assertEquals("server-port=25565\n", Files.readString(target));
+        assertFalse(Files.exists(temporaryDirectory.resolve("config.txt.tmp")));
     }
 }

@@ -61,9 +61,9 @@ Unknown annotation trees, including YAML null values, are preserved. Documented
 SLS-LITE lifecycle annotations and vSLS lifecycle, capacity, `gameType`, and
 bounded `on-join` annotations affect local behavior.
 
-Stage 2 uses an exact-ID corpus gate for unmodified modern SLS fixtures. The
-authoritative accepted/adapted/rejected matrix remains the source of truth for
-each definition.
+The compatibility suite uses an exact-ID corpus gate for unmodified modern SLS
+fixtures. The authoritative accepted/adapted/rejected matrix remains the source
+of truth for each definition.
 
 ## From An Earlier SLS-LITE Snapshot
 

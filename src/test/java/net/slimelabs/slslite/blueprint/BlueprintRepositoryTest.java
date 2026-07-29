@@ -161,7 +161,7 @@ class BlueprintRepositoryTest {
     }
 
     @Test
-    void ignoresInvalidVSLSAnnotationValues() throws Exception {
+    void rejectsInvalidVSLSAnnotationTypes() throws Exception {
         write("invalid-vsls.yml", """
                 blueprint:
                   id: invalid-vsls
@@ -178,13 +178,107 @@ class BlueprintRepositoryTest {
                       maxPlayers: none
                 """);
 
-        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
-        repository.reload();
+        BlueprintException exception = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
 
-        Blueprint blueprint = repository.get("invalid-vsls").orElseThrow();
-        assertEquals(20, blueprint.maxPlayers());
-        assertEquals(1, blueprint.maxInstances());
-        assertFalse(BlueprintLifecyclePolicy.from(blueprint, 180).keepAlive());
+        assertTrue(exception.getMessage().contains(
+                "annotations.vsls.dont-stop-when-empty must be a boolean"
+        ));
+    }
+
+    @Test
+    void rejectsFractionalAndOverflowingVSLSCapacityAnnotations() throws Exception {
+        write("invalid-vsls.yml", """
+                blueprint:
+                  id: invalid-vsls
+                  name: Invalid vSLS annotations
+                  type: minigame
+                server:
+                  software: paper
+                  version: "1.21.1"
+                annotations:
+                  vsls:
+                    max-instances: 1.5
+                """);
+
+        BlueprintException fractional = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(fractional.getMessage().contains(
+                "annotations.vsls.max-instances must be a positive integer"
+        ));
+
+        Files.delete(temporaryDirectory.resolve("invalid-vsls.yml"));
+        write("invalid-vsls.yml", """
+                blueprint:
+                  id: invalid-vsls
+                  name: Invalid vSLS annotations
+                  type: minigame
+                server:
+                  software: paper
+                  version: "1.21.1"
+                annotations:
+                  vsls:
+                    matchmaking:
+                      maxPlayers: 2147483648
+                """);
+
+        BlueprintException overflow = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(overflow.getMessage().contains(
+                "annotations.vsls.matchmaking.maxPlayers must be between 1"
+        ));
+    }
+
+    @Test
+    void rejectsMalformedVSLSNamespaceAndGameType() throws Exception {
+        write("invalid-vsls.yml", """
+                blueprint:
+                  id: invalid-vsls
+                  name: Invalid vSLS annotations
+                  type: minigame
+                server:
+                  software: paper
+                  version: "1.21.1"
+                annotations:
+                  vsls: invalid
+                """);
+
+        BlueprintException namespace = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(namespace.getMessage().contains(
+                "annotations.vsls must be an object"
+        ));
+
+        Files.delete(temporaryDirectory.resolve("invalid-vsls.yml"));
+        write("invalid-vsls.yml", """
+                blueprint:
+                  id: invalid-vsls
+                  name: Invalid vSLS annotations
+                  type: minigame
+                server:
+                  software: paper
+                  version: "1.21.1"
+                annotations:
+                  vsls:
+                    matchmaking:
+                      gameType: 42
+                """);
+
+        BlueprintException gameType = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(gameType.getMessage().contains(
+                "annotations.vsls.matchmaking.gameType must be a non-blank string"
+        ));
     }
 
     @Test
@@ -457,6 +551,29 @@ class BlueprintRepositoryTest {
         assertTrue(objectValue.getMessage().contains(
                 "must be a string, number, or boolean"
         ));
+
+        Files.delete(temporaryDirectory.resolve("survival.yml"));
+        write("survival.yml", """
+                blueprint:
+                  id: survival
+                  name: Survival
+                  type: survival
+                server:
+                  software: paper
+                  version: "1.21.11"
+                  configs:
+                    server.txt:
+                      parser: file
+                      find:
+                        "server-": first
+                        "server-port=": second
+                """);
+
+        BlueprintException overlapping = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(overlapping.getMessage().contains("prefixes overlap"));
     }
 
     @Test

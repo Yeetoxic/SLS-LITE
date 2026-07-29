@@ -153,5 +153,5 @@ temporary instance log. It is mirrored to the proxy only when
 The regression run passes when the historical lobby and every imported game can
 install, start, join, stop, and clean up without modifying its source world.
 Record game-specific plugin or data incompatibility separately from an
-SLS-LITE lifecycle failure. Stage 2 uses unmodified modern SLS blueprints as
-the compatibility input.
+SLS-LITE lifecycle failure. The modern compatibility regression uses
+unmodified SLS blueprints as its input.

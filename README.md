@@ -9,9 +9,10 @@ SLS-LITE follows modern SLS terminology and compatible configuration shapes
 where they make sense on one host. It remains a separate, self-contained
 product: full SLS is not a runtime dependency or operating mode.
 
-> **Development status:** Stage 1 has passed on the local historical-world
-> network. The project is not a production release. Stage 2 will validate the
-> supported subset against unmodified modern SLS definitions.
+> **Development status:** The core historical-world network and the pinned
+> modern SLS `v0.2.0` compatibility run have passed. The project is not a
+> production release; full-stack performance, command completion, failure
+> hardening, and release qualification remain.
 
 ## What Works
 

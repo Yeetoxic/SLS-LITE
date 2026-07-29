@@ -1,5 +1,6 @@
 package net.slimelabs.slslite.host;
 
+import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.software.SoftwareProfile;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -24,6 +26,7 @@ class HostCapabilityCheckerTest {
         HostCapabilityReport report = new HostCapabilityChecker().check(
                 temporaryDirectory.resolve("instances"),
                 ports,
+                List.of(blueprint("1.21.1")),
                 List.of(profile(javaExecutable())),
                 new JavaJarProcessSpecFactory(temporaryDirectory),
                 1024
@@ -41,6 +44,7 @@ class HostCapabilityCheckerTest {
         HostCapabilityReport report = new HostCapabilityChecker().check(
                 temporaryDirectory.resolve("instances"),
                 new LoopbackPortAllocator(31171, 31270),
+                List.of(blueprint("1.21.1")),
                 List.of(profile("definitely-not-a-java-runtime")),
                 new JavaJarProcessSpecFactory(temporaryDirectory),
                 1024
@@ -48,6 +52,152 @@ class HostCapabilityCheckerTest {
 
         assertTrue(report.hasFailures());
         assertTrue(report.failureSummary().contains("Child Java process"));
+    }
+
+    @Test
+    void warnsForUnavailableOptionalVersionSpecificRuntime() {
+        SoftwareProfile base = profile(javaExecutable());
+        SoftwareProfile profile = new SoftwareProfile(
+                base.id(),
+                base.name(),
+                base.runtime(),
+                base.configurator(),
+                base.source(),
+                base.channel(),
+                base.acceptEula(),
+                base.javaExecutable(),
+                Map.of(21, "definitely-not-java-21"),
+                base.baseDirectory(),
+                base.serverJar(),
+                base.jvmArguments(),
+                base.serverArguments(),
+                base.serverProperties(),
+                base.readinessPattern(),
+                base.startupTimeoutSeconds(),
+                base.stopCommand(),
+                base.stopTimeoutSeconds()
+        );
+
+        HostCapabilityReport report = new HostCapabilityChecker().check(
+                temporaryDirectory.resolve("instances"),
+                new LoopbackPortAllocator(31271, 31370),
+                List.of(blueprint("1.18.2")),
+                List.of(profile),
+                new JavaJarProcessSpecFactory(temporaryDirectory),
+                1024
+        );
+
+        assertFalse(report.hasFailures(), report.failureSummary());
+        assertTrue(report.capabilities().stream().anyMatch(capability ->
+                        capability.status() == HostCapabilityStatus.WARNING
+                        && capability.detail().contains(
+                                "configured but unused runtime"
+                        )));
+    }
+
+    @Test
+    void missingUnusedDefaultDoesNotFailWhenSelectedRuntimeIsAvailable() {
+        SoftwareProfile profile = withJavaVersions(
+                profile("definitely-not-default-java"),
+                Map.of(17, javaExecutable())
+        );
+
+        HostCapabilityReport report = new HostCapabilityChecker().check(
+                temporaryDirectory.resolve("instances"),
+                new LoopbackPortAllocator(31371, 31470),
+                List.of(blueprint("1.18.2")),
+                List.of(profile),
+                new JavaJarProcessSpecFactory(temporaryDirectory),
+                1024
+        );
+
+        assertFalse(report.hasFailures(), report.failureSummary());
+        assertTrue(report.capabilities().stream().anyMatch(capability ->
+                capability.status() == HostCapabilityStatus.WARNING
+                        && capability.detail().contains(
+                                "definitely-not-default-java"
+                        )));
+    }
+
+    @Test
+    void missingSelectedRuntimeFailsEvenWhenDefaultIsAvailable() {
+        SoftwareProfile profile = withJavaVersions(
+                profile(javaExecutable()),
+                Map.of(17, "definitely-not-java-17")
+        );
+
+        HostCapabilityReport report = new HostCapabilityChecker().check(
+                temporaryDirectory.resolve("instances"),
+                new LoopbackPortAllocator(31471, 31570),
+                List.of(blueprint("1.18.2")),
+                List.of(profile),
+                new JavaJarProcessSpecFactory(temporaryDirectory),
+                1024
+        );
+
+        assertTrue(report.hasFailures());
+        assertTrue(report.failureSummary().contains("definitely-not-java-17"));
+    }
+
+    @Test
+    void fullyAvailableSelectedRuntimePassesWithoutWarnings() {
+        SoftwareProfile profile = withJavaVersions(
+                profile(javaExecutable()),
+                Map.of(17, javaExecutable())
+        );
+
+        HostCapabilityReport report = new HostCapabilityChecker().check(
+                temporaryDirectory.resolve("instances"),
+                new LoopbackPortAllocator(31571, 31670),
+                List.of(blueprint("1.18.2")),
+                List.of(profile),
+                new JavaJarProcessSpecFactory(temporaryDirectory),
+                1024
+        );
+
+        assertFalse(report.hasFailures(), report.failureSummary());
+        assertFalse(report.capabilities().stream().anyMatch(capability ->
+                capability.status() == HostCapabilityStatus.WARNING
+                        && capability.name().equals("Child Java process")));
+    }
+
+    private static SoftwareProfile withJavaVersions(
+            SoftwareProfile base,
+            Map<Integer, String> javaVersions
+    ) {
+        return new SoftwareProfile(
+                base.id(),
+                base.name(),
+                base.runtime(),
+                base.configurator(),
+                base.source(),
+                base.channel(),
+                base.acceptEula(),
+                base.javaExecutable(),
+                javaVersions,
+                base.baseDirectory(),
+                base.serverJar(),
+                base.jvmArguments(),
+                base.serverArguments(),
+                base.serverProperties(),
+                base.readinessPattern(),
+                base.startupTimeoutSeconds(),
+                base.stopCommand(),
+                base.stopTimeoutSeconds()
+        );
+    }
+
+    private static Blueprint blueprint(String version) {
+        return new Blueprint(
+                "fixture",
+                "Fixture",
+                "test",
+                "paper",
+                version,
+                1024,
+                false,
+                Map.of()
+        );
     }
 
     private static SoftwareProfile profile(String javaExecutable) {

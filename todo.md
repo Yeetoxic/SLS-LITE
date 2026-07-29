@@ -306,24 +306,24 @@ the local implementation has equivalent behavior.
       Velocity registrations.
 - [x] Keep SLS-LITE entirely operational inside Velocity and its locally managed
       child processes.
-- [ ] Treat modern SLS as the behavioral and documentation reference when an
+- [x] Treat modern SLS as the behavioral and documentation reference when an
       equivalent feature exists in both projects.
-- [ ] Implement every supported feature locally without forwarding work to
+- [x] Implement every supported feature locally without forwarding work to
       Protocube, a daemon, S4J, Docker, or another SLS installation.
-- [ ] Prefer direct support for compatible modern SLS configuration over a
+- [x] Prefer direct support for compatible modern SLS configuration over a
       separate SLS-LITE-only schema or mandatory conversion step.
 - [x] Use a local server-controller interface to separate commands, matchmaking,
       and lifecycle logic from Java process and filesystem management.
-- [ ] Do not add a remote-controller implementation or make full SLS a runtime
+- [x] Do not add a remote-controller implementation or make full SLS a runtime
       mode of SLS-LITE.
 - [ ] Match upstream command names and argument behavior where the operation is
       available locally.
-- [ ] Return a clear `not available in local mode` response for distributed-only
+- [x] Return a clear `not available in local mode` response for distributed-only
       operations instead of silently ignoring them.
-- [ ] Match upstream lifecycle state names and event meanings where practical.
-- [ ] Express SLS-LITE-specific behavior through namespaced annotations instead
+- [x] Match upstream lifecycle state names and event meanings where practical.
+- [x] Express SLS-LITE-specific behavior through namespaced annotations instead
       of changing the meaning of upstream fields.
-- [ ] Define the local equivalent of each adopted distributed feature:
+- [x] Define the local equivalent of each adopted distributed feature:
   - Daemon process creation becomes a locally supervised Java child process.
   - Node allocation becomes local memory, directory, and port admission.
   - Docker images become configured Java runtimes and prepared software
@@ -346,24 +346,27 @@ the local implementation has equivalent behavior.
 - [x] Record the historical Velocity-only baseline at SLS commit
       `4f9b7ca7f6d857d43253076f1627ad4087f663ab` and separate its proven
       single-host behavior from implementation details that must be modernized.
-- [ ] Treat modern SLS terminology and public configuration conventions as the
+- [x] Treat modern SLS terminology and public configuration conventions as the
       preferred reference when the same concept exists in SLS-LITE.
 - [x] Record the initial upstream SLS release and commit targeted by SLS-LITE
       release.
-- [ ] Maintain a feature compatibility matrix with `supported`, `adapted`,
+- [x] Maintain a feature compatibility matrix with `supported`, `adapted`,
       `unsupported`, and `planned` states.
 - [ ] Review each stable upstream SLS release for features that are useful in a
       single-host Velocity environment.
 - [ ] Track announced or experimental upstream features separately and wait for
       their configuration and behavior to stabilize before adopting them.
-- [ ] Document intentional differences when distributed SLS behavior cannot be
+- [x] Document intentional differences when distributed SLS behavior cannot be
       reproduced safely on a shared host.
-- [ ] Reuse upstream field names, status names, command names, and examples when
+- [x] Reuse upstream field names, status names, command names, and examples when
       their semantics remain equivalent.
-- [ ] Add migration notes whenever SLS-LITE follows an upstream schema or
+- [x] Add migration notes whenever SLS-LITE follows an upstream schema or
       behavior change.
-- [ ] Keep upstream example blueprints and software definitions as compatibility
+- [x] Keep upstream example blueprints and software definitions as compatibility
       fixtures where licensing permits.
+- [ ] Revisit announced `allowed-client-versions` support only after upstream
+      publishes a stable schema and behavior. The field is absent from pinned
+      SLS `v0.2.0`; do not invent a compatibility contract in advance.
 - [ ] Add migration fixtures for the historical `minigames.yml`,
       `adventureMaps.yml`, and `archive.yml` formats.
 - [ ] Decide whether historical `shutdown` and `config` forms remain as hidden
@@ -371,26 +374,26 @@ the local implementation has equivalent behavior.
       and `blueprint` commands.
 - [ ] Add an optional, validated compatibility listener for the historical
       `slimelabs:network` plugin message channel.
-- [ ] Never introduce a runtime dependency on Protocube, the daemon, S4J, Docker,
+- [x] Never introduce a runtime dependency on Protocube, the daemon, S4J, Docker,
       or another SLS installation.
 
 ### Blueprint Compatibility
 
-- [ ] Publish a compatibility matrix showing which modern SLS blueprint fields
+- [x] Publish a compatibility matrix showing which modern SLS blueprint fields
       SLS-LITE supports, translates, ignores, or rejects.
-- [ ] Load supported modern SLS blueprints directly without requiring an import
+- [x] Load supported modern SLS blueprints directly without requiring an import
       or conversion command.
-- [ ] Support the useful subset of modern blueprint metadata:
+- [x] Support the useful subset of modern blueprint metadata:
   - `blueprint.id`, `blueprint.name`, and `blueprint.type`.
   - `server.software`, `server.version`, and resource limits.
   - Persistent or ephemeral `save` behavior.
   - State volumes, copied files, environment variables, and annotations.
 - [ ] Add an optional conversion or validation command for users who want a
       standalone SLS-LITE-compatible copy with unsupported fields explained.
-- [ ] Preserve unknown annotations during load and save so external tools can
+- [x] Preserve unknown annotations during load and save so external tools can
       attach metadata without SLS-LITE deleting it.
 - [x] Use stable blueprint IDs and short instance IDs similar to modern SLS.
-- [ ] Keep the SLS-LITE schema smaller than the upstream schema and reject fields
+- [x] Keep the SLS-LITE schema smaller than the upstream schema and reject fields
       that imply unavailable isolation or host capabilities.
 
 ### Full Review Gate
@@ -920,7 +923,7 @@ SLS is not required at this gate.
       ephemeral cleanup, idle shutdown, and proxy shutdown with the test worlds.
 - [x] [S1] Record the exact fixture configuration and manual acceptance results.
 
-### Stage 2: Compatibility Run
+### Stage 2: Compatibility Run (Complete 2026-07-29)
 
 Prove that SLS-LITE remains part of the SLS ecosystem by speaking the same
 configuration language wherever a distributed feature has a safe local
@@ -953,12 +956,12 @@ equivalent.
 - [x] [S2] Classify every compared feature as `supported`, `adapted for local
       mode`, `intentionally unsupported`, or `deferred`, with a reason for every
       difference.
-- [ ] [S2] Perform a scope-balance review before Stage 3:
+- [x] [S2] Perform a scope-balance review before Stage 3:
   - [x] Identify important shared SLS behavior that SLS-LITE is missing.
   - [x] Identify SLS-LITE behavior that is unnecessary, overbuilt, or outside its
     single-host purpose.
   - [x] Confirm that retained features remain practical on constrained shared hosts.
-  - [ ] Obtain project-owner approval for the resulting scope and compatibility
+  - [x] Obtain project-owner approval for the resulting scope and compatibility
     matrix.
 - [x] [S2] Define and publish the supported modern SLS configuration and blueprint
       subset, including local adaptations and intentionally unsupported fields.
@@ -987,16 +990,45 @@ equivalent.
       skipped definitions. Do not modify the owner's original blueprint source.
 - [x] [S2] Preserve compatible names, annotations, registry types, limits,
       lifecycle intentions, and content declarations.
-- [ ] [S2] Revisit announced `allowed-client-versions` support after upstream
-      publishes a stable schema and behavior. The field is absent from pinned
-      SLS `v0.2.0`; do not invent a compatibility contract in advance.
 - [x] [S2] Define the modern SLS copy-on-write volume compatibility contract:
       preserve its isolation intent while documenting `reflink`, `overlay`, and
       portable-copy implementations as host-dependent local adaptations.
 - [x] [S2] Add upstream-derived compatibility fixtures and automated parser,
       validation, and migration tests where licensing permits.
-- [ ] [S2] Run a multi-world network from those modern SLS fixtures and document
+- [x] [S2] Run a multi-world network from those modern SLS fixtures and document
       every supported, adapted, and rejected field.
+  - [x] Select a representative world-backed fixture set containing a lobby,
+        multiple registries, multiple game versions, and at least one blueprint
+        using modern software inheritance, `state.copy`, `state.env`,
+        configuration patches, lifecycle annotations, and matchmaking metadata.
+  - [x] Deploy copied fixtures to the local Pterodactyl test allocation without
+        modifying the project owner's source worlds or blueprint collection.
+  - [x] Start the fixture network, join each available world, transfer between
+        registries, provision sibling instances, return to the lobby, and verify
+        persistent and ephemeral lifecycle behavior with a real client.
+  - [x] Confirm supported fields retain their modern SLS meaning and adapted
+        fields produce the documented single-host behavior.
+  - [x] Exercise deliberate unsupported examples, including host mounts and
+        shared read-write volumes, and confirm actionable rejection without
+        partial instances, leaked processes, or damaged source data.
+  - [x] Record the blueprint IDs, software versions, observed behavior, logs,
+        limitations, and pass/fail result in the compatibility evidence.
+  - [x] Re-run the automated suite and exact-ID 54-blueprint corpus gate against
+        the source revision used for the deployed manual test.
+- [x] [S2] Resolve the final Stage 2 code-review findings:
+  - [x] Make `parser: file` handling deterministic when configured prefixes
+        overlap; reject ambiguous definitions or apply exactly one documented
+        precedence rule, with parser and editor regression tests.
+  - [x] Strictly validate interpreted vSLS annotation types and integer ranges
+        so malformed `dont-stop-when-empty`, `max-instances`,
+        `matchmaking.maxPlayers`, and `matchmaking.gameType` values produce
+        actionable definition errors instead of silent defaults or truncation.
+  - [x] Base Java startup failures on runtimes required by active resolved
+        blueprints, while retaining warnings for configured but currently
+        unused runtimes; cover missing default, missing selected, and fully
+        available runtime combinations.
+  - [x] Re-run the regular suite, exact 54-ID corpus gate, package verification,
+        and one focused Pterodactyl startup after these corrections.
 
 ### Stage 3: The Full Stack
 
@@ -1004,6 +1036,32 @@ Run the complete SLS-LITE product as one cohesive network. Expected failures
 must degrade cleanly without crashing Velocity, corrupting data, leaking child
 processes, or trapping players in unexplained states.
 
+- [ ] [S3] Detect and report host storage/process capabilities at startup, then
+      select the fastest safe instance strategy supported by that host.
+- [ ] [S3] Implement and benchmark native reflink and Linux OverlayFS COW
+      strategies, with explicit configuration overrides and the current
+      transactional portable copy retained as the tested universal fallback.
+- [ ] [S3] Profile provisioning, file preparation, software resolution, child
+      launch, readiness detection, protocol registration, queueing, transfers,
+      cleanup, and proxy restart using per-phase timings.
+- [ ] [S3] Optimize measured bottlenecks for constrained hosts without weakening
+      source-world immutability, transactionality, recovery, or resource
+      admission; establish native-Linux and Windows/Pterodactyl baselines before
+      setting regression thresholds.
+- [ ] [S3] Complete the useful local vSLS command surface, including `create`,
+      `delete`, `kill`, `blueprint`, and `debug`, with safe local semantics;
+      preserve explicit local-mode responses for distributed-only operations and
+      do not prioritize unsafe portable `pause`/`resume` emulation.
+- [ ] [S3] Finish command-output, permission, selector, sender, force-flag, and
+      tab-completion parity wherever SLS-LITE supports the corresponding vSLS
+      operation.
+- [ ] [S3] Harden lifecycle state transitions and concurrency for simultaneous
+      start, stop, reset, join, queue, cleanup, reload, and proxy-shutdown
+      requests, including cancellation and idempotency.
+- [ ] [S3] Audit resource efficiency under squeezed allocations: minimum useful
+      proxy and child memory, managed process limits, idle shutdown, software
+      cache retention/purging, temporary logs, stale instances, and disk
+      reclamation.
 - [ ] [S3] Verify every locally supported command, argument branch, selector,
       permission, sender restriction, output, and tab-completion path.
 - [ ] [S3] Exercise managed lobby, external lobby, SLS-Limbo fallback, queues,

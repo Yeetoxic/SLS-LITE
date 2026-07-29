@@ -1,0 +1,16 @@
+blueprint:
+  id: "stage2_reject_mount"
+  name: "Stage 2 Rejected Host Mount"
+  type: "compatibility"
+
+server:
+  software: "paper"
+  version: "1.18.2"
+  limits:
+    memory_limit: 1024
+
+state:
+  mounts:
+    - source: "/srv/shared"
+      target: "/shared"
+

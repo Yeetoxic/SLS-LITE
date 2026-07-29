@@ -147,7 +147,8 @@ server:
 For every existing line beginning with a `find` key, SLS-LITE replaces the
 whole line with the mapped scalar value. It does not append a replacement when
 the prefix is absent. A missing target is created as an empty file, matching
-SLS v0.2.0 behavior.
+SLS v0.2.0 behavior. Prefixes may not overlap; definitions such as `server-`
+and `server-port=` are rejected because one input line could match both.
 
 Targets must remain inside the instance and may not traverse symbolic links.
 Files must be UTF-8 regular files no larger than 8 MiB. Writes use a sibling
@@ -292,9 +293,9 @@ HTTP(S) URL. See [Resource Packs](Resource_Packs.md).
 
 ## Modern SLS Boundary
 
-The field shape above is the currently implemented subset, not the final Stage
-2 compatibility contract. Unsupported modern SLS structural fields are
-rejected with their path; unknown annotations are preserved in memory. See the
+The field shape above is the implemented local subset. Unsupported modern SLS
+structural fields are rejected with their path; unknown annotations are
+preserved in memory. See the
 [SLS v0.2.0 compatibility matrix](SLS_v0.2.0_Compatibility.md) for the pinned,
 field-by-field boundary.
 

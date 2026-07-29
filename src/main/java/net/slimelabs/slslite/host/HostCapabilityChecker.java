@@ -1,5 +1,6 @@
 package net.slimelabs.slslite.host;
 
+import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.network.PortAllocationException;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
@@ -12,7 +13,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -23,6 +26,7 @@ public final class HostCapabilityChecker {
     public HostCapabilityReport check(
             Path instancesDirectory,
             LoopbackPortAllocator portAllocator,
+            Collection<Blueprint> blueprints,
             Collection<SoftwareProfile> profiles,
             JavaJarProcessSpecFactory processSpecFactory,
             int managedMemoryMiB
@@ -30,7 +34,11 @@ public final class HostCapabilityChecker {
         List<HostCapability> results = new ArrayList<>();
         results.add(checkWritableStorage(instancesDirectory));
         results.add(checkLoopbackPort(portAllocator));
-        results.addAll(checkJavaProcesses(profiles, processSpecFactory));
+        results.addAll(checkJavaProcesses(
+                blueprints,
+                profiles,
+                processSpecFactory
+        ));
         results.add(new HostCapability(
                 "Managed memory",
                 HostCapabilityStatus.WARNING,
@@ -71,37 +79,73 @@ public final class HostCapabilityChecker {
     }
 
     private static List<HostCapability> checkJavaProcesses(
+            Collection<Blueprint> blueprints,
             Collection<SoftwareProfile> profiles,
             JavaJarProcessSpecFactory processSpecFactory
     ) {
-        Set<String> executables = new LinkedHashSet<>();
+        Set<String> requiredExecutables = new LinkedHashSet<>();
+        Set<String> optionalExecutables = new LinkedHashSet<>();
         List<HostCapability> results = new ArrayList<>();
+        Map<String, SoftwareProfile> profilesById = new LinkedHashMap<>();
         for (SoftwareProfile profile : profiles) {
+            profilesById.put(profile.id(), profile);
             try {
-                executables.addAll(
+                optionalExecutables.addAll(
                         processSpecFactory.configuredJavaExecutables(profile)
                 );
             } catch (ProcessSpecificationException exception) {
-                results.add(failure(
+                results.add(new HostCapability(
                         "Java runtime " + profile.id(),
+                        HostCapabilityStatus.WARNING,
+                        message(exception) + " (configured but unused runtime)"
+                ));
+            }
+        }
+        for (Blueprint blueprint : blueprints) {
+            SoftwareProfile profile = profilesById.get(blueprint.software());
+            if (profile == null) {
+                results.add(failure(
+                        "Java runtime " + blueprint.id(),
+                        "Software profile '" + blueprint.software()
+                                + "' is not loaded"
+                ));
+                continue;
+            }
+            try {
+                requiredExecutables.add(processSpecFactory.resolveJavaExecutable(
+                        profile,
+                        blueprint.version(),
+                        blueprint.image()
+                ));
+            } catch (ProcessSpecificationException exception) {
+                results.add(failure(
+                        "Java runtime " + blueprint.id(),
                         message(exception)
                 ));
             }
         }
-        if (executables.isEmpty() && results.isEmpty()) {
+        optionalExecutables.removeAll(requiredExecutables);
+        if (requiredExecutables.isEmpty() && optionalExecutables.isEmpty()
+                && results.isEmpty()) {
             return List.of(new HostCapability(
                     "Child processes",
                     HostCapabilityStatus.WARNING,
                     "No software profiles are loaded, so no Java runtime was tested"
             ));
         }
-        for (String executable : executables) {
-            results.add(checkJavaProcess(executable));
+        for (String executable : requiredExecutables) {
+            results.add(checkJavaProcess(executable, true));
+        }
+        for (String executable : optionalExecutables) {
+            results.add(checkJavaProcess(executable, false));
         }
         return results;
     }
 
-    private static HostCapability checkJavaProcess(String executable) {
+    private static HostCapability checkJavaProcess(
+            String executable,
+            boolean required
+    ) {
         Process process = null;
         try {
             process = new ProcessBuilder(executable, "-version")
@@ -110,21 +154,27 @@ public final class HostCapabilityChecker {
                     .start();
             if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
-                return failure(
+                return unavailableJava(
+                        required,
                         "Child Java process",
                         executable + " did not exit within "
                                 + PROCESS_TIMEOUT_SECONDS + " seconds"
                 );
             }
             if (process.exitValue() != 0) {
-                return failure(
+                return unavailableJava(
+                        required,
                         "Child Java process",
                         executable + " exited with code " + process.exitValue()
                 );
             }
             return pass("Child Java process", executable);
         } catch (IOException exception) {
-            return failure("Child Java process", executable + ": " + message(exception));
+            return unavailableJava(
+                    required,
+                    "Child Java process",
+                    executable + ": " + message(exception)
+            );
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return failure("Child Java process", "probe was interrupted");
@@ -133,6 +183,20 @@ public final class HostCapabilityChecker {
                 process.destroyForcibly();
             }
         }
+    }
+
+    private static HostCapability unavailableJava(
+            boolean required,
+            String name,
+            String detail
+    ) {
+        return required
+                ? failure(name, detail)
+                : new HostCapability(
+                        name,
+                        HostCapabilityStatus.WARNING,
+                        detail + " (configured but unused runtime)"
+                );
     }
 
     private static HostCapability pass(String name, String detail) {

@@ -34,6 +34,7 @@ public final class TextFileConfigEditor {
             String configuredTarget,
             Map<String, String> replacements
     ) throws IOException {
+        validatePrefixes(replacements);
         if (configuredTarget == null || configuredTarget.isBlank()) {
             throw new IOException("Text config target must not be blank");
         }
@@ -102,6 +103,25 @@ public final class TextFileConfigEditor {
             moveAtomically(temporary, target);
         } finally {
             Files.deleteIfExists(temporary);
+        }
+    }
+
+    private static void validatePrefixes(Map<String, String> replacements)
+            throws IOException {
+        java.util.List<String> prefixes = java.util.List.copyOf(
+                replacements.keySet()
+        );
+        for (int left = 0; left < prefixes.size(); left++) {
+            for (int right = left + 1; right < prefixes.size(); right++) {
+                String first = prefixes.get(left);
+                String second = prefixes.get(right);
+                if (first.startsWith(second) || second.startsWith(first)) {
+                    throw new IOException(
+                            "Text config replacement prefixes overlap: '"
+                                    + first + "' and '" + second + "'"
+                    );
+                }
+            }
         }
     }
 
