@@ -934,6 +934,10 @@ equivalent.
 - [x] [S2] Add a constrained modern SLS software-definition adapter with an
       attributed Paper fixture, shell-free invocation parsing, supported
       software config defaults, and explicit Docker/script boundaries.
+- [x] [S2] Load the copied 54-blueprint modern SlimeLabs corpus unchanged,
+      including Java image selectors, a contained software path override,
+      shorthand COW volumes, distributed limit metadata, and nested YAML
+      config patches. Missing optional world sources remain a launch-time gate.
 - [ ] [S2] Compare modern SLS and SLS-LITE feature by feature across
       configuration, blueprints, registries, matchmaking, lifecycle, commands,
       permissions, observability, installation, storage, and integrations.

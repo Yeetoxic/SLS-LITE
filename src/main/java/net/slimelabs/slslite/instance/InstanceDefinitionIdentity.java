@@ -60,8 +60,11 @@ public record InstanceDefinitionIdentity(
                 writeValue(output, profile.startupTimeoutSeconds());
                 writeValue(output, profile.stopCommand());
                 writeValue(output, profile.stopTimeoutSeconds());
+                writeValue(output, blueprint.image());
+                writeValue(output, blueprint.softwarePath());
                 writeValue(output, blueprint.save());
                 writeValue(output, blueprint.serverProperties());
+                writeValue(output, blueprint.yamlConfigs());
                 writeValue(output, blueprint.annotations());
                 writeValue(output, blueprint.volumes().stream()
                         .map(InstanceDefinitionIdentity::volumeValues)

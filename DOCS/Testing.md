@@ -52,6 +52,20 @@ This creates an isolated development fixture under `test-server/`. It is useful
 for narrow lifecycle work but is not the primary historical-world regression
 network.
 
+## Modern Blueprint Corpus
+
+Run the opt-in Stage 2 parser harness against a copied blueprint directory:
+
+```powershell
+mvn "-Dtest=BlueprintCorpusCompatibilityIT" `
+  "-Dsls.compatibility.blueprints=path/to/blueprints" test
+```
+
+This validates schema compatibility without requiring referenced world or
+plugin volume sources. It does not claim that every blueprint is launch-ready;
+runtime content, software, Java, memory, and unsupported volume modes remain
+separate gates.
+
 ## Historical-World Fixture
 
 The primary integration network runs in local Pterodactyl and includes the

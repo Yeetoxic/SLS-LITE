@@ -16,6 +16,9 @@ blueprint:
 server:
   software: paper
   version: "1.18.2"
+  # Optional modern SLS local adaptations:
+  # image: java_17
+  # path: paper/1.18.2
   limits:
     memory_limit: 1024
     max_players: 12
@@ -26,6 +29,11 @@ server:
       find:
         enable-command-block: true
         view-distance: 8
+    bukkit.yml:
+      parser: yaml
+      find:
+        settings:
+          allow-end: false
 
 save: false
 
@@ -57,6 +65,8 @@ documented below.
 | `blueprint.type` | yes | Non-blank dynamic registry name. |
 | `server.software` | yes | ID of a loaded software profile. |
 | `server.version` | yes | Exact Minecraft/software version string. |
+| `server.image` | no | Modern `java_<major>` selector; requires a matching local Java runtime unless it matches the proxy JVM. |
+| `server.path` | no | Relative manually prepared base path below `plugins/sls-lite/software/`; bypasses provider installation. |
 | `server.limits.memory_limit` | no | Positive MiB; default `1024`. |
 | `server.limits.max_players` | no | Positive slots per instance; default `20`. |
 | `server.limits.max_instances` | no | Positive concurrent instances; default `1`. |
@@ -104,13 +114,42 @@ be a scalar string, number, or boolean without line breaks. SLS-LITE writes
 these properties atomically, then enforces managed values such as loopback
 address, allocated port, backend online mode, and player capacity.
 
-Other YAML, JSON, and TOML patchers are not implemented. Unsupported structural
-config targets are rejected instead of ignored.
+Nested YAML map patches are supported for contained `.yml` and `.yaml` targets:
+
+```yaml
+server:
+  configs:
+    spigot.yml:
+      parser: yaml
+      find:
+        settings:
+          moved-wrongly-threshold: 1000
+```
+
+SLS-LITE recursively merges the configured map into the existing file and
+writes it atomically. Target traversal, symbolic links, non-map YAML roots, and
+unsupported value types are rejected. JSON, TOML, `file`, and arbitrary
+properties targets remain unsupported.
 
 ## Volumes
 
 SLS-LITE accepts modern SLS `state.volumes` entries with `mode: cow`. The local
 portable implementation copies the source into each isolated instance.
+
+Mapping and shorthand forms are accepted:
+
+```yaml
+state:
+  volumes:
+    - name: world
+      source: worlds/archive
+      target: /world
+      mode: cow
+    - "nether:worlds/archive/DIM-1:/world_nether/DIM-1:cow"
+```
+
+The shorthand shape is `name:source:target[:mode]`; omitted mode defaults to
+`cow`.
 
 - `source` is relative to `plugins/sls-lite/`.
 - `target` is an instance path such as `/world`.
@@ -171,3 +210,8 @@ The field shape above is the currently implemented subset, not the final Stage
 rejected with their path; unknown annotations are preserved in memory. See the
 [SLS v0.2.0 compatibility matrix](SLS_v0.2.0_Compatibility.md) for the pinned,
 field-by-field boundary.
+
+Blueprint parsing does not require volume source directories to exist. This
+allows definitions to be reviewed and reloaded before optional world content
+is installed. Starting an affected blueprint still fails with an actionable
+content error if its required source is absent.

@@ -137,7 +137,7 @@ public final class BlueprintRepository {
             Map<String, Object> metadata = requiredMap(root, "blueprint", path);
             Map<String, Object> server = requiredMap(root, "server", path);
             Map<String, Object> limits = optionalMap(server, "limits", path);
-            Map<String, String> serverProperties = parseServerProperties(server, path);
+            ParsedConfigs parsedConfigs = parseConfigs(server, path);
             Map<String, Object> state = optionalMap(root, "state", path);
             Map<String, Object> annotations = optionalMap(root, "annotations", path);
             requireOnlyKeys(
@@ -151,15 +151,18 @@ public final class BlueprintRepository {
                     server,
                     "server",
                     path,
-                    "software", "version", "limits", "configs"
+                    "software", "version", "image", "path", "limits", "configs"
             );
             requireOnlyKeys(state, "state", path, "volumes");
             requireOnlyKeys(
                     limits,
                     "server.limits",
                     path,
-                    "memory_limit", "max_players", "max_instances"
+                    "memory_limit", "max_players", "max_instances", "swap",
+                    "io_weight", "cpu_limit", "disk_space", "threads",
+                    "oom_disabled"
             );
+            validateDistributedLimits(limits, path);
 
             String id = requiredString(metadata, "id", path);
             if (!VALID_ID.matcher(id).matches()) {
@@ -170,6 +173,9 @@ public final class BlueprintRepository {
             String type = requiredString(metadata, "type", path);
             String software = requiredString(server, "software", path);
             String version = requiredString(server, "version", path);
+            String image = optionalString(server, "image", path);
+            String softwarePath = optionalString(server, "path", path);
+            validateRelativePath(softwarePath, "server.path", path);
             int memory = optionalPositiveInt(limits, "memory_limit", DEFAULT_MEMORY_MIB, path);
             int maxPlayers = optionalPositiveInt(
                     limits,
@@ -194,11 +200,14 @@ public final class BlueprintRepository {
                     type,
                     software,
                     version,
+                    image,
+                    softwarePath,
                     memory,
                     maxPlayers,
                     maxInstances,
                     save,
-                    serverProperties,
+                    parsedConfigs.serverProperties(),
+                    parsedConfigs.yamlConfigs(),
                     annotations,
                     volumes
             );
@@ -263,6 +272,36 @@ public final class BlueprintRepository {
         return value.toString().trim();
     }
 
+    private static String optionalString(
+            Map<String, Object> values,
+            String key,
+            Path path
+    ) throws BlueprintException {
+        Object value = values.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof String stringValue) || stringValue.isBlank()) {
+            throw error(path, "'" + key + "' must be a non-blank string");
+        }
+        return stringValue.trim();
+    }
+
+    private static void validateRelativePath(String value, String key, Path path)
+            throws BlueprintException {
+        if (value == null) {
+            return;
+        }
+        try {
+            Path configured = Path.of(value);
+            if (configured.isAbsolute() || configured.normalize().startsWith("..")) {
+                throw error(path, "'" + key + "' must be a contained relative path");
+            }
+        } catch (java.nio.file.InvalidPathException exception) {
+            throw error(path, "'" + key + "' is not a valid path");
+        }
+    }
+
     private static int optionalPositiveInt(
             Map<String, Object> values,
             String key,
@@ -279,6 +318,28 @@ public final class BlueprintRepository {
             throw error(path, "'" + key + "' must be a positive integer");
         }
         return number.intValue();
+    }
+
+    private static void validateDistributedLimits(
+            Map<String, Object> limits,
+            Path path
+    ) throws BlueprintException {
+        for (String key : List.of("swap", "io_weight", "cpu_limit", "disk_space")) {
+            Object value = limits.get(key);
+            if (value != null && (!(value instanceof Number number)
+                    || number.intValue() < 0
+                    || number.doubleValue() != number.intValue())) {
+                throw error(path, "'" + key + "' must be a non-negative integer");
+            }
+        }
+        Object threads = limits.get("threads");
+        if (threads != null && !(threads instanceof String)) {
+            throw error(path, "'threads' must be a string");
+        }
+        Object oomDisabled = limits.get("oom_disabled");
+        if (oomDisabled != null && !(oomDisabled instanceof Boolean)) {
+            throw error(path, "'oom_disabled' must be true or false");
+        }
     }
 
     private static boolean optionalBoolean(
@@ -313,59 +374,139 @@ public final class BlueprintRepository {
         Set<String> names = new java.util.HashSet<>();
         for (int index = 0; index < rawVolumes.size(); index++) {
             String section = "state.volumes[" + index + "]";
-            Map<String, Object> volume = asMap(rawVolumes.get(index), section, path);
-            requireOnlyKeys(volume, section, path, "name", "source", "target", "mode");
-
-            String name = requiredString(volume, "name", path);
+            BlueprintVolume parsed = rawVolumes.get(index) instanceof String shorthand
+                    ? parseVolumeShorthand(shorthand, section, path)
+                    : parseVolumeMap(rawVolumes.get(index), section, path);
+            String name = parsed.name();
             if (!names.add(name)) {
                 throw error(path, "duplicate volume name '" + name + "'");
             }
-            String source = requiredString(volume, "source", path);
-            String target = requiredString(volume, "target", path);
-            String mode = requiredString(volume, "mode", path);
-            if (!mode.equalsIgnoreCase("cow")) {
-                throw error(
-                        path,
-                        "'" + section + ".mode' must be 'cow'; SLS-LITE does not "
-                                + "support host-mounted '" + mode + "' volumes"
-                );
-            }
-            volumes.add(new BlueprintVolume(
-                    name,
-                    source,
-                    target,
-                    BlueprintVolume.Mode.COW
-            ));
+            volumes.add(parsed);
         }
         return List.copyOf(volumes);
     }
 
-    private static Map<String, String> parseServerProperties(
+    private static BlueprintVolume parseVolumeMap(
+            Object configured,
+            String section,
+            Path path
+    ) throws BlueprintException {
+        Map<String, Object> volume = asMap(configured, section, path);
+        requireOnlyKeys(volume, section, path, "name", "source", "target", "mode");
+        String name = requiredString(volume, "name", path);
+        String source = requiredString(volume, "source", path);
+        String target = requiredString(volume, "target", path);
+        String mode = optionalString(volume, "mode", path);
+        return volume(name, source, target, mode == null ? "cow" : mode, section, path);
+    }
+
+    private static BlueprintVolume parseVolumeShorthand(
+            String configured,
+            String section,
+            Path path
+    ) throws BlueprintException {
+        String[] parts = configured.split(":", -1);
+        if (parts.length != 3 && parts.length != 4) {
+            throw error(
+                    path,
+                    "'" + section + "' shorthand must be name:source:target[:mode]"
+            );
+        }
+        for (int index = 0; index < parts.length; index++) {
+            parts[index] = parts[index].trim();
+            if (parts[index].isEmpty()) {
+                throw error(path, "'" + section + "' shorthand contains a blank segment");
+            }
+        }
+        return volume(
+                parts[0],
+                parts[1],
+                parts[2],
+                parts.length == 4 ? parts[3] : "cow",
+                section,
+                path
+        );
+    }
+
+    private static BlueprintVolume volume(
+            String name,
+            String source,
+            String target,
+            String mode,
+            String section,
+            Path path
+    ) throws BlueprintException {
+        if (!mode.equalsIgnoreCase("cow")) {
+            throw error(
+                    path,
+                    "'" + section + ".mode' must be 'cow'; SLS-LITE does not "
+                            + "support host-mounted '" + mode + "' volumes"
+            );
+        }
+        return new BlueprintVolume(
+                name,
+                source,
+                target,
+                BlueprintVolume.Mode.COW
+        );
+    }
+
+    private static ParsedConfigs parseConfigs(
             Map<String, Object> server,
             Path path
     ) throws BlueprintException {
         Map<String, Object> configs = optionalMap(server, "configs", path);
-        requireOnlyKeys(configs, "server.configs", path, "server.properties");
         if (configs.isEmpty()) {
-            return Map.of();
+            return new ParsedConfigs(Map.of(), Map.of());
         }
 
-        Map<String, Object> config = requiredMap(configs, "server.properties", path);
-        requireOnlyKeys(
-                config,
-                "server.configs.server.properties",
-                path,
-                "parser", "find"
-        );
-        String parser = requiredString(config, "parser", path);
-        if (!parser.equalsIgnoreCase("properties")) {
-            throw error(
-                    path,
-                    "'server.configs.server.properties.parser' must be 'properties'"
+        Map<String, String> properties = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> yamlConfigs = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : configs.entrySet()) {
+            String target = entry.getKey();
+            validateRelativePath(target, "server.configs target", path);
+            Map<String, Object> config = asMap(
+                    entry.getValue(),
+                    "server.configs." + target,
+                    path
             );
+            requireOnlyKeys(
+                    config,
+                    "server.configs." + target,
+                    path,
+                    "parser", "find"
+            );
+            String parser = requiredString(config, "parser", path);
+            Map<String, Object> find = optionalMap(config, "find", path);
+            if (parser.equalsIgnoreCase("properties")) {
+                if (!target.equals("server.properties")) {
+                    throw error(
+                            path,
+                            "properties config target '" + target
+                                    + "' is not supported; use server.properties"
+                    );
+                }
+                properties.putAll(parseProperties(find, path));
+            } else if (parser.equalsIgnoreCase("yaml")) {
+                String lowerTarget = target.toLowerCase(Locale.ROOT);
+                if (!lowerTarget.endsWith(".yml") && !lowerTarget.endsWith(".yaml")) {
+                    throw error(path, "YAML config target must end in .yml or .yaml");
+                }
+                yamlConfigs.put(target, validateYamlMap(find, target, path));
+            } else {
+                throw error(
+                        path,
+                        "unsupported parser '" + parser + "' for server.configs." + target
+                );
+            }
         }
+        return new ParsedConfigs(Map.copyOf(properties), Map.copyOf(yamlConfigs));
+    }
 
-        Map<String, Object> configured = optionalMap(config, "find", path);
+    private static Map<String, String> parseProperties(
+            Map<String, Object> configured,
+            Path path
+    ) throws BlueprintException {
         Map<String, String> properties = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : configured.entrySet()) {
             String key = entry.getKey();
@@ -395,6 +536,54 @@ public final class BlueprintRepository {
         return Map.copyOf(properties);
     }
 
+    private static Map<String, Object> validateYamlMap(
+            Map<String, Object> configured,
+            String target,
+            Path path
+    ) throws BlueprintException {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : configured.entrySet()) {
+            result.put(
+                    entry.getKey(),
+                    validateYamlValue(
+                            entry.getValue(),
+                            "server.configs." + target + ".find." + entry.getKey(),
+                            path
+                    )
+            );
+        }
+        return Map.copyOf(result);
+    }
+
+    private static Object validateYamlValue(
+            Object value,
+            String key,
+            Path path
+    ) throws BlueprintException {
+        if (value instanceof String || value instanceof Number
+                || value instanceof Boolean) {
+            return value;
+        }
+        if (value == null) {
+            throw error(path, "'" + key + "' must not be null");
+        }
+        if (value instanceof Map<?, ?>) {
+            return validateYamlMap(asMap(value, key, path), key, path);
+        }
+        if (value instanceof List<?> list) {
+            java.util.ArrayList<Object> values = new java.util.ArrayList<>();
+            for (int index = 0; index < list.size(); index++) {
+                values.add(validateYamlValue(
+                        list.get(index),
+                        key + "[" + index + "]",
+                        path
+                ));
+            }
+            return List.copyOf(values);
+        }
+        throw error(path, "'" + key + "' contains an unsupported YAML value");
+    }
+
     private static void requireOnlyKeys(
             Map<String, Object> values,
             String section,
@@ -418,6 +607,12 @@ public final class BlueprintRepository {
 
     private static BlueprintException error(Path path, String message) {
         return new BlueprintException(path + ": " + message);
+    }
+
+    private record ParsedConfigs(
+            Map<String, String> serverProperties,
+            Map<String, Map<String, Object>> yamlConfigs
+    ) {
     }
 
     public record Snapshot(Map<String, Blueprint> values) {

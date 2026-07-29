@@ -97,6 +97,53 @@ final class InstanceDefinitionIdentityTest {
         );
     }
 
+    @Test
+    void fingerprintIncludesModernRuntimeAndYamlConfigAdaptations() {
+        Blueprint original = compatibleBlueprint(
+                "java_21",
+                "paper/1.21.11",
+                Map.of("bukkit.yml", Map.of(
+                        "settings", Map.of("allow-end", false)
+                ))
+        );
+
+        assertNotEquals(
+                InstanceDefinitionIdentity.from(original, profile()),
+                InstanceDefinitionIdentity.from(
+                        compatibleBlueprint(
+                                "java_25",
+                                "paper/1.21.11",
+                                original.yamlConfigs()
+                        ),
+                        profile()
+                )
+        );
+        assertNotEquals(
+                InstanceDefinitionIdentity.from(original, profile()),
+                InstanceDefinitionIdentity.from(
+                        compatibleBlueprint(
+                                "java_21",
+                                "paper/custom",
+                                original.yamlConfigs()
+                        ),
+                        profile()
+                )
+        );
+        assertNotEquals(
+                InstanceDefinitionIdentity.from(original, profile()),
+                InstanceDefinitionIdentity.from(
+                        compatibleBlueprint(
+                                "java_21",
+                                "paper/1.21.11",
+                                Map.of("bukkit.yml", Map.of(
+                                        "settings", Map.of("allow-end", true)
+                                ))
+                        ),
+                        profile()
+                )
+        );
+    }
+
     private static Blueprint blueprint(
             Map<String, String> properties,
             Map<String, Object> annotations
@@ -119,6 +166,30 @@ final class InstanceDefinitionIdentityTest {
                         "/world",
                         BlueprintVolume.Mode.COW
                 ))
+        );
+    }
+
+    private static Blueprint compatibleBlueprint(
+            String image,
+            String softwarePath,
+            Map<String, Map<String, Object>> yamlConfigs
+    ) {
+        return new Blueprint(
+                "fixture",
+                "Fixture",
+                "test",
+                "paper",
+                "1.21.11",
+                image,
+                softwarePath,
+                256,
+                20,
+                1,
+                true,
+                Map.of(),
+                yamlConfigs,
+                Map.of(),
+                List.of()
         );
     }
 

@@ -84,6 +84,69 @@ class JavaJarProcessSpecFactoryTest {
     }
 
     @Test
+    void mapsBlueprintJavaImageToConfiguredLocalRuntime() throws Exception {
+        JavaJarProcessSpecFactory factory = new JavaJarProcessSpecFactory(
+                temporaryDirectory
+        );
+        SoftwareProfile profile = new SoftwareProfile(
+                "paper",
+                net.slimelabs.slslite.software.SoftwareRuntime.JAVA_JAR,
+                net.slimelabs.slslite.software.SoftwareConfigurator.PAPER,
+                net.slimelabs.slslite.software.SoftwareSource.MANUAL,
+                net.slimelabs.slslite.software.SoftwareReleaseChannel.STABLE,
+                false,
+                "java",
+                Map.of(8, "runtimes/java-8/bin/java"),
+                "software/paper/{version}",
+                "paper.jar",
+                List.of("-Xmx{memory_mib}M"),
+                List.of(),
+                "Done",
+                180,
+                "stop",
+                30
+        );
+        Blueprint blueprint = blueprint("1.14.4", "java_8");
+
+        ProcessSpec spec = factory.create(
+                profile,
+                blueprint,
+                "game-abc123",
+                temporaryDirectory.resolve("instances/game-abc123"),
+                25571
+        );
+
+        assertEquals(
+                temporaryDirectory.resolve("runtimes/java-8/bin/java")
+                        .toAbsolutePath().normalize().toString(),
+                spec.command().getFirst()
+        );
+    }
+
+    @Test
+    void rejectsUnmappedJavaImageAndUnsafeSoftwareOverridePath() {
+        JavaJarProcessSpecFactory factory = new JavaJarProcessSpecFactory(
+                temporaryDirectory
+        );
+
+        ProcessSpecificationException imageFailure = assertThrows(
+                ProcessSpecificationException.class,
+                () -> factory.create(
+                        profile("paper.jar"),
+                        blueprint("1.14.4", "java_8"),
+                        "game-abc123",
+                        temporaryDirectory.resolve("instances/game-abc123"),
+                        25571
+                )
+        );
+        assertTrue(imageFailure.getMessage().contains("launch.java_versions"));
+        assertThrows(
+                ProcessSpecificationException.class,
+                () -> factory.resolveSoftwareOverridePath("../outside")
+        );
+    }
+
+    @Test
     void rejectsUnsafeVersionAndJarTraversal() {
         JavaJarProcessSpecFactory factory = new JavaJarProcessSpecFactory(temporaryDirectory);
         Path instanceDirectory = temporaryDirectory.resolve("instances/game-abc123");
@@ -157,6 +220,25 @@ class JavaJarProcessSpecFactoryTest {
                 1536,
                 false,
                 Map.of()
+        );
+    }
+
+    private static Blueprint blueprint(String version, String image) {
+        return new Blueprint(
+                "game",
+                "Game",
+                "game",
+                "paper",
+                version,
+                image,
+                null,
+                1536,
+                20,
+                1,
+                false,
+                Map.of(),
+                Map.of(),
+                List.of()
         );
     }
 }

@@ -426,7 +426,7 @@ public final class InstanceManager implements ServerController {
         try {
             Path baseDirectory = resolveBaseDirectory(
                     profile,
-                    blueprint.version(),
+                    blueprint,
                     () -> false
             );
             InstanceMetadata stopped = metadata
@@ -502,7 +502,7 @@ public final class InstanceManager implements ServerController {
             long softwareStartedAt = System.nanoTime();
             Path baseDirectory = resolveBaseDirectory(
                     profile,
-                    instance.blueprint().version(),
+                    instance.blueprint(),
                     instance::stopRequested
             );
             long softwareReadyAt = System.nanoTime();
@@ -550,6 +550,10 @@ public final class InstanceManager implements ServerController {
                     instance.port(),
                     instance.blueprint().maxPlayers(),
                     configuredProperties
+            );
+            YamlConfigEditor.apply(
+                    prepared,
+                    instance.blueprint().yamlConfigs()
             );
             if (profile.configurator() == SoftwareConfigurator.PAPER) {
                 PaperForwardingEditor.apply(prepared, forwardingConfig);
@@ -656,14 +660,27 @@ public final class InstanceManager implements ServerController {
 
     private Path resolveBaseDirectory(
             SoftwareProfile profile,
-            String version,
+            Blueprint blueprint,
             BooleanSupplier cancellationRequested
     ) throws ProcessSpecificationException {
+        if (blueprint.softwarePath() != null) {
+            if (cancellationRequested.getAsBoolean()) {
+                throw new ProcessSpecificationException(
+                        "Software path resolution was cancelled"
+                );
+            }
+            return processSpecFactory.resolveSoftwareOverridePath(
+                    blueprint.softwarePath()
+            );
+        }
         if (installationService == null) {
-            return processSpecFactory.resolveBaseDirectory(profile, version);
+            return processSpecFactory.resolveBaseDirectory(
+                    profile,
+                    blueprint.version()
+            );
         }
         CompletableFuture<Path> installation =
-                installationService.ensureInstalled(profile, version);
+                installationService.ensureInstalled(profile, blueprint.version());
         try {
             while (true) {
                 if (cancellationRequested.getAsBoolean()) {

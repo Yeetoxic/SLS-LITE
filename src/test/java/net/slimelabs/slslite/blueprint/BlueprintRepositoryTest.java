@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -167,6 +168,105 @@ class BlueprintRepositoryTest {
         assertEquals("worlds/survival/main", volume.source());
         assertEquals("/world", volume.target());
         assertEquals(BlueprintVolume.Mode.COW, volume.mode());
+    }
+
+    @Test
+    void loadsImagePathAndShorthandVolumesWithoutSourceWorlds() throws Exception {
+        write("archives/slsmp1.yml", """
+                blueprint:
+                  id: slsmp1
+                  name: SLSMP1
+                  type: archive
+                server:
+                  software: paper
+                  version: "1.21.1"
+                  image: java_21
+                  path: vanilla/1.21.1
+                state:
+                  volumes:
+                    - "world:worlds/archives/SLSMP1:/world:cow"
+                    - "nether:worlds/archives/SLSMP1/DIM-1:/world_nether/DIM-1"
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        Blueprint blueprint = repository.get("slsmp1").orElseThrow();
+        assertEquals("java_21", blueprint.image());
+        assertEquals("vanilla/1.21.1", blueprint.softwarePath());
+        assertEquals(2, blueprint.volumes().size());
+        assertEquals("worlds/archives/SLSMP1", blueprint.volumes().get(0).source());
+        assertEquals(BlueprintVolume.Mode.COW, blueprint.volumes().get(1).mode());
+    }
+
+    @Test
+    void loadsNestedYamlConfigPatches() throws Exception {
+        write("archive.yml", """
+                blueprint:
+                  id: archive
+                  name: Archive
+                  type: archive
+                server:
+                  software: paper
+                  version: "1.21.1"
+                  configs:
+                    bukkit.yml:
+                      parser: yaml
+                      find:
+                        settings:
+                          allow-end: true
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        Map<String, Object> bukkit = repository.get("archive")
+                .orElseThrow()
+                .yamlConfigs()
+                .get("bukkit.yml");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> settings = (Map<String, Object>) bukkit.get("settings");
+        assertEquals(true, settings.get("allow-end"));
+    }
+
+    @Test
+    void rejectsUnsafeSoftwarePathAndMalformedVolumeShorthand() throws Exception {
+        write("unsafe-path.yml", """
+                blueprint:
+                  id: unsafe-path
+                  name: Unsafe Path
+                  type: archive
+                server:
+                  software: paper
+                  version: "1.21.1"
+                  path: ../outside
+                """);
+
+        BlueprintException unsafePath = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(unsafePath.getMessage().contains("server.path"));
+
+        Files.delete(temporaryDirectory.resolve("unsafe-path.yml"));
+        write("bad-volume.yml", """
+                blueprint:
+                  id: bad-volume
+                  name: Bad Volume
+                  type: archive
+                server:
+                  software: paper
+                  version: "1.21.1"
+                state:
+                  volumes:
+                    - "world:missing-target"
+                """);
+
+        BlueprintException badVolume = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(badVolume.getMessage().contains("name:source:target[:mode]"));
     }
 
     @Test

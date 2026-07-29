@@ -30,21 +30,21 @@ fixtures exercise each row.
 | `blueprint.type` | Supported | Dynamic registry used by commands. |
 | `server.software` | Supported | References a local software profile. |
 | `server.version` | Supported | Exact version; providers never substitute another game version. |
-| `server.image` | Intentionally unsupported | Docker image selection has no local-child equivalent. |
-| `server.path` | Intentionally unsupported | Local cache layout is controlled by the software profile. |
+| `server.image` | Adapted | `java_<major>` selects a configured local Java executable; other Docker selectors fail at launch. |
+| `server.path` | Adapted | Resolves below the local software cache as a manually prepared base and bypasses provider installation. |
 | `server.limits.memory_limit` | Adapted | Local memory reservation and JVM limit, not container enforcement. |
-| `server.limits.swap` | Intentionally unsupported | Requires container/host enforcement. |
-| `server.limits.io_weight` | Intentionally unsupported | Requires container/host enforcement. |
-| `server.limits.cpu_limit` | Intentionally unsupported | No portable child-JVM CPU enforcement. |
-| `server.limits.disk_space` | Deferred | Useful for diagnostics/admission, but not enforceable portably yet. |
-| `server.limits.threads` | Intentionally unsupported | Container CPU affinity is outside the local baseline. |
-| `server.limits.oom_disabled` | Intentionally unsupported | Host/container OOM policy cannot be controlled safely. |
+| `server.limits.swap` | Metadata only | Validated but not enforced without a container/host boundary. |
+| `server.limits.io_weight` | Metadata only | Validated but not enforced without a container/host boundary. |
+| `server.limits.cpu_limit` | Metadata only | Validated but not enforced on portable child JVMs. |
+| `server.limits.disk_space` | Metadata only | Validated; diagnostics/admission remain deferred. |
+| `server.limits.threads` | Metadata only | Validated but CPU affinity is not applied. |
+| `server.limits.oom_disabled` | Metadata only | Validated but host/container OOM policy is not controlled. |
 | `server.configs.server.properties` with `parser: properties` | Supported | Applied atomically to the private instance. |
 | Other `properties` targets | Deferred | Parser exists conceptually; safe generic target handling is not implemented. |
-| `parser: yaml` | Deferred | Requires a structured, path-contained YAML patcher. |
+| `parser: yaml` | Adapted | Nested map patches for contained `.yml`/`.yaml` files merge recursively and write atomically. |
 | `parser: file` | Deferred | Requires explicit safe replacement semantics. |
 | `state.volumes` mapping form with `mode: cow` | Adapted | Portable transactional private copy. |
-| Volume shorthand `name:source:target[:mode]` | Deferred | Not parsed yet. |
+| Volume shorthand `name:source:target[:mode]` | Supported | Omitted mode defaults to `cow`. |
 | Multiple `cow` volumes targeting one directory | Deferred | Full SLS merges sources; SLS-LITE currently rejects overlap. |
 | `mode: ro` | Intentionally unsupported for now | A portable immutable-copy adaptation needs a defined contract. |
 | `mode: rw` | Intentionally unsupported | Shared mutable host state is unsafe for the default local model. |
@@ -131,3 +131,19 @@ Before this matrix is final:
 4. Implement or deliberately defer the useful local gaps.
 5. Run the resulting multi-world network.
 6. Review scope balance before Stage 3.
+
+## Corpus Evidence
+
+On 2026-07-29, the opt-in parser harness loaded the copied modern SlimeLabs
+corpus unchanged:
+
+- 54 blueprints;
+- registries: `adventure`, `archive`, `experimental`, `game`, and `minigame`;
+- explicit Java image selectors, one contained software path override,
+  properties and YAML config patches, distributed limit metadata, and shorthand
+  COW volumes.
+
+Volume source directories were intentionally not required for this parser run.
+The pinned upstream examples additionally exercise duplicate/multi-source COW
+merge and `ro`/`rw` modes; those remain part of the separate volume
+compatibility contract.

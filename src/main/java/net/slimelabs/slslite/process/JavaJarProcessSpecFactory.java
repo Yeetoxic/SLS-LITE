@@ -15,6 +15,7 @@ import java.util.regex.Pattern;
 public final class JavaJarProcessSpecFactory {
 
     private static final Pattern VALID_VERSION = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,63}");
+    private static final Pattern JAVA_IMAGE = Pattern.compile("java[_-](\\d+)");
     private static final Pattern UNRESOLVED_PLACEHOLDER = Pattern.compile("\\{[^}]+}");
 
     private final Path dataDirectory;
@@ -45,6 +46,34 @@ public final class JavaJarProcessSpecFactory {
         return resolveManagedPath(expanded, "software.base_directory");
     }
 
+    public Path resolveSoftwareOverridePath(String configured)
+            throws ProcessSpecificationException {
+        if (configured == null || configured.isBlank()) {
+            throw new ProcessSpecificationException("server.path must not be blank");
+        }
+        try {
+            Path relative = Path.of(configured);
+            if (relative.isAbsolute() || relative.normalize().startsWith("..")) {
+                throw new ProcessSpecificationException(
+                        "server.path must stay inside the software cache"
+                );
+            }
+            Path softwareRoot = dataDirectory.resolve("software").normalize();
+            Path resolved = softwareRoot.resolve(relative).normalize();
+            if (!resolved.startsWith(softwareRoot)) {
+                throw new ProcessSpecificationException(
+                        "server.path must stay inside the software cache"
+                );
+            }
+            return resolved;
+        } catch (InvalidPathException exception) {
+            throw new ProcessSpecificationException(
+                    "Invalid server.path: " + configured,
+                    exception
+            );
+        }
+    }
+
     public ProcessSpec create(
             SoftwareProfile profile,
             Blueprint blueprint,
@@ -65,7 +94,8 @@ public final class JavaJarProcessSpecFactory {
         );
         String javaExecutable = resolveJavaExecutable(
                 profile,
-                blueprint.version()
+                blueprint.version(),
+                blueprint.image()
         );
         Map<String, String> placeholders = placeholders(blueprint, instanceId, port);
 
@@ -99,18 +129,63 @@ public final class JavaJarProcessSpecFactory {
             SoftwareProfile profile,
             String minecraftVersion
     ) throws ProcessSpecificationException {
+        return resolveJavaExecutable(profile, minecraftVersion, null);
+    }
+
+    public String resolveJavaExecutable(
+            SoftwareProfile profile,
+            String minecraftVersion,
+            String image
+    ) throws ProcessSpecificationException {
         String configured = profile.javaExecutable();
-        if (minecraftVersion != null && !profile.javaExecutables().isEmpty()) {
-            int required = MinecraftJavaVersion.requiredMajor(
+        Integer required = imageJavaMajor(image);
+        if (required == null && minecraftVersion != null
+                && !profile.javaExecutables().isEmpty()) {
+            required = MinecraftJavaVersion.requiredMajor(
                     profile.configurator(),
                     minecraftVersion
             );
-            configured = profile.javaExecutables().getOrDefault(
-                    required,
-                    configured
-            );
+        }
+        if (required != null) {
+            String selected = profile.javaExecutables().get(required);
+            if (selected != null) {
+                configured = selected;
+            } else if (image != null
+                    && configured.equals("java")
+                    && Runtime.version().feature() != required) {
+                throw new ProcessSpecificationException(
+                        "Blueprint image '" + image + "' requires Java " + required
+                                + "; configure launch.java_versions.\"" + required
+                                + "\" for software '" + profile.id() + "'"
+                );
+            }
         }
         return resolveJavaExecutable(configured);
+    }
+
+    private static Integer imageJavaMajor(String image)
+            throws ProcessSpecificationException {
+        if (image == null || image.isBlank()) {
+            return null;
+        }
+        java.util.regex.Matcher matcher = JAVA_IMAGE.matcher(image);
+        if (!matcher.matches()) {
+            throw new ProcessSpecificationException(
+                    "Blueprint image '" + image + "' is a Docker selector with no "
+                            + "safe local Java mapping; use java_<major> or omit it"
+            );
+        }
+        try {
+            int major = Integer.parseInt(matcher.group(1));
+            if (major < 8) {
+                throw new NumberFormatException();
+            }
+            return major;
+        } catch (NumberFormatException exception) {
+            throw new ProcessSpecificationException(
+                    "Blueprint image '" + image + "' has an invalid Java major"
+            );
+        }
     }
 
     public List<String> configuredJavaExecutables(SoftwareProfile profile)

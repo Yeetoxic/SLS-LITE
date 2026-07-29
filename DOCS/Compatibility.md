@@ -19,7 +19,7 @@ progress.
 | Blueprint identity and limits | Supported | Modern names for ID, name, type, software, version, memory, players, and instances. |
 | `state.volumes` `cow` intent | Adapted for local mode | Transactional private directory copy; no daemon or host mount. |
 | Blueprint annotations | Adapted | Unknown annotations are accepted; local lifecycle keys and supported vSLS lifecycle/capacity keys are interpreted. |
-| Structured config patches | Partial | `server.properties` with `parser: properties` is supported; other formats are rejected. |
+| Structured config patches | Partial | `server.properties` and contained nested YAML map patches are supported; other formats are rejected. |
 | Software definitions | Adapted | Local profiles and constrained modern SLS definitions with shell-free Java invocation. |
 | Exact Paper/vanilla install | SLS-LITE only | Verified local cache and provider download after explicit EULA acceptance. |
 | Instance IDs | Supported | Human-readable `<blueprint>.<short-id>`. |
