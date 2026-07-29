@@ -174,13 +174,15 @@ public final class BlueprintRepository {
             int maxPlayers = optionalPositiveInt(
                     limits,
                     "max_players",
-                    DEFAULT_MAX_PLAYERS,
+                    VSLSBlueprintAnnotations.maxPlayers(annotations)
+                            .orElse(DEFAULT_MAX_PLAYERS),
                     path
             );
             int maxInstances = optionalPositiveInt(
                     limits,
                     "max_instances",
-                    DEFAULT_MAX_INSTANCES,
+                    VSLSBlueprintAnnotations.maxInstances(annotations)
+                            .orElse(DEFAULT_MAX_INSTANCES),
                     path
             );
             boolean save = optionalBoolean(root, "save", false, path);

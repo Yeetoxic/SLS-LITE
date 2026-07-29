@@ -32,7 +32,9 @@ class ServerPropertiesEditorTest {
                 java.util.Map.of(
                         "enable-command-block", "true",
                         "motd", "Blueprint Server",
-                        "server-port", "12345"
+                        "server-port", "12345",
+                        "query.port", "{port}",
+                        "custom-capacity", "{max_players}"
                 )
         );
 
@@ -49,6 +51,8 @@ class ServerPropertiesEditorTest {
         assertEquals("12", properties.getProperty("max-players"));
         assertEquals("127.0.0.1", properties.getProperty("server-ip"));
         assertEquals("25571", properties.getProperty("server-port"));
+        assertEquals("25571", properties.getProperty("query.port"));
+        assertEquals("12", properties.getProperty("custom-capacity"));
         assertFalse(Files.exists(
                 temporaryDirectory.resolve("server.properties.tmp")
         ));

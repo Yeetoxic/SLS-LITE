@@ -1,0 +1,29 @@
+# Derived from examples/example_vSLS.yaml in SLS v0.2.0.
+# Source commit: 8e8b1e3cf7d2157887764c16f11b8901f8241121
+# Source license: GNU Affero General Public License v3.0
+
+blueprint:
+  id: "slsmp1"
+  name: "SLSMP1"
+  type: "archive"
+
+server:
+  software: "paper"
+  version: "1.21.1"
+
+state:
+  volumes:
+    - name: "world"
+      source: "worlds/archives/SLSMP1"
+      target: "/world"
+      mode: cow
+
+annotations:
+  vsls:
+    dont-stop-when-empty: true
+    max-instances: 1
+    on-join:
+      - run: "say hello {PLAYER_NAME}"
+      - run: "playsound minecraft:block.note_block.bell ambient {PLAYER_NAME} ~ ~ ~ 1000 0"
+    matchmaking:
+      maxPlayers: 1

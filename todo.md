@@ -926,7 +926,14 @@ Prove that SLS-LITE remains part of the SLS ecosystem by speaking the same
 configuration language wherever a distributed feature has a safe local
 equivalent.
 
-- [ ] [S2] Pin the modern SLS release and commit used for this compatibility run.
+- [x] [S2] Pin SLS `v0.2.0` at commit
+      `8e8b1e3cf7d2157887764c16f11b8901f8241121` for this compatibility run.
+- [x] [S2] Publish the initial field-level SLS `v0.2.0` compatibility matrix.
+- [x] [S2] Add an attributed upstream vSLS blueprint fixture and verify
+      `dont-stop-when-empty`, `max-instances`, and matchmaking `maxPlayers`.
+- [x] [S2] Add a constrained modern SLS software-definition adapter with an
+      attributed Paper fixture, shell-free invocation parsing, supported
+      software config defaults, and explicit Docker/script boundaries.
 - [ ] [S2] Compare modern SLS and SLS-LITE feature by feature across
       configuration, blueprints, registries, matchmaking, lifecycle, commands,
       permissions, observability, installation, storage, and integrations.
@@ -948,9 +955,9 @@ equivalent.
       equivalents while rejecting unsupported behavior with actionable errors.
 - [ ] [S2] Preserve compatible names, annotations, registry types, limits,
       lifecycle intentions, and content declarations.
-- [ ] [S2] Implement and document modern SLS `allowed-client-versions`
-      compatibility using the bundled protocol-version mappings (including
-      pre-data-version releases) and reject unknown version names clearly.
+- [ ] [S2] Revisit announced `allowed-client-versions` support after upstream
+      publishes a stable schema and behavior. The field is absent from pinned
+      SLS `v0.2.0`; do not invent a compatibility contract in advance.
 - [ ] [S2] Define the modern SLS copy-on-write volume compatibility contract:
       preserve its isolation intent while documenting `reflink`, `overlay`, and
       portable-copy implementations as host-dependent local adaptations.

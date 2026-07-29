@@ -40,7 +40,11 @@ public final class ServerPropertiesEditor {
             }
         }
 
-        configuredProperties.forEach(properties::setProperty);
+        configuredProperties.forEach((key, value) -> properties.setProperty(
+                key,
+                value.replace("{port}", Integer.toString(port))
+                        .replace("{max_players}", Integer.toString(maxPlayers))
+        ));
 
         // Proxy-owned values must win over blueprint configuration.
         properties.setProperty("server-ip", "127.0.0.1");

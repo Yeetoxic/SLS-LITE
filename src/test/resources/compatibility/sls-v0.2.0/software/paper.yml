@@ -1,0 +1,59 @@
+# Derived from software/paper.yml in SLS v0.2.0.
+# Source commit: 8e8b1e3cf7d2157887764c16f11b8901f8241121
+# Source license: GNU Affero General Public License v3.0
+
+software:
+  id: "paper"
+  name: "Paper"
+
+  update:
+    enabled: true
+    url: https://github.com/jessefaler/SLS/blob/main/software/paper.yml
+
+  images:
+    "java_25": "ghcr.io/protoxon/images:java_25"
+    "java_21": "ghcr.io/protoxon/images:java_21"
+    "java_17": "ghcr.io/protoxon/images:java_17"
+    "java_16": "ghcr.io/protoxon/images:java_16"
+    "java_11": "ghcr.io/protoxon/images:java_11"
+    "java_8": "ghcr.io/protoxon/images:java_8"
+
+  mappings:
+    - java_8: "<=1.16.5"
+    - java_16: ">=1.17 <=1.17.1"
+    - java_17: ">=1.18 <=1.20.4"
+    - java_21: ">=1.20.5 <=1.21.11"
+    - java_25: ">=1.21.12"
+    - default: java_25
+
+  invocation: "java -Xms128M -XX:MaxRAMPercentage=95.0 -Dterminal.jline=false -Dterminal.ansi=true -XX:+PerfDisableSharedMem -XX:+ParallelRefProcEnabled -jar server.jar"
+  stop-command: "stop"
+  online-signal: ")! For help, type"
+
+  install-script:
+    entrypoint: bash
+    script: "#!/bin/ash\n# Upstream installation body is intentionally not executed by SLS-LITE.\n"
+    skip-scripts: false
+    warmup: true
+    warmup-timeout: 600
+    warmup-retries: 0
+    post-warmup-script: "rm -rf world world_nether world_the_end logs"
+    post-warmup-timeout: 120
+    warmup_failure_policy: fail
+
+  limits:
+    memory_limit: 4096
+    swap: 0
+    io_weight: 500
+    cpu_limit: 0
+    disk_space: 8192
+    threads: ""
+    oom_disabled: true
+
+  configs:
+    server.properties:
+      parser: properties
+      find:
+        server-ip: "0.0.0.0"
+        server-port: "{{server.build.default.port}}"
+        query.port: "{{server.build.default.port}}"

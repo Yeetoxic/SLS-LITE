@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -57,6 +59,83 @@ class BlueprintRepositoryTest {
         assertEquals("true", blueprint.serverProperties().get("enable-command-block"));
         assertEquals("8", blueprint.serverProperties().get("view-distance"));
         assertFalse(blueprint.save());
+    }
+
+    @Test
+    void loadsPinnedVSLSAnnotationsFromUpstreamFixture() throws Exception {
+        copyResource(
+                "compatibility/sls-v0.2.0/example_vsls.yml",
+                "archives/example_vsls.yml"
+        );
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        Blueprint blueprint = repository.get("slsmp1").orElseThrow();
+        assertEquals("archive", blueprint.type());
+        assertEquals(1, blueprint.maxPlayers());
+        assertEquals(1, blueprint.maxInstances());
+        assertTrue(BlueprintLifecyclePolicy.from(blueprint, 180).keepAlive());
+        assertEquals(
+                Duration.ofSeconds(180),
+                BlueprintLifecyclePolicy.from(blueprint, 180).idleTimeout()
+        );
+        assertTrue(blueprint.annotations().containsKey("vsls"));
+    }
+
+    @Test
+    void localLimitsOverrideVSLSAnnotationDefaults() throws Exception {
+        write("precedence.yml", """
+                blueprint:
+                  id: precedence
+                  name: Precedence
+                  type: minigame
+                server:
+                  software: paper
+                  version: "1.21.1"
+                  limits:
+                    max_players: 12
+                    max_instances: 3
+                annotations:
+                  vsls:
+                    max-instances: 5
+                    matchmaking:
+                      maxPlayers: 40
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        Blueprint blueprint = repository.get("precedence").orElseThrow();
+        assertEquals(12, blueprint.maxPlayers());
+        assertEquals(3, blueprint.maxInstances());
+    }
+
+    @Test
+    void ignoresInvalidVSLSAnnotationValues() throws Exception {
+        write("invalid-vsls.yml", """
+                blueprint:
+                  id: invalid-vsls
+                  name: Invalid vSLS annotations
+                  type: minigame
+                server:
+                  software: paper
+                  version: "1.21.1"
+                annotations:
+                  vsls:
+                    dont-stop-when-empty: enabled
+                    max-instances: unlimited
+                    matchmaking:
+                      maxPlayers: none
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        Blueprint blueprint = repository.get("invalid-vsls").orElseThrow();
+        assertEquals(20, blueprint.maxPlayers());
+        assertEquals(1, blueprint.maxInstances());
+        assertFalse(BlueprintLifecyclePolicy.from(blueprint, 180).keepAlive());
     }
 
     @Test
@@ -300,5 +379,16 @@ class BlueprintRepositoryTest {
         Path target = temporaryDirectory.resolve(name);
         Files.createDirectories(target.getParent());
         Files.writeString(target, content);
+    }
+
+    private void copyResource(String resource, String targetName) throws IOException {
+        Path target = temporaryDirectory.resolve(targetName);
+        Files.createDirectories(target.getParent());
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
+            if (input == null) {
+                throw new IOException("Missing test resource: " + resource);
+            }
+            Files.copy(input, target);
+        }
     }
 }

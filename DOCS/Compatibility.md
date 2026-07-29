@@ -4,9 +4,12 @@ SLS-LITE is an independent, single-host implementation of useful SLS concepts.
 It does not run under full SLS and does not require Protocube, a daemon, S4J,
 Docker, or another SLS installation.
 
-This document describes the pre-Stage 2 baseline. Stage 2 will pin a current
-modern SLS revision and replace broad claims with a tested field-by-field
-matrix from unmodified upstream definitions.
+Stage 2 is pinned to SLS `v0.2.0` at commit
+`8e8b1e3cf7d2157887764c16f11b8901f8241121`. The working field-level comparison
+and evidence tracker is
+[SLS v0.2.0 Compatibility Matrix](SLS_v0.2.0_Compatibility.md). This overview
+summarizes the current boundary while that detailed Stage 2 gate remains in
+progress.
 
 ## Current Feature Matrix
 
@@ -15,9 +18,9 @@ matrix from unmodified upstream definitions.
 | Dynamic registries | Supported | `blueprint.type` defines the registry. |
 | Blueprint identity and limits | Supported | Modern names for ID, name, type, software, version, memory, players, and instances. |
 | `state.volumes` `cow` intent | Adapted for local mode | Transactional private directory copy; no daemon or host mount. |
-| Blueprint annotations | Adapted | Unknown annotations are accepted; documented SLS-LITE lifecycle annotations are interpreted. |
+| Blueprint annotations | Adapted | Unknown annotations are accepted; local lifecycle keys and supported vSLS lifecycle/capacity keys are interpreted. |
 | Structured config patches | Partial | `server.properties` with `parser: properties` is supported; other formats are rejected. |
-| Software definitions | Adapted | Local Java-jar profiles with Paper, vanilla, or manual sources. |
+| Software definitions | Adapted | Local profiles and constrained modern SLS definitions with shell-free Java invocation. |
 | Exact Paper/vanilla install | SLS-LITE only | Verified local cache and provider download after explicit EULA acceptance. |
 | Instance IDs | Supported | Human-readable `<blueprint>.<short-id>`. |
 | Matchmaking and capacity | Supported | Ready-instance preference, queued slots, and bounded new-instance creation. |

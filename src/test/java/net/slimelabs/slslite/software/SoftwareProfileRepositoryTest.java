@@ -6,9 +6,13 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -81,6 +85,87 @@ class SoftwareProfileRepositoryTest {
     }
 
     @Test
+    void adaptsPinnedModernPaperDefinition() throws Exception {
+        copyResource(
+                "compatibility/sls-v0.2.0/software/paper.yml",
+                "upstream/minecraft/paper.yml"
+        );
+        SoftwareProfileRepository repository =
+                new SoftwareProfileRepository(temporaryDirectory);
+
+        repository.reload();
+
+        SoftwareProfile profile = repository.get("paper").orElseThrow();
+        assertEquals("Paper", profile.name());
+        assertEquals(SoftwareSource.PAPER, profile.source());
+        assertEquals(SoftwareConfigurator.PAPER, profile.configurator());
+        assertEquals("software/paper/{version}", profile.baseDirectory());
+        assertEquals("server.jar", profile.serverJar());
+        assertEquals("java", profile.javaExecutable());
+        assertTrue(profile.jvmArguments().contains("-Xmx{memory_mib}M"));
+        assertTrue(profile.jvmArguments().stream()
+                .noneMatch(argument -> argument.startsWith("-XX:MaxRAMPercentage=")));
+        assertEquals("{port}", profile.serverProperties().get("server-port"));
+        assertEquals("{port}", profile.serverProperties().get("query.port"));
+        assertTrue(Pattern.compile(profile.readinessPattern())
+                .matcher("Done (1.2s)! For help, type \"help\"").find());
+        assertEquals(600, profile.startupTimeoutSeconds());
+        assertEquals("stop", profile.stopCommand());
+        assertFalse(profile.acceptEula());
+    }
+
+    @Test
+    void rejectsShellSyntaxInModernInvocation() throws Exception {
+        write("shell.yml", """
+                software:
+                  id: unsafe
+                  name: Unsafe
+                  images:
+                    java_21: example/java:21
+                  invocation: "java -jar server.jar && touch escaped"
+                  stop-command: stop
+                  online-signal: Ready
+                """);
+        SoftwareProfileRepository repository =
+                new SoftwareProfileRepository(temporaryDirectory);
+
+        ConfigurationException exception = assertThrows(
+                ConfigurationException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("unsupported shell syntax"));
+    }
+
+    @Test
+    void rejectsUnsupportedModernSoftwareConfigTarget() throws Exception {
+        write("unsupported-config.yml", """
+                software:
+                  id: custom
+                  name: Custom
+                  images:
+                    java_21: example/java:21
+                  invocation: "java -jar server.jar"
+                  stop-command: stop
+                  online-signal: Ready
+                  configs:
+                    paper-global.yml:
+                      parser: yaml
+                      find:
+                        proxies.velocity.enabled: true
+                """);
+        SoftwareProfileRepository repository =
+                new SoftwareProfileRepository(temporaryDirectory);
+
+        ConfigurationException exception = assertThrows(
+                ConfigurationException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("software.configs.paper-global.yml"));
+    }
+
+    @Test
     void rejectsInvalidReadinessPattern() throws Exception {
         write("invalid.yml", """
                 software:
@@ -133,6 +218,19 @@ class SoftwareProfileRepositoryTest {
     }
 
     private void write(String name, String content) throws Exception {
-        Files.writeString(temporaryDirectory.resolve(name), content);
+        Path target = temporaryDirectory.resolve(name);
+        Files.createDirectories(target.getParent());
+        Files.writeString(target, content);
+    }
+
+    private void copyResource(String resource, String targetName) throws IOException {
+        Path target = temporaryDirectory.resolve(targetName);
+        Files.createDirectories(target.getParent());
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
+            if (input == null) {
+                throw new IOException("Missing test resource: " + resource);
+            }
+            Files.copy(input, target);
+        }
     }
 }

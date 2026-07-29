@@ -36,7 +36,11 @@ public record BlueprintLifecyclePolicy(
                 defaultIdleShutdownSeconds
         );
         return new BlueprintLifecyclePolicy(
-                blueprint.save() || keepAlive || !stopWhenEmpty || idleSeconds == 0,
+                blueprint.save()
+                        || keepAlive
+                        || !stopWhenEmpty
+                        || VSLSBlueprintAnnotations.dontStopWhenEmpty(annotations)
+                        || idleSeconds == 0,
                 Duration.ofSeconds(idleSeconds)
         );
     }

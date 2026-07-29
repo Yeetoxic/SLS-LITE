@@ -4,7 +4,7 @@ Status: adapted for local mode.
 
 SLS-LITE separates how software is launched, configured, and obtained. Paper is
 the recommended default, but it is not the only software SLS-LITE can run.
-Profiles are loaded from non-recursive `.yml` or `.yaml` files in
+Profiles are loaded recursively from `.yml` or `.yaml` files in
 `software-profiles/`; IDs must be globally unique.
 
 ## Profile Model
@@ -58,6 +58,52 @@ Profiles created before provider support remain `manual` unless their
 
 `runtime` currently accepts only `java-jar`. Unsupported enum values and unknown
 structural keys fail profile loading.
+
+## Modern SLS Definitions
+
+SLS-LITE directly recognizes the modern SLS `software:` shape documented by
+SLS and pinned for Stage 2 at `v0.2.0`:
+
+```yaml
+software:
+  id: paper
+  name: Paper
+  images:
+    java_21: ghcr.io/protoxon/images:java_21
+  mappings:
+    - java_21: ">=1.20.5 <=1.21.11"
+  invocation: "java -Xms128M -XX:MaxRAMPercentage=95.0 -jar server.jar"
+  stop-command: stop
+  online-signal: ")! For help, type"
+```
+
+The local adapter:
+
+- preserves `id` and `name`;
+- validates Docker `images` and version `mappings` as compatibility metadata,
+  but does not pull or run containers;
+- accepts only a directly tokenizable `java ... -jar <relative-file>`
+  invocation and rejects shell operators;
+- replaces container-relative `MaxRAMPercentage` or fixed `-Xmx` arguments
+  with `-Xmx{memory_mib}M`;
+- treats `online-signal` as a literal readiness substring;
+- maps the known `paper` and `vanilla` IDs to verified SLS-LITE providers;
+- treats other software IDs as manually installed Java servers;
+- merges supported software-level `server.properties` defaults before
+  blueprint patches and proxy-owned values;
+- validates but does not enforce container limits; and
+- never executes `install-script` or remote `update` behavior.
+
+Modern image mappings cannot identify an operator-supplied local Java binary.
+The adapted profile uses `java` from the host path. Use the SLS-LITE profile
+shape with `launch.java_versions` when multiple local Java installations are
+required.
+
+An unmodified modern Paper or vanilla definition does not record local EULA
+acceptance. Existing verified caches may be reused, but a new provider download
+remains blocked until acceptance is configured through an SLS-LITE profile.
+Importing an upstream definition is not treated as accepting the Minecraft
+EULA.
 
 ## Providers
 

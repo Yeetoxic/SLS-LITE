@@ -55,6 +55,7 @@ public record InstanceDefinitionIdentity(
                 writeValue(output, profile.serverJar());
                 writeValue(output, profile.jvmArguments());
                 writeValue(output, profile.serverArguments());
+                writeValue(output, profile.serverProperties());
                 writeValue(output, profile.readinessPattern());
                 writeValue(output, profile.startupTimeoutSeconds());
                 writeValue(output, profile.stopCommand());

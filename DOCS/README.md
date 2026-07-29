@@ -31,12 +31,13 @@ their schema:
 | Document | Purpose |
 | --- | --- |
 | [Compatibility](Compatibility.md) | Current feature scope and local adaptations. |
+| [SLS v0.2.0 Compatibility Matrix](SLS_v0.2.0_Compatibility.md) | Pinned Stage 2 field and feature comparison. |
 | [SLS Command Compatibility](SLS_Command_Compatibility.md) | Pinned vSLS command contract and remaining command work. |
 | [Protocol Compatibility](Protocol_Compatibility.md) | Tested SLS-Limbo and ViaVersion protocol paths. |
 
 Compatibility claims are versioned observations, not promises that every
-modern SLS file is already accepted. Establishing that complete supported
-subset is the Stage 2 gate.
+modern SLS file is already accepted. The Stage 2 matrix records the current
+supported subset and remaining evidence.
 
 ## Developers And Testers
 

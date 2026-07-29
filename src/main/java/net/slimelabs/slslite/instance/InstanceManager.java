@@ -541,11 +541,15 @@ public final class InstanceManager implements ServerController {
             }
             instance.configureOutput(outputConfig);
             writeMetadata(instance, InstanceState.PREPARING, null);
+            Map<String, String> configuredProperties = new java.util.LinkedHashMap<>(
+                    profile.serverProperties()
+            );
+            configuredProperties.putAll(instance.blueprint().serverProperties());
             ServerPropertiesEditor.applyManagedNetworkSettings(
                     prepared,
                     instance.port(),
                     instance.blueprint().maxPlayers(),
-                    instance.blueprint().serverProperties()
+                    configuredProperties
             );
             if (profile.configurator() == SoftwareConfigurator.PAPER) {
                 PaperForwardingEditor.apply(prepared, forwardingConfig);

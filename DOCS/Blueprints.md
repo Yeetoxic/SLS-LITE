@@ -45,7 +45,8 @@ annotations:
 
 Unknown structural fields are rejected. `annotations` is intentionally
 open-ended so modern SLS and third-party metadata can survive loading.
-SLS-LITE currently reads only the lifecycle keys documented below.
+SLS-LITE reads the local lifecycle keys and the vSLS compatibility keys
+documented below.
 
 ## Metadata
 
@@ -132,6 +133,28 @@ SLS-LITE reads these values under `annotations.sls-lite`:
 Persistent instances and the active managed lobby are excluded from ordinary
 idle cleanup regardless of annotation.
 
+SLS-LITE also accepts these established vSLS annotations:
+
+```yaml
+annotations:
+  vsls:
+    dont-stop-when-empty: true
+    max-instances: 2
+    matchmaking:
+      maxPlayers: 12
+```
+
+`dont-stop-when-empty` excludes the blueprint from idle cleanup.
+`max-instances` and `matchmaking.maxPlayers` supply capacity defaults when the
+SLS-LITE `server.limits.max_instances` and `max_players` extensions are
+omitted. Explicit local limits take precedence. Missing or invalid vSLS
+capacity values retain the constrained defaults of one instance and 20
+players.
+
+`matchmaking.gameType` and `on-join` are preserved as metadata but do not yet
+affect runtime behavior. Their compatibility semantics are tracked separately
+for Stage 2.
+
 `start-on-proxy-start` is roadmap work. Because annotations are open-ended, the
 key can be preserved in an imported blueprint, but it currently has no effect.
 
@@ -145,6 +168,6 @@ HTTP(S) URL. See [Resource Packs](Resource_Packs.md).
 
 The field shape above is the currently implemented subset, not the final Stage
 2 compatibility contract. Unsupported modern SLS structural fields are
-rejected with their path; unknown annotations are preserved in memory. Stage 2
-will test representative unmodified upstream definitions and publish a
-field-by-field matrix.
+rejected with their path; unknown annotations are preserved in memory. See the
+[SLS v0.2.0 compatibility matrix](SLS_v0.2.0_Compatibility.md) for the pinned,
+field-by-field boundary.

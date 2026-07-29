@@ -103,6 +103,9 @@ public final class SoftwareProfileRepository {
             Map<String, Object> launch = YamlValues.optionalMap(root, "launch", path);
             Map<String, Object> readiness = YamlValues.optionalMap(root, "readiness", path);
             Map<String, Object> shutdown = YamlValues.optionalMap(root, "shutdown", path);
+            if (ModernSLSSoftwareAdapter.supports(software)) {
+                return ModernSLSSoftwareAdapter.adapt(root, software, path);
+            }
             YamlValues.requireOnlyKeys(
                     root,
                     "",
@@ -113,7 +116,7 @@ public final class SoftwareProfileRepository {
                     software,
                     "software",
                     path,
-                    "id", "runtime", "configurator", "source", "channel",
+                    "id", "name", "runtime", "configurator", "source", "channel",
                     "accept_eula",
                     "base_directory", "server_jar"
             );
@@ -140,6 +143,7 @@ public final class SoftwareProfileRepository {
             if (!VALID_ID.matcher(id).matches()) {
                 throw YamlValues.error(path, "software.id must match " + VALID_ID.pattern());
             }
+            String name = YamlValues.optionalString(software, "name", id, path);
 
             String javaExecutable = YamlValues.optionalString(
                     launch, "java", "java", path
@@ -222,6 +226,7 @@ public final class SoftwareProfileRepository {
             try {
                 return new SoftwareProfile(
                         id,
+                        name,
                         runtime,
                         configurator,
                         source,
@@ -233,6 +238,7 @@ public final class SoftwareProfileRepository {
                         serverJar,
                         jvmArguments,
                         serverArguments,
+                        Map.of(),
                         readinessPattern,
                         startupTimeout,
                         stopCommand,
@@ -312,7 +318,7 @@ public final class SoftwareProfileRepository {
     }
 
     private List<Path> profileFiles() throws IOException {
-        try (Stream<Path> files = Files.list(directory)) {
+        try (Stream<Path> files = Files.walk(directory)) {
             return files.filter(Files::isRegularFile)
                     .filter(SoftwareProfileRepository::isYaml)
                     .sorted()
