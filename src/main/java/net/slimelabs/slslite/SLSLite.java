@@ -47,6 +47,7 @@ import net.slimelabs.slslite.security.AdminClaimService;
 import net.slimelabs.slslite.security.AdministratorStore;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import net.slimelabs.slslite.velocity.LocalJoinService;
+import net.slimelabs.slslite.velocity.BlueprintJoinActionService;
 import net.slimelabs.slslite.velocity.BackendProtocolSynchronizer;
 import net.slimelabs.slslite.velocity.ViaVersionProtocolSynchronizer;
 import net.slimelabs.slslite.velocity.VelocityBackendRegistry;
@@ -77,6 +78,7 @@ public final class SLSLite {
     private ProcessSupervisor processSupervisor;
     private InstanceManager instanceManager;
     private LocalJoinService joinService;
+    private BlueprintJoinActionService joinActions;
     private LobbyProvider lobbyProvider;
     private SLSLimboHandoffService limboHandoff;
     private IdleInstanceReaper idleReaper;
@@ -210,6 +212,7 @@ public final class SLSLite {
                     instanceManager,
                     Duration.ofSeconds(configuration.get().queueTimeoutSeconds())
             );
+            joinActions = new BlueprintJoinActionService(instanceManager, logger);
             LobbyProvider primaryLobby = new LocalLobbyProvider(
                     proxy,
                     blueprints,
@@ -411,6 +414,9 @@ public final class SLSLite {
         if (limboHandoff != null) {
             limboHandoff.connected(event.getPlayer(), event.getServer());
         }
+        if (joinActions != null) {
+            joinActions.connected(event.getPlayer(), event.getServer());
+        }
     }
 
     @Subscribe
@@ -420,6 +426,9 @@ public final class SLSLite {
         }
         if (joinService != null) {
             joinService.disconnect(event.getPlayer().getUniqueId());
+        }
+        if (joinActions != null) {
+            joinActions.disconnect(event.getPlayer().getUniqueId());
         }
     }
 

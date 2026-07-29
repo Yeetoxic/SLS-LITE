@@ -336,8 +336,53 @@ class LocalJoinServiceTest {
                     InstanceOperationException.class,
                     () -> service.join(thirdPlayer, "test", "smoke")
             );
-            assertTrue(exception.getMessage().contains("blueprint limit of 2"));
+            assertTrue(exception.getMessage().contains(
+                    "every blueprint has reached its instance limit"
+            ));
             assertEquals(2, fixture.controller().getAll().size());
+        }
+    }
+
+    @Test
+    void gameTypePoolReusesAReadyInstanceFromAnotherBlueprint() throws Exception {
+        PoolFixture fixture = poolFixture();
+        try (LocalJoinService service = fixture.service()) {
+            ManagedInstance variant = fixture.controller().start("variant");
+            variant.lifecycle().transitionTo(InstanceState.STARTING);
+            variant.lifecycle().transitionTo(InstanceState.READY);
+            variant.readyFuture().complete(variant);
+
+            LocalJoinService.JoinAttempt attempt = service.join(
+                    fixture.player(),
+                    "test",
+                    "smoke"
+            );
+
+            assertFalse(attempt.created());
+            assertEquals("variant", attempt.instance().blueprint().id());
+            assertEquals(
+                    ConnectionRequestBuilder.Status.SUCCESS,
+                    attempt.connection().get(1, TimeUnit.SECONDS).getStatus()
+            );
+        }
+    }
+
+    @Test
+    void gameTypePoolProvisionsAnotherBlueprintWhenRequestedCapIsReached()
+            throws Exception {
+        PoolFixture fixture = poolFixture();
+        try (LocalJoinService service = fixture.service()) {
+            ManagedInstance smoke = fixture.controller().start("smoke");
+            assertTrue(service.tryDrain(smoke.id()));
+
+            LocalJoinService.JoinAttempt attempt = service.join(
+                    fixture.player(),
+                    "test",
+                    "smoke"
+            );
+
+            assertTrue(attempt.created());
+            assertEquals("variant", attempt.instance().blueprint().id());
         }
     }
 
@@ -385,6 +430,62 @@ class LocalJoinServiceTest {
                 player,
                 playerId,
                 actionBars
+        );
+    }
+
+    private PoolFixture poolFixture() throws Exception {
+        Path blueprintDirectory = temporaryDirectory.resolve("pool-blueprints");
+        Files.createDirectories(blueprintDirectory);
+        for (String id : List.of("smoke", "variant")) {
+            Files.writeString(blueprintDirectory.resolve(id + ".yml"), """
+                    blueprint:
+                      id: %s
+                      name: %s
+                      type: test
+                    server:
+                      software: paper
+                      version: "1.21.11"
+                      limits:
+                        memory_limit: 512
+                        max_players: 1
+                        max_instances: 1
+                    annotations:
+                      vsls:
+                        matchmaking:
+                          gameType: party
+                          maxPlayers: 1
+                    """.formatted(id, id));
+        }
+        BlueprintRepository blueprints = new BlueprintRepository(blueprintDirectory);
+        blueprints.reload();
+        Map<String, Blueprint> definitions = blueprints.getAll().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        Blueprint::id,
+                        blueprint -> blueprint
+                ));
+        FakeController controller = new FakeController(
+                definitions,
+                temporaryDirectory
+        );
+        UUID playerId = UUID.randomUUID();
+        RegisteredServer registered = registeredServer();
+        Player player = player(
+                playerId,
+                "PoolTester",
+                registered,
+                connectionResult(registered),
+                Optional.empty()
+        );
+        ProxyServer proxy = proxy(player, registered);
+        return new PoolFixture(
+                new LocalJoinService(
+                        proxy,
+                        blueprints,
+                        controller,
+                        Duration.ofSeconds(5)
+                ),
+                controller,
+                player
         );
     }
 
@@ -536,21 +637,36 @@ class LocalJoinServiceTest {
     ) {
     }
 
+    private record PoolFixture(
+            LocalJoinService service,
+            FakeController controller,
+            Player player
+    ) {
+    }
+
     private static final class FakeController implements ServerController {
-        private final Blueprint blueprint;
+        private final Map<String, Blueprint> blueprints;
         private final Path directory;
         private final Map<String, ManagedInstance> instances = new LinkedHashMap<>();
         private int stopCount;
         private int sequence;
 
         private FakeController(Blueprint blueprint, Path directory) {
-            this.blueprint = blueprint;
+            this(Map.of(blueprint.id(), blueprint), directory);
+        }
+
+        private FakeController(Map<String, Blueprint> blueprints, Path directory) {
+            this.blueprints = Map.copyOf(blueprints);
             this.directory = directory;
         }
 
         @Override
         public ManagedInstance start(String blueprintId) {
-            String id = "smoke.test" + String.format("%02d", ++sequence);
+            Blueprint blueprint = blueprints.get(blueprintId);
+            if (blueprint == null) {
+                throw new IllegalArgumentException("Unknown blueprint " + blueprintId);
+            }
+            String id = blueprintId + ".test" + String.format("%02d", ++sequence);
             InstanceLifecycle lifecycle = new InstanceLifecycle(id);
             lifecycle.transitionTo(InstanceState.PREPARING);
             ManagedInstance instance = new ManagedInstance(

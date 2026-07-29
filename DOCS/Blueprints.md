@@ -67,7 +67,7 @@ documented below.
 | `server.version` | yes | Exact Minecraft/software version string. |
 | `server.image` | no | Modern `java_<major>` selector; requires a matching local Java runtime unless it matches the proxy JVM. |
 | `server.path` | no | Relative manually prepared base path below `plugins/sls-lite/software/`; bypasses provider installation. |
-| `server.limits.memory_limit` | no | Positive MiB; default `1024`. |
+| `server.limits.memory_limit` | no | Positive MiB; inherits a modern software definition's `limits.memory_limit`, otherwise defaults to `1024`. |
 | `server.limits.max_players` | no | Positive slots per instance; default `20`. |
 | `server.limits.max_instances` | no | Positive concurrent instances; default `1`. |
 | `save` | no | Boolean persistence policy; default `false`. |
@@ -257,6 +257,9 @@ annotations:
     max-instances: 2
     matchmaking:
       maxPlayers: 12
+      gameType: party
+    on-join:
+      - run: "say Welcome {PLAYER_NAME}"
 ```
 
 `dont-stop-when-empty` excludes the blueprint from idle cleanup.
@@ -266,9 +269,17 @@ omitted. Explicit local limits take precedence. Missing or invalid vSLS
 capacity values retain the constrained defaults of one instance and 20
 players.
 
-`matchmaking.gameType` and `on-join` are preserved as metadata but do not yet
-affect runtime behavior. Their compatibility semantics are tracked separately
-for Stage 2.
+`matchmaking.gameType` groups blueprints into one local matchmaking pool. A
+join still names a blueprint in its normal `blueprint.type` registry, but
+SLS-LITE may reuse or provision another blueprint with the same game type when
+capacity requires it.
+
+`on-join` accepts at most 32 single-line `run` actions of at most 4096
+characters each. SLS-LITE sends them to the managed backend console after the
+player connects and replaces `{PLAYER_NAME}` and `{PLAYER_UUID}` with the
+connecting player's identity. Actions run once per backend transition and are
+cleared when the player disconnects. Malformed actions reject the definition
+during reload.
 
 `start-on-proxy-start` is roadmap work. Because annotations are open-ended, the
 key can be preserved in an imported blueprint, but it currently has no effect.

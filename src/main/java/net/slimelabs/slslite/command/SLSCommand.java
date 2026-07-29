@@ -1718,6 +1718,13 @@ public final class SLSCommand implements SimpleCommand {
             boolean reset
     ) {
         String operation = reset ? "reset" : "restart";
+        if (!lobbyProvider.beginIntentionalStop(instanceId)) {
+            source.sendMessage(CommandMessages.message(
+                    "The active lobby is already draining or changed.",
+                    NamedTextColor.RED
+            ));
+            return;
+        }
         logger.warn(
                 "Forced offline managed lobby {} requested by {} for {}",
                 operation,
@@ -1738,6 +1745,7 @@ public final class SLSCommand implements SimpleCommand {
                                 NamedTextColor.GREEN
                         ));
                     } else {
+                        lobbyProvider.cancelIntentionalStop(instanceId);
                         source.sendMessage(CommandMessages.message(
                                 capitalize(operation) + " failed: "
                                         + rootMessage(failure),

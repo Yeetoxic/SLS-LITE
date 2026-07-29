@@ -2,10 +2,14 @@ package net.slimelabs.slslite.blueprint;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlueprintCorpusCompatibilityIT {
 
@@ -17,12 +21,24 @@ class BlueprintCorpusCompatibilityIT {
                 "Set -Dsls.compatibility.blueprints=<directory>"
         );
 
-        BlueprintRepository repository = new BlueprintRepository(
-                Path.of(configured)
-        );
+        Path corpus = Path.of(configured);
+        BlueprintRepository repository = new BlueprintRepository(corpus);
         repository.reload();
 
-        assertFalse(repository.getAll().isEmpty(), "Blueprint corpus is empty");
+        Path manifest = corpus.resolve("EXPECTED_BLUEPRINT_IDS.txt");
+        assertTrue(Files.isRegularFile(manifest), "Corpus ID manifest is missing");
+        Set<String> expectedIds;
+        try (var lines = Files.lines(manifest)) {
+            expectedIds = lines
+                    .map(String::trim)
+                    .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+                    .collect(Collectors.toUnmodifiableSet());
+        }
+        Set<String> actualIds = repository.getAll().stream()
+                .map(Blueprint::id)
+                .collect(Collectors.toUnmodifiableSet());
+
+        assertEquals(expectedIds, actualIds, "Blueprint corpus IDs differ from its manifest");
         System.out.printf(
                 "Loaded %d blueprints across registries %s%n",
                 repository.getAll().size(),

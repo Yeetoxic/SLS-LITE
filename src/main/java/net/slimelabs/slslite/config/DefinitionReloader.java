@@ -25,9 +25,15 @@ public final class DefinitionReloader {
                 ? softwareProfiles.loadSnapshot()
                 : softwareProfiles.snapshot();
 
+        java.util.Map<String, net.slimelabs.slslite.blueprint.Blueprint>
+                resolvedBlueprints = DefinitionCatalog.resolveBlueprints(
+                        blueprintCandidate.values(),
+                        softwareCandidate.values()
+                );
+
         ConfigurationValidator.validate(
                 config,
-                blueprintCandidate.getAll(),
+                resolvedBlueprints.values(),
                 softwareCandidate.getAll()
         );
 
@@ -37,7 +43,7 @@ public final class DefinitionReloader {
             );
         }
         blueprints.catalog().install(
-                blueprintCandidate.values(),
+                resolvedBlueprints,
                 softwareCandidate.values()
         );
     }

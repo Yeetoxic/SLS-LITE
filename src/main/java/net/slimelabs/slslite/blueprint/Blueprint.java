@@ -21,7 +21,9 @@ public record Blueprint(
         Map<String, Object> annotations,
         List<BlueprintVolume> volumes,
         List<BlueprintCopy> copies,
-        Map<String, String> environment
+        Map<String, String> environment,
+        boolean inheritsSoftwareMemory,
+        boolean inheritsSoftwareImage
 ) {
 
     public Blueprint {
@@ -33,10 +35,79 @@ public record Blueprint(
         serverProperties = Map.copyOf(serverProperties);
         yamlConfigs = copyYamlConfigs(yamlConfigs);
         textFileConfigs = copyTextFileConfigs(textFileConfigs);
-        annotations = Map.copyOf(annotations);
+        annotations = immutableAnnotationMap(annotations);
         volumes = List.copyOf(volumes);
         copies = List.copyOf(copies);
         environment = validateEnvironment(environment);
+    }
+
+    public Blueprint(
+            String id,
+            String name,
+            String type,
+            String software,
+            String version,
+            String image,
+            String softwarePath,
+            int memoryLimitMiB,
+            int maxPlayers,
+            int maxInstances,
+            boolean save,
+            Map<String, String> serverProperties,
+            Map<String, Map<String, Object>> yamlConfigs,
+            Map<String, Map<String, String>> textFileConfigs,
+            Map<String, Object> annotations,
+            List<BlueprintVolume> volumes,
+            List<BlueprintCopy> copies,
+            Map<String, String> environment
+    ) {
+        this(
+                id,
+                name,
+                type,
+                software,
+                version,
+                image,
+                softwarePath,
+                memoryLimitMiB,
+                maxPlayers,
+                maxInstances,
+                save,
+                serverProperties,
+                yamlConfigs,
+                textFileConfigs,
+                annotations,
+                volumes,
+                copies,
+                environment,
+                false,
+                false
+        );
+    }
+
+    public Blueprint withSoftwareDefaults(int memoryLimit, String selectedImage) {
+        return new Blueprint(
+                id,
+                name,
+                type,
+                software,
+                version,
+                inheritsSoftwareImage ? selectedImage : image,
+                softwarePath,
+                inheritsSoftwareMemory ? memoryLimit : memoryLimitMiB,
+                maxPlayers,
+                maxInstances,
+                save,
+                serverProperties,
+                yamlConfigs,
+                textFileConfigs,
+                annotations,
+                volumes,
+                copies,
+                environment,
+                inheritsSoftwareMemory,
+                inheritsSoftwareImage
+        );
     }
 
     public Blueprint(
@@ -75,7 +146,9 @@ public record Blueprint(
                 annotations,
                 volumes,
                 List.of(),
-                Map.of()
+                Map.of(),
+                false,
+                false
         );
     }
 
@@ -382,6 +455,28 @@ public record Blueprint(
         java.util.LinkedHashMap<String, Object> copied = new java.util.LinkedHashMap<>();
         values.forEach((key, value) -> copied.put(key, copyValue(value)));
         return Map.copyOf(copied);
+    }
+
+    private static Map<String, Object> immutableAnnotationMap(
+            Map<String, Object> configured
+    ) {
+        java.util.LinkedHashMap<String, Object> copied = new java.util.LinkedHashMap<>();
+        configured.forEach((key, value) -> copied.put(key, copyAnnotationValue(value)));
+        return java.util.Collections.unmodifiableMap(copied);
+    }
+
+    private static Object copyAnnotationValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            java.util.LinkedHashMap<Object, Object> copied = new java.util.LinkedHashMap<>();
+            map.forEach((key, nested) -> copied.put(key, copyAnnotationValue(nested)));
+            return java.util.Collections.unmodifiableMap(copied);
+        }
+        if (value instanceof List<?> list) {
+            java.util.ArrayList<Object> copied = new java.util.ArrayList<>(list.size());
+            list.forEach(valueItem -> copied.add(copyAnnotationValue(valueItem)));
+            return java.util.Collections.unmodifiableList(copied);
+        }
+        return value;
     }
 
     private static Object copyValue(Object value) {

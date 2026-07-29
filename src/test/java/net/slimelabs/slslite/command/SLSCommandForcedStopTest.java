@@ -279,7 +279,7 @@ class SLSCommandForcedStopTest {
                 "--force"
         ));
 
-        assertEquals(0, lobby.begins);
+        assertEquals(1, lobby.begins);
         assertEquals(0, lobby.evacuations);
         assertEquals(1, lobby.cycles);
         assertTrue(lobby.lastReset);

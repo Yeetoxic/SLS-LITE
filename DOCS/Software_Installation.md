@@ -72,6 +72,9 @@ software:
     java_21: ghcr.io/protoxon/images:java_21
   mappings:
     - java_21: ">=1.20.5 <=1.21.11"
+    - default: java_21
+  limits:
+    memory_limit: 4096
   invocation: "java -Xms128M -XX:MaxRAMPercentage=95.0 -jar server.jar"
   stop-command: stop
   online-signal: ")! For help, type"
@@ -80,8 +83,11 @@ software:
 The local adapter:
 
 - preserves `id` and `name`;
-- validates Docker `images` and version `mappings` as compatibility metadata,
-  but does not pull or run containers;
+- validates Docker `images` and version `mappings`, then uses the first matching
+  mapping (or `default`) as the local Java selector when a blueprint omits
+  `server.image`; it does not pull or run containers;
+- supplies `limits.memory_limit` to blueprints that omit their own memory
+  reservation;
 - accepts only a directly tokenizable `java ... -jar <relative-file>`
   invocation and rejects shell operators;
 - replaces container-relative `MaxRAMPercentage` or fixed `-Xmx` arguments
@@ -94,10 +100,11 @@ The local adapter:
 - validates but does not enforce container limits; and
 - never executes `install-script` or remote `update` behavior.
 
-Modern image mappings cannot identify an operator-supplied local Java binary.
-The adapted profile uses `java` from the host path. Use the SLS-LITE profile
-shape with `launch.java_versions` when multiple local Java installations are
-required.
+Modern image values remain container references and are never executed.
+Mapping keys such as `java_17`, `java_21`, and `java_25` select an
+operator-configured local Java runtime. Use the SLS-LITE profile shape with
+`launch.java_versions` when multiple local Java installations are required;
+launch fails clearly when the selected Java major is unavailable.
 
 An unmodified modern Paper or vanilla definition does not record local EULA
 acceptance. Existing verified caches may be reused, but a new provider download

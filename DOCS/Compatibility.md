@@ -18,12 +18,12 @@ progress.
 | Dynamic registries | Supported | `blueprint.type` defines the registry. |
 | Blueprint identity and limits | Supported | Modern names for ID, name, type, software, version, memory, players, and instances. |
 | `state.volumes` | Adapted for local mode | Transactional `cow` merge and private-snapshot `ro`; `rw` loads but cannot launch without unsafe shared writable mounts. |
-| Blueprint annotations | Adapted | Unknown annotations are accepted; local lifecycle keys and supported vSLS lifecycle/capacity keys are interpreted. |
+| Blueprint annotations | Adapted | Unknown annotation trees and nulls are preserved; local lifecycle keys plus vSLS lifecycle, capacity, `gameType`, and bounded `on-join` keys are interpreted. |
 | Structured config patches | Partial | `server.properties`, contained nested YAML maps, and atomic text line-prefix patches are supported; JSON, XML, INI, and arbitrary properties targets are rejected. |
 | Software definitions | Adapted | Local profiles and constrained modern SLS definitions with shell-free Java invocation. |
 | Exact Paper/vanilla install | SLS-LITE only | Verified local cache and provider download after explicit EULA acceptance. |
 | Instance IDs | Supported | Human-readable `<blueprint>.<short-id>`. |
-| Matchmaking and capacity | Supported | Ready-instance preference, queued slots, and bounded new-instance creation. |
+| Matchmaking and capacity | Supported | Ready-instance preference, queued slots, bounded new-instance creation, and vSLS `gameType` pools. |
 | Local lifecycle | Supported | Start, readiness, graceful stop, cancellation, idle cleanup, restart, and reset. |
 | Persistent instances | Adapted | Local ownership metadata, definition fingerprint, and startup reconciliation. |
 | Managed/external lobby | SLS-LITE only/adapted | Primary lobby can be local or pre-registered. |

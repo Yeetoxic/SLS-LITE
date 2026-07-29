@@ -7,6 +7,7 @@ import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.VSLSBlueprintAnnotations;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.InstanceState;
 import net.slimelabs.slslite.instance.IdleAdmissionControl;
@@ -99,18 +100,22 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                 );
             }
 
-            Optional<ManagedInstance> existing = selectInstance(blueprint);
+            List<Blueprint> pool = matchmakingPool(blueprint);
+            Optional<ManagedInstance> existing = selectInstance(pool);
             created = existing.isEmpty();
-            if (created && activeInstanceCount(blueprint) >= blueprint.maxInstances()) {
+            Blueprint provision = created
+                    ? provisionBlueprint(blueprint, pool).orElse(null)
+                    : null;
+            if (created && provision == null) {
                 throw new InstanceOperationException(
-                        "All instances of " + registry + "/" + server
-                                + " are full and the blueprint limit of "
-                                + blueprint.maxInstances() + " instance(s) has been reached"
+                        "All instances in matchmaking pool '"
+                                + gameType(blueprint) + "' are full and every "
+                                + "blueprint has reached its instance limit"
                 );
             }
             ManagedInstance instance = existing.isPresent()
                     ? existing.get()
-                    : instances.start(blueprint.id());
+                    : instances.start(provision.id());
             if (created) {
                 queueOwnedInstances.add(instance.id());
             }
@@ -289,17 +294,57 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         scheduler.shutdownNow();
     }
 
-    private Optional<ManagedInstance> selectInstance(Blueprint blueprint) {
+    private Optional<ManagedInstance> selectInstance(List<Blueprint> pool) {
+        Set<String> blueprintIds = pool.stream()
+                .map(Blueprint::id)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
         return instances.getAll().stream()
-                .filter(instance -> instance.blueprint().id().equals(blueprint.id()))
+                .filter(instance -> blueprintIds.contains(instance.blueprint().id()))
                 .filter(this::isActive)
                 .filter(instance -> !isDraining(instance.id()))
-                .filter(instance -> occupiedSlots(instance) < blueprint.maxPlayers())
+                .filter(instance -> occupiedSlots(instance)
+                        < instance.blueprint().maxPlayers())
                 .sorted(Comparator
                         .comparing((ManagedInstance instance) ->
                                 instance.state() == InstanceState.READY ? 0 : 1)
-                        .thenComparing(ManagedInstance::createdAt))
+                        .thenComparing(ManagedInstance::createdAt)
+                        .thenComparing(ManagedInstance::id))
                 .findFirst();
+    }
+
+    private List<Blueprint> matchmakingPool(Blueprint requested) {
+        String gameType = VSLSBlueprintAnnotations.gameType(requested.annotations())
+                .orElse(null);
+        if (gameType == null) {
+            return List.of(requested);
+        }
+        return blueprints.getAll().stream()
+                .filter(candidate -> VSLSBlueprintAnnotations.gameType(
+                        candidate.annotations()
+                ).filter(gameType::equals).isPresent())
+                .sorted(Comparator.comparing(
+                        candidate -> candidate.id().equals(requested.id()) ? "" : candidate.id()
+                ))
+                .toList();
+    }
+
+    private Optional<Blueprint> provisionBlueprint(
+            Blueprint requested,
+            List<Blueprint> pool
+    ) {
+        return pool.stream()
+                .filter(candidate -> activeInstanceCount(candidate)
+                        < candidate.maxInstances())
+                .sorted(Comparator
+                        .comparing((Blueprint candidate) ->
+                                candidate.id().equals(requested.id()) ? 0 : 1)
+                        .thenComparing(Blueprint::id))
+                .findFirst();
+    }
+
+    private static String gameType(Blueprint blueprint) {
+        return VSLSBlueprintAnnotations.gameType(blueprint.annotations())
+                .orElse(blueprint.id());
     }
 
     private long activeInstanceCount(Blueprint blueprint) {

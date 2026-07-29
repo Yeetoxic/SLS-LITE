@@ -140,6 +140,14 @@ public final class BlueprintRepository {
             ParsedConfigs parsedConfigs = parseConfigs(server, path);
             Map<String, Object> state = optionalMap(root, "state", path);
             Map<String, Object> annotations = optionalMap(root, "annotations", path);
+            VSLSBlueprintAnnotations.validate(annotations);
+            if (state.containsKey("mounts")) {
+                throw error(
+                        path,
+                        "'state.mounts' is not available in local mode; use a "
+                                + "contained state.volume with mode cow or ro"
+                );
+            }
             requireOnlyKeys(
                     root,
                     "",
@@ -214,7 +222,9 @@ public final class BlueprintRepository {
                     annotations,
                     volumes,
                     copies,
-                    environment
+                    environment,
+                    !limits.containsKey("memory_limit"),
+                    image == null
             );
         } catch (IOException exception) {
             throw new BlueprintException("Unable to read blueprint " + path, exception);

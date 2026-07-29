@@ -112,6 +112,19 @@ class SoftwareProfileRepositoryTest {
         assertEquals(600, profile.startupTimeoutSeconds());
         assertEquals("stop", profile.stopCommand());
         assertFalse(profile.acceptEula());
+        assertEquals(4096, profile.defaultMemoryLimitMiB());
+        assertEquals(
+                "java_17",
+                profile.imageForVersion("1.18.2").orElseThrow()
+        );
+        assertEquals(
+                "java_21",
+                profile.imageForVersion("1.21.11").orElseThrow()
+        );
+        assertEquals(
+                "java_25",
+                profile.imageForVersion("1.21.12").orElseThrow()
+        );
     }
 
     @Test

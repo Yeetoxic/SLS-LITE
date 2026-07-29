@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -77,6 +78,14 @@ class BlueprintRepositoryTest {
         assertEquals(1, blueprint.maxPlayers());
         assertEquals(1, blueprint.maxInstances());
         assertTrue(BlueprintLifecyclePolicy.from(blueprint, 180).keepAlive());
+        assertEquals(
+                List.of(
+                        "say hello {PLAYER_NAME}",
+                        "playsound minecraft:block.note_block.bell ambient "
+                                + "{PLAYER_NAME} ~ ~ ~ 1000 0"
+                ),
+                VSLSBlueprintAnnotations.onJoinCommands(blueprint.annotations())
+        );
         assertEquals(
                 Duration.ofSeconds(180),
                 BlueprintLifecyclePolicy.from(blueprint, 180).idleTimeout()
@@ -700,6 +709,119 @@ class BlueprintRepositoryTest {
 
         assertTrue(exception.getMessage().contains("server.limits.max_intances"));
         assertTrue(exception.getMessage().contains("server.limits.max_instances"));
+    }
+
+    @Test
+    void preservesNullValuesInArbitraryAnnotations() throws Exception {
+        write("annotations.yml", """
+                blueprint:
+                  id: annotations
+                  name: Annotations
+                  type: game
+                server:
+                  software: paper
+                  version: "1.21.11"
+                annotations:
+                  integration:
+                    optional: null
+                    values:
+                      - first
+                      - null
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        Map<?, ?> integration = (Map<?, ?>) repository.get("annotations")
+                .orElseThrow()
+                .annotations()
+                .get("integration");
+        assertTrue(integration.containsKey("optional"));
+        assertEquals(null, integration.get("optional"));
+        assertEquals(
+                java.util.Arrays.asList("first", null),
+                integration.get("values")
+        );
+    }
+
+    @Test
+    void rejectsHostMountsWithALocalModeAlternative() throws Exception {
+        write("mounts.yml", """
+                blueprint:
+                  id: mounts
+                  name: Mounts
+                  type: game
+                server:
+                  software: paper
+                  version: "1.21.11"
+                state:
+                  mounts:
+                    - /host/path:/home/container:ro
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        BlueprintException exception = assertThrows(
+                BlueprintException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("not available in local mode"));
+        assertTrue(exception.getMessage().contains("mode cow or ro"));
+    }
+
+    @Test
+    void rejectsUnsafeOnJoinCommandShape() throws Exception {
+        write("unsafe-on-join.yml", """
+                blueprint:
+                  id: unsafe-on-join
+                  name: Unsafe on-join
+                  type: game
+                server:
+                  software: paper
+                  version: "1.21.11"
+                annotations:
+                  vsls:
+                    on-join:
+                      - run: |-
+                          say first
+                          say second
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        BlueprintException exception = assertThrows(
+                BlueprintException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("on-join[0].run"));
+        assertTrue(exception.getMessage().contains("one line"));
+    }
+
+    @Test
+    void readsMatchmakingGameTypeWithoutChangingRegistryType() throws Exception {
+        write("pool.yml", """
+                blueprint:
+                  id: pool-map
+                  name: Pool Map
+                  type: minigame
+                server:
+                  software: paper
+                  version: "1.21.11"
+                annotations:
+                  vsls:
+                    matchmaking:
+                      gameType: party
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        Blueprint blueprint = repository.get("pool-map").orElseThrow();
+        assertEquals("minigame", blueprint.type());
+        assertEquals(
+                "party",
+                VSLSBlueprintAnnotations.gameType(blueprint.annotations()).orElseThrow()
+        );
     }
 
     @Test

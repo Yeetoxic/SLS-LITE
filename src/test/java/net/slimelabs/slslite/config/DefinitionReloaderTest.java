@@ -97,6 +97,75 @@ class DefinitionReloaderTest {
         reader.join();
     }
 
+    @Test
+    void resolvesModernSoftwareMemoryAndImageDefaultsAtomically() throws Exception {
+        Path blueprintsPath = Files.createDirectories(
+                temporaryDirectory.resolve("modern-blueprints")
+        );
+        Path profilesPath = Files.createDirectories(
+                temporaryDirectory.resolve("modern-profiles")
+        );
+        Files.writeString(blueprintsPath.resolve("test.yml"), """
+                blueprint:
+                  id: test
+                  name: Test
+                  type: game
+                server:
+                  software: paper
+                  version: "1.21.11"
+                """);
+        Files.writeString(profilesPath.resolve("paper.yml"), """
+                software:
+                  id: paper
+                  name: Paper
+                  images:
+                    java_21: example/java:21
+                    java_25: example/java:25
+                  mappings:
+                    - java_21: ">=1.20.5 <=1.21.11"
+                    - java_25: ">=1.21.12"
+                    - default: java_25
+                  invocation: "java -jar server.jar"
+                  stop-command: stop
+                  online-signal: Ready
+                  limits:
+                    memory_limit: 768
+                """);
+
+        DefinitionCatalog catalog = new DefinitionCatalog();
+        BlueprintRepository blueprints = new BlueprintRepository(
+                blueprintsPath,
+                catalog
+        );
+        SoftwareProfileRepository profiles = new SoftwareProfileRepository(
+                profilesPath,
+                catalog
+        );
+        profiles.reload();
+        blueprints.reload();
+
+        assertEquals(768, blueprints.get("test").orElseThrow().memoryLimitMiB());
+        assertEquals("java_21", blueprints.get("test").orElseThrow().image());
+
+        Files.writeString(profilesPath.resolve("paper.yml"), """
+                software:
+                  id: paper
+                  name: Paper
+                  images:
+                    java_21: example/java:21
+                  mappings:
+                    - java_21: ">=1.20.5 <=1.21.11"
+                    - default: java_21
+                  invocation: "java -jar server.jar"
+                  stop-command: stop
+                  online-signal: Ready
+                """);
+        profiles.reload();
+
+        assertEquals(1024, blueprints.get("test").orElseThrow().memoryLimitMiB());
+        assertEquals("java_21", blueprints.get("test").orElseThrow().image());
+    }
+
     private Repositories repositories() throws Exception {
         Path blueprintsPath = Files.createDirectories(
                 temporaryDirectory.resolve("blueprints")

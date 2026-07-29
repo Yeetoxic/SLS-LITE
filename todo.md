@@ -535,7 +535,7 @@ the local implementation has equivalent behavior.
   - [x] Make volume preparation cooperatively cancellable between files and
         retry waits so PREPARING cancellation does not finish copying an entire
         world before rollback.
-- [ ] Support blueprint `on-join` console actions with safe placeholders such as
+- [x] Support blueprint `on-join` console actions with safe placeholders such as
       player name and UUID.
 - [x] Add a force-join permission that can bypass blueprint capacity for
       administrators.
@@ -947,26 +947,45 @@ equivalent.
 - [x] [S2] Implement constrained modern `state.env` with portable validation,
       protected JVM/loader/path/SLS names, child-process propagation,
       fingerprints, and value-redacted operator visibility.
-- [ ] [S2] Compare modern SLS and SLS-LITE feature by feature across
+- [x] [S2] Compare modern SLS and SLS-LITE feature by feature across
       configuration, blueprints, registries, matchmaking, lifecycle, commands,
       permissions, observability, installation, storage, and integrations.
-- [ ] [S2] Classify every compared feature as `supported`, `adapted for local
+- [x] [S2] Classify every compared feature as `supported`, `adapted for local
       mode`, `intentionally unsupported`, or `deferred`, with a reason for every
       difference.
 - [ ] [S2] Perform a scope-balance review before Stage 3:
-  - Identify important shared SLS behavior that SLS-LITE is missing.
-  - Identify SLS-LITE behavior that is unnecessary, overbuilt, or outside its
+  - [x] Identify important shared SLS behavior that SLS-LITE is missing.
+  - [x] Identify SLS-LITE behavior that is unnecessary, overbuilt, or outside its
     single-host purpose.
-  - Confirm that retained features remain practical on constrained shared hosts.
-  - Obtain project-owner approval for the resulting scope and compatibility
+  - [x] Confirm that retained features remain practical on constrained shared hosts.
+  - [ ] Obtain project-owner approval for the resulting scope and compatibility
     matrix.
-- [ ] [S2] Define and publish the supported modern SLS configuration and blueprint
+- [x] [S2] Define and publish the supported modern SLS configuration and blueprint
       subset, including local adaptations and intentionally unsupported fields.
 - [x] [S2] Load representative pre-made modern SLS software definitions,
       configuration, and blueprints without requiring manual schema translation.
-- [ ] [S2] Map supported distributed concepts to their documented local
+- [x] [S2] Map supported distributed concepts to their documented local
       equivalents while rejecting unsupported behavior with actionable errors.
-- [ ] [S2] Preserve compatible names, annotations, registry types, limits,
+- [x] [S2] Make unsupported structural fields report an actionable local-mode
+      reason and safe alternative instead of only a generic unknown-key error.
+- [x] [S2] Inherit `software.limits.memory_limit` when a modern blueprint omits
+      `server.limits.memory_limit`; keep container-only limits as visible
+      metadata without claiming enforcement.
+- [x] [S2] Interpret modern software `mappings` so an omitted `server.image`
+      selects the correct configured local Java runtime for the game version.
+- [x] [S2] Implement bounded `annotations.vsls.on-join[].run` actions after a
+      successful player connection, including validated `{PLAYER_NAME}`
+      substitution and lifecycle cleanup.
+- [x] [S2] Implement local `annotations.vsls.matchmaking.gameType` pools without
+      replacing blueprint `type` as the operator-facing registry.
+- [x] [S2] Preserve arbitrary annotation trees containing YAML null values, or
+      reject them with a deliberate documented restriction; add an attributed
+      parser fixture for the chosen contract.
+- [x] [S2] Normalize only the copied compatibility corpus: exclude
+      `BLUEPRINT_TEMPLATE.yaml`, give `adventures/temple_of_doom` a YAML
+      extension, and assert expected blueprint IDs so equal counts cannot hide
+      skipped definitions. Do not modify the owner's original blueprint source.
+- [x] [S2] Preserve compatible names, annotations, registry types, limits,
       lifecycle intentions, and content declarations.
 - [ ] [S2] Revisit announced `allowed-client-versions` support after upstream
       publishes a stable schema and behavior. The field is absent from pinned

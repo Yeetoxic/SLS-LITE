@@ -48,10 +48,20 @@ final class ModernSLSSoftwareAdapter {
             throw YamlValues.error(path, "software.id must match " + VALID_ID.pattern());
         }
         String name = YamlValues.requiredString(software, "name", path);
-        validateImages(YamlValues.optionalMap(software, "images", path), path);
-        validateMappings(software.get("mappings"), path);
+        Map<String, String> images = parseImages(
+                YamlValues.optionalMap(software, "images", path),
+                path
+        );
+        ParsedMappings mappings = parseMappings(
+                software.get("mappings"),
+                images,
+                path
+        );
         validateUpdate(YamlValues.optionalMap(software, "update", path), path);
-        validateLimits(YamlValues.optionalMap(software, "limits", path), path);
+        int defaultMemoryLimitMiB = parseLimits(
+                YamlValues.optionalMap(software, "limits", path),
+                path
+        );
 
         Invocation invocation = parseInvocation(
                 YamlValues.requiredString(software, "invocation", path),
@@ -95,7 +105,11 @@ final class ModernSLSSoftwareAdapter {
                 Pattern.quote(onlineSignal),
                 startupTimeout,
                 stopCommand,
-                30
+                30,
+                defaultMemoryLimitMiB,
+                images,
+                mappings.entries(),
+                mappings.defaultImage()
         );
     }
 
@@ -115,13 +129,14 @@ final class ModernSLSSoftwareAdapter {
         };
     }
 
-    private static void validateImages(
+    private static Map<String, String> parseImages(
             Map<String, Object> images,
             Path path
     ) throws ConfigurationException {
         if (images.isEmpty()) {
             throw YamlValues.error(path, "missing required field: software.images");
         }
+        Map<String, String> parsed = new LinkedHashMap<>();
         for (Map.Entry<String, Object> image : images.entrySet()) {
             if (image.getKey().isBlank()
                     || !(image.getValue() instanceof String value)
@@ -131,17 +146,25 @@ final class ModernSLSSoftwareAdapter {
                         "software.images must map non-blank IDs to image references"
                 );
             }
+            parsed.put(image.getKey(), value.trim());
         }
+        return Map.copyOf(parsed);
     }
 
-    private static void validateMappings(Object configured, Path path)
+    private static ParsedMappings parseMappings(
+            Object configured,
+            Map<String, String> images,
+            Path path
+    )
             throws ConfigurationException {
         if (configured == null) {
-            return;
+            return new ParsedMappings(List.of(), null);
         }
         if (!(configured instanceof List<?> mappings)) {
             throw YamlValues.error(path, "'software.mappings' must be a list");
         }
+        List<SoftwareVersionMapping> parsed = new ArrayList<>();
+        String defaultImage = null;
         for (int index = 0; index < mappings.size(); index++) {
             Map<String, Object> mapping = YamlValues.asMap(
                     mappings.get(index),
@@ -157,7 +180,43 @@ final class ModernSLSSoftwareAdapter {
                                 + "] must contain one non-blank string mapping"
                 );
             }
+            String image = mapping.keySet().iterator().next();
+            String expression = (String) mapping.values().iterator().next();
+            if (image.equals("default")) {
+                if (defaultImage != null) {
+                    throw YamlValues.error(
+                            path,
+                            "software.mappings must contain at most one default"
+                    );
+                }
+                defaultImage = expression.trim();
+                if (!images.containsKey(defaultImage)) {
+                    throw YamlValues.error(
+                            path,
+                            "software.mappings[" + index
+                                    + "] default references unknown image '"
+                                    + defaultImage + "'"
+                    );
+                }
+                continue;
+            }
+            if (!images.containsKey(image)) {
+                throw YamlValues.error(
+                        path,
+                        "software.mappings[" + index + "] references unknown image '"
+                                + image + "'"
+                );
+            }
+            try {
+                parsed.add(new SoftwareVersionMapping(image, expression));
+            } catch (IllegalArgumentException exception) {
+                throw YamlValues.error(
+                        path,
+                        "software.mappings[" + index + "]: " + exception.getMessage()
+                );
+            }
         }
+        return new ParsedMappings(List.copyOf(parsed), defaultImage);
     }
 
     private static void validateUpdate(
@@ -174,7 +233,7 @@ final class ModernSLSSoftwareAdapter {
         }
     }
 
-    private static void validateLimits(
+    private static int parseLimits(
             Map<String, Object> limits,
             Path path
     ) throws ConfigurationException {
@@ -185,7 +244,9 @@ final class ModernSLSSoftwareAdapter {
                 "memory_limit", "swap", "io_weight", "cpu_limit", "disk_space",
                 "threads", "oom_disabled"
         );
-        YamlValues.optionalPositiveInt(limits, "memory_limit", 1024, path);
+        int memory = limits.containsKey("memory_limit")
+                ? YamlValues.optionalPositiveInt(limits, "memory_limit", 1024, path)
+                : 0;
         for (String key : List.of("swap", "io_weight", "cpu_limit", "disk_space")) {
             YamlValues.optionalNonNegativeInt(limits, key, 0, path);
         }
@@ -196,6 +257,7 @@ final class ModernSLSSoftwareAdapter {
             }
         }
         YamlValues.optionalBoolean(limits, "oom_disabled", false, path);
+        return memory;
     }
 
     private static int parseInstallScript(
@@ -415,6 +477,12 @@ final class ModernSLSSoftwareAdapter {
             String serverJar,
             List<String> jvmArguments,
             List<String> serverArguments
+    ) {
+    }
+
+    private record ParsedMappings(
+            List<SoftwareVersionMapping> entries,
+            String defaultImage
     ) {
     }
 }

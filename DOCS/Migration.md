@@ -52,15 +52,18 @@ Copy representative definitions into `blueprints/` and run:
 Unsupported structural fields are rejected with their YAML path. Do not delete
 an unsupported field merely to make parsing succeed until its operational
 intent is understood. Distributed node placement, container mounts, shared
-read-write storage, environment injection, non-properties config patches, and
-remote services do not yet have a general local compatibility contract.
+read-write storage, and remote services remain outside local mode. Contained
+`state.copy`, validated `state.env`, nested YAML patches, and line-prefix file
+patches have documented local equivalents. `state.mounts` is rejected with a
+contained `cow`/`ro` alternative.
 
-Unknown annotations are accepted, but only documented SLS-LITE lifecycle
-annotations affect local behavior.
+Unknown annotation trees, including YAML null values, are preserved. Documented
+SLS-LITE lifecycle annotations and vSLS lifecycle, capacity, `gameType`, and
+bounded `on-join` annotations affect local behavior.
 
-Stage 2 will test unmodified modern SLS fixtures and publish the authoritative
-accepted/adapted/rejected matrix. Until then, migration is reviewed per
-definition.
+Stage 2 uses an exact-ID corpus gate for unmodified modern SLS fixtures. The
+authoritative accepted/adapted/rejected matrix remains the source of truth for
+each definition.
 
 ## From An Earlier SLS-LITE Snapshot
 
@@ -96,4 +99,3 @@ A migration is complete only after:
 - lobby failure routes through SLS-Limbo without a reconnect loop;
 - commands and permissions match the operator's intended access model;
 - resource packs and protocol translation are tested with real clients.
-
