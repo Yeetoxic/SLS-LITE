@@ -45,9 +45,9 @@ fixtures exercise each row.
 | `parser: file` | Deferred | Requires explicit safe replacement semantics. |
 | `state.volumes` mapping form with `mode: cow` | Adapted | Portable transactional private copy. |
 | Volume shorthand `name:source:target[:mode]` | Supported | Omitted mode defaults to `cow`. |
-| Multiple `cow` volumes targeting one directory | Deferred | Full SLS merges sources; SLS-LITE currently rejects overlap. |
-| `mode: ro` | Intentionally unsupported for now | A portable immutable-copy adaptation needs a defined contract. |
-| `mode: rw` | Intentionally unsupported | Shared mutable host state is unsafe for the default local model. |
+| Multiple `cow` volumes targeting one directory | Adapted | Deterministic declaration-order merge; first source wins collisions, matching SLS v0.2.0 OverlayFS lower-layer precedence. |
+| `mode: ro` | Adapted | Private writable instance snapshot protects the source; not a strict read-only bind mount. |
+| `mode: rw` | Intentionally unsupported at runtime | Definition parses, but launch fails before preparation because shared mutable host state is unsafe in portable local mode. |
 | `state.mounts` | Intentionally unsupported | Arbitrary host mounts require daemon/container policy. |
 | `state.copy` | Deferred | Useful for plugins/configuration if sources and targets remain contained. |
 | `state.env` | Deferred | Useful after protected variables and launch boundaries are defined. |
@@ -144,6 +144,7 @@ corpus unchanged:
   COW volumes.
 
 Volume source directories were intentionally not required for this parser run.
-The pinned upstream examples additionally exercise duplicate/multi-source COW
-merge and `ro`/`rw` modes; those remain part of the separate volume
-compatibility contract.
+The pinned upstream example harness loaded 5 of 6 examples independently. This
+includes duplicate/multi-source COW merge and `ro`/`rw` definitions. The sole
+expected rejection is `example_config_patches.yaml`, which uses the separately
+deferred `parser: file` contract.

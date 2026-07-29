@@ -4,7 +4,8 @@ Status: SLS and SLS-LITE field shape; adapted for SLS-LITE local mode.
 
 SLS-LITE supports the modern SLS `state.volumes` structure for placing locally
 supplied worlds and other directory content into a managed server instance.
-The initial supported mode is `cow`.
+It recognizes the modern `cow`, `ro`, and `rw` modes, with explicit local
+adaptations and boundaries.
 
 ```yaml
 state:
@@ -29,9 +30,52 @@ isolation outcome as a portable directory copy:
 5. Resetting a persistent instance recopies both its software base and its
    clean volume sources.
 
+Multiple `cow` entries may target the same exact directory. SLS-LITE merges
+them in blueprint declaration order, matching the lower-layer order used by
+SLS v0.2.0:
+
+- directories merge;
+- the first source wins when the same path exists in multiple sources;
+- later sources fill paths that earlier sources do not contain;
+- repeated volume names are accepted because upstream examples use them for
+  same-target plugin merges.
+
 This baseline uses more disk space and startup time than filesystem-native
 copy-on-write. It works on ordinary shared-host filesystems without requiring
 Docker mounts, overlay filesystems, or elevated privileges.
+
+## Storage Strategy Contract
+
+Portable copying is the only active strategy today. Future host capability
+checks may select a reflink clone or native OverlayFS implementation, but that
+selection must not change blueprint behavior:
+
+- source content remains unchanged;
+- every instance receives an isolated writable view;
+- same-target sources keep declaration-order, first-source precedence;
+- reset reconstructs the view from clean sources;
+- failed preparation and cleanup do not leave an instance presented as ready;
+- unsupported native capabilities fall back to portable copying unless an
+  operator explicitly requires a native strategy.
+
+Reflink and OverlayFS support remain roadmap work. They must be verified for
+filesystem support, unclean shutdown recovery, cleanup, and real disk savings
+before becoming automatic.
+
+## Local `ro` and `rw` Policy
+
+SLS-LITE accepts all three modern mode names so compatible blueprints can be
+loaded and inspected without schema translation.
+
+`ro` is adapted to a private snapshot copy. The managed process may write to
+its instance copy, but the configured source directory is never mounted or
+modified. This preserves source protection and provider portability, but it is
+not a byte-for-byte equivalent of a read-only container bind mount.
+
+`rw` requires shared writable host state. SLS-LITE parses the definition, then
+rejects instance preparation with an actionable error before creating a
+partial instance. Use `cow`, or operate that backend outside SLS-LITE, when
+shared mutable state is required.
 
 ## Paths
 
@@ -56,7 +100,8 @@ Volume paths must use `/` separators. SLS-LITE rejects:
 - Targets that escape or select the instance root.
 - Symbolic links in a source path or anywhere inside copied content.
 - Sources inside the managed instances directory.
-- Overlapping volume targets.
+- Ancestor/descendant target overlaps such as `/world` and `/world/data`.
+- Same-target combinations unless every entry uses `cow`.
 - Targets that collide with files or directories from the software base.
 
 Preparation is transactional. If the software or any volume cannot be copied,
@@ -65,9 +110,8 @@ the previous instance directory.
 
 ## Current Limits
 
-- Only `mode: cow` is supported.
-- `rw` and `ro` host-mounted volumes are rejected because they would expose
-  shared mutable host state and behave differently across providers.
+- `cow` and local-snapshot `ro` use complete directory copies.
+- `rw` definitions are understood but cannot be launched in local mode.
 - Volume sources must already exist before the blueprint is started.
 - Operators must budget disk space for a complete copy per instance.
 - Do not modify a source directory while an instance is being prepared.

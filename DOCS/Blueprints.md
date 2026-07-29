@@ -133,8 +133,11 @@ properties targets remain unsupported.
 
 ## Volumes
 
-SLS-LITE accepts modern SLS `state.volumes` entries with `mode: cow`. The local
-portable implementation copies the source into each isolated instance.
+SLS-LITE accepts modern SLS `state.volumes` entries using `cow`, `ro`, or `rw`.
+The portable `cow` implementation copies and merges sources into each isolated
+instance. `ro` becomes a source-protecting private snapshot; `rw` parses but is
+rejected when an instance is prepared because shared writable mounts cannot be
+provided safely in portable local mode.
 
 Mapping and shorthand forms are accepted:
 
@@ -153,8 +156,10 @@ The shorthand shape is `name:source:target[:mode]`; omitted mode defaults to
 
 - `source` is relative to `plugins/sls-lite/`.
 - `target` is an instance path such as `/world`.
-- source paths, symlinks, traversal, overlap, and template collisions are
-  rejected.
+- exact same-target `cow` entries merge in declaration order, with the first
+  source winning file collisions.
+- source paths, symlinks, traversal, ancestor/descendant overlap, and template
+  collisions are rejected.
 
 See [Blueprint Volumes](Blueprint_Volumes.md) for transactional and filesystem
 details.

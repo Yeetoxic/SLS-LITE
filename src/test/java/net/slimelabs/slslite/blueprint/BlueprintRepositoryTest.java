@@ -85,6 +85,26 @@ class BlueprintRepositoryTest {
     }
 
     @Test
+    void loadsPinnedModernVolumeContractFixture() throws Exception {
+        copyResource(
+                "compatibility/sls-v0.2.0/example_volumes.yml",
+                "compatibility/example_volumes.yml"
+        );
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        Blueprint blueprint = repository.get("volume-contract").orElseThrow();
+        assertEquals(5, blueprint.volumes().size());
+        assertEquals("plugins", blueprint.volumes().get(1).name());
+        assertEquals("plugins", blueprint.volumes().get(2).name());
+        assertEquals("/plugins", blueprint.volumes().get(1).target());
+        assertEquals("/plugins", blueprint.volumes().get(2).target());
+        assertEquals(BlueprintVolume.Mode.RO, blueprint.volumes().get(3).mode());
+        assertEquals(BlueprintVolume.Mode.RW, blueprint.volumes().get(4).mode());
+    }
+
+    @Test
     void localLimitsOverrideVSLSAnnotationDefaults() throws Exception {
         write("precedence.yml", """
                 blueprint:
@@ -270,7 +290,7 @@ class BlueprintRepositoryTest {
     }
 
     @Test
-    void rejectsUnsupportedVolumeMode() throws Exception {
+    void loadsModernVolumeModes() throws Exception {
         write("world.yml", """
                 blueprint:
                   id: survival
@@ -284,7 +304,39 @@ class BlueprintRepositoryTest {
                     - name: world
                       source: worlds/survival/main
                       target: /world
-                      mode: rw
+                      mode: ro
+                    - data:worlds/survival/data:/data:rw
+                    - plugins:plugins/common:/plugins
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+        Blueprint blueprint = repository
+                .getAll()
+                .iterator()
+                .next();
+
+        assertEquals(BlueprintVolume.Mode.RO, blueprint.volumes().get(0).mode());
+        assertEquals(BlueprintVolume.Mode.RW, blueprint.volumes().get(1).mode());
+        assertEquals(BlueprintVolume.Mode.COW, blueprint.volumes().get(2).mode());
+    }
+
+    @Test
+    void rejectsUnknownVolumeMode() throws Exception {
+        write("world.yml", """
+                blueprint:
+                  id: survival
+                  name: Survival
+                  type: games
+                server:
+                  software: paper
+                  version: "26.1"
+                state:
+                  volumes:
+                    - name: world
+                      source: worlds/survival/main
+                      target: /world
+                      mode: bind
                 """);
 
         BlueprintException exception = assertThrows(
@@ -292,11 +344,11 @@ class BlueprintRepositoryTest {
                 () -> new BlueprintRepository(temporaryDirectory).reload()
         );
 
-        assertTrue(exception.getMessage().contains("must be 'cow'"));
+        assertTrue(exception.getMessage().contains("must be cow, ro, or rw"));
     }
 
     @Test
-    void rejectsDuplicateVolumeNames() throws Exception {
+    void allowsRepeatedVolumeNamesForModernCowMerges() throws Exception {
         write("world.yml", """
                 blueprint:
                   id: survival
@@ -313,16 +365,20 @@ class BlueprintRepositoryTest {
                       mode: cow
                     - name: world
                       source: worlds/two
-                      target: /world_nether
+                      target: /world
                       mode: cow
                 """);
 
-        BlueprintException exception = assertThrows(
-                BlueprintException.class,
-                () -> new BlueprintRepository(temporaryDirectory).reload()
-        );
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+        Blueprint blueprint = repository
+                .getAll()
+                .iterator()
+                .next();
 
-        assertTrue(exception.getMessage().contains("duplicate volume name 'world'"));
+        assertEquals(2, blueprint.volumes().size());
+        assertEquals("world", blueprint.volumes().get(0).name());
+        assertEquals("world", blueprint.volumes().get(1).name());
     }
 
     @Test

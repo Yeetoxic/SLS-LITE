@@ -1,0 +1,30 @@
+# Derived from examples/example_volumes.yaml and example_adding_plugins.yaml
+# in SLS v0.2.0.
+# Source commit: 8e8b1e3cf7d2157887764c16f11b8901f8241121
+# Source license: GNU Affero General Public License v3.0
+
+blueprint:
+  id: "volume-contract"
+  name: "Volume Contract"
+  type: "compatibility"
+
+server:
+  software: "paper"
+  version: "1.21.1"
+
+state:
+  volumes:
+    - name: "world"
+      source: "worlds/main"
+      target: "/world"
+      mode: cow
+    - name: "plugins"
+      source: "plugins/common"
+      target: "/plugins"
+      mode: cow
+    - name: "plugins"
+      source: "plugins/game"
+      target: "/plugins"
+      mode: cow
+    - assets:assets/shared:/assets:ro
+    - data:shared/data:/data:rw

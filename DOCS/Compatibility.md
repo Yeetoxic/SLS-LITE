@@ -17,7 +17,7 @@ progress.
 | --- | --- | --- |
 | Dynamic registries | Supported | `blueprint.type` defines the registry. |
 | Blueprint identity and limits | Supported | Modern names for ID, name, type, software, version, memory, players, and instances. |
-| `state.volumes` `cow` intent | Adapted for local mode | Transactional private directory copy; no daemon or host mount. |
+| `state.volumes` | Adapted for local mode | Transactional `cow` merge and private-snapshot `ro`; `rw` loads but cannot launch without unsafe shared writable mounts. |
 | Blueprint annotations | Adapted | Unknown annotations are accepted; local lifecycle keys and supported vSLS lifecycle/capacity keys are interpreted. |
 | Structured config patches | Partial | `server.properties` and contained nested YAML map patches are supported; other formats are rejected. |
 | Software definitions | Adapted | Local profiles and constrained modern SLS definitions with shell-free Java invocation. |

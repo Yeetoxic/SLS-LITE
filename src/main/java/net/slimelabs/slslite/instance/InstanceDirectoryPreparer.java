@@ -18,7 +18,9 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
@@ -300,10 +302,11 @@ public final class InstanceDirectoryPreparer {
                 : instancesRoot.toAbsolutePath().normalize();
         List<ResolvedVolume> resolved = new ArrayList<>();
         for (BlueprintVolume volume : volumes) {
-            if (volume.mode() != BlueprintVolume.Mode.COW) {
+            if (volume.mode() == BlueprintVolume.Mode.RW) {
                 throw new InstancePreparationException(
-                        "Unsupported volume mode for '" + volume.name() + "': "
-                                + volume.mode()
+                        "Volume '" + volume.name() + "' uses mode rw. SLS-LITE "
+                                + "cannot safely emulate a shared writable host mount; "
+                                + "use cow or manage this server outside SLS-LITE"
                 );
             }
 
@@ -316,8 +319,12 @@ public final class InstanceDirectoryPreparer {
                 );
             }
             for (ResolvedVolume previous : resolved) {
-                if (target.startsWith(previous.target())
-                        || previous.target().startsWith(target)) {
+                boolean sameCowTarget = target.equals(previous.target())
+                        && volume.mode() == BlueprintVolume.Mode.COW
+                        && previous.volume().mode() == BlueprintVolume.Mode.COW;
+                if (!sameCowTarget
+                        && (target.startsWith(previous.target())
+                        || previous.target().startsWith(target))) {
                     throw new InstancePreparationException(
                             "Volume targets overlap: '" + previous.volume().target()
                                     + "' and '" + volume.target() + "'"
@@ -445,20 +452,66 @@ public final class InstanceDirectoryPreparer {
             BooleanSupplier cancellationRequested
     )
             throws IOException, InstancePreparationException {
+        Map<Path, ResolvedVolume> appliedTargets = new LinkedHashMap<>();
         for (ResolvedVolume volume : volumes) {
             checkCancelled(cancellationRequested);
-            if (Files.exists(volume.target())) {
+            ResolvedVolume first = appliedTargets.get(volume.target());
+            if (first == null && Files.exists(volume.target())) {
                 throw new InstancePreparationException(
                         "Volume target collides with existing instance content: "
                                 + volume.volume().target()
                 );
             }
-            copyDirectory(
-                    volume.source(),
-                    volume.target(),
-                    cancellationRequested
-            );
+            if (first == null) {
+                copyDirectory(
+                        volume.source(),
+                        volume.target(),
+                        cancellationRequested
+                );
+                appliedTargets.put(volume.target(), volume);
+            } else {
+                mergeDirectoryFirstWins(
+                        volume.source(),
+                        volume.target(),
+                        cancellationRequested
+                );
+            }
         }
+    }
+
+    private void mergeDirectoryFirstWins(
+            Path source,
+            Path destination,
+            BooleanSupplier cancellationRequested
+    ) throws IOException {
+        Files.walkFileTree(source, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(
+                    Path directory,
+                    BasicFileAttributes attrs
+            ) throws IOException {
+                checkCancelled(cancellationRequested);
+                rejectSymbolicLink(directory, attrs);
+                Path target = destination.resolve(source.relativize(directory));
+                if (Files.exists(target) && !Files.isDirectory(target)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                Files.createDirectories(target);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                    throws IOException {
+                checkCancelled(cancellationRequested);
+                rejectSymbolicLink(file, attrs);
+                Path target = destination.resolve(source.relativize(file));
+                if (!Files.exists(target)) {
+                    copyFileWithRetry(file, target, cancellationRequested);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     private Path destination(String instanceId) throws InstancePreparationException {

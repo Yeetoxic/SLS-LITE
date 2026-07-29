@@ -66,6 +66,17 @@ plugin volume sources. It does not claim that every blueprint is launch-ready;
 runtime content, software, Java, memory, and unsupported volume modes remain
 separate gates.
 
+Run each example from the pinned SLS checkout independently:
+
+```powershell
+mvn "-Dtest=BlueprintExamplesCompatibilityIT" `
+  "-Dsls.compatibility.examples=target/upstream-sls-v0.2.0/examples" `
+  "-Dsls.compatibility.expectedRejected=example_config_patches.yaml" test
+```
+
+The expected-rejection list is exact: the test fails if a new example is
+rejected or if a listed gap starts loading and the list is not updated.
+
 ## Historical-World Fixture
 
 The primary integration network runs in local Pterodactyl and includes the

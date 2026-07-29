@@ -60,6 +60,96 @@ class InstanceDirectoryPreparerTest {
     }
 
     @Test
+    void mergesCowVolumesAtSameTargetWithFirstSourcePrecedence() throws Exception {
+        Path source = createSource();
+        Path first = temporaryDirectory.resolve("plugins/first");
+        Path second = temporaryDirectory.resolve("plugins/second");
+        Files.createDirectories(first.resolve("shared"));
+        Files.createDirectories(second.resolve("shared"));
+        Files.writeString(first.resolve("first.jar"), "first");
+        Files.writeString(second.resolve("second.jar"), "second");
+        Files.writeString(first.resolve("shared/config.yml"), "first wins");
+        Files.writeString(second.resolve("shared/config.yml"), "second loses");
+        Files.writeString(first.resolve("file-wins"), "file");
+        Files.createDirectories(second.resolve("file-wins"));
+        Files.writeString(second.resolve("file-wins/hidden.txt"), "hidden");
+        InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(
+                temporaryDirectory.resolve("instances"),
+                temporaryDirectory
+        );
+
+        Path prepared = preparer.prepare(
+                "game.x82odk",
+                source,
+                List.of(
+                        volume("plugins/first", "/plugins"),
+                        volume("plugins/second", "/plugins")
+                )
+        );
+
+        assertEquals("first", Files.readString(prepared.resolve("plugins/first.jar")));
+        assertEquals("second", Files.readString(prepared.resolve("plugins/second.jar")));
+        assertEquals(
+                "first wins",
+                Files.readString(prepared.resolve("plugins/shared/config.yml"))
+        );
+        assertTrue(Files.isRegularFile(prepared.resolve("plugins/file-wins")));
+        assertFalse(Files.exists(prepared.resolve("plugins/file-wins/hidden.txt")));
+    }
+
+    @Test
+    void copiesRoVolumeAsPrivateLocalSnapshot() throws Exception {
+        Path source = createSource();
+        Path shared = createVolumeSource("plugins/shared");
+        Files.writeString(shared.resolve("config.yml"), "source");
+        InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(
+                temporaryDirectory.resolve("instances"),
+                temporaryDirectory
+        );
+
+        Path prepared = preparer.prepare(
+                "game.x82odk",
+                source,
+                List.of(volume(
+                        "plugins/shared",
+                        "/plugins",
+                        BlueprintVolume.Mode.RO
+                ))
+        );
+        Files.writeString(prepared.resolve("plugins/config.yml"), "instance");
+
+        assertEquals("source", Files.readString(shared.resolve("config.yml")));
+        assertEquals("instance", Files.readString(prepared.resolve("plugins/config.yml")));
+    }
+
+    @Test
+    void rejectsRwVolumeWithoutLeavingPartialInstance() throws Exception {
+        Path source = createSource();
+        createVolumeSource("data/shared");
+        Path instances = temporaryDirectory.resolve("instances");
+        InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(
+                instances,
+                temporaryDirectory
+        );
+
+        InstancePreparationException exception = assertThrows(
+                InstancePreparationException.class,
+                () -> preparer.prepare(
+                        "game.x82odk",
+                        source,
+                        List.of(volume(
+                                "data/shared",
+                                "/data",
+                                BlueprintVolume.Mode.RW
+                        ))
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("shared writable host mount"));
+        assertFalse(Files.exists(instances.resolve("game.x82odk")));
+    }
+
+    @Test
     void retriesTransientFilesystemCopyFailures() throws Exception {
         Path source = createSource();
         Path instances = temporaryDirectory.resolve("instances");
@@ -498,11 +588,19 @@ class InstanceDirectoryPreparerTest {
     }
 
     private static BlueprintVolume volume(String source, String target) {
+        return volume(source, target, BlueprintVolume.Mode.COW);
+    }
+
+    private static BlueprintVolume volume(
+            String source,
+            String target,
+            BlueprintVolume.Mode mode
+    ) {
         return new BlueprintVolume(
                 "world",
                 source,
                 target,
-                BlueprintVolume.Mode.COW
+                mode
         );
     }
 

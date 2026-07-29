@@ -26,6 +26,8 @@ public record BlueprintVolume(
     }
 
     public enum Mode {
-        COW
+        COW,
+        RO,
+        RW
     }
 }

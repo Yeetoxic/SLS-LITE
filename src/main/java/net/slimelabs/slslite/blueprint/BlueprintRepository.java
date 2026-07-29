@@ -371,16 +371,11 @@ public final class BlueprintRepository {
         }
 
         java.util.ArrayList<BlueprintVolume> volumes = new java.util.ArrayList<>();
-        Set<String> names = new java.util.HashSet<>();
         for (int index = 0; index < rawVolumes.size(); index++) {
             String section = "state.volumes[" + index + "]";
             BlueprintVolume parsed = rawVolumes.get(index) instanceof String shorthand
                     ? parseVolumeShorthand(shorthand, section, path)
                     : parseVolumeMap(rawVolumes.get(index), section, path);
-            String name = parsed.name();
-            if (!names.add(name)) {
-                throw error(path, "duplicate volume name '" + name + "'");
-            }
             volumes.add(parsed);
         }
         return List.copyOf(volumes);
@@ -436,18 +431,19 @@ public final class BlueprintRepository {
             String section,
             Path path
     ) throws BlueprintException {
-        if (!mode.equalsIgnoreCase("cow")) {
-            throw error(
-                    path,
-                    "'" + section + ".mode' must be 'cow'; SLS-LITE does not "
-                            + "support host-mounted '" + mode + "' volumes"
+        BlueprintVolume.Mode parsedMode;
+        try {
+            parsedMode = BlueprintVolume.Mode.valueOf(
+                    mode.trim().toUpperCase(java.util.Locale.ROOT)
             );
+        } catch (IllegalArgumentException exception) {
+            throw error(path, "'" + section + ".mode' must be cow, ro, or rw");
         }
         return new BlueprintVolume(
                 name,
                 source,
                 target,
-                BlueprintVolume.Mode.COW
+                parsedMode
         );
     }
 

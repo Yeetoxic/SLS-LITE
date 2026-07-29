@@ -962,10 +962,10 @@ equivalent.
 - [ ] [S2] Revisit announced `allowed-client-versions` support after upstream
       publishes a stable schema and behavior. The field is absent from pinned
       SLS `v0.2.0`; do not invent a compatibility contract in advance.
-- [ ] [S2] Define the modern SLS copy-on-write volume compatibility contract:
+- [x] [S2] Define the modern SLS copy-on-write volume compatibility contract:
       preserve its isolation intent while documenting `reflink`, `overlay`, and
       portable-copy implementations as host-dependent local adaptations.
-- [ ] [S2] Add upstream-derived compatibility fixtures and automated parser,
+- [x] [S2] Add upstream-derived compatibility fixtures and automated parser,
       validation, and migration tests where licensing permits.
 - [ ] [S2] Run a multi-world network from those modern SLS fixtures and document
       every supported, adapted, and rejected field.
