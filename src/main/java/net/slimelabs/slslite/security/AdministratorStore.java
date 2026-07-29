@@ -24,35 +24,43 @@ public final class AdministratorStore {
 
     private final Path dataDirectory;
     private final Path storePath;
+    private final StoreWriter writer;
     private final Properties values = new Properties();
 
     public AdministratorStore(Path dataDirectory) {
+        this(dataDirectory, AdministratorStore::atomicWrite);
+    }
+
+    AdministratorStore(Path dataDirectory, StoreWriter writer) {
         this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
         this.storePath = this.dataDirectory.resolve(FILE_NAME);
+        this.writer = java.util.Objects.requireNonNull(writer, "writer");
     }
 
     public synchronized void initialize() throws IOException {
         Files.createDirectories(dataDirectory);
-        values.clear();
         if (!Files.exists(storePath)) {
-            values.setProperty(SCHEMA_KEY, SCHEMA_VERSION);
-            write();
+            Properties initial = new Properties();
+            initial.setProperty(SCHEMA_KEY, SCHEMA_VERSION);
+            persist(initial);
             return;
         }
         if (!Files.isRegularFile(storePath)) {
             throw new IOException("Administrator store is not a regular file: " + storePath);
         }
+        Properties loaded = new Properties();
         try (InputStream input = Files.newInputStream(storePath)) {
-            values.load(input);
+            loaded.load(input);
         }
-        if (!SCHEMA_VERSION.equals(values.getProperty(SCHEMA_KEY))) {
+        if (!SCHEMA_VERSION.equals(loaded.getProperty(SCHEMA_KEY))) {
             throw new IOException("Unsupported administrator store schema in " + storePath);
         }
-        for (String key : values.stringPropertyNames()) {
+        for (String key : loaded.stringPropertyNames()) {
             if (!SCHEMA_KEY.equals(key)) {
-                parseAdministrator(key, values.getProperty(key));
+                parseAdministrator(key, loaded.getProperty(key));
             }
         }
+        replaceValues(loaded);
     }
 
     public synchronized boolean isEmpty() {
@@ -64,8 +72,9 @@ public final class AdministratorStore {
     }
 
     public synchronized void add(UUID uniqueId, String username) throws IOException {
-        values.setProperty(key(uniqueId), username);
-        write();
+        Properties updated = copyValues();
+        updated.setProperty(key(uniqueId), username);
+        persist(updated);
     }
 
     public synchronized Optional<Administrator> remove(String usernameOrUuid) throws IOException {
@@ -73,8 +82,9 @@ public final class AdministratorStore {
         if (administrator.isEmpty()) {
             return Optional.empty();
         }
-        values.remove(key(administrator.get().uniqueId()));
-        write();
+        Properties updated = copyValues();
+        updated.remove(key(administrator.get().uniqueId()));
+        persist(updated);
         return administrator;
     }
 
@@ -98,7 +108,27 @@ public final class AdministratorStore {
                 .toList();
     }
 
-    private void write() throws IOException {
+    private void persist(Properties updated) throws IOException {
+        writer.write(dataDirectory, storePath, updated);
+        replaceValues(updated);
+    }
+
+    private Properties copyValues() {
+        Properties copied = new Properties();
+        copied.putAll(values);
+        return copied;
+    }
+
+    private void replaceValues(Properties updated) {
+        values.clear();
+        values.putAll(updated);
+    }
+
+    private static void atomicWrite(
+            Path dataDirectory,
+            Path storePath,
+            Properties updated
+    ) throws IOException {
         Path temporary = dataDirectory.resolve(TEMP_FILE_NAME);
         try (OutputStream output = Files.newOutputStream(
                 temporary,
@@ -106,7 +136,7 @@ public final class AdministratorStore {
                 StandardOpenOption.TRUNCATE_EXISTING,
                 StandardOpenOption.WRITE
         )) {
-            values.store(output, "Managed by SLS-LITE");
+            updated.store(output, "Managed by SLS-LITE");
         }
         try {
             Files.move(
@@ -117,7 +147,15 @@ public final class AdministratorStore {
             );
         } catch (AtomicMoveNotSupportedException ignored) {
             Files.move(temporary, storePath, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(temporary);
         }
+    }
+
+    @FunctionalInterface
+    interface StoreWriter {
+        void write(Path dataDirectory, Path storePath, Properties values)
+                throws IOException;
     }
 
     private Administrator parseAdministrator(String property, String username) {

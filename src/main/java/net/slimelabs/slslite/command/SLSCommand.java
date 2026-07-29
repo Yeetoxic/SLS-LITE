@@ -1552,7 +1552,7 @@ public final class SLSCommand implements SimpleCommand {
         } else {
             active = findInstanceOrNull(instanceId);
         }
-        boolean protectedLobby = active != null && lobbyProvider.isLobby(active.id());
+        boolean protectedLobby = lobbyProvider.isLobby(instanceId);
         if (protectedLobby && !force) {
             source.sendMessage(CommandMessages.message(
                     "The active lobby is protected. Use /sls " + operation + " "
@@ -1572,7 +1572,11 @@ public final class SLSCommand implements SimpleCommand {
         }
 
         if (protectedLobby) {
-            cycleProtectedLobby(source, active, reset);
+            if (active == null) {
+                cycleUnavailableProtectedLobby(source, instanceId, reset);
+            } else {
+                cycleProtectedLobby(source, active, reset);
+            }
             return;
         }
 
@@ -1705,6 +1709,41 @@ public final class SLSCommand implements SimpleCommand {
                                     ));
                                 }
                             });
+                });
+    }
+
+    private void cycleUnavailableProtectedLobby(
+            CommandSource source,
+            String instanceId,
+            boolean reset
+    ) {
+        String operation = reset ? "reset" : "restart";
+        logger.warn(
+                "Forced offline managed lobby {} requested by {} for {}",
+                operation,
+                commandSourceName(source),
+                instanceId
+        );
+        source.sendMessage(CommandMessages.message(
+                (reset ? "Resetting" : "Restarting")
+                        + " offline protected lobby " + instanceId + "...",
+                NamedTextColor.YELLOW
+        ));
+        lobbyProvider.cyclePrimary(instanceId, reset)
+                .whenComplete((server, failure) -> {
+                    if (failure == null) {
+                        source.sendMessage(CommandMessages.message(
+                                "Server " + instanceId + " "
+                                        + (reset ? "reset" : "restarted") + ".",
+                                NamedTextColor.GREEN
+                        ));
+                    } else {
+                        source.sendMessage(CommandMessages.message(
+                                capitalize(operation) + " failed: "
+                                        + rootMessage(failure),
+                                NamedTextColor.RED
+                        ));
+                    }
                 });
     }
 

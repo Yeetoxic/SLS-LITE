@@ -8,6 +8,7 @@ release.properties
 # Java
 *.class
 *.jar
+!src/main/resources/limbo/nanolimbo-1.13.0.jar
 hs_err_pid*
 replay_pid*
 

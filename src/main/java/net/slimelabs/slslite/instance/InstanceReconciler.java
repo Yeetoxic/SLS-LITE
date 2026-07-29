@@ -32,6 +32,18 @@ public final class InstanceReconciler {
 
     public InstanceReconciliationReport reconcile() throws IOException {
         Files.createDirectories(directoryPreparer.root());
+        int recoveredTransactions = directoryPreparer.recoverInterruptedReplacements(
+                (directory, instanceId) -> metadataStore.read(directory)
+                        .filter(metadata -> metadata.instanceId().equals(instanceId))
+                        .filter(InstanceMetadata::persistent)
+                        .isPresent()
+        );
+        if (recoveredTransactions > 0) {
+            logger.warn(
+                    "Recovered {} interrupted persistent reset transaction(s)",
+                    recoveredTransactions
+            );
+        }
         List<Path> directories;
         try (var entries = Files.list(directoryPreparer.root())) {
             directories = entries
@@ -41,6 +53,7 @@ public final class InstanceReconciler {
         }
 
         MutableReport report = new MutableReport();
+        report.recoveredResetTransactions = recoveredTransactions;
         for (Path directory : directories) {
             reconcile(directory, report);
         }
@@ -201,6 +214,7 @@ public final class InstanceReconciler {
 
     private static final class MutableReport {
 
+        private int recoveredResetTransactions;
         private int removedEphemeral;
         private int preservedPersistent;
         private int preservedRunning;
@@ -209,6 +223,7 @@ public final class InstanceReconciler {
 
         private InstanceReconciliationReport snapshot() {
             return new InstanceReconciliationReport(
+                    recoveredResetTransactions,
                     removedEphemeral,
                     preservedPersistent,
                     preservedRunning,

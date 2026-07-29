@@ -21,6 +21,8 @@ class PluginMetadataTest {
                     "\"main\": \"net.slimelabs.slslite.SLSLite\""
             ));
             assertTrue(metadata.contains("\"version\": \"" + BuildInfo.VERSION + "\""));
+            assertTrue(metadata.contains("\"id\": \"viaversion\""));
+            assertTrue(metadata.contains("\"optional\": true"));
         }
     }
 }

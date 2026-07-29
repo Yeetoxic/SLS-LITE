@@ -133,6 +133,149 @@ class InstanceManagerTest {
     }
 
     @Test
+    void rejectsChangedPersistentDefinitionUntilExplicitReset() throws Exception {
+        TestContext context = createContext(true, true);
+        ManagedInstance original = manager.start("fixture");
+        original.readyFuture().get(10, TimeUnit.SECONDS);
+        manager.stop(original.id()).get(10, TimeUnit.SECONDS);
+        awaitCleanup();
+
+        Path profile = temporaryDirectory.resolve("profiles/paper.yml");
+        Files.writeString(
+                profile,
+                Files.readString(profile).replace(
+                        "timeout_seconds: 5",
+                        "timeout_seconds: 6"
+                )
+        );
+        context.profiles().reload();
+
+        InstanceOperationException rejected = assertThrows(
+                InstanceOperationException.class,
+                () -> manager.restart(original.id())
+        );
+        assertTrue(rejected.getMessage().contains("reset"));
+
+        ManagedInstance reset = manager.reset(original.id())
+                .get(10, TimeUnit.SECONDS);
+        reset.readyFuture().get(10, TimeUnit.SECONDS);
+        assertEquals(original.id(), reset.id());
+    }
+
+    @Test
+    void rejectsPersistenceFlagChangeWithoutDeletingExistingData() throws Exception {
+        TestContext context = createContext(true, true);
+        ManagedInstance original = manager.start("fixture");
+        original.readyFuture().get(10, TimeUnit.SECONDS);
+        manager.stop(original.id()).get(10, TimeUnit.SECONDS);
+        awaitCleanup();
+        Files.writeString(original.directory().resolve("world-data"), "player changes");
+
+        Path blueprint = temporaryDirectory.resolve("blueprints/fixture.yml");
+        Files.writeString(
+                blueprint,
+                Files.readString(blueprint).replace("save: true", "save: false")
+        );
+        context.blueprints().reload();
+
+        InstanceOperationException rejected = assertThrows(
+                InstanceOperationException.class,
+                () -> manager.restart(original.id())
+        );
+
+        assertTrue(rejected.getMessage().contains("reset"));
+        assertEquals(
+                "player changes",
+                Files.readString(original.directory().resolve("world-data"))
+        );
+    }
+
+    @Test
+    void migratesLegacyPersistentMetadataWithoutResettingData() throws Exception {
+        createContext(true, true);
+        ManagedInstance original = manager.start("fixture");
+        original.readyFuture().get(10, TimeUnit.SECONDS);
+        manager.stop(original.id()).get(10, TimeUnit.SECONDS);
+        awaitCleanup();
+
+        Path metadataPath = original.directory().resolve(
+                InstanceMetadataStore.FILE_NAME
+        );
+        java.util.Properties values = new java.util.Properties();
+        try (var input = Files.newInputStream(metadataPath)) {
+            values.load(input);
+        }
+        values.setProperty("schema", "1");
+        values.remove("software_id");
+        values.remove("software_version");
+        values.remove("definition_fingerprint");
+        try (var output = Files.newOutputStream(metadataPath)) {
+            values.store(output, "Legacy fixture");
+        }
+
+        Files.writeString(original.directory().resolve("world-data"), "player changes");
+        ManagedInstance restarted = manager.restart(original.id())
+                .get(10, TimeUnit.SECONDS);
+        restarted.readyFuture().get(10, TimeUnit.SECONDS);
+
+        assertEquals(original.id(), restarted.id());
+        assertEquals(
+                "player changes",
+                Files.readString(restarted.directory().resolve("world-data"))
+        );
+        java.util.Properties migrated = new java.util.Properties();
+        try (var input = Files.newInputStream(metadataPath)) {
+            migrated.load(input);
+        }
+        assertEquals("3", migrated.getProperty("schema"));
+        assertTrue(migrated.containsKey("definition_fingerprint"));
+    }
+
+    @Test
+    void rejectsLegacyMigrationWhenBlueprintIsNoLongerPersistent()
+            throws Exception {
+        TestContext context = createContext(true, true);
+        ManagedInstance original = manager.start("fixture");
+        original.readyFuture().get(10, TimeUnit.SECONDS);
+        manager.stop(original.id()).get(10, TimeUnit.SECONDS);
+        awaitCleanup();
+        Files.writeString(original.directory().resolve("world-data"), "player changes");
+
+        Path metadataPath = original.directory().resolve(
+                InstanceMetadataStore.FILE_NAME
+        );
+        java.util.Properties values = new java.util.Properties();
+        try (var input = Files.newInputStream(metadataPath)) {
+            values.load(input);
+        }
+        values.setProperty("schema", "1");
+        values.remove("software_id");
+        values.remove("software_version");
+        values.remove("definition_fingerprint");
+        try (var output = Files.newOutputStream(metadataPath)) {
+            values.store(output, "Legacy fixture");
+        }
+
+        Path blueprint = temporaryDirectory.resolve("blueprints/fixture.yml");
+        Files.writeString(
+                blueprint,
+                Files.readString(blueprint).replace("save: true", "save: false")
+        );
+        context.blueprints().reload();
+
+        InstanceOperationException rejected = assertThrows(
+                InstanceOperationException.class,
+                () -> manager.restart(original.id())
+        );
+
+        assertTrue(rejected.getMessage().contains("restore save: true"));
+        assertEquals(
+                "player changes",
+                Files.readString(original.directory().resolve("world-data"))
+        );
+    }
+
+    @Test
     void rejectsRestartForEphemeralInstance() throws Exception {
         createContext(false, true);
         ManagedInstance instance = manager.start("fixture");
@@ -373,7 +516,7 @@ class InstanceManagerTest {
                 backends,
                 LoggerFactory.getLogger(InstanceManagerTest.class)
         );
-        return new TestContext(budget, ports, backends);
+        return new TestContext(budget, ports, backends, blueprints, profiles);
     }
 
     private void awaitCleanup() throws Exception {
@@ -425,7 +568,9 @@ class InstanceManagerTest {
     private record TestContext(
             ResourceBudget budget,
             LoopbackPortAllocator ports,
-            FakeBackendRegistry backends
+            FakeBackendRegistry backends,
+            BlueprintRepository blueprints,
+            SoftwareProfileRepository profiles
     ) {
     }
 

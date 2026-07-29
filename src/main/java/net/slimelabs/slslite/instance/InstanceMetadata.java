@@ -6,6 +6,7 @@ import java.util.Objects;
 public record InstanceMetadata(
         String instanceId,
         String blueprintId,
+        InstanceDefinitionIdentity definitionIdentity,
         boolean persistent,
         InstanceState state,
         Instant createdAt,
@@ -32,10 +33,47 @@ public record InstanceMetadata(
         }
     }
 
+    public InstanceMetadata(
+            String instanceId,
+            String blueprintId,
+            boolean persistent,
+            InstanceState state,
+            Instant createdAt,
+            Long processId,
+            Instant processStartedAt
+    ) {
+        this(
+                instanceId,
+                blueprintId,
+                null,
+                persistent,
+                state,
+                createdAt,
+                processId,
+                processStartedAt
+        );
+    }
+
+    public InstanceMetadata withDefinitionIdentity(
+            InstanceDefinitionIdentity nextIdentity
+    ) {
+        return new InstanceMetadata(
+                instanceId,
+                blueprintId,
+                Objects.requireNonNull(nextIdentity, "nextIdentity"),
+                persistent,
+                state,
+                createdAt,
+                processId,
+                processStartedAt
+        );
+    }
+
     public InstanceMetadata withState(InstanceState nextState) {
         return new InstanceMetadata(
                 instanceId,
                 blueprintId,
+                definitionIdentity,
                 persistent,
                 nextState,
                 createdAt,
@@ -52,6 +90,7 @@ public record InstanceMetadata(
         return new InstanceMetadata(
                 instanceId,
                 blueprintId,
+                definitionIdentity,
                 persistent,
                 nextState,
                 createdAt,
@@ -64,6 +103,7 @@ public record InstanceMetadata(
         return new InstanceMetadata(
                 instanceId,
                 blueprintId,
+                definitionIdentity,
                 persistent,
                 nextState,
                 createdAt,

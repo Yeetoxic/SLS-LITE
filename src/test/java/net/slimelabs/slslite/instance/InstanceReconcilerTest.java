@@ -168,6 +168,65 @@ final class InstanceReconcilerTest {
         assertTrue(current.isAlive());
     }
 
+    @Test
+    void restoresBackupWhenResetReplacementNeverCommitted() throws Exception {
+        Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+        String id = "survival.abc123";
+        String nonce = "12345678-1234-1234-1234-123456789abc";
+        Path original = directory(root, id);
+        Files.writeString(original.resolve("world.dat"), "original");
+        new InstanceMetadataStore(root).write(original, record(
+                id,
+                true,
+                InstanceState.STOPPED,
+                null,
+                null
+        ));
+        Path backup = root.resolve("." + id + ".backup-" + nonce);
+        Files.move(original, backup);
+        Path replacement = directory(root, id);
+        Files.writeString(replacement.resolve("world.dat"), "incomplete replacement");
+
+        InstanceReconciliationReport report = new InstanceReconciler(
+                new InstanceDirectoryPreparer(root),
+                LoggerFactory.getLogger(InstanceReconcilerTest.class)
+        ).reconcile();
+
+        assertEquals(1, report.recoveredResetTransactions());
+        assertEquals("original", Files.readString(root.resolve(id).resolve("world.dat")));
+        assertFalse(Files.exists(backup));
+    }
+
+    @Test
+    void keepsCommittedReplacementAndRemovesResetBackup() throws Exception {
+        Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+        String id = "survival.abc123";
+        String nonce = "12345678-1234-1234-1234-123456789abc";
+        Path backup = directory(root, "." + id + ".backup-" + nonce);
+        Files.writeString(backup.resolve("world.dat"), "original");
+        Path replacement = directory(root, id);
+        Files.writeString(replacement.resolve("world.dat"), "replacement");
+        new InstanceMetadataStore(root).write(replacement, record(
+                id,
+                true,
+                InstanceState.STOPPED,
+                null,
+                null
+        ));
+
+        InstanceReconciliationReport report = new InstanceReconciler(
+                new InstanceDirectoryPreparer(root),
+                LoggerFactory.getLogger(InstanceReconcilerTest.class)
+        ).reconcile();
+
+        assertEquals(1, report.recoveredResetTransactions());
+        assertEquals(
+                "replacement",
+                Files.readString(root.resolve(id).resolve("world.dat"))
+        );
+        assertFalse(Files.exists(backup));
+    }
+
     private static Path directory(Path root, String name) throws Exception {
         return Files.createDirectories(root.resolve(name));
     }

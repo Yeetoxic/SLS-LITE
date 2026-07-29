@@ -6,8 +6,9 @@ SLS-Limbo is SLS-LITE's default virtual lobby: a literal liminal space for a
 network that is not fully configured yet, a destination that is still starting,
 or a player moving between places. Players remain connected and can use
 Velocity-level `/sls` commands without requiring a Paper lobby to be ready.
-It is not yet production-ready; protocol compatibility and recovery testing
-remain release gates.
+The project as a whole is not yet production-ready. SLS-Limbo has automated
+native protocol coverage and local recovery coverage; translated real-client
+coverage remains a release gate.
 
 SLS-Limbo complements the configured lobby rather than becoming a third primary
 lobby mode. `lobby.mode` remains either `external` or `managed`.

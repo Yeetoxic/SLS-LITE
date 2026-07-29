@@ -8,15 +8,14 @@ WSL2.
 
 - Panel: <http://localhost:8088>
 - Velocity console: <http://localhost:8088/server/c165ae9c>
-- External lobby console: <http://localhost:8088/server/61a65a48>
-- Username: `admin`
-- Email: `admin@local.test`
-- Password: `SlsLiteLocal2026!`
+- Optional external lobby console: created by the lobby-mode helper when needed.
 - Velocity address: `127.0.0.1:25565`
 
-These credentials are only suitable for a local, loopback-only test panel.
-Change the password and configure TLS before exposing the Panel to a LAN or the
-internet.
+The Docker environment stores generated local credentials in the ignored
+`infra/pterodactyl/.env.local` file. The legacy WSL installer requires
+`PTERODACTYL_DB_PASSWORD` and `PTERODACTYL_ADMIN_PASSWORD` to be set explicitly;
+it has no fallback passwords. Configure TLS and rotate all credentials before
+exposing the Panel to a LAN or the internet.
 
 ## Installed Services
 
@@ -25,7 +24,7 @@ internet.
 - MariaDB 11.4 and Redis 7
 - One node named `Local Wings`
 - One server named `SLS-LITE Velocity`
-- One separately allocated Paper server named `SLS-LITE External Lobby`
+- An optional separately allocated Paper server named `SLS-LITE External Lobby`
 - Eclipse Temurin Java 25 container images
 - Velocity with the current SLS-LITE build
 
@@ -62,8 +61,8 @@ registration, and restores SLS-LITE's managed `lobby/lobby` blueprint.
 
 ## Manual External-Lobby Test
 
-The local fixture is currently configured in external mode. Connect a Minecraft
-client to `127.0.0.1:25565` and verify:
+Switch to external mode first. Connect a Minecraft client to
+`127.0.0.1:25565` and verify:
 
 1. The first connection lands on `SLS-LITE External Lobby`.
 2. `/sls info` reports the lobby as external.

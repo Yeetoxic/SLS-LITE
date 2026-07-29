@@ -180,8 +180,8 @@ public final class IdleInstanceReaper implements AutoCloseable {
             );
             forget(instance.id());
             instances.stop(instance.id()).whenComplete((exitCode, failure) -> {
+                admissions.cancelDrain(instance.id());
                 if (failure != null) {
-                    admissions.cancelDrain(instance.id());
                     logger.error("Unable to stop idle instance " + instance.id(), failure);
                 }
             });

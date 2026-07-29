@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class ServerPropertiesEditorTest {
 
@@ -48,5 +49,8 @@ class ServerPropertiesEditorTest {
         assertEquals("12", properties.getProperty("max-players"));
         assertEquals("127.0.0.1", properties.getProperty("server-ip"));
         assertEquals("25571", properties.getProperty("server-port"));
+        assertFalse(Files.exists(
+                temporaryDirectory.resolve("server.properties.tmp")
+        ));
     }
 }

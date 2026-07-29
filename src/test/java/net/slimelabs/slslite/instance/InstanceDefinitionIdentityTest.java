@@ -1,0 +1,139 @@
+package net.slimelabs.slslite.instance;
+
+import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintVolume;
+import net.slimelabs.slslite.software.SoftwareProfile;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+
+final class InstanceDefinitionIdentityTest {
+
+    @Test
+    void fingerprintIsStableAcrossMapIterationOrder() {
+        Blueprint first = blueprint(
+                Map.of("motd", "Test", "view-distance", "6"),
+                Map.of("feature", true, "nested", Map.of("b", 2, "a", 1))
+        );
+        Blueprint second = blueprint(
+                new java.util.LinkedHashMap<>(Map.of(
+                        "view-distance", "6",
+                        "motd", "Test"
+                )),
+                new java.util.LinkedHashMap<>(Map.of(
+                        "nested", Map.of("a", 1, "b", 2),
+                        "feature", true
+                ))
+        );
+
+        assertEquals(
+                InstanceDefinitionIdentity.from(first, profile()),
+                InstanceDefinitionIdentity.from(second, profile())
+        );
+    }
+
+    @Test
+    void fingerprintChangesWhenPersistentContentDefinitionChanges() {
+        InstanceDefinitionIdentity original = InstanceDefinitionIdentity.from(
+                blueprint(Map.of("motd", "One"), Map.of()),
+                profile()
+        );
+        InstanceDefinitionIdentity changedProperty = InstanceDefinitionIdentity.from(
+                blueprint(Map.of("motd", "Two"), Map.of()),
+                profile()
+        );
+        Blueprint changedVolume = new Blueprint(
+                "fixture",
+                "Fixture",
+                "test",
+                "paper",
+                "1.21.11",
+                256,
+                20,
+                1,
+                true,
+                Map.of("motd", "One"),
+                Map.of(),
+                List.of(new BlueprintVolume(
+                        "world",
+                        "worlds/other",
+                        "/world",
+                        BlueprintVolume.Mode.COW
+                ))
+        );
+
+        assertNotEquals(original, changedProperty);
+        assertNotEquals(
+                original,
+                InstanceDefinitionIdentity.from(changedVolume, profile())
+        );
+
+        Blueprint ephemeral = new Blueprint(
+                "fixture",
+                "Fixture",
+                "test",
+                "paper",
+                "1.21.11",
+                256,
+                20,
+                1,
+                false,
+                Map.of("motd", "One"),
+                Map.of(),
+                List.of(new BlueprintVolume(
+                        "world",
+                        "worlds/fixture",
+                        "/world",
+                        BlueprintVolume.Mode.COW
+                ))
+        );
+        assertNotEquals(
+                original,
+                InstanceDefinitionIdentity.from(ephemeral, profile())
+        );
+    }
+
+    private static Blueprint blueprint(
+            Map<String, String> properties,
+            Map<String, Object> annotations
+    ) {
+        return new Blueprint(
+                "fixture",
+                "Fixture",
+                "test",
+                "paper",
+                "1.21.11",
+                256,
+                20,
+                1,
+                true,
+                properties,
+                annotations,
+                List.of(new BlueprintVolume(
+                        "world",
+                        "worlds/fixture",
+                        "/world",
+                        BlueprintVolume.Mode.COW
+                ))
+        );
+    }
+
+    private static SoftwareProfile profile() {
+        return new SoftwareProfile(
+                "paper",
+                "java",
+                "software/paper/{version}",
+                "paper.jar",
+                List.of("-Xmx{memory_mib}M"),
+                List.of(),
+                "Done",
+                60,
+                "stop",
+                30
+        );
+    }
+}

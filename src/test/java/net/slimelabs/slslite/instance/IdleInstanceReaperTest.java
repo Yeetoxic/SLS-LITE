@@ -29,6 +29,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IdleInstanceReaperTest {
@@ -70,7 +71,7 @@ class IdleInstanceReaperTest {
         reaper.scanNow();
 
         assertEquals(List.of(instance.id()), controller.stopped);
-        assertTrue(admissions.draining.contains(instance.id()));
+        assertFalse(admissions.draining.contains(instance.id()));
     }
 
     @Test
@@ -105,6 +106,31 @@ class IdleInstanceReaperTest {
         clock.advance(Duration.ofSeconds(10));
         reaper.scanNow();
         assertEquals(List.of(instance.id()), controller.stopped);
+    }
+
+    @Test
+    void holdsDrainUntilAsynchronousStopCompletes() {
+        ManagedInstance instance = readyInstance("smoke.123456", Map.of(), false);
+        FakeController controller = new FakeController(instance);
+        controller.stopFuture = new CompletableFuture<>();
+        FakeAdmissions admissions = new FakeAdmissions();
+        MutableClock clock = new MutableClock();
+        reaper = reaper(
+                controller,
+                admissions,
+                neverLobby(),
+                proxy(Map.of(instance.id(), new ArrayList<>())),
+                clock,
+                1
+        );
+
+        reaper.scanNow();
+        clock.advance(Duration.ofSeconds(1));
+        reaper.scanNow();
+        assertTrue(admissions.draining.contains(instance.id()));
+
+        controller.stopFuture.complete(0);
+        assertFalse(admissions.draining.contains(instance.id()));
     }
 
     @Test
@@ -286,6 +312,8 @@ class IdleInstanceReaperTest {
     private static final class FakeController implements ServerController {
         private final List<ManagedInstance> instances;
         private final List<String> stopped = new ArrayList<>();
+        private CompletableFuture<Integer> stopFuture =
+                CompletableFuture.completedFuture(0);
 
         private FakeController(ManagedInstance... instances) {
             this.instances = List.of(instances);
@@ -312,7 +340,7 @@ class IdleInstanceReaperTest {
         @Override
         public CompletableFuture<Integer> stop(String instanceId) {
             stopped.add(instanceId);
-            return CompletableFuture.completedFuture(0);
+            return stopFuture;
         }
 
         @Override

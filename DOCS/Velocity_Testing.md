@@ -10,7 +10,7 @@ The synthetic `test-server/` fixture remains available for isolated development:
 .\scripts\setup-velocity-test.ps1
 ```
 
-It is not the main Stage 1 acceptance network.
+It is not the primary historical-world regression network.
 
 ## Primary Network
 
@@ -148,10 +148,10 @@ Managed Paper output remains available through `/sls logs` and the bounded
 temporary instance log. It is mirrored to the proxy only when
 `managed_output.mirror_to_proxy_console` is explicitly enabled.
 
-## Completion Gate
+## Regression Gate
 
-Stage 1 passes when the historical lobby and every imported game can install,
-start, join, stop, and clean up without modifying its source world. Record any
-game-specific plugin or data incompatibility separately from an SLS-LITE
-lifecycle failure. Stage 2 then repeats the run with unmodified modern SLS
-blueprints as the compatibility input.
+The regression run passes when the historical lobby and every imported game can
+install, start, join, stop, and clean up without modifying its source world.
+Record game-specific plugin or data incompatibility separately from an
+SLS-LITE lifecycle failure. Stage 2 uses unmodified modern SLS blueprints as
+the compatibility input.

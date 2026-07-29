@@ -1,376 +1,123 @@
 # SLS-LITE
 
-SLS-LITE is a standalone Velocity plugin for running a small Minecraft network
-inside one game-server hosting allocation. It is based on SLS concepts, but it
-does not require Protocube, a daemon, Docker, S4J, or another SLS installation.
+SLS-LITE is a Velocity plugin for running a small Minecraft network inside one
+hosting allocation. It launches and supervises local Java server processes,
+registers ready backends with Velocity, and moves players between them without
+requiring full SLS infrastructure, Docker, or a second purchased game server.
 
-## Project Status
+SLS-LITE follows modern SLS terminology and compatible configuration shapes
+where they make sense on one host. It remains a separate, self-contained
+product: full SLS is not a runtime dependency or operating mode.
 
-SLS-LITE is undergoing a controlled modernization of its original 2020
-implementation. The current development baseline provides:
+> **Development status:** Stage 1 has passed on the local historical-world
+> network. The project is not a production release. Stage 2 will validate the
+> supported subset against unmodified modern SLS definitions.
 
-- A Java 21-compatible Velocity 4.1 plugin foundation.
-- Modern SLS-style blueprint metadata.
-- Validated host configuration and software launch profiles.
-- Locked and verified Paper and vanilla installation with manual custom
-  software support.
-- Validated YAML loading and reload support.
-- Explicit server-instance lifecycle states.
-- Configurable idle shutdown for empty ephemeral instances.
-- Local memory reservation accounting.
-- Loopback port reservation and isolated instance-directory copying.
-- Shell-free Paper command construction and managed process supervision.
-- Startup probes for child Java execution, writable instance storage, and
-  loopback port binding.
-- A bundled, supervised SLS-Limbo virtual space for network setup, destination
-  startup, and safe placement between servers.
-- Bounded in-game and temporary-file process logs with optional proxy mirroring.
-- A shaded release JAR with isolated runtime dependencies.
-- JUnit coverage for the implemented foundation.
+## What Works
 
-The `/sls start`, `/sls join`, `/sls list`, `/sls status`, and `/sls stop`
-commands now manage local Paper processes, dynamically register ready backends
-with Velocity, and connect requested players after an instance becomes ready.
-Matchmaking queues, capacity enforcement, persistent-instance restart/reset,
-and external or managed lobby routing are implemented. Production hardening is
-not complete. Do not deploy this development version to a production network.
+- Dynamic blueprint registries and `registry/server` command targeting.
+- Composite instance IDs such as `biome_run.vued73`.
+- On-demand Paper and vanilla installation for exact Minecraft versions.
+- Manual custom Java server software.
+- Isolated local instance directories and portable `cow` volume copies.
+- Capacity-aware matchmaking, queues, direct transfers, and action-bar status.
+- Managed or external primary lobbies.
+- Bundled SLS-Limbo fallback when no normal backend is safe.
+- Persistent managed instances, restart/reset, crash reconciliation, and idle
+  cleanup for ephemeral servers.
+- Bounded in-game logs, temporary log files, lifecycle logging, resource
+  admission, forwarding configuration, and host capability checks.
+- Built-in administrator claiming plus standard Velocity permissions.
 
-Managed lobbies are protected from ordinary stop commands. An administrator can
-intentionally stop one with `/sls stop <instance> --force`; connected players
-are moved to SLS-Limbo first and new arrivals are diverted there while the lobby
-drains. A failed evacuation restores normal lobby routing. After evacuation,
-automatic recovery is suppressed and the action is recorded in the proxy log.
-The override requires `sls.command.stop.force`, the umbrella
-`sls.command.admin` permission, or built-in administration.
-
-## Goal
-
-The intended deployment is:
-
-```text
-One hosting allocation
-|-- Velocity
-|-- SLS-LITE
-|-- Bundled SLS-Limbo
-|-- Optional managed Paper lobby
-`-- Paper servers launched on demand
-```
-
-SLS-LITE will continue to support an external lobby and conventional separately
-hosted backends. A host must permit child Java processes, writable instance
-directories, and loopback ports for local management to work.
-
-## Compatibility
-
-Modern SLS is the terminology and configuration reference where equivalent
-features exist. SLS-LITE implements those features locally and remains
-operationally independent from full SLS.
-
-The in-game command compatibility target and implementation status are tracked
-in [DOCS/SLS_Command_Compatibility.md](DOCS/SLS_Command_Compatibility.md).
-Upstream vSLS command names and argument order are primary; local conveniences
-are additive aliases.
-
-The proven single-host workflows from the original Velocity-only implementation
-are recorded separately in
-[DOCS/Historical_Single_Host_Baseline.md](DOCS/Historical_Single_Host_Baseline.md).
-
-Distributed SLS features are adapted to a single host:
-
-- Daemon provisioning becomes supervised local Java processes.
-- Node allocation becomes local memory, directory, and port admission.
-- Container limits become JVM limits and local resource accounting.
-- Remote event streams become in-process lifecycle events.
-- `state.volumes` with `mode: cow` uses a transactional portable directory-copy
-  baseline. See
-  [DOCS/Blueprint_Volumes.md](DOCS/Blueprint_Volumes.md).
+The exact current scope and intentional limitations are listed in
+[Compatibility](DOCS/Compatibility.md).
 
 ## Requirements
 
-- JDK 21 or newer to build and run the plugin.
-- Java 25 for current Paper releases that require it.
-- A current compatible Velocity build.
-- Maven 3.9 or newer.
-- Permission for Velocity to launch child Java processes.
-- Permission to bind managed backends to additional loopback ports.
-- Writable plugin storage for software, instances, worlds, and temporary logs.
-- Enough provider-assigned memory for Velocity plus every admitted backend.
+- A current compatible Velocity 4.x server.
+- Java 21 or newer for Velocity and SLS-LITE.
+- Any additional Java majors required by the Minecraft versions you launch.
+- Permission to create files, bind loopback ports, and launch child Java
+  processes inside the hosting allocation.
+- Enough real host memory for Velocity, SLS-Limbo, and every active backend.
+- Outbound HTTPS only when using the Paper or vanilla auto-install providers.
 
-The plugin is compiled to Java 21 bytecode and is tested on JDK 25.
-At startup, SLS-LITE verifies storage, loopback binding, and every distinct Java
-runtime referenced by a software profile. Managed initialization fails with a
-specific diagnostic if a required probe fails. Provider memory limits cannot be
-discovered portably, so `resources.total_memory_mib` remains an operator-declared
-admission budget.
+The declared managed-memory budget is admission accounting, not a way to bypass
+or discover a hosting-panel limit. SLS-LITE does not bypass provider
+restrictions.
 
-SLS-LITE uses the same top-level storage concepts as modern SLS: blueprints,
-worlds, reusable software, and runtime instances remain separate. Blueprint
-YAML files can be grouped recursively by category. The complete recommended
-tree is documented in [DOCS/Data_Layout.md](DOCS/Data_Layout.md).
+## Install
 
-## Configuration
+1. Build with `mvn verify` or obtain a reviewed release artifact.
+2. Place `sls-lite-<version>.jar` in Velocity's `plugins/` directory.
+3. Start Velocity once to generate `plugins/sls-lite/`.
+4. Review `config.yml`, especially memory, ports, forwarding, lobby mode, and
+   administrator security.
+5. Set `software.accept_eula: true` only after reviewing the Minecraft EULA.
+6. Add worlds and blueprints, then restart Velocity or run
+   `/sls reload blueprints`.
 
-On first initialization, SLS-LITE creates `config.yml` in its Velocity plugin
-data directory:
+The project is currently a snapshot, so clean-install and update instructions
+are development guidance rather than a release guarantee. See
+[Getting Started](DOCS/Getting_Started.md) before operating a test network.
 
-```yaml
-resources:
-  total_memory_mib: 4096
-  max_managed_processes: 101
-
-network:
-  ports:
-    start: 25570
-    end: 25670
-
-matchmaking:
-  queue_timeout_seconds: 180
-
-lifecycle:
-  idle_shutdown_seconds: 180
-
-managed_output:
-  mirror_to_proxy_console: false
-  write_temporary_file: true
-  temporary_file_max_kib: 4096
-
-forwarding:
-  mode: none
-  online_mode: true
-  secret_file: forwarding.secret
-
-lobby:
-  mode: external
-  registry: lobby
-  server: lobby
-  limbo:
-    enabled: true
-    memory_mib: 96
-    startup_timeout_seconds: 30
-    recovery:
-      max_attempts: 5
-      initial_backoff_seconds: 2
-      max_backoff_seconds: 30
-      stable_after_seconds: 120
-
-paths:
-  instances: instances
-```
-
-The memory value is the shared budget for managed backend processes and excludes
-Velocity itself. SLS-Limbo reserves its configured heap from this same budget
-and consumes one managed process slot. In managed-lobby mode, startup validation
-requires enough memory and process slots for both SLS-Limbo and the primary
-lobby. `max_managed_processes` cannot exceed the configured port count and
-defaults to that count when omitted. Managed paths must remain relative to the
-SLS-LITE data directory. Managed instances reserve an available loopback port
-from this range and release it during cleanup. Matchmaking requests fail and
-clean themselves up after the configured timeout.
-
-Unknown structural keys in host configuration, blueprints, and software profiles
-are rejected with their full path and a suggestion when one is available.
-Blueprint `annotations` remain open-ended so integrations can preserve their
-own metadata.
-
-SLS-Limbo is currently experimental. Its architecture, operational
-limits, compatibility policy, and manual test are documented in
-[DOCS/SLS_Limbo.md](DOCS/SLS_Limbo.md). The bundled component's
-source, pinned revision, checksum, and GPL notice are recorded in
-[THIRD_PARTY/NanoLimbo.md](THIRD_PARTY/NanoLimbo.md).
-The packaged plugin also includes its AGPL license and the licenses and notices
-for bundled NanoLimbo and SnakeYAML components under `META-INF`.
-Native and translated client test results are tracked in
-[DOCS/Protocol_Compatibility.md](DOCS/Protocol_Compatibility.md).
-
-Normal matchmaking does not pass through SLS-Limbo. Players remain on their
-current healthy backend while queued and transfer directly when the requested
-destination is ready. SLS-Limbo is reserved for cases where no safe normal
-backend is available.
-
-Managed process output always feeds the bounded `/sls logs` viewer. Proxy
-mirroring is disabled by default so Paper output does not flood the Velocity
-console. When temporary files are enabled, each instance writes
-`logs/sls-lite-console.log` inside its isolated directory and stops writing at
-the configured hard cap; no archive files are created. Ephemeral instance logs
-are removed with the instance directory. These host-wide settings currently
-apply after a proxy restart.
-
-For a production Paper network, set `forwarding.mode: modern`,
-`forwarding.online_mode` to the same value as Velocity's `online-mode`, and
-`forwarding.secret_file` to Velocity's configured forwarding secret file.
-SLS-LITE rejects startup when modern forwarding and Velocity disagree about
-online mode.
-SLS-LITE then patches each managed instance's `spigot.yml` and
-`config/paper-global.yml` without exposing the secret in process arguments or
-logs. The default `none` mode is intended for isolated smoke testing.
-
-Empty `READY` ephemeral instances stop after `lifecycle.idle_shutdown_seconds`.
-Set the value to `0` to disable idle shutdown globally. Persistent `save: true`
-instances and the active lobby are excluded. A blueprint can override the delay
-or opt out:
-
-```yaml
-annotations:
-  sls-lite:
-    idle-shutdown-seconds: 300
-    keep-alive: true
-```
-
-`stop-when-empty: false` is also treated as keep-alive. Idle shutdown rechecks
-players and queued joins before draining an instance, preventing a new
-matchmaking request from being assigned while shutdown begins.
-
-Each managed instance contains an internal `.sls-lite-instance.properties`
-ownership record. On startup, SLS-LITE uses that record to remove confirmed
-stale ephemeral directories left by an unclean shutdown. A live child is stopped
-only when both its PID and recorded start time match; its ephemeral directory is
-then removed, or its persistent directory is normalized to `STOPPED`. Live
-processes without enough identity data, malformed records, and directories from
-older versions without metadata are preserved and reported. Persistent
-instances are not automatically resumed yet.
-
-Administrators can recover or cycle a persistent instance using its original
-composite ID:
+## Basic Use
 
 ```text
-/sls restart <instance-id>
-/sls reset <instance-id>
+/sls registries
+/sls blueprints minigame
+/sls join minigame biome_run
+/sls list
+/sls info
 ```
 
-Restart preserves the instance directory and world. Reset evacuates players,
-stops the process, replaces the directory from its current software template,
-and starts the same instance ID. Directory replacement keeps a rollback copy
-until the new files and ownership metadata are valid. Both commands reject
-ephemeral instances and recorded child processes that are still running outside
-the current manager.
+The first operator can issue `/sls admin code` from the Velocity console and
+claim it in game with `/sls admin claim <code>`. Production proxies must use
+online mode for persistent in-game administrators.
 
-`lobby.mode: external` routes players to an existing Velocity registration named
-by `lobby.server`. `lobby.mode: managed` starts the blueprint identified by
-`lobby.registry` and `lobby.server` in the local allocation and reserves that
-instance as the initial and fallback lobby.
+## Data Model
 
-Managed lobbies restart after unexpected exits using bounded exponential
-backoff. Retry limits are configured under `lobby.recovery`:
-
-```yaml
-lobby:
-  recovery:
-    max_attempts: 5
-    initial_backoff_seconds: 5
-    max_backoff_seconds: 60
-    stable_after_seconds: 120
+```text
+plugins/sls-lite/
+|-- config.yml
+|-- administrators.properties
+|-- blueprints/
+|-- worlds/
+|-- software-profiles/
+|-- software/
+|-- runtimes/
+|-- instances/
+`-- sls-limbo/
 ```
 
-Set `max_attempts` to `0` to disable recovery. A lobby that remains healthy for
-`stable_after_seconds` receives a fresh retry budget. While no lobby is ready,
-new connections and backend kick redirects fail closed with a temporary
-unavailability message instead of routing players to an arbitrary server.
-`/sls info` reports `STARTING`, `READY`, `RECOVERING`, `OFFLINE`, or
-`SHUTTING_DOWN`.
+Blueprint folders are organizational. The dynamic registry used by commands is
+the blueprint's `blueprint.type`.
 
-SLS-LITE also creates `software-profiles/paper.yml`:
+## Documentation
 
-```yaml
-software:
-  id: paper
-  runtime: java-jar
-  configurator: paper
-  source: paper
-  channel: stable
-  # Set true only after reviewing https://aka.ms/MinecraftEULA
-  accept_eula: false
-  base_directory: software/paper/{version}
-  server_jar: paper.jar
-
-launch:
-  java: java
-  jvm_arguments:
-    - "-Xms128M"
-    - "-Xmx{memory_mib}M"
-  server_arguments: []
-
-readiness:
-  pattern: 'Done \([^)]+\)! For help'
-  timeout_seconds: 600
-
-shutdown:
-  command: stop
-  timeout_seconds: 30
-```
-
-Launch arguments are YAML lists and are passed directly to Java without a
-command shell. Set `accept_eula: true` only after reviewing the Minecraft EULA.
-Missing provider-backed software is installed by the first start or join
-request. Existing profiles without `source` remain manual. Custom Java servers
-remain supported with `source: manual` and `configurator: generic`. See
-[DOCS/Software_Installation.md](DOCS/Software_Installation.md).
+- [Documentation index](DOCS/README.md)
+- [Getting started and installation](DOCS/Getting_Started.md)
+- [Configuration reference](DOCS/Configuration.md)
+- [Blueprint reference](DOCS/Blueprints.md)
+- [Commands and permissions](DOCS/Commands.md)
+- [Operations and recovery](DOCS/Operations.md)
+- [Migration](DOCS/Migration.md)
+- [Architecture and contributor map](DOCS/ARCHITECTURE.md)
+- [Roadmap](todo.md)
 
 ## Build
 
 ```shell
-mvn clean package
+mvn verify
 ```
 
-The shaded plugin JAR is written to:
-
-```text
-target/sls-lite-0.1.0-SNAPSHOT.jar
-```
-
-## Velocity Test
-
-A local Velocity and Paper environment is documented in
-[DOCS/Velocity_Testing.md](DOCS/Velocity_Testing.md). The primary integration
-fixture is the preserved SLS v2.1.2 minigame network, using organized modern
-blueprints and exact Paper versions. A synthetic fixture can still be created
-for isolated development with:
-
-```powershell
-.\scripts\setup-velocity-test.ps1
-```
-
-## Blueprint
-
-On first initialization, SLS-LITE installs a template under its `blueprints`
-data directory. Blueprint YAML files may be grouped into nested category
-directories such as `blueprints/lobbies`, `blueprints/minigames`, and
-`blueprints/adventures`; SLS-LITE discovers them recursively:
-
-```yaml
-blueprint:
-  id: template
-  name: Template Server
-  type: game
-
-server:
-  software: paper
-  version: "26.1"
-  limits:
-    max_players: 20
-    max_instances: 1
-    memory_limit: 2048
-
-save: false
-
-annotations:
-  sls-lite:
-    start-on-proxy-start: false
-    stop-when-empty: true
-```
-
-`max_players` applies to each instance and is written to `server.properties`.
-Queued joins reserve slots before the backend is ready. When all instances are
-full, SLS-LITE may start another instance up to `max_instances`; afterward it
-rejects the join with a capacity error. The same limit applies to direct
-administrative starts and internal callers. Memory admission can still reject a
-permitted instance when the host-wide managed-memory budget is exhausted.
-
-## Roadmap
-
-See [todo.md](todo.md) for the implementation roadmap, compatibility contract,
-lobby modes, and first-release criteria.
+The shaded plugin is written to
+`target/sls-lite-0.1.0-SNAPSHOT.jar`. The build embeds SLS-LITE's AGPL license,
+third-party notices, SnakeYAML, and the pinned NanoLimbo runtime used by
+SLS-Limbo.
 
 ## License
 
-SLS-LITE is licensed under the GNU Affero General Public License v3.0. See
-[LICENSE](LICENSE).
+SLS-LITE is licensed under the
+[GNU Affero General Public License v3.0](LICENSE). Bundled dependency notices
+and corresponding source information are under [THIRD_PARTY](THIRD_PARTY).

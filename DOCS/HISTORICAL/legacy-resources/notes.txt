@@ -1,3 +1,0 @@
-HISTORICAL: retained for migration research; not used by current SLS-LITE.
-
-Current minecraft protocol information for packets: https://wiki.vg/Protocol

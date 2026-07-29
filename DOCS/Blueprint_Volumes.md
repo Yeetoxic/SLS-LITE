@@ -72,6 +72,6 @@ the previous instance directory.
 - Operators must budget disk space for a complete copy per instance.
 - Do not modify a source directory while an instance is being prepared.
 
-These limits are intentional for the Stage 1 portable baseline. Native
-copy-on-write optimizations may be added later only when they preserve the same
-blueprint behavior and have a reliable portable fallback.
+These limits define the portable baseline. Native copy-on-write optimizations
+may be added later only when they preserve the same blueprint behavior and have
+a reliable portable fallback.

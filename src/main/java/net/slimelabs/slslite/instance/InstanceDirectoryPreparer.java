@@ -1,6 +1,8 @@
 package net.slimelabs.slslite.instance;
 
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
@@ -15,11 +17,23 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class InstanceDirectoryPreparer {
 
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(InstanceDirectoryPreparer.class);
+    private static final Pattern BACKUP_DIRECTORY = Pattern.compile(
+            "^\\.(.+)\\.backup-([0-9a-f-]{36})$"
+    );
+    private static final Pattern STAGING_DIRECTORY = Pattern.compile(
+            "^\\.(.+)\\.reset-([0-9a-f-]{36})$"
+    );
     private static final long[] COPY_RETRY_DELAYS_MILLIS = {
         250,
         750,
@@ -191,11 +205,14 @@ public final class InstanceDirectoryPreparer {
             deleteDirectory(backup);
         } catch (Exception exception) {
             if (initialized) {
-                throw new InstancePreparationException(
-                        "Persistent instance was reset, but its backup could not be removed: "
-                                + backup,
-                        exception
+                LOGGER.warn(
+                        "Persistent reset for {} committed, but backup cleanup failed; "
+                                + "{} will be retried during the next startup: {}",
+                        instanceId,
+                        backup,
+                        exception.getMessage()
                 );
+                return;
             }
             try {
                 if (replacementMoved) {
@@ -213,6 +230,60 @@ public final class InstanceDirectoryPreparer {
                     exception
             );
         }
+    }
+
+    public int recoverInterruptedReplacements(DirectoryCommitVerifier verifier)
+            throws IOException {
+        java.util.Objects.requireNonNull(verifier, "verifier");
+        Files.createDirectories(instancesRoot);
+        List<Path> directories;
+        try (var entries = Files.list(instancesRoot)) {
+            directories = entries
+                    .filter(path -> Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS))
+                    .toList();
+        }
+
+        int recovered = 0;
+        Set<Path> handledStaging = new HashSet<>();
+        for (Path backup : directories) {
+            Matcher match = BACKUP_DIRECTORY.matcher(
+                    backup.getFileName().toString()
+            );
+            if (!match.matches() || !InstanceIdGenerator.isValid(match.group(1))) {
+                continue;
+            }
+            String instanceId = match.group(1);
+            Path destination = instancesRoot.resolve(instanceId);
+            Path staging = instancesRoot.resolve(
+                    "." + instanceId + ".reset-" + match.group(2)
+            );
+            handledStaging.add(staging);
+
+            if (Files.isDirectory(destination, LinkOption.NOFOLLOW_LINKS)
+                    && verifier.isCommitted(destination, instanceId)) {
+                deleteDirectory(backup);
+            } else {
+                deleteDirectory(destination);
+                moveDirectory(backup, destination);
+            }
+            deleteDirectory(staging);
+            recovered++;
+        }
+
+        for (Path staging : directories) {
+            if (handledStaging.contains(staging)) {
+                continue;
+            }
+            Matcher match = STAGING_DIRECTORY.matcher(
+                    staging.getFileName().toString()
+            );
+            if (!match.matches() || !InstanceIdGenerator.isValid(match.group(1))) {
+                continue;
+            }
+            deleteDirectory(staging);
+            recovered++;
+        }
+        return recovered;
     }
 
     private List<ResolvedVolume> resolveVolumes(
@@ -555,6 +626,11 @@ public final class InstanceDirectoryPreparer {
     @FunctionalInterface
     public interface DirectoryInitializer {
         void initialize(Path directory) throws Exception;
+    }
+
+    @FunctionalInterface
+    public interface DirectoryCommitVerifier {
+        boolean isCommitted(Path directory, String instanceId) throws IOException;
     }
 
     @FunctionalInterface

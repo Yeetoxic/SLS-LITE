@@ -8,6 +8,11 @@
     "Protoxon",
     "Yeetoxic"
   ],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "id": "viaversion",
+      "optional": true
+    }
+  ],
   "main": "net.slimelabs.slslite.SLSLite"
 }

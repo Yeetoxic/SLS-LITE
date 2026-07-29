@@ -42,7 +42,7 @@ annotations:
 ```
 
 SLS-LITE preserves this annotation but does not yet resolve the logical ID to a
-public URL. The Stage 1 archive contains
+public URL. The historical regression archive contains
 `worlds/minigames/combat_cube/resources.zip`, matching that historical
 convention. The imported Meteor Miners and Missile Wars worlds do not currently
 contain a conventional client resource-pack ZIP.
@@ -65,4 +65,3 @@ The intended self-contained integration is:
 The built-in endpoint cannot create a public allocation or bypass a hosting
 provider's firewall. Operators without an exposed HTTP port must use normal
 static hosting or a CDN.
-

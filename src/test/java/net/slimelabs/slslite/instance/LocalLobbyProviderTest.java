@@ -130,6 +130,42 @@ class LocalLobbyProviderTest {
     }
 
     @Test
+    void forcedCycleRecoversKnownPersistentLobbyWhileProviderIsOffline()
+            throws Exception {
+        BlueprintRepository blueprints = persistentBlueprints();
+        FakeController controller = new FakeController(
+                blueprints.get("lobby", "lobby").orElseThrow(),
+                temporaryDirectory
+        );
+        controller.persistentId = "lobby.saved01";
+        controller.failRestarts = true;
+        Map<String, RegisteredServer> servers = new LinkedHashMap<>();
+        LocalLobbyProvider provider = new LocalLobbyProvider(
+                proxy(servers),
+                blueprints,
+                controller,
+                recoveryConfig(0),
+                LoggerFactory.getLogger(LocalLobbyProviderTest.class)
+        );
+
+        provider.start();
+        assertEquals(LobbyStatus.OFFLINE, provider.status());
+        assertTrue(provider.isLobby("lobby.saved01"));
+
+        controller.failRestarts = false;
+        CompletableFuture<RegisteredServer> cycled =
+                provider.cyclePrimary("lobby.saved01", true);
+        ManagedInstance replacement = controller.instance();
+        RegisteredServer replacementServer = registeredServer(List.of());
+        publishReady(replacement, replacementServer, servers);
+
+        assertSame(replacementServer, cycled.get(1, TimeUnit.SECONDS));
+        assertEquals(LobbyStatus.READY, provider.status());
+        assertEquals(1, controller.resets);
+        provider.close();
+    }
+
+    @Test
     void evacuatesExternalBackendPlayersToConfiguredLobby() throws Exception {
         BlueprintRepository blueprints = blueprints();
         AtomicReference<RegisteredServer> requestedServer = new AtomicReference<>();
@@ -484,7 +520,9 @@ class LocalLobbyProviderTest {
         private ManagedInstance instance;
         private int starts;
         private int restarts;
+        private int resets;
         private String persistentId;
+        private boolean failRestarts;
 
         private FakeController(Blueprint blueprint, Path directory) {
             this.blueprint = blueprint;
@@ -519,16 +557,32 @@ class LocalLobbyProviderTest {
         @Override
         public CompletableFuture<ManagedInstance> restart(String instanceId) {
             restarts++;
+            if (failRestarts) {
+                return CompletableFuture.failedFuture(
+                        new InstanceOperationException("fixture restart failure")
+                );
+            }
+            instance = replacement(instanceId);
+            return CompletableFuture.completedFuture(instance);
+        }
+
+        @Override
+        public CompletableFuture<ManagedInstance> reset(String instanceId) {
+            resets++;
+            instance = replacement(instanceId);
+            return CompletableFuture.completedFuture(instance);
+        }
+
+        private ManagedInstance replacement(String instanceId) {
             InstanceLifecycle lifecycle = new InstanceLifecycle(instanceId);
             lifecycle.transitionTo(InstanceState.PREPARING);
-            instance = new ManagedInstance(
+            return new ManagedInstance(
                     instanceId,
                     blueprint,
                     25600,
                     directory.resolve(instanceId),
                     lifecycle
             );
-            return CompletableFuture.completedFuture(instance);
         }
 
         @Override

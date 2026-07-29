@@ -18,7 +18,9 @@ public final class InstanceMetadataStore {
 
     public static final String FILE_NAME = ".sls-lite-instance.properties";
     private static final String TEMP_FILE_NAME = FILE_NAME + ".tmp";
-    private static final String SCHEMA_VERSION = "1";
+    private static final String LEGACY_SCHEMA_VERSION = "1";
+    private static final String PREVIOUS_SCHEMA_VERSION = "2";
+    private static final String SCHEMA_VERSION = "3";
 
     private final Path instancesRoot;
 
@@ -55,9 +57,28 @@ public final class InstanceMetadataStore {
         }
 
         Properties values = new Properties();
-        values.setProperty("schema", SCHEMA_VERSION);
+        values.setProperty(
+                "schema",
+                metadata.definitionIdentity() == null
+                        ? LEGACY_SCHEMA_VERSION
+                        : SCHEMA_VERSION
+        );
         values.setProperty("instance_id", metadata.instanceId());
         values.setProperty("blueprint_id", metadata.blueprintId());
+        if (metadata.definitionIdentity() != null) {
+            values.setProperty(
+                    "software_id",
+                    metadata.definitionIdentity().softwareId()
+            );
+            values.setProperty(
+                    "software_version",
+                    metadata.definitionIdentity().softwareVersion()
+            );
+            values.setProperty(
+                    "definition_fingerprint",
+                    metadata.definitionIdentity().fingerprint()
+            );
+        }
         values.setProperty("persistent", Boolean.toString(metadata.persistent()));
         values.setProperty("state", metadata.state().name());
         values.setProperty("created_at", metadata.createdAt().toString());
@@ -109,9 +130,21 @@ public final class InstanceMetadataStore {
 
     private static InstanceMetadata parse(Properties values, Path source) throws IOException {
         try {
-            require(values, "schema", source, SCHEMA_VERSION);
+            String schema = require(values, "schema", source);
+            if (!LEGACY_SCHEMA_VERSION.equals(schema)
+                    && !PREVIOUS_SCHEMA_VERSION.equals(schema)
+                    && !SCHEMA_VERSION.equals(schema)) {
+                throw invalid(source, "unsupported schema " + schema);
+            }
             String instanceId = require(values, "instance_id", source);
             String blueprintId = require(values, "blueprint_id", source);
+            InstanceDefinitionIdentity identity = SCHEMA_VERSION.equals(schema)
+                    ? new InstanceDefinitionIdentity(
+                            require(values, "software_id", source),
+                            require(values, "software_version", source),
+                            require(values, "definition_fingerprint", source)
+                    )
+                    : null;
             String persistentText = require(values, "persistent", source);
             if (!"true".equals(persistentText) && !"false".equals(persistentText)) {
                 throw invalid(source, "persistent must be true or false");
@@ -134,6 +167,7 @@ public final class InstanceMetadataStore {
             return new InstanceMetadata(
                     instanceId,
                     blueprintId,
+                    identity,
                     Boolean.parseBoolean(persistentText),
                     state,
                     createdAt,
@@ -152,18 +186,6 @@ public final class InstanceMetadataStore {
             throw invalid(source, "missing property " + key);
         }
         return value;
-    }
-
-    private static void require(
-            Properties values,
-            String key,
-            Path source,
-            String expected
-    ) throws IOException {
-        String value = require(values, key, source);
-        if (!expected.equals(value)) {
-            throw invalid(source, "unsupported " + key + " " + value);
-        }
     }
 
     private static IOException invalid(Path source, String detail) {

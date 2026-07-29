@@ -27,14 +27,14 @@ upstream umbrella behavior.
 | `info [server]` | Details: `sls.command.admin` | Adapted | Summary and local instance details include players, lifecycle, process, resource, queue, log, and directory information. |
 | `list` | Public | Adapted | vSLS layout, status colors, counts, and hover information matched. |
 | `create <type> <id> [flags...]` | Admin | Planned | Add safe local equivalents for supported override flags. |
-| `start <type> <id>` | Admin | Adapted | Preserve saved-instance semantics when persistence lands. |
+| `start <type> <id>` | Admin | Adapted | Starts local ephemeral or persistent instances within blueprint and host limits. |
 | `join <type> <id> [target]` | Self public; others admin | Adapted | Capacity-aware allocation is supported; admin `/sls join player <player> --force` can bypass a full target instance. |
 | `find <player>` | Public | Supported | vSLS messages, hover details, and action-bar feedback matched. |
-| `system` | Admin | Adapted | Reports local runtime, JVM memory, managed memory allocation, supervised process usage and limit, CPU threads, Java, and OS details; capability probes remain planned. |
+| `system` | Admin | Adapted | Reports local runtime, JVM memory, managed memory allocation, supervised process usage and limit, CPU threads, Java, OS, lobby state, output policy, and startup capability probes. |
 | `node <id> [drained [value]]` | Admin | Local-mode response planned | Node administration is distributed-only. |
 | `console <server> <command>` | Admin | Adapted | Safe local process input is supported; add bounded in-game output capture. |
 | `blueprint <id>` | Admin | Planned | Pretty-print one blueprint; keep `blueprints` as an additive alias. |
-| `debug` | Public, player-only | Planned | Add per-player local lifecycle diagnostics. |
+| `debug` | Public, player-only upstream | Compatibility response | Not implemented; currently visible to administrators as an explicit unavailable command. |
 | `delete <server\|all>` | Admin | Planned | Define safe persistent and ephemeral deletion behavior. |
 | `logs <server> [page] [lines]` | Admin | Adapted | vSLS pagination is backed by a bounded 1,000-line local process-output buffer. |
 | `reload [all\|config\|blueprints\|software]` | Admin | Adapted | Blueprint/software candidates are cross-validated and installed as one immutable catalog revision. Add upstream `config` mode only when host-wide services can be rebuilt safely; until then `config.yml` requires a Velocity restart. |

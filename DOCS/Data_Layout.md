@@ -17,7 +17,8 @@ plugins/sls-lite/
 |-- software-profiles/
 |-- runtimes/
 |-- instances/
-`-- logs/
+|-- sls-limbo/
+`-- administrators.properties
 ```
 
 Blueprint files are discovered recursively below `blueprints/`. Folder names
@@ -37,12 +38,34 @@ state:
       mode: cow
 ```
 
-`software/` is the reusable exact-version cache. `instances/` contains prepared
-runtime copies and is not a source-content directory. Operators should back up
-blueprints, worlds, software profiles, configuration, and any persistent
-instances.
+`software/` is the reusable exact-version cache. `runtimes/` holds optional
+operator-supplied Java installations. `instances/` contains prepared runtime
+copies and is not a source-content directory. Managed temporary logs live
+inside each instance at `logs/sls-lite-console.log`; there is no host-wide log
+archive. `sls-limbo/` is an extracted, reproducible runtime directory.
 
-The Stage 1 test allocation uses the historical network directly from the
-organized `worlds/lobbies`, `worlds/minigames`, and `worlds/adventures`
-directories. Import archives and retired fixtures belong outside the live
-blueprint registry so they cannot appear in commands or tab completion.
+Operators should back up blueprints, worlds, software profiles, configuration,
+administrators, and any persistent instances.
+
+Persistent instance metadata schema 3 records the exact software ID and version
+plus a fingerprint of the software profile, server properties, annotations,
+volumes, and persistence policy used to prepare the directory. SLS-LITE refuses
+a normal restart when that definition has changed, because reusing old files
+would silently mix definitions. Use `/sls reset <instance>` after reviewing the
+change to rebuild from the current definition.
+
+Persistent directories made by schema-1 or schema-2 builds are migrated
+non-destructively on their first restart. SLS-LITE logs that adoption because
+those schemas cannot prove the complete current definition. Migration is
+refused when the current blueprint has `save: false`; restore `save: true`
+first so existing contents cannot be mistaken for an ephemeral instance.
+
+Persistent reset uses sibling staging and backup directories. Startup
+reconciliation restores the backup if a reset was interrupted before valid
+metadata was written, or removes the backup when the replacement had already
+committed.
+
+The historical regression allocation uses the network directly from organized
+`worlds/lobbies`, `worlds/minigames`, and `worlds/adventures` directories.
+Import archives and retired fixtures belong outside the live blueprint registry
+so they cannot appear in commands or tab completion.

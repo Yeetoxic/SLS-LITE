@@ -36,6 +36,7 @@ public final class LocalLobbyProvider implements LobbyProvider {
 
     private volatile CompletableFuture<RegisteredServer> ready = new CompletableFuture<>();
     private volatile ManagedInstance managedInstance;
+    private volatile String managedServerName;
     private volatile LobbyStatus status = LobbyStatus.OFFLINE;
 
     private boolean started;
@@ -126,7 +127,8 @@ public final class LocalLobbyProvider implements LobbyProvider {
             return config.server().equals(serverName);
         }
         ManagedInstance instance = managedInstance;
-        return instance != null && instance.id().equals(serverName);
+        return (instance != null && instance.id().equals(serverName))
+                || serverName.equals(managedServerName);
     }
 
     @Override
@@ -164,8 +166,7 @@ public final class LocalLobbyProvider implements LobbyProvider {
         synchronized (this) {
             current = managedInstance;
             if (config.mode() != LobbyMode.MANAGED
-                    || current == null
-                    || !current.id().equals(serverName)
+                    || !isLobby(serverName)
                     || closed) {
                 return CompletableFuture.failedFuture(
                         new IllegalStateException(
@@ -210,6 +211,7 @@ public final class LocalLobbyProvider implements LobbyProvider {
                     return;
                 }
                 managedInstance = replacement;
+                managedServerName = replacement.id();
             }
             observeManagedInstance(replacement, attemptGeneration);
         });
@@ -341,7 +343,9 @@ public final class LocalLobbyProvider implements LobbyProvider {
     private ManagedInstance provisionInstance(Blueprint blueprint, boolean recovery)
             throws InstanceOperationException {
         if (!blueprint.save()) {
-            return instances.start(blueprint.id());
+            ManagedInstance instance = instances.start(blueprint.id());
+            managedServerName = instance.id();
+            return instance;
         }
 
         String persistentId = null;
@@ -357,9 +361,12 @@ public final class LocalLobbyProvider implements LobbyProvider {
                     .orElse(null);
         }
         if (persistentId == null) {
-            return instances.start(blueprint.id());
+            ManagedInstance instance = instances.start(blueprint.id());
+            managedServerName = instance.id();
+            return instance;
         }
 
+        managedServerName = persistentId;
         try {
             logger.info(
                     "Resuming persistent managed lobby {} from {}/{}",

@@ -52,7 +52,7 @@ public final class ConsoleBanner {
                         + " " + paint(GRAY, "| Standalone Server Launch System")
         );
         lines.add(
-                paint(BLUE, " Copyright \u00A9 2020 - 2026 ")
+                paint(BLUE, " Copyright © 2020 - 2026 ")
                         + paint(MAGENTA, "Protoxon, Yeetoxic & Contributors")
         );
         lines.add("");

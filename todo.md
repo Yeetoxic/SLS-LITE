@@ -269,6 +269,11 @@ access, and SLS-LITE administration must not require another plugin.
       or partially emulating them.
 - [ ] Add command tests covering public, granular, administrator, console,
       player, other-player, force, invalid-usage, and tab-completion cases.
+  - [ ] Design an operator test command equivalent to
+        `/sls tools tests join [registry|all] [world|all]` that starts each
+        selected server, performs a real protocol-level join probe, and reports
+        bounded failure evidence without pretending a synthetic proxy player is
+        a real client.
   - [x] Cover the shared `this` selector for console, external backends, and
         managed backends.
   - [x] Cover protected-stop rejection, granular force permission, built-in
@@ -474,6 +479,9 @@ the local implementation has equivalent behavior.
   - Document that Minecraft clients fetch packs over HTTP(S); SLS-LITE cannot
     make a panel-private file client-reachable without an exposed web endpoint.
   - Do not require a separate Velocity or Paper plugin for core pack switching.
+  - [ ] Evaluate optional local resource-pack conversion as a separate adapter
+        or tool. Do not upload operator packs to an external conversion service
+        from the proxy or make conversion a prerequisite for core operation.
 
 ### Events and Lifecycle
 
@@ -757,18 +765,18 @@ data layout, lifecycle behavior, and the passing test suite.
 
 ## Documentation and Public Release Preparation
 
-- [ ] Audit every existing file in `DOCS/` and classify it as current,
+- [x] Audit every existing file in `DOCS/` and classify it as current,
       historical reference, material to rewrite, or obsolete material to remove.
-- [ ] Separate internal development notes and test-environment procedures from
+- [x] Separate internal development notes and test-environment procedures from
       public operator documentation.
-- [ ] Replace legacy SLS-LITE terminology, commands, configuration examples, and
+- [x] Replace legacy SLS-LITE terminology, commands, configuration examples, and
       architecture descriptions that no longer match the implementation.
 - [x] Preserve useful historical context in a clearly labeled archive instead of
       presenting old behavior as current guidance.
-- [ ] Create a concise public README covering the project goal, supported
+- [x] Create a concise public README covering the project goal, supported
       environments, current maturity, installation, quick start, and links to
       detailed documentation.
-- [ ] Publish operator documentation for:
+- [x] Publish operator documentation for:
   - Host requirements and shared-host limitations.
   - Installation, first startup, updates, backups, and uninstallation.
   - The complete commented `config.yml` reference and validation rules.
@@ -782,12 +790,14 @@ data layout, lifecycle behavior, and the passing test suite.
     states, and the new-Minecraft-release compatibility process.
   - Pterodactyl and generic shared-host deployment without implying that host
     restrictions can be bypassed.
-- [ ] Publish administrator migration guidance from historical SLS-LITE and the
+- [x] Publish administrator migration guidance from historical SLS-LITE and the
       compatible subset of modern SLS, with unsupported distributed features
       identified explicitly.
-- [ ] Publish contributor and integration documentation for the versioned
+- [x] Publish contributor and integration documentation for the versioned
       SLS-LITE API, lifecycle events, capability detection, compatibility policy,
-      build process, tests, and release process.
+      build process, tests, and release process. The current documentation
+      explicitly records that no public versioned API or event contract exists
+      yet rather than presenting internal classes as stable integration points.
 - [ ] Maintain a generated or test-verified command, permission, configuration,
       and feature-compatibility reference so public docs cannot silently drift
       from implemented behavior.
@@ -938,6 +948,9 @@ equivalent.
       equivalents while rejecting unsupported behavior with actionable errors.
 - [ ] [S2] Preserve compatible names, annotations, registry types, limits,
       lifecycle intentions, and content declarations.
+- [ ] [S2] Implement and document modern SLS `allowed-client-versions`
+      compatibility using the bundled protocol-version mappings (including
+      pre-data-version releases) and reject unknown version names clearly.
 - [ ] [S2] Define the modern SLS copy-on-write volume compatibility contract:
       preserve its isolation intent while documenting `reflink`, `overlay`, and
       portable-copy implementations as host-dependent local adaptations.

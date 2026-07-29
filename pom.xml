@@ -24,7 +24,8 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>21</maven.compiler.release>
-        <velocity.version>4.1.0-SNAPSHOT</velocity.version>
+        <!-- Pin the exact API build validated by SLS-LITE; do not use a moving snapshot. -->
+        <velocity.version>4.1.0-20260719.140524-3</velocity.version>
         <snakeyaml.version>2.6</snakeyaml.version>
         <viaversion.version>5.11.0</viaversion.version>
         <junit.version>5.13.4</junit.version>

@@ -16,6 +16,7 @@ public final class ManagedInstance {
 
     private final String id;
     private final Blueprint blueprint;
+    private final InstanceDefinitionIdentity definitionIdentity;
     private final int port;
     private final Path directory;
     private final InstanceLifecycle lifecycle;
@@ -42,7 +43,25 @@ public final class ManagedInstance {
             Path directory,
             InstanceLifecycle lifecycle
     ) {
-        this(id, blueprint, port, directory, lifecycle, Instant.now());
+        this(id, blueprint, null, port, directory, lifecycle, Instant.now());
+    }
+
+    ManagedInstance(
+            String id,
+            Blueprint blueprint,
+            InstanceDefinitionIdentity definitionIdentity,
+            int port,
+            Path directory,
+            InstanceLifecycle lifecycle,
+            Instant createdAt
+    ) {
+        this.id = id;
+        this.blueprint = blueprint;
+        this.definitionIdentity = definitionIdentity;
+        this.port = port;
+        this.directory = directory;
+        this.lifecycle = lifecycle;
+        this.createdAt = java.util.Objects.requireNonNull(createdAt, "createdAt");
     }
 
     ManagedInstance(
@@ -53,12 +72,7 @@ public final class ManagedInstance {
             InstanceLifecycle lifecycle,
             Instant createdAt
     ) {
-        this.id = id;
-        this.blueprint = blueprint;
-        this.port = port;
-        this.directory = directory;
-        this.lifecycle = lifecycle;
-        this.createdAt = java.util.Objects.requireNonNull(createdAt, "createdAt");
+        this(id, blueprint, null, port, directory, lifecycle, createdAt);
     }
 
     public String id() {
@@ -67,6 +81,10 @@ public final class ManagedInstance {
 
     public Blueprint blueprint() {
         return blueprint;
+    }
+
+    InstanceDefinitionIdentity definitionIdentity() {
+        return definitionIdentity;
     }
 
     public int port() {

@@ -27,6 +27,11 @@ final class InstanceMetadataStoreTest {
         InstanceMetadata expected = new InstanceMetadata(
                 "smoke.abc123",
                 "smoke",
+                new InstanceDefinitionIdentity(
+                        "paper",
+                        "1.21.11",
+                        "0123456789abcdef"
+                ),
                 false,
                 InstanceState.STARTING,
                 createdAt,
@@ -40,6 +45,11 @@ final class InstanceMetadataStoreTest {
         assertFalse(Files.exists(instance.resolve(
                 InstanceMetadataStore.FILE_NAME + ".tmp"
         )));
+        assertEquals(
+                "3",
+                readProperties(instance.resolve(InstanceMetadataStore.FILE_NAME))
+                        .getProperty("schema")
+        );
     }
 
     @Test
@@ -58,5 +68,64 @@ final class InstanceMetadataStoreTest {
         );
 
         assertThrows(IOException.class, () -> store.write(outside, metadata));
+    }
+
+    @Test
+    void readsLegacyMetadataWithoutInventingDefinitionIdentity() throws Exception {
+        Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+        Path instance = Files.createDirectories(root.resolve("smoke.abc123"));
+        Files.writeString(
+                instance.resolve(InstanceMetadataStore.FILE_NAME),
+                """
+                schema=1
+                instance_id=smoke.abc123
+                blueprint_id=smoke
+                persistent=true
+                state=STOPPED
+                created_at=2026-07-24T12:00:00Z
+                """
+        );
+
+        InstanceMetadata loaded = new InstanceMetadataStore(root)
+                .read(instance)
+                .orElseThrow();
+
+        assertEquals(null, loaded.definitionIdentity());
+        assertEquals(InstanceState.STOPPED, loaded.state());
+    }
+
+    @Test
+    void treatsSchemaTwoFingerprintAsLegacyAfterIdentityContractChange()
+            throws Exception {
+        Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+        Path instance = Files.createDirectories(root.resolve("smoke.abc123"));
+        Files.writeString(
+                instance.resolve(InstanceMetadataStore.FILE_NAME),
+                """
+                schema=2
+                instance_id=smoke.abc123
+                blueprint_id=smoke
+                software_id=paper
+                software_version=1.21.11
+                definition_fingerprint=old-contract
+                persistent=true
+                state=STOPPED
+                created_at=2026-07-24T12:00:00Z
+                """
+        );
+
+        InstanceMetadata loaded = new InstanceMetadataStore(root)
+                .read(instance)
+                .orElseThrow();
+
+        assertEquals(null, loaded.definitionIdentity());
+    }
+
+    private static java.util.Properties readProperties(Path path) throws Exception {
+        java.util.Properties values = new java.util.Properties();
+        try (var input = Files.newInputStream(path)) {
+            values.load(input);
+        }
+        return values;
     }
 }

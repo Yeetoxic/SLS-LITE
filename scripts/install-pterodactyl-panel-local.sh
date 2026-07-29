@@ -2,14 +2,33 @@
 set -euo pipefail
 
 panel_root="/var/www/pterodactyl"
-database_password="${PTERODACTYL_DB_PASSWORD:-PteroDbLocal2026!}"
+: "${PTERODACTYL_DB_PASSWORD:?Set PTERODACTYL_DB_PASSWORD before running this installer}"
+: "${PTERODACTYL_ADMIN_PASSWORD:?Set PTERODACTYL_ADMIN_PASSWORD before running this installer}"
+database_password="${PTERODACTYL_DB_PASSWORD}"
+admin_password="${PTERODACTYL_ADMIN_PASSWORD}"
+database_password_hex="$(
+    printf '%s' "${database_password}" | od -An -tx1 | tr -d ' \n'
+)"
 
 systemctl enable --now mariadb redis-server php8.3-fpm nginx cron
 
 mariadb <<SQL
 CREATE DATABASE IF NOT EXISTS panel;
-CREATE USER IF NOT EXISTS 'pterodactyl'@'127.0.0.1' IDENTIFIED BY '${database_password}';
-ALTER USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY '${database_password}';
+SET @sls_database_password = CONVERT(0x${database_password_hex} USING utf8mb4);
+SET @sls_create_user = CONCAT(
+    "CREATE USER IF NOT EXISTS 'pterodactyl'@'127.0.0.1' IDENTIFIED BY ",
+    QUOTE(@sls_database_password)
+);
+PREPARE sls_create_user FROM @sls_create_user;
+EXECUTE sls_create_user;
+DEALLOCATE PREPARE sls_create_user;
+SET @sls_alter_user = CONCAT(
+    "ALTER USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY ",
+    QUOTE(@sls_database_password)
+);
+PREPARE sls_alter_user FROM @sls_alter_user;
+EXECUTE sls_alter_user;
+DEALLOCATE PREPARE sls_alter_user;
 GRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'127.0.0.1';
 FLUSH PRIVILEGES;
 SQL
@@ -39,12 +58,38 @@ sed -i -E \
     -e 's|^DB_PORT=.*|DB_PORT=3306|' \
     -e 's|^DB_DATABASE=.*|DB_DATABASE=panel|' \
     -e 's|^DB_USERNAME=.*|DB_USERNAME=pterodactyl|' \
-    -e "s|^DB_PASSWORD=.*|DB_PASSWORD=${database_password}|" \
     -e 's|^CACHE_DRIVER=.*|CACHE_DRIVER=redis|' \
     -e 's|^SESSION_DRIVER=.*|SESSION_DRIVER=redis|' \
     -e 's|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=redis|' \
     -e 's|^REDIS_HOST=.*|REDIS_HOST=127.0.0.1|' \
     .env
+
+PTERODACTYL_ENV_DB_PASSWORD="${database_password}" php -r '
+$path = ".env";
+$content = file_get_contents($path);
+$password = getenv("PTERODACTYL_ENV_DB_PASSWORD");
+$escaped = str_replace(
+    ["\\", "\"", "$", "\n", "\r"],
+    ["\\\\", "\\\"", "\\$", "\\n", "\\r"],
+    $password
+);
+$replacement = "DB_PASSWORD=\"" . $escaped . "\"";
+$updated = preg_replace_callback(
+    "/^DB_PASSWORD=.*$/m",
+    static fn() => $replacement,
+    $content,
+    1,
+    $count
+);
+if ($updated === null || $count !== 1) {
+    fwrite(STDERR, "Unable to update DB_PASSWORD in .env\n");
+    exit(1);
+}
+if (file_put_contents($path, $updated) === false) {
+    fwrite(STDERR, "Unable to write .env\n");
+    exit(1);
+}
+'
 
 if grep -q '^APP_KEY=$' .env; then
     php artisan key:generate --force
@@ -60,7 +105,7 @@ if ! mariadb panel -N -e \
         --username=admin \
         --name-first=SLS \
         --name-last=Admin \
-        --password='SlsLiteLocal2026!' \
+        --password="${admin_password}" \
         --admin=1 \
         --no-interaction
 fi

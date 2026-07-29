@@ -262,6 +262,30 @@ class SLSCommandForcedStopTest {
     }
 
     @Test
+    void forcedResetRecoversProtectedLobbyWhenNoActiveInstanceExists() {
+        TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+        SLSCommand command = command(new TrackingController(null), lobby);
+
+        command.execute(invocation(
+                source(
+                        Set.of(
+                                "sls.command.reset",
+                                "sls.command.reset.force"
+                        ),
+                        new ArrayList<>()
+                ),
+                "reset",
+                INSTANCE_ID,
+                "--force"
+        ));
+
+        assertEquals(0, lobby.begins);
+        assertEquals(0, lobby.evacuations);
+        assertEquals(1, lobby.cycles);
+        assertTrue(lobby.lastReset);
+    }
+
+    @Test
     void restartForceSuggestionIsHiddenWithoutForcePermission() {
         SLSCommand command = command(
                 new TrackingController(instance),
@@ -416,13 +440,13 @@ class SLSCommandForcedStopTest {
 
         @Override
         public Collection<ManagedInstance> getAll() {
-            return List.of(instance);
+            return instance == null ? List.of() : List.of(instance);
         }
 
         @Override
         public ManagedInstance get(String instanceId)
                 throws InstanceOperationException {
-            if (!instance.id().equals(instanceId)) {
+            if (instance == null || !instance.id().equals(instanceId)) {
                 throw new InstanceOperationException("Unknown instance");
             }
             return instance;

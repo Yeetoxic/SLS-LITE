@@ -35,10 +35,13 @@ import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -149,6 +152,8 @@ public final class InstanceManager implements ServerController {
         );
         Blueprint blueprint = definition.blueprint();
         SoftwareProfile profile = definition.softwareProfile();
+        InstanceDefinitionIdentity definitionIdentity =
+                InstanceDefinitionIdentity.from(blueprint, profile);
 
         String instanceId;
         int port;
@@ -176,9 +181,11 @@ public final class InstanceManager implements ServerController {
             ManagedInstance instance = new ManagedInstance(
                     instanceId,
                     blueprint,
+                    definitionIdentity,
                     port,
                     directory,
-                    lifecycle
+                    lifecycle,
+                    Instant.now()
             );
             instances.put(instanceId, instance);
             logger.info(
@@ -369,6 +376,9 @@ public final class InstanceManager implements ServerController {
                         ? readPersistentMetadata(instanceId)
                         : metadataFor(active);
                 requireRestartable(metadata, active);
+                if (!reset) {
+                    metadata = requireCompatibleDefinition(metadata);
+                }
             } catch (InstanceOperationException exception) {
                 pendingRestarts.remove(instanceId);
                 throw exception;
@@ -414,8 +424,16 @@ public final class InstanceManager implements ServerController {
         Blueprint blueprint = definition.blueprint();
         SoftwareProfile profile = definition.softwareProfile();
         try {
-            Path baseDirectory = resolveBaseDirectory(profile, blueprint.version());
-            InstanceMetadata stopped = metadata.withoutProcess(InstanceState.STOPPED);
+            Path baseDirectory = resolveBaseDirectory(
+                    profile,
+                    blueprint.version(),
+                    () -> false
+            );
+            InstanceMetadata stopped = metadata
+                    .withDefinitionIdentity(
+                            InstanceDefinitionIdentity.from(blueprint, profile)
+                    )
+                    .withoutProcess(InstanceState.STOPPED);
             directoryPreparer.replace(
                     instanceId,
                     baseDirectory,
@@ -484,7 +502,8 @@ public final class InstanceManager implements ServerController {
             long softwareStartedAt = System.nanoTime();
             Path baseDirectory = resolveBaseDirectory(
                     profile,
-                    instance.blueprint().version()
+                    instance.blueprint().version(),
+                    instance::stopRequested
             );
             long softwareReadyAt = System.nanoTime();
             logger.info(
@@ -633,17 +652,35 @@ public final class InstanceManager implements ServerController {
 
     private Path resolveBaseDirectory(
             SoftwareProfile profile,
-            String version
+            String version,
+            BooleanSupplier cancellationRequested
     ) throws ProcessSpecificationException {
         if (installationService == null) {
             return processSpecFactory.resolveBaseDirectory(profile, version);
         }
+        CompletableFuture<Path> installation =
+                installationService.ensureInstalled(profile, version);
         try {
-            return installationService.ensureInstalled(profile, version).join();
-        } catch (java.util.concurrent.CompletionException exception) {
-            Throwable cause = exception.getCause() == null
-                    ? exception
-                    : exception.getCause();
+            while (true) {
+                if (cancellationRequested.getAsBoolean()) {
+                    throw new ProcessSpecificationException(
+                            "Software installation wait was cancelled"
+                    );
+                }
+                try {
+                    return installation.get(100, TimeUnit.MILLISECONDS);
+                } catch (TimeoutException ignored) {
+                    // Polling cancels only this instance's wait, not the shared install.
+                }
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new ProcessSpecificationException(
+                    "Interrupted while waiting for software installation",
+                    exception
+            );
+        } catch (ExecutionException exception) {
+            Throwable cause = exception.getCause() == null ? exception : exception.getCause();
             throw new ProcessSpecificationException(
                     cause.getMessage() == null
                             ? "Software installation failed"
@@ -889,6 +926,9 @@ public final class InstanceManager implements ServerController {
         Blueprint blueprint = definition.blueprint();
         SoftwareProfile profile = definition.softwareProfile();
         requireRestartable(metadata, null);
+        metadata = requireCompatibleDefinition(metadata, definition);
+        InstanceDefinitionIdentity definitionIdentity =
+                InstanceDefinitionIdentity.from(blueprint, profile);
 
         int port;
         ManagedInstance instance;
@@ -920,6 +960,7 @@ public final class InstanceManager implements ServerController {
             instance = new ManagedInstance(
                     instanceId,
                     blueprint,
+                    definitionIdentity,
                     port,
                     directoryPreparer.root().resolve(instanceId),
                     lifecycle,
@@ -969,6 +1010,7 @@ public final class InstanceManager implements ServerController {
         return new InstanceMetadata(
                 instance.id(),
                 instance.blueprint().id(),
+                instance.definitionIdentity(),
                 instance.blueprint().save(),
                 instance.state(),
                 instance.createdAt(),
@@ -991,6 +1033,65 @@ public final class InstanceManager implements ServerController {
                     "Persistent instance process is still running: " + metadata.instanceId()
             );
         }
+    }
+
+    private InstanceMetadata requireCompatibleDefinition(InstanceMetadata metadata)
+            throws InstanceOperationException {
+        ResolvedDefinition definition = resolveDefinition(
+                metadata.blueprintId(),
+                "Persistent instance " + metadata.instanceId()
+                        + " references missing blueprint " + metadata.blueprintId()
+        );
+        return requireCompatibleDefinition(metadata, definition);
+    }
+
+    private InstanceMetadata requireCompatibleDefinition(
+            InstanceMetadata metadata,
+            ResolvedDefinition definition
+    ) throws InstanceOperationException {
+        InstanceDefinitionIdentity recorded = metadata.definitionIdentity();
+        InstanceDefinitionIdentity current = InstanceDefinitionIdentity.from(
+                definition.blueprint(),
+                definition.softwareProfile()
+        );
+        if (recorded == null) {
+            if (metadata.persistent() != definition.blueprint().save()) {
+                throw new InstanceOperationException(
+                        "Persistent instance " + metadata.instanceId()
+                                + " uses legacy metadata, but its blueprint now has "
+                                + "save: false; restore save: true to migrate it "
+                                + "without deleting its contents"
+                );
+            }
+            InstanceMetadata migrated = metadata.withDefinitionIdentity(current);
+            Path directory = directoryPreparer.root().resolve(metadata.instanceId());
+            try {
+                metadataStore.write(directory, migrated);
+            } catch (IOException exception) {
+                throw new InstanceOperationException(
+                        "Unable to migrate legacy metadata for persistent instance "
+                                + metadata.instanceId(),
+                        exception
+                );
+            }
+            logger.warn(
+                    "Migrated legacy metadata for persistent instance {} using "
+                            + "the current {}/{} definition; reset it explicitly if "
+                            + "its template contents are no longer compatible",
+                    metadata.instanceId(),
+                    current.softwareId(),
+                    current.softwareVersion()
+            );
+            return migrated;
+        }
+        if (!recorded.equals(current)) {
+            throw new InstanceOperationException(
+                    "Persistent instance " + metadata.instanceId()
+                            + " was created from a different software, configuration, "
+                            + "or volume definition; reset it before restarting"
+            );
+        }
+        return metadata;
     }
 
     private static boolean isRecordedProcessRunning(InstanceMetadata metadata) {
@@ -1073,6 +1174,7 @@ public final class InstanceManager implements ServerController {
         InstanceMetadata metadata = new InstanceMetadata(
                 instance.id(),
                 instance.blueprint().id(),
+                instance.definitionIdentity(),
                 instance.blueprint().save(),
                 state,
                 instance.createdAt(),

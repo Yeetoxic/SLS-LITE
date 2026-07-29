@@ -6,6 +6,8 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.Properties;
 
@@ -30,6 +32,7 @@ public final class ServerPropertiesEditor {
 
         Path root = instanceDirectory.toAbsolutePath().normalize();
         Path propertiesPath = root.resolve("server.properties");
+        Path temporaryPath = root.resolve("server.properties.tmp");
         Properties properties = new Properties();
         if (Files.exists(propertiesPath)) {
             try (Reader input = Files.newBufferedReader(propertiesPath, StandardCharsets.UTF_8)) {
@@ -45,8 +48,29 @@ public final class ServerPropertiesEditor {
         properties.setProperty("online-mode", "false");
         properties.setProperty("max-players", Integer.toString(maxPlayers));
 
-        try (Writer output = Files.newBufferedWriter(propertiesPath, StandardCharsets.UTF_8)) {
-            properties.store(output, "Managed by SLS-LITE");
+        try {
+            try (Writer output = Files.newBufferedWriter(
+                    temporaryPath,
+                    StandardCharsets.UTF_8
+            )) {
+                properties.store(output, "Managed by SLS-LITE");
+            }
+            try {
+                Files.move(
+                        temporaryPath,
+                        propertiesPath,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING
+                );
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(
+                        temporaryPath,
+                        propertiesPath,
+                        StandardCopyOption.REPLACE_EXISTING
+                );
+            }
+        } finally {
+            Files.deleteIfExists(temporaryPath);
         }
     }
 }
