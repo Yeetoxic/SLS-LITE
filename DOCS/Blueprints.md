@@ -188,6 +188,53 @@ The shorthand shape is `name:source:target[:mode]`; omitted mode defaults to
 See [Blueprint Volumes](Blueprint_Volumes.md) for transactional and filesystem
 details.
 
+## State Copies
+
+Modern SLS `state.copy` entries place blueprint assets into a prepared instance
+after the software base and volumes:
+
+```yaml
+state:
+  copy:
+    - source: files/plugins/example.jar
+      target: plugins/example.jar
+    - "files/server-icon.png:server-icon.png"
+```
+
+Both mapping and `source:target` shorthand forms are accepted. Sources are
+relative to `plugins/sls-lite/`; targets are relative to the instance root.
+Files replace an existing file, while directories merge and replace matching
+files in declaration order.
+
+Copy preparation is transactional with the software and volumes. Missing
+sources, traversal, symbolic links, special files, and file/directory type
+conflicts fail preparation and remove the incomplete instance. Persistent
+instances refresh copy sources during `/sls reset`, not every restart, so an
+operator-controlled source change cannot silently mutate an existing server.
+
+## State Environment
+
+Modern SLS `state.env` values are passed to the locally managed child process:
+
+```yaml
+state:
+  env:
+    FEATURE_FLAG: "true"
+    PUBLIC_ENDPOINT: "https://example.test"
+```
+
+Names use portable environment syntax and values must be strings. A blueprint
+may define at most 64 variables, each value is limited to 8 KiB, and the total
+declaration is limited to 64 KiB. Names that can alter Java startup, executable
+resolution, native library loading, or SLS-LITE-owned behavior are rejected,
+including `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, `JDK_JAVA_OPTIONS`,
+`CLASSPATH`, `PATH`, `LD_*`, `DYLD_*`, and `SLS_*`.
+
+Environment variable names appear in administrative blueprint details, but
+SLS-LITE does not log values or show them in hover text. The child process and
+its plugins can still print their own environment. Blueprint files are
+plaintext; `state.env` is not a secret store.
+
 ## Lifecycle Annotations
 
 SLS-LITE reads these values under `annotations.sls-lite`:

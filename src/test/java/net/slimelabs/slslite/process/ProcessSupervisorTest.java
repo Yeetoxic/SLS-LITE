@@ -9,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
@@ -53,6 +54,38 @@ class ProcessSupervisorTest {
         assertTrue(output.contains("FIXTURE READY"));
         assertEquals(0, process.stop().get(5, TimeUnit.SECONDS));
         assertEquals(InstanceState.STOPPED, process.state());
+    }
+
+    @Test
+    void passesConfiguredEnvironmentToChildProcess() throws Exception {
+        supervisor = new ProcessSupervisor(1);
+        InstanceLifecycle lifecycle = preparingLifecycle("test-environment");
+        List<String> output = new CopyOnWriteArrayList<>();
+        ProcessSpec base = spec(
+                "environment",
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(2)
+        );
+        ProcessSpec configured = new ProcessSpec(
+                base.command(),
+                base.workingDirectory(),
+                base.readinessPattern(),
+                base.startupTimeout(),
+                base.stopCommand(),
+                base.stopTimeout(),
+                Map.of("SLS_LITE_TEST_VALUE", "propagated")
+        );
+
+        SupervisedProcess process = supervisor.start(
+                "test-environment",
+                configured,
+                lifecycle,
+                output::add
+        );
+
+        process.readyFuture().get(5, TimeUnit.SECONDS);
+        assertTrue(output.contains("ENV:propagated"));
+        assertEquals(0, process.exitFuture().get(5, TimeUnit.SECONDS));
     }
 
     @Test

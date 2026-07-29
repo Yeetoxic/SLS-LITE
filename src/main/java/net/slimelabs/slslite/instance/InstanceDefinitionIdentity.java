@@ -1,6 +1,7 @@
 package net.slimelabs.slslite.instance;
 
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintCopy;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import net.slimelabs.slslite.software.SoftwareProfile;
 
@@ -70,6 +71,10 @@ public record InstanceDefinitionIdentity(
                 writeValue(output, blueprint.volumes().stream()
                         .map(InstanceDefinitionIdentity::volumeValues)
                         .toList());
+                writeValue(output, blueprint.copies().stream()
+                        .map(InstanceDefinitionIdentity::copyValues)
+                        .toList());
+                writeValue(output, blueprint.environment());
             }
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return new InstanceDefinitionIdentity(
@@ -90,6 +95,13 @@ public record InstanceDefinitionIdentity(
                 "source", volume.source(),
                 "target", volume.target(),
                 "mode", volume.mode().name()
+        );
+    }
+
+    private static Map<String, Object> copyValues(BlueprintCopy copy) {
+        return Map.of(
+                "source", copy.source(),
+                "target", copy.target()
         );
     }
 

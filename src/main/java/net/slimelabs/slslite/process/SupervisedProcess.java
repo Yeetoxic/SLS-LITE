@@ -59,6 +59,7 @@ public final class SupervisedProcess {
         ProcessBuilder builder = new ProcessBuilder(spec.command())
                 .directory(spec.workingDirectory().toFile())
                 .redirectErrorStream(true);
+        builder.environment().putAll(spec.environment());
 
         try {
             process = builder.start();

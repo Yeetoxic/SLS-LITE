@@ -49,8 +49,8 @@ fixtures exercise each row.
 | `mode: ro` | Adapted | Private writable instance snapshot protects the source; not a strict read-only bind mount. |
 | `mode: rw` | Intentionally unsupported at runtime | Definition parses, but launch fails before preparation because shared mutable host state is unsafe in portable local mode. |
 | `state.mounts` | Intentionally unsupported | Arbitrary host mounts require daemon/container policy. |
-| `state.copy` | Deferred | Useful for plugins/configuration if sources and targets remain contained. |
-| `state.env` | Deferred | Useful after protected variables and launch boundaries are defined. |
+| `state.copy` mapping and shorthand | Adapted | Transactional contained file/directory copy after software and volumes. Persistent instances refresh sources on reset rather than every restart. |
+| `state.env` | Adapted | Validated strings reach the local child process; JVM, loader, path, and SLS-owned variables are rejected. Names are visible to operators, values are not logged. |
 | `save` | Supported | Persistent instance directory and identity. |
 | `annotations` | Supported as metadata | Open-ended values load without structural rejection. |
 
@@ -148,3 +148,7 @@ The pinned upstream example harness loaded all 6 examples independently. This
 includes duplicate/multi-source COW merge, `ro`/`rw` definitions, properties,
 YAML, and text-file patches. Runtime volume sources remain a separate launch
 gate.
+
+An attributed fixture derived from `protocube/blueprint/example.yml` separately
+verifies `state.copy` mapping/shorthand and `state.env`, because neither field
+is used by the current 54-blueprint SlimeLabs corpus.

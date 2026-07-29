@@ -1,6 +1,7 @@
 package net.slimelabs.slslite.instance;
 
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintCopy;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import net.slimelabs.slslite.software.SoftwareProfile;
 import org.junit.jupiter.api.Test;
@@ -164,6 +165,56 @@ final class InstanceDefinitionIdentityTest {
         assertNotEquals(
                 InstanceDefinitionIdentity.from(original, profile()),
                 InstanceDefinitionIdentity.from(changedTextPatch, profile())
+        );
+
+        Blueprint changedCopy = new Blueprint(
+                original.id(),
+                original.name(),
+                original.type(),
+                original.software(),
+                original.version(),
+                original.image(),
+                original.softwarePath(),
+                original.memoryLimitMiB(),
+                original.maxPlayers(),
+                original.maxInstances(),
+                original.save(),
+                original.serverProperties(),
+                original.yamlConfigs(),
+                original.textFileConfigs(),
+                original.annotations(),
+                original.volumes(),
+                List.of(new BlueprintCopy("files/source.yml", "plugins/config.yml")),
+                Map.of()
+        );
+        assertNotEquals(
+                InstanceDefinitionIdentity.from(original, profile()),
+                InstanceDefinitionIdentity.from(changedCopy, profile())
+        );
+
+        Blueprint changedEnvironment = new Blueprint(
+                original.id(),
+                original.name(),
+                original.type(),
+                original.software(),
+                original.version(),
+                original.image(),
+                original.softwarePath(),
+                original.memoryLimitMiB(),
+                original.maxPlayers(),
+                original.maxInstances(),
+                original.save(),
+                original.serverProperties(),
+                original.yamlConfigs(),
+                original.textFileConfigs(),
+                original.annotations(),
+                original.volumes(),
+                List.of(),
+                Map.of("FEATURE_FLAG", "enabled")
+        );
+        assertNotEquals(
+                InstanceDefinitionIdentity.from(original, profile()),
+                InstanceDefinitionIdentity.from(changedEnvironment, profile())
         );
     }
 

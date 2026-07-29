@@ -1,0 +1,21 @@
+# Derived from protocube/blueprint/example.yml in SLS v0.2.0.
+# Source commit: 8e8b1e3cf7d2157887764c16f11b8901f8241121
+# Source license: GNU Affero General Public License v3.0
+
+blueprint:
+  id: "state-contract"
+  name: "State Contract"
+  type: "compatibility"
+
+server:
+  software: "paper"
+  version: "1.21.11"
+
+state:
+  copy:
+    - source: "files/config.yml"
+      target: "plugins/example/config.yml"
+    - "files/server-icon.png:server-icon.png"
+  env:
+    FEATURE_FLAG: "true"
+    PUBLIC_ENDPOINT: "https://example.test"

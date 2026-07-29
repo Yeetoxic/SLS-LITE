@@ -13,6 +13,7 @@ plugins/sls-lite/
 |   |-- lobbies/
 |   |-- minigames/
 |   `-- adventures/
+|-- files/
 |-- software/
 |-- software-profiles/
 |-- runtimes/
@@ -38,6 +39,10 @@ state:
       mode: cow
 ```
 
+`state.copy` sources use the same contained data-directory root. `files/` is
+the recommended operator location for copied plugins, configuration, icons,
+and other assets, but any contained non-instance source path is valid.
+
 `software/` is the reusable exact-version cache. `runtimes/` holds optional
 operator-supplied Java installations. `instances/` contains prepared runtime
 copies and is not a source-content directory. Managed temporary logs live
@@ -48,11 +53,12 @@ Operators should back up blueprints, worlds, software profiles, configuration,
 administrators, and any persistent instances.
 
 Persistent instance metadata schema 3 records the exact software ID and version
-plus a fingerprint of the software profile, server properties, annotations,
-volumes, and persistence policy used to prepare the directory. SLS-LITE refuses
-a normal restart when that definition has changed, because reusing old files
-would silently mix definitions. Use `/sls reset <instance>` after reviewing the
-change to rebuild from the current definition.
+plus a fingerprint of the software profile, config patches, annotations,
+volumes, copy declarations, environment names and values, and persistence
+policy used to prepare the directory. SLS-LITE refuses a normal restart when
+that definition has changed, because reusing old files would silently mix
+definitions. Use `/sls reset <instance>` after reviewing the change to rebuild
+from the current definition.
 
 Persistent directories made by schema-1 or schema-2 builds are migrated
 non-destructively on their first restart. SLS-LITE logs that adoption because

@@ -3,6 +3,7 @@ package net.slimelabs.slslite.process;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 public record ProcessSpec(
@@ -11,7 +12,8 @@ public record ProcessSpec(
         Pattern readinessPattern,
         Duration startupTimeout,
         String stopCommand,
-        Duration stopTimeout
+        Duration stopTimeout,
+        Map<String, String> environment
 ) {
 
     public ProcessSpec {
@@ -33,5 +35,25 @@ public record ProcessSpec(
         if (stopTimeout == null || stopTimeout.isZero() || stopTimeout.isNegative()) {
             throw new IllegalArgumentException("stopTimeout must be positive");
         }
+        environment = Map.copyOf(environment);
+    }
+
+    public ProcessSpec(
+            List<String> command,
+            Path workingDirectory,
+            Pattern readinessPattern,
+            Duration startupTimeout,
+            String stopCommand,
+            Duration stopTimeout
+    ) {
+        this(
+                command,
+                workingDirectory,
+                readinessPattern,
+                startupTimeout,
+                stopCommand,
+                stopTimeout,
+                Map.of()
+        );
     }
 }

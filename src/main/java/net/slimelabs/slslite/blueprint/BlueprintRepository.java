@@ -153,7 +153,7 @@ public final class BlueprintRepository {
                     path,
                     "software", "version", "image", "path", "limits", "configs"
             );
-            requireOnlyKeys(state, "state", path, "volumes");
+            requireOnlyKeys(state, "state", path, "volumes", "copy", "env");
             requireOnlyKeys(
                     limits,
                     "server.limits",
@@ -193,6 +193,8 @@ public final class BlueprintRepository {
             );
             boolean save = optionalBoolean(root, "save", false, path);
             List<BlueprintVolume> volumes = parseVolumes(state, path);
+            List<BlueprintCopy> copies = parseCopies(state, path);
+            Map<String, String> environment = parseEnvironment(state, path);
 
             return new Blueprint(
                     id,
@@ -210,7 +212,9 @@ public final class BlueprintRepository {
                     parsedConfigs.yamlConfigs(),
                     parsedConfigs.textFileConfigs(),
                     annotations,
-                    volumes
+                    volumes,
+                    copies,
+                    environment
             );
         } catch (IOException exception) {
             throw new BlueprintException("Unable to read blueprint " + path, exception);
@@ -380,6 +384,88 @@ public final class BlueprintRepository {
             volumes.add(parsed);
         }
         return List.copyOf(volumes);
+    }
+
+    private static List<BlueprintCopy> parseCopies(
+            Map<String, Object> state,
+            Path path
+    ) throws BlueprintException {
+        Object configured = state.get("copy");
+        if (configured == null) {
+            return List.of();
+        }
+        if (!(configured instanceof List<?> rawCopies)) {
+            throw error(path, "'state.copy' must be a list");
+        }
+        if (rawCopies.size() > 128) {
+            throw error(path, "'state.copy' must not contain more than 128 entries");
+        }
+
+        java.util.ArrayList<BlueprintCopy> copies = new java.util.ArrayList<>();
+        for (int index = 0; index < rawCopies.size(); index++) {
+            String section = "state.copy[" + index + "]";
+            Object rawCopy = rawCopies.get(index);
+            if (rawCopy instanceof String shorthand) {
+                String[] parts = shorthand.split(":", 2);
+                if (parts.length != 2
+                        || parts[0].isBlank()
+                        || parts[1].isBlank()) {
+                    throw error(path, "'" + section + "' must be source:target");
+                }
+                copies.add(copy(parts[0], parts[1], section, path));
+            } else {
+                Map<String, Object> values = asMap(rawCopy, section, path);
+                requireOnlyKeys(values, section, path, "source", "target");
+                copies.add(copy(
+                        requiredString(values, "source", path),
+                        requiredString(values, "target", path),
+                        section,
+                        path
+                ));
+            }
+        }
+        return List.copyOf(copies);
+    }
+
+    private static BlueprintCopy copy(
+            String source,
+            String target,
+            String section,
+            Path path
+    ) throws BlueprintException {
+        String normalizedSource = source.trim();
+        String normalizedTarget = target.trim();
+        validateRelativePath(normalizedSource, section + ".source", path);
+        validateRelativePath(normalizedTarget, section + ".target", path);
+        if (normalizedSource.indexOf('\\') >= 0 || normalizedTarget.indexOf('\\') >= 0) {
+            throw error(path, "'" + section + "' must use portable '/' separators");
+        }
+        return new BlueprintCopy(normalizedSource, normalizedTarget);
+    }
+
+    private static Map<String, String> parseEnvironment(
+            Map<String, Object> state,
+            Path path
+    ) throws BlueprintException {
+        Map<String, Object> configured = optionalMap(state, "env", path);
+        if (configured.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> environment = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : configured.entrySet()) {
+            if (!(entry.getValue() instanceof String value)) {
+                throw error(
+                        path,
+                        "'state.env." + entry.getKey() + "' must be a string"
+                );
+            }
+            environment.put(entry.getKey(), value);
+        }
+        try {
+            return Blueprint.validateEnvironment(environment);
+        } catch (IllegalArgumentException exception) {
+            throw error(path, exception.getMessage());
+        }
     }
 
     private static BlueprintVolume parseVolumeMap(

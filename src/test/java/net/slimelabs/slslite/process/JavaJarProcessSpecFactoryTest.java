@@ -241,4 +241,42 @@ class JavaJarProcessSpecFactoryTest {
                 List.of()
         );
     }
+
+    @Test
+    void includesValidatedBlueprintEnvironmentInProcessSpec() throws Exception {
+        Blueprint base = blueprint("1.21.11");
+        Blueprint configured = new Blueprint(
+                base.id(),
+                base.name(),
+                base.type(),
+                base.software(),
+                base.version(),
+                base.image(),
+                base.softwarePath(),
+                base.memoryLimitMiB(),
+                base.maxPlayers(),
+                base.maxInstances(),
+                base.save(),
+                base.serverProperties(),
+                base.yamlConfigs(),
+                base.textFileConfigs(),
+                base.annotations(),
+                base.volumes(),
+                base.copies(),
+                Map.of("FEATURE_FLAG", "enabled")
+        );
+        JavaJarProcessSpecFactory factory = new JavaJarProcessSpecFactory(
+                temporaryDirectory
+        );
+
+        ProcessSpec spec = factory.create(
+                profile("paper.jar"),
+                configured,
+                "game.abc123",
+                temporaryDirectory.resolve("instances/game.abc123"),
+                25571
+        );
+
+        assertEquals(Map.of("FEATURE_FLAG", "enabled"), spec.environment());
+    }
 }

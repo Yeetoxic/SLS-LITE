@@ -462,9 +462,9 @@ the local implementation has equivalent behavior.
   - `copy-on-write` maps to the best supported local isolation strategy.
   - `read-only` exposes immutable template data.
   - `read-write` is allowed only for explicitly shared persistent data.
-- [ ] Add file-copy entries for plugins, configuration, resource packs, and other
+- [x] Add file-copy entries for plugins, configuration, resource packs, and other
       blueprint assets.
-- [ ] Add optional environment variables without allowing blueprints to replace
+- [x] Add optional environment variables without allowing blueprints to replace
       protected process or host variables.
 - [ ] Add first-class per-blueprint client resource-pack configuration:
   - Reuse modern SLS fields where an upstream contract exists.
@@ -941,6 +941,12 @@ equivalent.
 - [x] [S2] Implement modern `parser: file` line-prefix replacement with
       contained UTF-8 targets, atomic writes, persistent-definition
       fingerprinting, and failure-preservation tests.
+- [x] [S2] Implement native modern `state.copy` mapping/shorthand with
+      transactional contained copies, declaration-order replacement, reset
+      semantics, source isolation, fingerprints, and operator visibility.
+- [x] [S2] Implement constrained modern `state.env` with portable validation,
+      protected JVM/loader/path/SLS names, child-process propagation,
+      fingerprints, and value-redacted operator visibility.
 - [ ] [S2] Compare modern SLS and SLS-LITE feature by feature across
       configuration, blueprints, registries, matchmaking, lifecycle, commands,
       permissions, observability, installation, storage, and integrations.

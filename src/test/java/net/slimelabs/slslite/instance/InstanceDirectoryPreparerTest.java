@@ -1,5 +1,6 @@
 package net.slimelabs.slslite.instance;
 
+import net.slimelabs.slslite.blueprint.BlueprintCopy;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -120,6 +121,91 @@ class InstanceDirectoryPreparerTest {
 
         assertEquals("source", Files.readString(shared.resolve("config.yml")));
         assertEquals("instance", Files.readString(prepared.resolve("plugins/config.yml")));
+    }
+
+    @Test
+    void appliesStateCopiesAfterSoftwareAndVolumes() throws Exception {
+        Path software = createSource();
+        Files.writeString(software.resolve("config/settings.yml"), "software");
+        Path world = createVolumeSource("worlds/game");
+        Files.writeString(world.resolve("level.dat"), "volume");
+        Path copiedConfig = temporaryDirectory.resolve("files/settings.yml");
+        Path copiedWorldFile = temporaryDirectory.resolve("files/level.dat");
+        Files.createDirectories(copiedConfig.getParent());
+        Files.writeString(copiedConfig, "copy");
+        Files.writeString(copiedWorldFile, "copy world");
+        InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(
+                temporaryDirectory.resolve("instances"),
+                temporaryDirectory
+        );
+
+        Path prepared = preparer.prepare(
+                "game.x82odk",
+                software,
+                List.of(volume("worlds/game", "/world")),
+                List.of(
+                        new BlueprintCopy("files/settings.yml", "config/settings.yml"),
+                        new BlueprintCopy("files/level.dat", "world/level.dat")
+                ),
+                () -> false
+        );
+
+        assertEquals("copy", Files.readString(prepared.resolve("config/settings.yml")));
+        assertEquals("copy world", Files.readString(prepared.resolve("world/level.dat")));
+        assertEquals("software", Files.readString(software.resolve("config/settings.yml")));
+        assertEquals("volume", Files.readString(world.resolve("level.dat")));
+    }
+
+    @Test
+    void mergesStateCopyDirectoryIntoExistingTarget() throws Exception {
+        Path software = createSource();
+        Path source = temporaryDirectory.resolve("files/plugins");
+        Files.createDirectories(source);
+        Files.writeString(source.resolve("plugin.jar"), "plugin");
+        Files.createDirectories(software.resolve("plugins"));
+        Files.writeString(software.resolve("plugins/existing.jar"), "existing");
+        InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(
+                temporaryDirectory.resolve("instances"),
+                temporaryDirectory
+        );
+
+        Path prepared = preparer.prepare(
+                "game.x82odk",
+                software,
+                List.of(),
+                List.of(new BlueprintCopy("files/plugins", "plugins")),
+                () -> false
+        );
+
+        assertEquals("plugin", Files.readString(prepared.resolve("plugins/plugin.jar")));
+        assertEquals(
+                "existing",
+                Files.readString(prepared.resolve("plugins/existing.jar"))
+        );
+    }
+
+    @Test
+    void missingStateCopySourceRollsBackPreparedInstance() throws Exception {
+        Path software = createSource();
+        Path instances = temporaryDirectory.resolve("instances");
+        InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(
+                instances,
+                temporaryDirectory
+        );
+
+        InstancePreparationException exception = assertThrows(
+                InstancePreparationException.class,
+                () -> preparer.prepare(
+                        "game.x82odk",
+                        software,
+                        List.of(),
+                        List.of(new BlueprintCopy("files/missing.jar", "plugins/missing.jar")),
+                        () -> false
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("Copy source does not exist"));
+        assertFalse(Files.exists(instances.resolve("game.x82odk")));
     }
 
     @Test
@@ -501,6 +587,38 @@ class InstanceDirectoryPreparerTest {
         );
 
         assertEquals("clean", Files.readString(prepared.resolve("world/level.dat")));
+    }
+
+    @Test
+    void replacementReappliesChangedStateCopySource() throws Exception {
+        Path software = createSource();
+        Path copied = temporaryDirectory.resolve("files/config.yml");
+        Files.createDirectories(copied.getParent());
+        Files.writeString(copied, "first");
+        Path instances = temporaryDirectory.resolve("instances");
+        InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(
+                instances,
+                temporaryDirectory
+        );
+        Path prepared = preparer.prepare(
+                "game.x82odk",
+                software,
+                List.of(),
+                List.of(new BlueprintCopy("files/config.yml", "plugins/config.yml")),
+                () -> false
+        );
+        Files.writeString(copied, "second");
+
+        preparer.replace(
+                "game.x82odk",
+                software,
+                List.of(),
+                List.of(new BlueprintCopy("files/config.yml", "plugins/config.yml")),
+                ignored -> {
+                }
+        );
+
+        assertEquals("second", Files.readString(prepared.resolve("plugins/config.yml")));
     }
 
     @Test

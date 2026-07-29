@@ -105,6 +105,25 @@ class BlueprintRepositoryTest {
     }
 
     @Test
+    void loadsPinnedModernStateContractFixture() throws Exception {
+        copyResource(
+                "compatibility/sls-v0.2.0/example_state.yml",
+                "compatibility/example_state.yml"
+        );
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+
+        Blueprint blueprint = repository.get("state-contract").orElseThrow();
+        assertEquals(2, blueprint.copies().size());
+        assertEquals(
+                "plugins/example/config.yml",
+                blueprint.copies().get(0).target()
+        );
+        assertEquals("true", blueprint.environment().get("FEATURE_FLAG"));
+    }
+
+    @Test
     void localLimitsOverrideVSLSAnnotationDefaults() throws Exception {
         write("precedence.yml", """
                 blueprint:
@@ -276,6 +295,110 @@ class BlueprintRepositoryTest {
                         .textFileConfigs()
                         .get("whitelist.json")
         );
+    }
+
+    @Test
+    void loadsModernStateCopyAndEnvironment() throws Exception {
+        write("copy-env.yml", """
+                blueprint:
+                  id: copy-env
+                  name: Copy And Env
+                  type: compatibility
+                server:
+                  software: paper
+                  version: "1.21.11"
+                state:
+                  copy:
+                    - source: files/config.yml
+                      target: plugins/example/config.yml
+                    - "files/icon.png:server-icon.png"
+                  env:
+                    FEATURE_FLAG: "true"
+                    PUBLIC_ENDPOINT: "https://example.test"
+                """);
+
+        BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+        repository.reload();
+        Blueprint blueprint = repository.get("copy-env").orElseThrow();
+
+        assertEquals(2, blueprint.copies().size());
+        assertEquals("files/config.yml", blueprint.copies().get(0).source());
+        assertEquals("server-icon.png", blueprint.copies().get(1).target());
+        assertEquals(
+                Map.of(
+                        "FEATURE_FLAG", "true",
+                        "PUBLIC_ENDPOINT", "https://example.test"
+                ),
+                blueprint.environment()
+        );
+    }
+
+    @Test
+    void rejectsDangerousOrMalformedStateEnvironment() throws Exception {
+        write("unsafe-env.yml", """
+                blueprint:
+                  id: unsafe-env
+                  name: Unsafe Env
+                  type: compatibility
+                server:
+                  software: paper
+                  version: "1.21.11"
+                state:
+                  env:
+                    JAVA_TOOL_OPTIONS: "-javaagent:untrusted.jar"
+                """);
+
+        BlueprintException protectedVariable = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(protectedVariable.getMessage().contains(
+                "environment variable is protected"
+        ));
+
+        Files.delete(temporaryDirectory.resolve("unsafe-env.yml"));
+        write("unsafe-env.yml", """
+                blueprint:
+                  id: unsafe-env
+                  name: Unsafe Env
+                  type: compatibility
+                server:
+                  software: paper
+                  version: "1.21.11"
+                state:
+                  env:
+                    INVALID-NAME: "value"
+                """);
+
+        BlueprintException invalidName = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(invalidName.getMessage().contains(
+                "Invalid blueprint environment variable name"
+        ));
+    }
+
+    @Test
+    void rejectsUnsafeStateCopyPaths() throws Exception {
+        write("unsafe-copy.yml", """
+                blueprint:
+                  id: unsafe-copy
+                  name: Unsafe Copy
+                  type: compatibility
+                server:
+                  software: paper
+                  version: "1.21.11"
+                state:
+                  copy:
+                    - "../outside.txt:plugins/outside.txt"
+                """);
+
+        BlueprintException exception = assertThrows(
+                BlueprintException.class,
+                () -> new BlueprintRepository(temporaryDirectory).reload()
+        );
+        assertTrue(exception.getMessage().contains("contained relative path"));
     }
 
     @Test

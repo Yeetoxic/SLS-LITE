@@ -1,5 +1,6 @@
 package net.slimelabs.slslite.instance;
 
+import net.slimelabs.slslite.blueprint.BlueprintCopy;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,13 +91,29 @@ public final class InstanceDirectoryPreparer {
             Path sourceDirectory,
             List<BlueprintVolume> volumes
     ) throws InstancePreparationException {
-        return prepare(instanceId, sourceDirectory, volumes, () -> false);
+        return prepare(instanceId, sourceDirectory, volumes, List.of(), () -> false);
     }
 
     Path prepare(
             String instanceId,
             Path sourceDirectory,
             List<BlueprintVolume> volumes,
+            BooleanSupplier cancellationRequested
+    ) throws InstancePreparationException {
+        return prepare(
+                instanceId,
+                sourceDirectory,
+                volumes,
+                List.of(),
+                cancellationRequested
+        );
+    }
+
+    Path prepare(
+            String instanceId,
+            Path sourceDirectory,
+            List<BlueprintVolume> volumes,
+            List<BlueprintCopy> copies,
             BooleanSupplier cancellationRequested
     ) throws InstancePreparationException {
         Path destination = destination(instanceId);
@@ -125,9 +142,11 @@ public final class InstanceDirectoryPreparer {
         try {
             checkCancelled(cancellationRequested);
             List<ResolvedVolume> resolvedVolumes = resolveVolumes(volumes, destination);
+            List<ResolvedCopy> resolvedCopies = resolveCopies(copies, destination);
             Files.createDirectories(instancesRoot);
             copyDirectory(source, destination, cancellationRequested);
             applyVolumes(resolvedVolumes, cancellationRequested);
+            applyCopies(resolvedCopies, cancellationRequested);
             checkCancelled(cancellationRequested);
             return destination;
         } catch (IOException | InstancePreparationException exception) {
@@ -170,6 +189,16 @@ public final class InstanceDirectoryPreparer {
             List<BlueprintVolume> volumes,
             DirectoryInitializer initializer
     ) throws InstancePreparationException {
+        replace(instanceId, sourceDirectory, volumes, List.of(), initializer);
+    }
+
+    public void replace(
+            String instanceId,
+            Path sourceDirectory,
+            List<BlueprintVolume> volumes,
+            List<BlueprintCopy> copies,
+            DirectoryInitializer initializer
+    ) throws InstancePreparationException {
         Path destination = destination(instanceId);
         Path source = sourceDirectory.toAbsolutePath().normalize();
         if (!Files.isDirectory(source)) {
@@ -196,8 +225,10 @@ public final class InstanceDirectoryPreparer {
         boolean initialized = false;
         try {
             List<ResolvedVolume> resolvedVolumes = resolveVolumes(volumes, staging);
+            List<ResolvedCopy> resolvedCopies = resolveCopies(copies, staging);
             copyDirectory(source, staging, () -> false);
             applyVolumes(resolvedVolumes, () -> false);
+            applyCopies(resolvedCopies, () -> false);
             moveDirectory(destination, backup);
             originalMoved = true;
             moveDirectory(staging, destination);
@@ -373,6 +404,103 @@ public final class InstanceDirectoryPreparer {
         return realSource;
     }
 
+    private List<ResolvedCopy> resolveCopies(
+            List<BlueprintCopy> copies,
+            Path destination
+    ) throws IOException, InstancePreparationException {
+        if (copies.isEmpty()) {
+            return List.of();
+        }
+
+        Path realContentRoot = contentRoot.toRealPath();
+        Path normalizedInstancesRoot = Files.exists(instancesRoot)
+                ? instancesRoot.toRealPath()
+                : instancesRoot.toAbsolutePath().normalize();
+        List<ResolvedCopy> resolved = new ArrayList<>();
+        for (BlueprintCopy copy : copies) {
+            String configuredSource = portableCopyPath(copy.source(), "source");
+            Path relativeSource = configuredCopyPath(configuredSource, "source");
+            if (relativeSource.isAbsolute()) {
+                throw new InstancePreparationException(
+                        "Copy source must be relative to " + contentRoot + ": "
+                                + copy.source()
+                );
+            }
+            Path source = contentRoot.resolve(relativeSource).normalize();
+            if (source.equals(contentRoot) || !source.startsWith(contentRoot)) {
+                throw new InstancePreparationException(
+                        "Copy source must stay inside " + contentRoot + ": "
+                                + copy.source()
+                );
+            }
+            if (!Files.exists(source, LinkOption.NOFOLLOW_LINKS)) {
+                throw new InstancePreparationException(
+                        "Copy source does not exist: " + source
+                );
+            }
+            rejectSymbolicPathSegments(contentRoot, source);
+            Path realSource = source.toRealPath();
+            if (!realSource.startsWith(realContentRoot)
+                    || realSource.startsWith(normalizedInstancesRoot)) {
+                throw new InstancePreparationException(
+                        "Copy source must stay in managed content outside instances: "
+                                + copy.source()
+                );
+            }
+            BasicFileAttributes attributes = Files.readAttributes(
+                    realSource,
+                    BasicFileAttributes.class,
+                    LinkOption.NOFOLLOW_LINKS
+            );
+            if (!attributes.isDirectory() && !attributes.isRegularFile()) {
+                throw new InstancePreparationException(
+                        "Copy source must be a regular file or directory: " + realSource
+                );
+            }
+
+            String configuredTarget = portableCopyPath(copy.target(), "target");
+            if (configuredTarget.startsWith("/")) {
+                throw new InstancePreparationException(
+                        "Copy target must be relative to the instance: " + copy.target()
+                );
+            }
+            Path relativeTarget = configuredCopyPath(configuredTarget, "target");
+            Path target = destination.resolve(relativeTarget).normalize();
+            if (relativeTarget.toString().isBlank()
+                    || target.equals(destination)
+                    || !target.startsWith(destination)) {
+                throw new InstancePreparationException(
+                        "Copy target must stay inside the instance: " + copy.target()
+                );
+            }
+            resolved.add(new ResolvedCopy(copy, realSource, target, attributes.isDirectory()));
+        }
+        return List.copyOf(resolved);
+    }
+
+    private static String portableCopyPath(String configured, String field)
+            throws InstancePreparationException {
+        String value = configured.trim();
+        if (value.indexOf('\\') >= 0) {
+            throw new InstancePreparationException(
+                    "Copy " + field + " must use portable '/' separators: " + configured
+            );
+        }
+        return value;
+    }
+
+    private static Path configuredCopyPath(String value, String field)
+            throws InstancePreparationException {
+        try {
+            return Path.of(value);
+        } catch (InvalidPathException exception) {
+            throw new InstancePreparationException(
+                    "Invalid copy " + field + ": " + value,
+                    exception
+            );
+        }
+    }
+
     private static void rejectSymbolicPathSegments(Path root, Path source)
             throws IOException, InstancePreparationException {
         Path current = root;
@@ -477,6 +605,76 @@ public final class InstanceDirectoryPreparer {
                 );
             }
         }
+    }
+
+    private void applyCopies(
+            List<ResolvedCopy> copies,
+            BooleanSupplier cancellationRequested
+    ) throws IOException, InstancePreparationException {
+        for (ResolvedCopy copy : copies) {
+            checkCancelled(cancellationRequested);
+            if (copy.directory()) {
+                if (Files.exists(copy.target(), LinkOption.NOFOLLOW_LINKS)
+                        && !Files.isDirectory(copy.target(), LinkOption.NOFOLLOW_LINKS)) {
+                    throw new InstancePreparationException(
+                            "Copy directory target is not a directory: "
+                                    + copy.copy().target()
+                    );
+                }
+                copyDirectoryReplacing(
+                        copy.source(),
+                        copy.target(),
+                        cancellationRequested
+                );
+            } else {
+                if (Files.isDirectory(copy.target(), LinkOption.NOFOLLOW_LINKS)) {
+                    throw new InstancePreparationException(
+                            "Copy file target is a directory: " + copy.copy().target()
+                    );
+                }
+                Files.createDirectories(copy.target().getParent());
+                Files.deleteIfExists(copy.target());
+                copyFileWithRetry(copy.source(), copy.target(), cancellationRequested);
+            }
+        }
+    }
+
+    private void copyDirectoryReplacing(
+            Path source,
+            Path destination,
+            BooleanSupplier cancellationRequested
+    ) throws IOException {
+        Files.walkFileTree(source, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(
+                    Path directory,
+                    BasicFileAttributes attrs
+            ) throws IOException {
+                checkCancelled(cancellationRequested);
+                rejectSymbolicLink(directory, attrs);
+                Path target = destination.resolve(source.relativize(directory));
+                if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)
+                        && !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new IOException("Copy directory target is not a directory: " + target);
+                }
+                Files.createDirectories(target);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                    throws IOException {
+                checkCancelled(cancellationRequested);
+                rejectSymbolicLink(file, attrs);
+                Path target = destination.resolve(source.relativize(file));
+                if (Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new IOException("Copy file target is a directory: " + target);
+                }
+                Files.deleteIfExists(target);
+                copyFileWithRetry(file, target, cancellationRequested);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     private void mergeDirectoryFirstWins(
@@ -707,6 +905,14 @@ public final class InstanceDirectoryPreparer {
             BlueprintVolume volume,
             Path source,
             Path target
+    ) {
+    }
+
+    private record ResolvedCopy(
+            BlueprintCopy copy,
+            Path source,
+            Path target,
+            boolean directory
     ) {
     }
 }

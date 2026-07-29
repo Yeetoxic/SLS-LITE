@@ -438,6 +438,7 @@ public final class InstanceManager implements ServerController {
                     instanceId,
                     baseDirectory,
                     blueprint.volumes(),
+                    blueprint.copies(),
                     directory -> metadataStore.write(directory, stopped)
             );
         } catch (ProcessSpecificationException | InstancePreparationException exception) {
@@ -495,9 +496,10 @@ public final class InstanceManager implements ServerController {
         instance.preparationStarted();
         try {
             logger.info(
-                    "Preparing instance {} with {} volume(s)",
+                    "Preparing instance {} with {} volume(s) and {} copy entry(s)",
                     instance.id(),
-                    instance.blueprint().volumes().size()
+                    instance.blueprint().volumes().size(),
+                    instance.blueprint().copies().size()
             );
             long softwareStartedAt = System.nanoTime();
             Path baseDirectory = resolveBaseDirectory(
@@ -526,14 +528,16 @@ public final class InstanceManager implements ServerController {
                         instance.id(),
                         baseDirectory,
                         instance.blueprint().volumes(),
+                        instance.blueprint().copies(),
                         instance::stopRequested
                 );
             }
             long filesReadyAt = System.nanoTime();
             logger.info(
-                    "Instance files ready: {} ({} volume(s) in {} ms)",
+                    "Instance files ready: {} ({} volume(s), {} copy entry(s) in {} ms)",
                     instance.id(),
                     instance.blueprint().volumes().size(),
+                    instance.blueprint().copies().size(),
                     elapsedMillis(softwareReadyAt, filesReadyAt)
             );
             if (!prepared.equals(instance.directory())) {

@@ -116,7 +116,8 @@ public final class JavaJarProcessSpecFactory {
                 Pattern.compile(profile.readinessPattern()),
                 Duration.ofSeconds(profile.startupTimeoutSeconds()),
                 profile.stopCommand(),
-                Duration.ofSeconds(profile.stopTimeoutSeconds())
+                Duration.ofSeconds(profile.stopTimeoutSeconds()),
+                blueprint.environment()
         );
     }
 

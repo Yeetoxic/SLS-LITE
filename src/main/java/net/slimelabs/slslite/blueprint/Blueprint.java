@@ -19,7 +19,9 @@ public record Blueprint(
         Map<String, Map<String, Object>> yamlConfigs,
         Map<String, Map<String, String>> textFileConfigs,
         Map<String, Object> annotations,
-        List<BlueprintVolume> volumes
+        List<BlueprintVolume> volumes,
+        List<BlueprintCopy> copies,
+        Map<String, String> environment
 ) {
 
     public Blueprint {
@@ -33,6 +35,48 @@ public record Blueprint(
         textFileConfigs = copyTextFileConfigs(textFileConfigs);
         annotations = Map.copyOf(annotations);
         volumes = List.copyOf(volumes);
+        copies = List.copyOf(copies);
+        environment = validateEnvironment(environment);
+    }
+
+    public Blueprint(
+            String id,
+            String name,
+            String type,
+            String software,
+            String version,
+            String image,
+            String softwarePath,
+            int memoryLimitMiB,
+            int maxPlayers,
+            int maxInstances,
+            boolean save,
+            Map<String, String> serverProperties,
+            Map<String, Map<String, Object>> yamlConfigs,
+            Map<String, Map<String, String>> textFileConfigs,
+            Map<String, Object> annotations,
+            List<BlueprintVolume> volumes
+    ) {
+        this(
+                id,
+                name,
+                type,
+                software,
+                version,
+                image,
+                softwarePath,
+                memoryLimitMiB,
+                maxPlayers,
+                maxInstances,
+                save,
+                serverProperties,
+                yamlConfigs,
+                textFileConfigs,
+                annotations,
+                volumes,
+                List.of(),
+                Map.of()
+        );
     }
 
     public Blueprint(
@@ -262,6 +306,76 @@ public record Blueprint(
                 )
         ));
         return java.util.Collections.unmodifiableMap(copied);
+    }
+
+    static Map<String, String> validateEnvironment(
+            Map<String, String> configured
+    ) {
+        if (configured.size() > 64) {
+            throw new IllegalArgumentException(
+                    "Blueprint environment must not contain more than 64 variables"
+            );
+        }
+        java.util.LinkedHashMap<String, String> normalized =
+                new java.util.LinkedHashMap<>();
+        java.util.HashSet<String> portableNames = new java.util.HashSet<>();
+        int totalBytes = 0;
+        for (Map.Entry<String, String> entry : configured.entrySet()) {
+            String name = entry.getKey();
+            String value = entry.getValue();
+            if (name == null || !name.matches("[A-Za-z_][A-Za-z0-9_]{0,127}")) {
+                throw new IllegalArgumentException(
+                        "Invalid blueprint environment variable name: " + name
+                );
+            }
+            String portableName = name.toUpperCase(java.util.Locale.ROOT);
+            if (!portableNames.add(portableName)) {
+                throw new IllegalArgumentException(
+                        "Duplicate portable environment variable name: " + name
+                );
+            }
+            if (isProtectedEnvironmentName(portableName)) {
+                throw new IllegalArgumentException(
+                        "Blueprint environment variable is protected: " + name
+                );
+            }
+            if (value == null || value.indexOf('\0') >= 0) {
+                throw new IllegalArgumentException(
+                        "Blueprint environment value must not contain NUL: " + name
+                );
+            }
+            int valueBytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+            if (valueBytes > 8 * 1024) {
+                throw new IllegalArgumentException(
+                        "Blueprint environment value exceeds 8192 bytes: " + name
+                );
+            }
+            totalBytes += name.length() + valueBytes;
+            if (totalBytes > 64 * 1024) {
+                throw new IllegalArgumentException(
+                        "Blueprint environment exceeds 65536 bytes"
+                );
+            }
+            normalized.put(name, value);
+        }
+        return java.util.Collections.unmodifiableMap(normalized);
+    }
+
+    private static boolean isProtectedEnvironmentName(String name) {
+        return name.startsWith("SLS_")
+                || name.startsWith("LD_")
+                || name.startsWith("DYLD_")
+                || java.util.Set.of(
+                        "JAVA_TOOL_OPTIONS",
+                        "_JAVA_OPTIONS",
+                        "JDK_JAVA_OPTIONS",
+                        "CLASSPATH",
+                        "PATH",
+                        "PATHEXT",
+                        "COMSPEC",
+                        "SYSTEMROOT",
+                        "WINDIR"
+                ).contains(name);
     }
 
     private static Map<String, Object> copyMap(Map<String, Object> values) {

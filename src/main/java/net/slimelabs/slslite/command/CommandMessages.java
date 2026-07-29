@@ -10,6 +10,7 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.slimelabs.slslite.BuildInfo;
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintCopy;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import net.slimelabs.slslite.instance.InstanceState;
 import net.slimelabs.slslite.instance.ManagedInstance;
@@ -173,6 +174,39 @@ final class CommandMessages {
                         NamedTextColor.DARK_PURPLE
                 ));
             }
+        }
+        if (blueprint.copies().isEmpty()) {
+            tooltip.appendNewline().append(labelValue("Copies:", "none"));
+        } else {
+            tooltip.appendNewline().append(labelValue(
+                    "Copies:",
+                    Integer.toString(blueprint.copies().size())
+            ));
+            for (BlueprintCopy copy : blueprint.copies().stream().limit(8).toList()) {
+                tooltip.appendNewline().append(Component.text(
+                        "  " + copy.source() + " -> " + copy.target(),
+                        NamedTextColor.DARK_PURPLE
+                ));
+            }
+            if (blueprint.copies().size() > 8) {
+                tooltip.appendNewline().append(Component.text(
+                        "  +" + (blueprint.copies().size() - 8) + " more",
+                        NamedTextColor.DARK_PURPLE
+                ));
+            }
+        }
+        if (blueprint.environment().isEmpty()) {
+            tooltip.appendNewline().append(labelValue("Environment:", "none"));
+        } else {
+            List<String> names = blueprint.environment().keySet().stream()
+                    .sorted()
+                    .limit(8)
+                    .toList();
+            String summary = String.join(", ", names);
+            if (blueprint.environment().size() > names.size()) {
+                summary += " +" + (blueprint.environment().size() - names.size());
+            }
+            tooltip.appendNewline().append(labelValue("Environment:", summary));
         }
         tooltip.appendNewline().append(Component.text(
                 "Click to prepare or join this blueprint",

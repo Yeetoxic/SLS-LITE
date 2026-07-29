@@ -33,6 +33,11 @@ public final class FixtureProcessMain {
             }
             case "silent" -> Thread.sleep(30_000);
             case "crash" -> System.exit(7);
+            case "environment" -> {
+                System.out.println("ENV:" + System.getenv("SLS_LITE_TEST_VALUE"));
+                System.out.println("FIXTURE READY");
+                System.out.flush();
+            }
             default -> throw new IllegalArgumentException("Unknown fixture mode: " + mode);
         }
     }
