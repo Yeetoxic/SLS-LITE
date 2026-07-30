@@ -2,6 +2,13 @@ package net.slimelabs.slslite.instance;
 
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
+import net.slimelabs.slslite.instance.diagnostics.InstanceLogPage;
+import net.slimelabs.slslite.instance.diagnostics.InstanceOutput;
+import net.slimelabs.slslite.instance.diagnostics.ProcessResourceMetrics;
+import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
+import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
+import net.slimelabs.slslite.instance.model.InstanceDefinitionIdentity;
+import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.process.SupervisedProcess;
 
 import java.io.IOException;
@@ -23,14 +30,10 @@ public final class ManagedInstance {
     private final Instant createdAt;
     private final CompletableFuture<ManagedInstance> ready = new CompletableFuture<>();
     private final CompletableFuture<Integer> stopped = new CompletableFuture<>();
-    private final InstanceLogBuffer logs = new InstanceLogBuffer();
+    private final InstanceOutput output;
+    private final InstancePhaseTimings timings = new InstancePhaseTimings();
 
     private volatile SupervisedProcess process;
-    private volatile ManagedOutputConfig outputConfig =
-            new ManagedOutputConfig(false, false, 4096);
-    private volatile TemporaryInstanceLog temporaryLog;
-    private volatile IOException outputFailure;
-    private volatile boolean outputDisabled;
     private volatile boolean registered;
     private volatile boolean stopRequested;
     private volatile boolean preparationRunning;
@@ -60,6 +63,7 @@ public final class ManagedInstance {
         this.definitionIdentity = definitionIdentity;
         this.port = port;
         this.directory = directory;
+        this.output = new InstanceOutput(directory);
         this.lifecycle = lifecycle;
         this.createdAt = java.util.Objects.requireNonNull(createdAt, "createdAt");
     }
@@ -83,7 +87,7 @@ public final class ManagedInstance {
         return blueprint;
     }
 
-    InstanceDefinitionIdentity definitionIdentity() {
+    public InstanceDefinitionIdentity definitionIdentity() {
         return definitionIdentity;
     }
 
@@ -112,29 +116,27 @@ public final class ManagedInstance {
     }
 
     public InstanceLogPage logs(int page, int linesPerPage) {
-        return logs.page(page, linesPerPage);
+        return output.page(page, linesPerPage);
     }
 
     public int retainedLogLines() {
-        return logs.size();
+        return output.retainedLines();
     }
 
     public int logRetentionCapacity() {
-        return InstanceLogBuffer.CAPACITY;
+        return output.retentionCapacity();
     }
 
     public boolean mirrorsOutputToProxyConsole() {
-        return outputConfig.mirrorToProxyConsole();
+        return output.mirrorsToProxyConsole();
     }
 
     public boolean writesTemporaryLog() {
-        return outputConfig.writeTemporaryFile();
+        return output.writesTemporaryFile();
     }
 
     public Optional<Path> temporaryLogPath() {
-        return writesTemporaryLog()
-                ? Optional.of(directory.resolve(TemporaryInstanceLog.RELATIVE_PATH))
-                : Optional.empty();
+        return output.temporaryFilePath();
     }
 
     public OptionalLong processId() {
@@ -163,49 +165,58 @@ public final class ManagedInstance {
                 .flatMap(handle -> handle.info().totalCpuDuration());
     }
 
-    void configureOutput(ManagedOutputConfig config) throws IOException {
-        outputConfig = config;
-        if (config.writeTemporaryFile()) {
-            temporaryLog = new TemporaryInstanceLog(
-                    directory,
-                    config.temporaryFileMaxKiB()
-            );
+    public Optional<ProcessResourceSnapshot> processResources() {
+        OptionalLong id = processId();
+        if (id.isEmpty()) {
+            return Optional.empty();
         }
+        ProcessHandle handle = ProcessHandle.of(id.getAsLong())
+                .filter(ProcessHandle::isAlive)
+                .orElse(null);
+        if (handle == null || processStartedAt()
+                .filter(started -> handle.info().startInstant()
+                        .map(actual -> !actual.equals(started))
+                        .orElse(false))
+                .isPresent()) {
+            return Optional.empty();
+        }
+        return ProcessResourceMetrics.inspect(id.getAsLong()).map(snapshot ->
+                new ProcessResourceSnapshot(
+                        snapshot.residentBytes(),
+                        snapshot.charactersRead(),
+                        snapshot.charactersWritten(),
+                        snapshot.storageBytesRead(),
+                        snapshot.storageBytesWritten()
+                )
+        );
+    }
+
+    public Optional<Duration> recordFirstPlayerConnected() {
+        return timings.firstPlayerConnected().map(Duration::ofNanos);
+    }
+
+    void configureOutput(ManagedOutputConfig config) throws IOException {
+        output.configure(config);
     }
 
     void appendLog(String line) {
-        logs.append(line);
-        TemporaryInstanceLog current = temporaryLog;
-        if (current != null && !outputDisabled) {
-            try {
-                current.append(line);
-            } catch (IOException exception) {
-                outputDisabled = true;
-                outputFailure = exception;
-            }
-        }
+        output.append(line);
     }
 
     Optional<IOException> takeOutputFailure() {
-        IOException failure = outputFailure;
-        outputFailure = null;
-        return Optional.ofNullable(failure);
+        return output.takeFailure();
     }
 
     void closeOutput() {
-        TemporaryInstanceLog current = temporaryLog;
-        temporaryLog = null;
-        if (current != null) {
-            try {
-                current.close();
-            } catch (IOException exception) {
-                outputFailure = exception;
-            }
-        }
+        output.close();
     }
 
     InstanceLifecycle lifecycle() {
         return lifecycle;
+    }
+
+    InstancePhaseTimings timings() {
+        return timings;
     }
 
     SupervisedProcess process() {
@@ -250,5 +261,14 @@ public final class ManagedInstance {
         }
         failedStartDiagnosticsRecorded = true;
         return true;
+    }
+
+    public record ProcessResourceSnapshot(
+            OptionalLong residentBytes,
+            OptionalLong charactersRead,
+            OptionalLong charactersWritten,
+            OptionalLong storageBytesRead,
+            OptionalLong storageBytesWritten
+    ) {
     }
 }

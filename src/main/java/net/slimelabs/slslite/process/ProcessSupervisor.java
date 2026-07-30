@@ -1,6 +1,6 @@
 package net.slimelabs.slslite.process;
 
-import net.slimelabs.slslite.instance.InstanceLifecycle;
+import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 
 import java.time.Duration;
 import java.util.ArrayList;

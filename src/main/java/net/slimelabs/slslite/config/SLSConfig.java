@@ -14,8 +14,40 @@ public record SLSConfig(
         SecurityConfig security,
         SLSLimboConfig limbo,
         LobbyConfig lobby,
+        StorageConfig storage,
         Path instancesDirectory
 ) {
+
+    public SLSConfig(
+            int totalMemoryMiB,
+            int maxManagedProcesses,
+            int portRangeStart,
+            int portRangeEnd,
+            int queueTimeoutSeconds,
+            int idleShutdownSeconds,
+            ManagedOutputConfig managedOutput,
+            ForwardingConfig forwarding,
+            SecurityConfig security,
+            SLSLimboConfig limbo,
+            LobbyConfig lobby,
+            Path instancesDirectory
+    ) {
+        this(
+                totalMemoryMiB,
+                maxManagedProcesses,
+                portRangeStart,
+                portRangeEnd,
+                queueTimeoutSeconds,
+                idleShutdownSeconds,
+                managedOutput,
+                forwarding,
+                security,
+                limbo,
+                lobby,
+                new StorageConfig(StorageStrategy.AUTO),
+                instancesDirectory
+        );
+    }
 
     public SLSConfig {
         if (totalMemoryMiB <= 0) {
@@ -59,6 +91,9 @@ public record SLSConfig(
         }
         if (lobby == null) {
             throw new IllegalArgumentException("lobby configuration is required");
+        }
+        if (storage == null) {
+            throw new IllegalArgumentException("storage configuration is required");
         }
         instancesDirectory = instancesDirectory.toAbsolutePath().normalize();
     }

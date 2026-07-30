@@ -53,6 +53,7 @@ class SLSConfigRepositoryTest {
         assertEquals(5, config.lobby().initialBackoffSeconds());
         assertEquals(60, config.lobby().maxBackoffSeconds());
         assertEquals(120, config.lobby().stableAfterSeconds());
+        assertEquals(StorageStrategy.AUTO, config.storage().strategy());
         assertEquals(
                 temporaryDirectory.resolve("instances").toAbsolutePath().normalize(),
                 config.instancesDirectory()
@@ -124,6 +125,100 @@ class SLSConfigRepositoryTest {
                   mode: virtual
                 """);
         SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        assertThrows(ConfigurationException.class, repository::reload);
+    }
+
+    @Test
+    void loadsExplicitStorageStrategy() throws Exception {
+        writeConfig("""
+                storage:
+                  strategy: fuse-overlay
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        repository.reload();
+
+        assertEquals(
+                StorageStrategy.FUSE_OVERLAY,
+                repository.get().storage().strategy()
+        );
+    }
+
+    @Test
+    void rejectsUnknownStorageStrategy() throws Exception {
+        writeConfig("""
+                storage:
+                  strategy: magic-copy
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        ConfigurationException exception = assertThrows(
+                ConfigurationException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("storage.strategy"));
+    }
+
+    @Test
+    void loadsConfinedSnapshotHelperConfiguration() throws Exception {
+        writeConfig("""
+                storage:
+                  strategy: snapshot-hook
+                  snapshot_hook:
+                    executable: helpers/provider
+                    timeout_seconds: 45
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(
+                temporaryDirectory
+        );
+
+        repository.reload();
+
+        assertEquals(
+                temporaryDirectory.resolve("helpers/provider")
+                        .toAbsolutePath()
+                        .normalize(),
+                repository.get().storage().snapshotHookExecutable()
+        );
+        assertEquals(
+                45,
+                repository.get().storage().snapshotHookTimeoutSeconds()
+        );
+    }
+
+    @Test
+    void rejectsSnapshotHookWithoutExecutable() throws Exception {
+        writeConfig("""
+                storage:
+                  strategy: snapshot-hook
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(
+                temporaryDirectory
+        );
+
+        ConfigurationException failure = assertThrows(
+                ConfigurationException.class,
+                repository::reload
+        );
+
+        assertTrue(failure.getMessage().contains(
+                "storage.snapshot_hook.executable"
+        ));
+    }
+
+    @Test
+    void rejectsSnapshotHelperTraversal() throws Exception {
+        writeConfig("""
+                storage:
+                  strategy: snapshot-hook
+                  snapshot_hook:
+                    executable: ../provider
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(
+                temporaryDirectory
+        );
 
         assertThrows(ConfigurationException.class, repository::reload);
     }

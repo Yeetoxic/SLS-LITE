@@ -39,6 +39,22 @@ lifecycle:
   # Blueprints may override this policy with SLS-LITE lifecycle annotations.
   idle_shutdown_seconds: 180
 
+storage:
+  # Instance-directory preparation strategy. auto selects the first safe
+  # exact-path capability in this order: reflink, eligible Btrfs snapshot,
+  # kernel OverlayFS, rootless fuse-overlayfs, then transactional portable
+  # copy. Per-source eligibility can still fall back safely under auto;
+  # explicitly requested native strategies fail transactionally instead.
+  # snapshot-hook is explicit-only and requires the bounded helper below.
+  # Valid values: auto, copy, reflink, btrfs, overlay, fuse-overlay,
+  # snapshot-hook.
+  strategy: auto
+  snapshot_hook:
+    # Explicit-only, shell-free helper below the SLS-LITE data directory.
+    # Required only when strategy is snapshot-hook.
+    # executable: helpers/storage-snapshot
+    timeout_seconds: 30
+
 managed_output:
   # Boolean: true or false. When true, every managed server output line is also
   # written to the Velocity console with its instance ID. Keep false on busy or

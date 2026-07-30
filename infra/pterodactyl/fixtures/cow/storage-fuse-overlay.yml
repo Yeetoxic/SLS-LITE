@@ -1,0 +1,2 @@
+storage:
+  strategy: fuse-overlay

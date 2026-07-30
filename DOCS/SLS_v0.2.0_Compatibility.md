@@ -66,7 +66,7 @@ The compatibility pass closed five shared behavior gaps and one fixture defect:
 | Resource-pack conversion | Intentionally separate from SLS-LITE. Preserve annotations and support normal Minecraft URLs; conversion belongs in SlimePacks or another pack service. |
 | Resource-pack discovery/serving for local test worlds | Useful local integration, but not part of the shared SLS blueprint contract. |
 | SLS-Limbo, built-in administrator claims, local lobby recovery, provider-backed Paper/vanilla installation, and bounded local logs | Retained SLS-LITE extensions needed for a self-contained constrained-host product. |
-| True OverlayFS/reflink COW | Performance work after schema compatibility; portable transactional copy remains the required fallback. |
+| True OverlayFS/reflink COW | Reflink preparation and kernel OverlayFS lifecycle are implemented with exact-path validation and portable fallback. |
 | `create`, `delete`, `kill`, `blueprint`, `debug`, and complete command-output parity | Full-stack command work. Preserve roots now; implement only meaningful and safe local semantics. |
 | `pause` and `resume` | Do not prioritize. Portable process suspension is unsafe and low-value for the constrained-host goal. |
 | `node` | Keep the explicit local-mode response; never emulate distributed node control. |
@@ -167,7 +167,7 @@ configures the executable for that major locally.
 | Docker isolation and limits | Intentionally unsupported | Local Java children and admission accounting. |
 | Protocube HTTP API | Intentionally unsupported | No central controller in local mode. |
 | Daemon event stream | Deferred local equivalent | A public in-proxy event/API contract does not exist yet. |
-| True overlay COW | Deferred optimization | Portable copy preserves isolation intent today. |
+| True overlay COW | Implemented on eligible Linux hosts | Exact-path probing, durable private layers, safe remount/unmount, reset/delete handling, and crash reconciliation are implemented. |
 | vSLS command surface | Partial/adapted | See `SLS_Command_Compatibility.md`. |
 | `resource_pack` annotation | Metadata only | Public serving and transfer orchestration are deferred. |
 | SlimePacks conversion | Intentionally separate | SLS-LITE should integrate with a pack service, not duplicate conversion. |

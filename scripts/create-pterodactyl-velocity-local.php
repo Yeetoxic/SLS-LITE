@@ -86,6 +86,20 @@ if ($server->status === Server::STATUS_INSTALLING && is_file($volume . '/velocit
     ])->save();
 }
 
+$testImage = trim((string) getenv('SLS_TEST_IMAGE'));
+if ($testImage !== '') {
+    $allowedImages = [
+        'ghcr.io/pterodactyl/yolks:java_25',
+        'sls-lite-cow-test:java_25',
+    ];
+    if (!in_array($testImage, $allowedImages, true)) {
+        throw new InvalidArgumentException(
+            'SLS_TEST_IMAGE must be one of the explicitly allowed local fixture images.'
+        );
+    }
+    $server->forceFill(['image' => $testImage])->save();
+}
+
 $powerAction = null;
 foreach (['start', 'stop', 'restart', 'kill'] as $action) {
     if (in_array('--' . $action, $argv, true)) {

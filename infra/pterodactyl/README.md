@@ -51,3 +51,28 @@ restart. The original Ubuntu WSL files remain available under
 Windows `state/game-data` directory. Wings uses this identical absolute path
 when it asks the Docker daemon to bind a game server's files into
 `/home/container`.
+
+## WSL2-Native Game Storage
+
+The default fixture deliberately keeps allocation data on the Windows-backed
+project filesystem. For a Linux-native comparison without another machine,
+switch Wings and its game containers to the Docker Desktop WSL2 ext4 volume:
+
+```powershell
+.\scripts\set-pterodactyl-storage-mode.ps1 -Mode native
+```
+
+The first switch stops Velocity, copies the complete 10 GiB game-data snapshot
+into the external Docker volume `sls-ptero-native-game-data`, recreates only
+Wings with `docker-compose.native-storage.yml`, removes only the stopped game
+container so Wings recreates its mount, and starts Velocity from that copy. The
+Windows snapshot remains unchanged. Switch back with:
+
+```powershell
+.\scripts\set-pterodactyl-storage-mode.ps1 -Mode windows
+```
+
+The two storage modes are independent snapshots after initialization. Do not
+switch modes while retaining unexported player or persistent-instance changes.
+The script never overwrites an initialized native volume; delete that volume
+explicitly only when a fresh native snapshot is intended.

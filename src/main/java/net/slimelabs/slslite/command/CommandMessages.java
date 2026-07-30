@@ -12,14 +12,14 @@ import net.slimelabs.slslite.BuildInfo;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintCopy;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
-import net.slimelabs.slslite.instance.InstanceState;
+import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.instance.ManagedInstance;
 
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
-final class CommandMessages {
+public final class CommandMessages {
 
     private static final TextColor SLS_BLUE = TextColor.color(46, 112, 255);
     private static final TextColor SLS_LIGHT_BLUE = TextColor.color(71, 151, 255);
@@ -28,7 +28,7 @@ final class CommandMessages {
     private CommandMessages() {
     }
 
-    static Component prefix() {
+    public static Component prefix() {
         Component tooltip = Component.text("Server Launch System", NamedTextColor.RED)
                 .appendNewline()
                 .append(Component.text("By " + BuildInfo.AUTHORS, SLS_LIGHT_BLUE));
@@ -40,15 +40,15 @@ final class CommandMessages {
                 .hoverEvent(HoverEvent.showText(tooltip));
     }
 
-    static Component message(String text, TextColor color) {
+    public static Component message(String text, TextColor color) {
         return prefix().append(Component.text(text, color));
     }
 
-    static Component incorrectUsage() {
+    public static Component incorrectUsage() {
         return prefix().append(Component.text(" Incorrect Command Usage!", ERROR_RED));
     }
 
-    static Component usage(String command, String... arguments) {
+    public static Component usage(String command, String... arguments) {
         TextComponent.Builder message = Component.text()
                 .append(prefix())
                 .append(Component.text("Usage: ", NamedTextColor.DARK_AQUA))
@@ -66,7 +66,7 @@ final class CommandMessages {
         return message.append(Component.text(">", NamedTextColor.DARK_GRAY)).build();
     }
 
-    static Component player(Player player) {
+    public static Component player(Player player) {
         String currentServer = player.getCurrentServer()
                 .map(connection -> connection.getServerInfo().getName())
                 .orElse("none");
@@ -77,7 +77,7 @@ final class CommandMessages {
                 .hoverEvent(HoverEvent.showText(tooltip));
     }
 
-    static Component server(ManagedInstance instance, int playerCount) {
+    public static Component server(ManagedInstance instance, int playerCount) {
         String id = instance.id();
         int separator = id.lastIndexOf('.');
         String prefix = separator < 0 ? id : id.substring(0, separator);
@@ -87,7 +87,7 @@ final class CommandMessages {
                 .hoverEvent(HoverEvent.showText(instanceDetails(instance, playerCount)));
     }
 
-    static Component listEntry(
+    public static Component listEntry(
             ManagedInstance instance,
             Collection<Player> players
     ) {
@@ -109,7 +109,7 @@ final class CommandMessages {
                 .append(playerCount);
     }
 
-    static Component blueprint(
+    public static Component blueprint(
             Blueprint blueprint,
             Collection<ManagedInstance> activeInstances
     ) {
@@ -232,7 +232,7 @@ final class CommandMessages {
                 .build();
     }
 
-    static Component listHeader() {
+    public static Component listHeader() {
         return Component.text("----", NamedTextColor.DARK_GRAY)
                 .decorate(TextDecoration.STRIKETHROUGH)
                 .append(Component.text(" SERVER LIST ", NamedTextColor.DARK_GRAY)
@@ -241,13 +241,13 @@ final class CommandMessages {
                         .decorate(TextDecoration.STRIKETHROUGH));
     }
 
-    static Component listFooter() {
+    public static Component listFooter() {
         return Component.text("----------------", NamedTextColor.DARK_GRAY)
                 .decorate(TextDecoration.STRIKETHROUGH)
                 .decorate(TextDecoration.BOLD);
     }
 
-    static TextColor statusColor(InstanceState state) {
+    public static TextColor statusColor(InstanceState state) {
         return switch (state) {
             case READY -> NamedTextColor.GREEN;
             case STOPPING, STOPPED, FAILED -> NamedTextColor.RED;
@@ -255,7 +255,7 @@ final class CommandMessages {
         };
     }
 
-    static String statusName(InstanceState state) {
+    public static String statusName(InstanceState state) {
         return switch (state) {
             case READY -> "Running";
             case STOPPED -> "Offline";
@@ -263,7 +263,7 @@ final class CommandMessages {
         };
     }
 
-    static Component labelValue(String label, String value) {
+    public static Component labelValue(String label, String value) {
         return Component.text(label, NamedTextColor.DARK_GRAY)
                 .append(Component.text(" " + value, NamedTextColor.GRAY));
     }

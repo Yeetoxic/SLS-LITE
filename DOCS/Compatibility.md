@@ -34,7 +34,7 @@ scope approval were completed on 2026-07-29.
 | Container isolation/limits | Intentionally unsupported | JVM arguments and local admission are not container enforcement. |
 | Remote event stream/API | Deferred | No public integration API or distributed event service yet. |
 | Resource-pack hosting | Deferred | Public URL properties work; built-in serving and transfer orchestration do not. |
-| True filesystem COW | Deferred | Portable copy is the current tested fallback. |
+| True filesystem COW | Stage 3 | Reflink, eligible Btrfs subvolume snapshots, kernel OverlayFS, fuse-overlayfs, and an explicit bounded operator snapshot-helper protocol are implemented. Portable copy remains the tested universal fallback. |
 
 ## Compatibility Rules
 
@@ -79,6 +79,26 @@ Paper or vanilla provider availability for an exact version does not by itself
 mean every world, plugin, Java combination, forwarding mode, or client protocol
 is supported. Native-Linux performance and broad current-Paper compatibility
 remain later test gates.
+
+## Named Host Capability Profiles
+
+Automatic storage selection is tested against these capability profiles. A
+profile describes detected capabilities, not a provider brand guarantee; the
+exact-path startup probes remain authoritative.
+
+| Profile | Required exposure | Expected `auto` result |
+| --- | --- | --- |
+| Restricted ext4 shared host | Writable storage and child processes only | `portable-copy` |
+| XFS reflink host | Successful clone/isolation probe | `reflink` |
+| Eligible Btrfs host | Source subvolume and successful snapshot/isolation probe | `btrfs` |
+| Kernel-overlay host | Overlay driver plus contained mount permission | `overlay` |
+| Rootless-FUSE host | `fuse-overlayfs`, `/dev/fuse`, and successful unprivileged mount | `fuse-overlay` |
+| Operator snapshot provider | Explicit confined `sls-snapshot-helper-v1` executable | `snapshot-hook` only when explicitly requested |
+
+Pterodactyl's normal restricted profile is never weakened to obtain a faster
+result. Missing `CAP_SYS_ADMIN`, inaccessible `/dev/fuse`, unsuitable
+filesystems, or rejected helper handshakes degrade to portable copy under
+`auto` and fail startup when explicitly required.
 
 ## Compatibility Contract
 

@@ -46,9 +46,24 @@ Docker mounts, overlay filesystems, or elevated privileges.
 
 ## Storage Strategy Contract
 
-Portable copying is the only active strategy today. Future host capability
-checks may select a reflink clone or native OverlayFS implementation, but that
-selection must not change blueprint behavior:
+Transactional portable copying, reflink cloning, Btrfs subvolume snapshots,
+kernel OverlayFS, and fuse-overlayfs are active strategies.
+`storage.strategy` accepts `auto`, `copy`, `reflink`, `btrfs`, `overlay`,
+`fuse-overlay`, and `snapshot-hook`. Startup capability checks probe the
+configured instance filesystem, atomic directory moves, reflink cloning, Btrfs
+identity, and kernel/FUSE overlay prerequisites, then report the requested and
+selected strategy in `/sls system`. `auto` selects reflink, Btrfs, kernel
+OverlayFS, or fuse-overlayfs only after the configured instance path passes the
+corresponding isolation probe. A
+reflink source on a different or incompatible filesystem falls back
+transactionally for that source; explicit `reflink` fails instead. When Btrfs
+is selected, a `cow` source must be a subvolume without nested subvolumes.
+Ineligible sources fall back under `auto`; explicit `btrfs` fails. Other
+unsupported native capabilities remain informational under `auto`.
+Explicitly requesting an unavailable strategy fails startup rather than
+silently falling back. An explicitly configured, versioned, bounded snapshot
+helper supports storage such as ZFS, LVM thin volumes, or provider APIs. No
+strategy may change blueprint behavior:
 
 - source content remains unchanged;
 - every instance receives an isolated writable view;
@@ -58,9 +73,39 @@ selection must not change blueprint behavior:
 - unsupported native capabilities fall back to portable copying unless an
   operator explicitly requires a native strategy.
 
-Reflink and OverlayFS support remain roadmap work. They must be verified for
-filesystem support, unclean shutdown recovery, cleanup, and real disk savings
-before becoming automatic.
+Every native COW implementation must be verified for storage-location support,
+write isolation, unclean shutdown recovery, cleanup, and real disk savings
+before becoming automatic. Reflink passed its implementation gates through the
+contained probe, transactional preparation tests, and a real XFS `reflink=1`
+shared-extent test on WSL2. Btrfs passed contained snapshot/isolation/cleanup
+probing plus prepare, replacement, reconciliation, deletion, and shared-extent
+tests on a disposable real Btrfs filesystem. Snapshot helpers are never
+auto-discovered. fuse-overlayfs passed the same overlay lifecycle tests plus a
+real contained probe and prepare/restart/reset/delete gate. `/dev/fuse` alone
+does not make a host eligible: the contained mount must succeed. Snapshot
+helpers passed fake-provider process, timeout, malformed-response, rollback,
+lifecycle, and reconciliation tests.
+
+The current `auto` priority is `reflink`, Btrfs snapshot, kernel OverlayFS,
+rootless fuse-overlayfs, then portable copy. An operator `snapshot-hook` is
+never part of automatic selection. This is the conservative general-purpose
+order: reflinks provide block-level COW in ordinary directories without a
+mount lifecycle, while overlays require managed mounts and FUSE adds a
+userspace process.
+
+Reflink remains ahead of Btrfs in the general priority. If Btrfs is selected,
+an eligible `cow` source uses an instant writable snapshot. Ordinary
+directories, sources with nested subvolumes, `ro` volumes, and later sources in
+a same-target ordered merge use portable semantics. Benchmarks may adjust the
+global order only after all safety gates still pass.
+
+`auto` and explicitly requested kernel OverlayFS run a contained
+mount/write-isolation/unmount/cleanup probe once their kernel and privilege
+prerequisites are present. The probe proves that writes reach only the private
+upper layer and that the lower source remains unchanged. Provisioning uses a
+durable per-instance manifest, verifies ownership before unmounting, remounts
+persistent instances, suspends layers before reset/delete, and reconciles stale
+managed mounts after an unclean proxy exit.
 
 ## Local `ro` and `rw` Policy
 
@@ -118,4 +163,7 @@ the previous instance directory.
 
 These limits define the portable baseline. Native copy-on-write optimizations
 may be added later only when they preserve the same blueprint behavior and have
-a reliable portable fallback.
+a reliable portable fallback. Stage 3 also includes improving that fallback
+through measured bounded parallelism, sparse-file preservation, safe reuse of
+verified immutable artifacts, and avoidance of unnecessary persistent-instance
+reconstruction. Mutable world data must never be hard-linked or shared.

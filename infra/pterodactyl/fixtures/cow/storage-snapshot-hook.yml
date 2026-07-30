@@ -1,0 +1,5 @@
+storage:
+  strategy: snapshot-hook
+  snapshot_hook:
+    executable: snapshot-helper
+    timeout_seconds: 10

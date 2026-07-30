@@ -9,10 +9,12 @@ import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.blueprint.VSLSBlueprintAnnotations;
 import net.slimelabs.slslite.instance.InstanceOperationException;
-import net.slimelabs.slslite.instance.InstanceState;
-import net.slimelabs.slslite.instance.IdleAdmissionControl;
+import net.slimelabs.slslite.instance.model.InstanceState;
+import net.slimelabs.slslite.instance.lifecycle.IdleAdmissionControl;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -34,12 +36,16 @@ import java.util.concurrent.TimeoutException;
 
 public final class LocalJoinService implements AutoCloseable, IdleAdmissionControl {
 
+    private static final Logger DEFAULT_LOGGER =
+            LoggerFactory.getLogger(LocalJoinService.class);
+
     private final ProxyServer proxy;
     private final BlueprintRepository blueprints;
     private final ServerController instances;
     private final Duration queueTimeout;
     private final ScheduledExecutorService scheduler;
     private final TransferActionBar actionBar;
+    private final Logger logger;
     private final Map<UUID, QueueEntry> queue = new HashMap<>();
     private final Set<String> queueOwnedInstances = new java.util.HashSet<>();
     private final Set<String> drainingInstances = new java.util.HashSet<>();
@@ -56,7 +62,25 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                 blueprints,
                 instances,
                 queueTimeout,
-                Executors.newSingleThreadScheduledExecutor(threadFactory())
+                Executors.newSingleThreadScheduledExecutor(threadFactory()),
+                DEFAULT_LOGGER
+        );
+    }
+
+    public LocalJoinService(
+            ProxyServer proxy,
+            BlueprintRepository blueprints,
+            ServerController instances,
+            Duration queueTimeout,
+            Logger logger
+    ) {
+        this(
+                proxy,
+                blueprints,
+                instances,
+                queueTimeout,
+                Executors.newSingleThreadScheduledExecutor(threadFactory()),
+                logger
         );
     }
 
@@ -65,7 +89,8 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
             BlueprintRepository blueprints,
             ServerController instances,
             Duration queueTimeout,
-            ScheduledExecutorService scheduler
+            ScheduledExecutorService scheduler,
+            Logger logger
     ) {
         if (queueTimeout.isZero() || queueTimeout.isNegative()) {
             throw new IllegalArgumentException("queueTimeout must be positive");
@@ -76,6 +101,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         this.queueTimeout = queueTimeout;
         this.scheduler = scheduler;
         this.actionBar = new TransferActionBar(scheduler);
+        this.logger = java.util.Objects.requireNonNull(logger, "logger");
     }
 
     public JoinAttempt join(Player player, String registry, String server)
@@ -139,6 +165,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
 
         entry.instance.readyFuture().whenComplete((ready, failure) -> {
             if (failure == null) {
+                entry.timings.backendReady();
                 connect(entry, ready);
             } else {
                 fail(entry, failure);
@@ -192,7 +219,32 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         } else {
             actionBar.joining(player, instance.id());
         }
-        return new DirectJoin(instance, player.createConnectionRequest(registered).connect());
+        JoinPhaseTimings timings = new JoinPhaseTimings(false);
+        timings.backendReady();
+        timings.transferStarted();
+        CompletableFuture<ConnectionRequestBuilder.Result> connection =
+                player.createConnectionRequest(registered).connect();
+        connection.whenComplete((result, failure) -> logJoinTiming(
+                instance.id(),
+                timings,
+                connectionOutcome(result, failure)
+        ));
+        return new DirectJoin(instance, connection);
+    }
+
+    public void connected(Player player, RegisteredServer server) {
+        String instanceId = server.getServerInfo().getName();
+        try {
+            instances.get(instanceId)
+                    .recordFirstPlayerConnected()
+                    .ifPresent(elapsed -> logger.info(
+                            "First-player timing: instance={} elapsed={}",
+                            instanceId,
+                            formatMillis(elapsed.toNanos())
+                    ));
+        } catch (InstanceOperationException ignored) {
+            // External and SLS-Limbo backends are not managed instances.
+        }
     }
 
     public synchronized List<QueueTicket> queuedPlayers() {
@@ -397,6 +449,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
             return;
         }
         actionBar.joining(player, instance.blueprint().name());
+        entry.timings.transferStarted();
         player.createConnectionRequest(registered).connect()
                 .whenComplete((result, failure) -> finish(entry, result, failure));
     }
@@ -420,6 +473,11 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         } else {
             stopOrphaned(entry.instance);
         }
+        logJoinTiming(
+                entry.instance.id(),
+                entry.timings,
+                connectionOutcome(result, failure)
+        );
         if (failure == null) {
             entry.completion.complete(result);
         } else {
@@ -435,6 +493,11 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         entry.completion.completeExceptionally(new TimeoutException(
                 "Queue timed out after " + queueTimeout.toSeconds() + " seconds"
         ));
+        logJoinTiming(
+                entry.instance.id(),
+                entry.timings,
+                "timeout"
+        );
         stopOrphaned(entry.instance);
     }
 
@@ -445,6 +508,11 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         actionBar.stop(entry.ticket.playerId());
         entry.cancelTimeout();
         entry.completion.completeExceptionally(failure);
+        logJoinTiming(
+                entry.instance.id(),
+                entry.timings,
+                "failed"
+        );
         synchronized (this) {
             queueOwnedInstances.remove(entry.instance.id());
         }
@@ -454,6 +522,11 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         actionBar.stop(entry.ticket.playerId());
         entry.cancelTimeout();
         entry.completion.completeExceptionally(new QueueCancelledException(message));
+        logJoinTiming(
+                entry.instance.id(),
+                entry.timings,
+                "cancelled"
+        );
     }
 
     private synchronized boolean isQueued(QueueEntry entry) {
@@ -487,6 +560,39 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         };
     }
 
+    private void logJoinTiming(
+            String instanceId,
+            JoinPhaseTimings timings,
+            String outcome
+    ) {
+        timings.complete(outcome).ifPresent(summary -> logger.info(
+                "Player join timings: instance={} {}",
+                instanceId,
+                summary
+        ));
+    }
+
+    private static String connectionOutcome(
+            ConnectionRequestBuilder.Result result,
+            Throwable failure
+    ) {
+        if (failure != null) {
+            return "failed";
+        }
+        if (result == null || result.getStatus() == null) {
+            return "unknown";
+        }
+        return result.getStatus().name();
+    }
+
+    private static String formatMillis(long nanos) {
+        return String.format(
+                java.util.Locale.ROOT,
+                "%.3fms",
+                Math.max(0L, nanos) / 1_000_000.0d
+        );
+    }
+
     public record QueueTicket(
             UUID playerId,
             String playerName,
@@ -514,6 +620,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     private static final class QueueEntry {
         private final QueueTicket ticket;
         private final ManagedInstance instance;
+        private final JoinPhaseTimings timings = new JoinPhaseTimings();
         private final CompletableFuture<ConnectionRequestBuilder.Result> completion =
                 new CompletableFuture<>();
         private volatile ScheduledFuture<?> timeout;

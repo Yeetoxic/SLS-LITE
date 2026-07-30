@@ -4,6 +4,8 @@ import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.command.SimpleCommand;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.slimelabs.slslite.host.HostCapability;
+import net.slimelabs.slslite.host.HostCapabilityStatus;
 import net.slimelabs.slslite.security.AdministratorStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -101,6 +103,21 @@ final class SLSCommandSurfaceTest {
         assertTrue(plainText(messages.getFirst()).contains(
                 "not available in local mode"
         ));
+    }
+
+    @Test
+    void capabilityLinesIncludeDetailForConsoleSendersAndBoundLongValues() {
+        String detail = "x".repeat(300);
+
+        String text = plainText(SLSCommand.capabilityLine(new HostCapability(
+                "Instance filesystem",
+                HostCapabilityStatus.PASS,
+                detail
+        )));
+
+        assertTrue(text.contains("Instance filesystem: PASS - "));
+        assertTrue(text.endsWith("…"));
+        assertTrue(text.length() < detail.length());
     }
 
     private static SimpleCommand.Invocation invocation(

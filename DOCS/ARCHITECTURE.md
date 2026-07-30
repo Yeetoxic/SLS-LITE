@@ -45,7 +45,14 @@ backend protocol synchronization all succeed.
 | `config` | Host configuration, validation, immutable definition catalogs, reload. |
 | `host` | Startup capability probes and diagnostics. |
 | `install` | Provider-backed software acquisition and bounded installation state. |
-| `instance` | Instance identity, files, metadata, lifecycle, matchmaking support, reconciliation, and logs. |
+| `instance` | Public local-server facade and orchestration. |
+| `instance.configuration` | Instance-confined forwarding, properties, YAML, and text-file edits. |
+| `instance.diagnostics` | Bounded output, temporary logs, failed-start reports, and process-resource sampling. |
+| `instance.lifecycle` | State transitions, phase timing, idle admission, and idle-instance reaping. |
+| `instance.model` | Immutable instance identity, definition fingerprint, metadata, and state values. |
+| `instance.metadata` | Confined, versioned instance-metadata persistence. |
+| `instance.reconcile` | Startup recovery, persistent normalization, and ownership-safe stale cleanup. |
+| `instance.storage` | Transactional preparation plus portable copy, reflink, Btrfs, OverlayFS, FUSE, and snapshot-hook lifecycles. |
 | `lobby` | Primary-lobby abstraction, SLS-Limbo runtime, fallback routing, and recovery. |
 | `network` | Synchronized loopback port reservation. |
 | `process` | Shell-free process specifications, supervision, input, output, and termination. |
@@ -57,6 +64,64 @@ backend protocol synchronization all succeed.
 `SLSLite` is the composition root. It creates services in dependency order,
 registers Velocity listeners and commands, starts lobby providers, and closes
 children during proxy shutdown.
+
+### Target Package Map
+
+Stage 3.4 is moving the current broad packages toward the following ownership
+boundaries. These are dependency boundaries, not only directory names.
+The storage, model, metadata, reconciliation, configuration, diagnostics, and
+lifecycle boundaries are complete:
+
+| Target package | Owns | May depend on |
+| --- | --- | --- |
+| `instance` | Public local-server façade and orchestration (`ServerController`, `InstanceManager`). | The focused instance packages below plus blueprint, install, network, process, resource, software, and Velocity ports. |
+| `instance.model` | Instance identity, definition identity, metadata value objects, state, and externally readable snapshots. | Blueprint/config model types; no filesystem or process implementations. |
+| `instance.metadata` | Versioned metadata serialization, confined atomic persistence, persistent discovery, resume validation, and legacy identity migration. | `instance.model`, the read-only instance facade, and filesystem/process identity primitives. |
+| `instance.lifecycle` | State transitions, admission coordination, idle policy, and phase timing. | `instance.model` and narrow service interfaces. |
+| `instance.storage` | Transactional preparation and all copy, reflink, Btrfs, OverlayFS, FUSE, and snapshot-hook lifecycles. | Blueprint volume/config models and filesystem/process primitives; never Velocity or command code. |
+| `instance.reconcile` | Startup recovery, persistent reuse/reset decisions, and ownership-safe stale cleanup. | `instance.model`, `instance.storage`, and metadata persistence. |
+| `instance.configuration` | Instance-confined properties, YAML, text, and forwarding edits. | Configuration models and filesystem primitives. |
+| `instance.diagnostics` | Bounded logs, failed-start records, process resource readings, and lifecycle summaries. | `instance.model` and process read-only views. |
+| `host.storage` | Read-only per-path storage capability probes and automatic strategy selection. | Storage configuration plus probe process/filesystem primitives; no instance mutation. |
+| `command.handler` | One focused handler per command family, sharing authorization, target resolution, messages, and the pinned command contract. | Public service interfaces; never concrete storage or process internals. |
+
+Dependency flow is inward through models and interfaces: command/Velocity
+adapters call orchestration; orchestration coordinates focused services;
+storage and process implementations do not call presentation code. Package
+moves must preserve operator paths, YAML keys, command behavior, serialized
+metadata, and the public `ServerController` boundary.
+
+The initial inventory found 35 classes in `instance`, with storage,
+configuration editing, lifecycle state, reconciliation, and diagnostics mixed
+beside orchestration. The root package is now reduced to five production
+classes: the public controller/orchestration facade, its managed-instance
+facade, and the two shared operation exceptions. The remaining large pressure
+points are `SLSCommand`, `InstanceDirectoryPreparer`, and `InstanceManager`;
+they should be decomposed after cohesive leaf classes move, not while package
+movement and behavioral rewrites are mixed in one pass.
+
+`InstanceManager` now delegates metadata persistence and persistent-instance
+compatibility to `InstanceMetadataService`, lifecycle timing presentation to
+`InstanceTimingReporter`, storage transactions to `InstanceDirectoryPreparer`,
+and child execution to `ProcessSupervisor`. It still owns the synchronized
+active-instance registry, admission reservations, asynchronous start/stop
+coordination, and Velocity registration. Those stateful responsibilities must
+move only with tests that exercise cancellation and callback races; package
+organization alone is not a reason to split the state machine.
+
+`SLSCommand` is being reduced to dispatch and shared presentation. The
+`command.handler` package owns complete command families, including their
+execution and completion behavior; `AdminCommandHandler` and
+`InstallationCommandHandler` own their respective families, while
+`InspectionCommandHandler` is a small stable facade over focused catalog,
+instance/log, and host-diagnostics components. `PlayerRoutingCommandHandler`
+owns join, dequeue, find, connection reporting, selectors, and their
+completions. `InstanceLifecycleCommandHandler` owns start, stop, restart, reset,
+protected-lobby cycling, and lifecycle completions. `CommandInstanceAccess`
+centralizes active/persistent lookup, player membership, and the `this` alias
+shared by handlers. `SLSCommand` retains dispatch and the small cross-family
+surface. A family must move with its permission, sender, usage, output, and
+completion tests so dispatch cannot drift from suggestions.
 
 ## Core Models
 
@@ -89,18 +154,49 @@ together so requests do not observe a half-reloaded pair.
 
 ## Storage Preparation
 
-The current `cow` implementation is a transactional portable copy:
+The `cow` implementation uses transactional reflink cloning, eligible Btrfs
+subvolume snapshots, managed kernel OverlayFS, or managed fuse-overlayfs when
+the selected storage passes its isolation probe; an explicitly configured
+snapshot helper covers provider-managed storage. Otherwise SLS-LITE uses
+transactional portable copy:
 
 1. create a sibling temporary instance directory;
 2. copy the exact software base;
-3. copy validated volume sources into non-overlapping targets;
+3. copy validated volume sources or mount them as immutable OverlayFS lowers
+   into non-overlapping targets;
 4. apply forwarding and server properties atomically;
 5. write ownership metadata;
 6. publish the complete directory;
 7. remove incomplete staging on failure.
 
 Persistent reset retains a rollback sibling until the replacement commits.
-There is no active OverlayFS, reflink, hard-link, or Docker mount path.
+An auto-selected reflink may fall back to copying for an individual
+cross-filesystem source; explicitly required reflink fails the transaction.
+Overlay-backed instances persist private upper/work layers and a manifest
+through stop/restart, and lifecycle cleanup verifies mount ownership before
+unmounting or traversing an instance.
+On non-Windows hosts, the portable file copier samples only large files for zero
+runs and preserves qualifying runs as sparse extents; Windows and all
+small/ordinary files retain the platform native copy path.
+Btrfs snapshots apply to `cow` volume sources that are subvolumes without
+nested subvolumes. A durable instance manifest drives replacement, stale
+ephemeral reconciliation, and deepest-first deletion. Under `auto`, ineligible
+sources use portable copy; explicit `btrfs` rejects them transactionally.
+Kernel and FUSE overlays share the durable layer manifest and transactional
+lifecycle. The FUSE adapter also verifies the exact daemon arguments before
+unmounting, including after proxy restart; `/dev/fuse` and an installed binary
+are only prerequisites, and the contained mount probe makes the final
+eligibility decision.
+The explicit snapshot-helper backend invokes only an executable confined below
+the SLS-LITE data directory. Its versioned argv protocol has bounded output and
+timeouts; durable source/target manifests drive provider suspend, resume,
+replacement, deletion, and stale-ephemeral reconciliation. It is never
+auto-selected.
+Full directory copies use a bounded pool of at most four workers with no more
+than twice that many tasks in flight. The batch drains all started work before
+transactional cleanup can remove a destination. Ordered first-wins merges stay
+sequential so precedence never depends on task scheduling.
+There is no active hard-link or Docker mount path.
 
 ## Concurrency
 

@@ -1,6 +1,7 @@
 package net.slimelabs.slslite.host;
 
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.config.StorageStrategy;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.software.SoftwareProfile;
@@ -33,10 +34,21 @@ class HostCapabilityCheckerTest {
         );
 
         assertFalse(report.hasFailures(), report.failureSummary());
+        assertTrue(
+                java.util.Set.of(StorageStrategy.COPY, StorageStrategy.REFLINK)
+                        .contains(report.selectedStorageStrategy().orElseThrow())
+        );
         assertTrue(ports.reservations().isEmpty());
         assertTrue(report.capabilities().stream().anyMatch(capability ->
                 capability.name().equals("Child Java process")
                         && capability.status() == HostCapabilityStatus.PASS));
+        assertTrue(report.capabilities().stream().anyMatch(capability ->
+                capability.name().equals("Selected COW strategy")
+                        && capability.detail().startsWith("requested=auto, selected=")));
+        assertTrue(report.capabilities().stream().anyMatch(capability ->
+                capability.name().equals("Process identity")));
+        assertTrue(report.capabilities().stream().anyMatch(capability ->
+                capability.name().equals("Container memory")));
     }
 
     @Test
@@ -89,9 +101,13 @@ class HostCapabilityCheckerTest {
 
         assertFalse(report.hasFailures(), report.failureSummary());
         assertTrue(report.capabilities().stream().anyMatch(capability ->
-                        capability.status() == HostCapabilityStatus.WARNING
+                        capability.status() == HostCapabilityStatus.INFO
+                        && capability.name().equals("Optional Java runtimes")
                         && capability.detail().contains(
-                                "configured but unused runtime"
+                                "definitely-not-java-21"
+                        )
+                        && !capability.detail().contains(
+                                "Cannot run program"
                         )));
     }
 
@@ -113,7 +129,8 @@ class HostCapabilityCheckerTest {
 
         assertFalse(report.hasFailures(), report.failureSummary());
         assertTrue(report.capabilities().stream().anyMatch(capability ->
-                capability.status() == HostCapabilityStatus.WARNING
+                capability.status() == HostCapabilityStatus.INFO
+                        && capability.name().equals("Optional Java runtimes")
                         && capability.detail().contains(
                                 "definitely-not-default-java"
                         )));
@@ -157,8 +174,8 @@ class HostCapabilityCheckerTest {
 
         assertFalse(report.hasFailures(), report.failureSummary());
         assertFalse(report.capabilities().stream().anyMatch(capability ->
-                capability.status() == HostCapabilityStatus.WARNING
-                        && capability.name().equals("Child Java process")));
+                capability.status() == HostCapabilityStatus.INFO
+                        && capability.name().equals("Optional Java runtimes")));
     }
 
     private static SoftwareProfile withJavaVersions(

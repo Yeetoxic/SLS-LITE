@@ -37,6 +37,8 @@ public final class SLSConfigRepository {
     private static final String DEFAULT_LOBBY_MODE = "external";
     private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
     private static final String DEFAULT_LOBBY_SERVER = "lobby";
+    private static final String DEFAULT_STORAGE_STRATEGY = "auto";
+    private static final int DEFAULT_SNAPSHOT_HOOK_TIMEOUT_SECONDS = 30;
     private static final int DEFAULT_LOBBY_MAX_RESTART_ATTEMPTS = 5;
     private static final int DEFAULT_LOBBY_INITIAL_BACKOFF_SECONDS = 5;
     private static final int DEFAULT_LOBBY_MAX_BACKOFF_SECONDS = 60;
@@ -115,6 +117,14 @@ public final class SLSConfigRepository {
                     : "lobby.emergency";
             Map<String, Object> limboRecovery =
                     YamlValues.optionalMap(limbo, "recovery", configPath);
+            Map<String, Object> storage =
+                    YamlValues.optionalMap(root, "storage", configPath);
+            Map<String, Object> snapshotHook =
+                    YamlValues.optionalMap(
+                            storage,
+                            "snapshot_hook",
+                            configPath
+                    );
             Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);
 
             YamlValues.requireOnlyKeys(
@@ -122,7 +132,7 @@ public final class SLSConfigRepository {
                     "",
                     configPath,
                     "resources", "network", "matchmaking", "lifecycle", "managed_output",
-                    "forwarding", "security", "lobby", "paths"
+                    "forwarding", "security", "lobby", "storage", "paths"
             );
             YamlValues.requireOnlyKeys(
                     resources,
@@ -189,6 +199,18 @@ public final class SLSConfigRepository {
                     configPath,
                     "max_attempts", "initial_backoff_seconds", "max_backoff_seconds",
                     "stable_after_seconds"
+            );
+            YamlValues.requireOnlyKeys(
+                    storage,
+                    "storage",
+                    configPath,
+                    "strategy", "snapshot_hook"
+            );
+            YamlValues.requireOnlyKeys(
+                    snapshotHook,
+                    "storage.snapshot_hook",
+                    configPath,
+                    "executable", "timeout_seconds"
             );
             YamlValues.requireOnlyKeys(paths, "paths", configPath, "instances");
 
@@ -367,6 +389,25 @@ public final class SLSConfigRepository {
                     DEFAULT_LIMBO_STABLE_AFTER_SECONDS,
                     configPath
             );
+            String storageStrategy = YamlValues.optionalString(
+                    storage,
+                    "strategy",
+                    DEFAULT_STORAGE_STRATEGY,
+                    configPath
+            );
+            String snapshotHookExecutable = YamlValues.optionalString(
+                    snapshotHook,
+                    "executable",
+                    "",
+                    configPath
+            );
+            int snapshotHookTimeoutSeconds =
+                    YamlValues.optionalPositiveInt(
+                            snapshotHook,
+                            "timeout_seconds",
+                            DEFAULT_SNAPSHOT_HOOK_TIMEOUT_SECONDS,
+                            configPath
+                    );
             String instances = YamlValues.optionalString(
                     paths,
                     "instances",
@@ -376,6 +417,15 @@ public final class SLSConfigRepository {
 
             Path instancesDirectory = resolveManagedPath(instances, "paths.instances");
             try {
+                StorageStrategy parsedStorageStrategy =
+                        StorageStrategy.parse(storageStrategy);
+                if (parsedStorageStrategy == StorageStrategy.SNAPSHOT_HOOK
+                        && snapshotHookExecutable.isBlank()) {
+                    throw new IllegalArgumentException(
+                            "storage.snapshot_hook.executable is required when "
+                                    + "storage.strategy is snapshot-hook"
+                    );
+                }
                 return new SLSConfig(
                         totalMemory,
                         maxManagedProcesses,
@@ -418,6 +468,16 @@ public final class SLSConfigRepository {
                                 lobbyInitialBackoff,
                                 lobbyMaxBackoff,
                                 lobbyStableAfter
+                        ),
+                        new StorageConfig(
+                                parsedStorageStrategy,
+                                snapshotHookExecutable.isBlank()
+                                        ? null
+                                        : resolveManagedPath(
+                                                snapshotHookExecutable,
+                                                "storage.snapshot_hook.executable"
+                                        ),
+                                snapshotHookTimeoutSeconds
                         ),
                         instancesDirectory
                 );

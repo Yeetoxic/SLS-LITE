@@ -42,7 +42,7 @@ upstream umbrella behavior.
 | `kill <server\|all> [force]` | Admin | Planned | Add explicit force-termination behavior. |
 | `dequeue [all\|local\|player]` | Self public; others admin | Adapted | Match final vSLS feedback and queue context. |
 | `status <server> [remote]` | Admin | Adapted | Local status output matched; add the `remote` local-mode response. |
-| `stats [server]` | Admin | Adapted | Reports lifecycle state, process CPU time, configured memory, uptime, and retained logs; Java cannot portably measure child memory, network, or disk usage. |
+| `stats [server]` | Admin | Adapted | Reports lifecycle state, CPU time, configured memory, current Linux RSS and process I/O where `/proc` is accessible, uptime, and retained logs. Shared-namespace network use and synchronous recursive disk use remain explicitly unavailable. |
 | `version` | Public | Adapted | vSLS label, emphasis, author metadata, and colors matched. |
 | `pause <server>` | Admin | Compatibility response | Local process suspension is not implemented yet. |
 | `resume <server>` | Admin | Compatibility response | Local process resumption is not implemented yet. |

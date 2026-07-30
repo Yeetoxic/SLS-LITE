@@ -1,0 +1,44 @@
+#!/bin/sh
+
+operation="$3"
+source_path=""
+target_path=""
+shift 3
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --source)
+      source_path="$2"
+      shift 2
+      ;;
+    --target)
+      target_path="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+state_path="${target_path}.provider-state"
+case "$operation" in
+  probe)
+    ;;
+  prepare)
+    cp -a "$source_path" "$target_path"
+    ;;
+  suspend)
+    [ ! -e "$target_path" ] || mv "$target_path" "$state_path"
+    ;;
+  resume)
+    [ ! -e "$state_path" ] || mv "$state_path" "$target_path"
+    ;;
+  delete)
+    rm -rf -- "$target_path" "$state_path"
+    ;;
+  *)
+    exit 64
+    ;;
+esac
+
+echo "sls-snapshot-helper-v1 ok"

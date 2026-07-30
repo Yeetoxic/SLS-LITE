@@ -24,11 +24,11 @@ import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityChecker;
 import net.slimelabs.slslite.host.HostCapabilityReport;
 import net.slimelabs.slslite.host.HostCapabilityStatus;
-import net.slimelabs.slslite.instance.InstanceDirectoryPreparer;
-import net.slimelabs.slslite.instance.IdleInstanceReaper;
+import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
+import net.slimelabs.slslite.instance.reconcile.InstanceReconciler;
+import net.slimelabs.slslite.instance.reconcile.InstanceReconciliationReport;
+import net.slimelabs.slslite.instance.lifecycle.IdleInstanceReaper;
 import net.slimelabs.slslite.instance.InstanceManager;
-import net.slimelabs.slslite.instance.InstanceReconciler;
-import net.slimelabs.slslite.instance.InstanceReconciliationReport;
 import net.slimelabs.slslite.install.PaperInstallationProvider;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.install.VanillaInstallationProvider;
@@ -109,6 +109,7 @@ public final class SLSLite {
 
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
+        ProxyRecoveryTiming recoveryTiming = new ProxyRecoveryTiming();
         ConsoleBanner.logStartup(logger);
 
         try {
@@ -142,10 +143,6 @@ public final class SLSLite {
                     configuration.get().portRangeStart(),
                     configuration.get().portRangeEnd()
             );
-            InstanceDirectoryPreparer directoryPreparer = new InstanceDirectoryPreparer(
-                    configuration.get().instancesDirectory(),
-                    dataDirectory
-            );
             JavaJarProcessSpecFactory processSpecFactory =
                     new JavaJarProcessSpecFactory(dataDirectory);
             hostCapabilities = new HostCapabilityChecker().check(
@@ -154,7 +151,8 @@ public final class SLSLite {
                     blueprints.getAll(),
                     softwareProfiles.getAll(),
                     processSpecFactory,
-                    configuration.get().totalMemoryMiB()
+                    configuration.get().totalMemoryMiB(),
+                    configuration.get().storage()
             );
             logHostCapabilities(hostCapabilities);
             if (hostCapabilities.hasFailures()) {
@@ -163,6 +161,17 @@ public final class SLSLite {
                                 + hostCapabilities.failureSummary()
                 );
             }
+            InstanceDirectoryPreparer directoryPreparer =
+                    new InstanceDirectoryPreparer(
+                            configuration.get().instancesDirectory(),
+                            dataDirectory,
+                            configuration.get().storage(),
+                            hostCapabilities.selectedStorageStrategy()
+                                    .orElseThrow(() -> new IllegalStateException(
+                                            "Host storage selection did not produce "
+                                                    + "an active strategy"
+                                    ))
+                    );
             InstanceReconciliationReport reconciliation = new InstanceReconciler(
                     directoryPreparer,
                     logger
@@ -211,7 +220,8 @@ public final class SLSLite {
                     proxy,
                     blueprints,
                     instanceManager,
-                    Duration.ofSeconds(configuration.get().queueTimeoutSeconds())
+                    Duration.ofSeconds(configuration.get().queueTimeoutSeconds()),
+                    logger
             );
             joinActions = new BlueprintJoinActionService(instanceManager, logger);
             LobbyProvider primaryLobby = new LocalLobbyProvider(
@@ -280,6 +290,14 @@ public final class SLSLite {
                 )
         );
         issueInitialAdministratorCode();
+        lobbyProvider.addPrimaryReadyListener(server ->
+                recoveryTiming.complete(
+                        "ready",
+                        server.getServerInfo().getName()
+                ).ifPresent(summary -> logger.info(
+                        "Proxy restart recovery timing: {}",
+                        summary
+                )));
         lobbyProvider.start();
         idleReaper.start();
 
@@ -317,22 +335,20 @@ public final class SLSLite {
     private void logHostCapabilities(HostCapabilityReport report) {
         for (HostCapability capability : report.capabilities()) {
             String message = "Host capability [{}]: {} - {}";
-            if (capability.status() == HostCapabilityStatus.FAILURE) {
-                logger.error(
+            switch (capability.status()) {
+                case FAILURE -> logger.error(
                         message,
                         capability.status(),
                         capability.name(),
                         capability.detail()
                 );
-            } else if (capability.status() == HostCapabilityStatus.WARNING) {
-                logger.warn(
+                case WARNING -> logger.warn(
                         message,
                         capability.status(),
                         capability.name(),
                         capability.detail()
                 );
-            } else {
-                logger.info(
+                case PASS, INFO -> logger.info(
                         message,
                         capability.status(),
                         capability.name(),
@@ -412,6 +428,9 @@ public final class SLSLite {
 
     @Subscribe
     public void onServerConnected(ServerConnectedEvent event) {
+        if (joinService != null) {
+            joinService.connected(event.getPlayer(), event.getServer());
+        }
         if (limboHandoff != null) {
             limboHandoff.connected(event.getPlayer(), event.getServer());
         }

@@ -1,5 +1,11 @@
 package net.slimelabs.slslite.instance;
 
+import net.slimelabs.slslite.instance.metadata.InstanceMetadataStore;
+import net.slimelabs.slslite.instance.diagnostics.InstanceOutput;
+import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
+import net.slimelabs.slslite.instance.model.InstanceMetadata;
+import net.slimelabs.slslite.instance.model.InstanceState;
+import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.config.ForwardingConfig;
@@ -62,10 +68,24 @@ class InstanceManagerTest {
         assertTrue(context.backends().registrations.containsKey(instance.id()));
         assertTrue(Files.isRegularFile(instance.directory().resolve("server.properties")));
         assertTrue(Files.isRegularFile(
-                instance.directory().resolve(TemporaryInstanceLog.RELATIVE_PATH)
+                instance.directory().resolve(InstanceOutput.TEMPORARY_RELATIVE_PATH)
         ));
         assertEquals(256, context.budget().reservedMemoryMiB());
         assertTrue(instance.logs(1, 50).lines().contains("FIXTURE READY"));
+        for (InstancePhaseTimings.Phase phase : java.util.List.of(
+                InstancePhaseTimings.Phase.DISPATCH_QUEUE,
+                InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION,
+                InstancePhaseTimings.Phase.FILE_PREPARATION,
+                InstancePhaseTimings.Phase.CONFIGURATION,
+                InstancePhaseTimings.Phase.PROCESS_LAUNCH,
+                InstancePhaseTimings.Phase.READINESS,
+                InstancePhaseTimings.Phase.REGISTRATION
+        )) {
+            assertTrue(
+                    instance.timings().elapsedNanos(phase).isPresent(),
+                    () -> "Missing timing for " + phase
+            );
+        }
 
         assertEquals(0, manager.stop(instance.id()).get(10, TimeUnit.SECONDS));
         awaitCleanup();
@@ -73,6 +93,12 @@ class InstanceManagerTest {
         assertTrue(context.backends().registrations.isEmpty());
         assertEquals(0, context.budget().reservedMemoryMiB());
         assertFalse(Files.exists(instance.directory()));
+        assertTrue(instance.timings().elapsedNanos(
+                InstancePhaseTimings.Phase.SHUTDOWN
+        ).isPresent());
+        assertTrue(instance.timings().elapsedNanos(
+                InstancePhaseTimings.Phase.CLEANUP
+        ).isPresent());
     }
 
     @Test
@@ -97,10 +123,15 @@ class InstanceManagerTest {
     @Test
     void restartsPersistentInstanceWithSameIdAndDirectory() throws Exception {
         createContext(true, true);
+        Path template = temporaryDirectory.resolve(
+                "software/paper/fixture/template-version"
+        );
+        Files.writeString(template, "version-one");
 
         ManagedInstance original = manager.start("fixture");
         original.readyFuture().get(10, TimeUnit.SECONDS);
         Files.writeString(original.directory().resolve("persistent-marker"), "preserved");
+        Files.writeString(template, "version-two");
 
         ManagedInstance restarted = manager.restart(original.id())
                 .get(10, TimeUnit.SECONDS);
@@ -110,6 +141,10 @@ class InstanceManagerTest {
         assertEquals(original.directory(), restarted.directory());
         assertEquals(original.createdAt(), restarted.createdAt());
         assertTrue(Files.isRegularFile(restarted.directory().resolve("persistent-marker")));
+        assertEquals(
+                "version-one",
+                Files.readString(restarted.directory().resolve("template-version"))
+        );
         assertEquals(InstanceState.READY, restarted.state());
     }
 

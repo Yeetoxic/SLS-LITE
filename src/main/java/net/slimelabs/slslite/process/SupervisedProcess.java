@@ -1,7 +1,7 @@
 package net.slimelabs.slslite.process;
 
-import net.slimelabs.slslite.instance.InstanceLifecycle;
-import net.slimelabs.slslite.instance.InstanceState;
+import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
+import net.slimelabs.slslite.instance.model.InstanceState;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;

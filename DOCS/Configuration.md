@@ -15,6 +15,9 @@ Velocity restart; `/sls reload` reloads blueprints and software profiles only.
 | `network.ports.end` | `25670` | Integer from `start..65535`; last managed loopback port. |
 | `matchmaking.queue_timeout_seconds` | `180` | Positive queue lifetime in seconds. |
 | `lifecycle.idle_shutdown_seconds` | `180` | Non-negative seconds. `0` disables global idle cleanup. |
+| `storage.strategy` | `auto` | `auto`, `copy`, `reflink`, `btrfs`, `overlay`, `fuse-overlay`, or `snapshot-hook`. `auto` uses reflink, eligible Btrfs snapshots, kernel OverlayFS, or fuse-overlayfs after a successful per-path isolation probe and otherwise uses portable copy. Explicitly requesting an unavailable or still-disabled strategy fails startup. |
+| `storage.snapshot_hook.executable` | unset | Required only for `snapshot-hook`; relative executable below the SLS-LITE data directory. Never auto-discovered. |
+| `storage.snapshot_hook.timeout_seconds` | `30` | Per-operation helper timeout from 1 through 300 seconds. |
 | `managed_output.mirror_to_proxy_console` | `false` | Mirror every child output line into the Velocity console. |
 | `managed_output.write_temporary_file` | `true` | Write bounded `logs/sls-lite-console.log` inside each instance. |
 | `managed_output.temporary_file_max_kib` | `4096` | Per-instance hard limit, `1..1048576` KiB. No rotation archives. |
@@ -39,6 +42,20 @@ Velocity restart; `/sls reload` reloads blueprints and software profiles only.
 | `lobby.recovery.max_backoff_seconds` | `60` | At least the initial delay. |
 | `lobby.recovery.stable_after_seconds` | `120` | Positive healthy period before retry-budget reset. |
 | `paths.instances` | `instances` | Non-blank relative path below the SLS-LITE data directory. |
+
+For `storage.strategy: auto`, the current general priority is reflink, Btrfs
+snapshot, kernel OverlayFS, rootless fuse-overlayfs, then portable copy.
+`snapshot-hook` is explicit-only and requires its configured helper to pass the
+bounded `sls-snapshot-helper-v1` handshake. When Btrfs is selected, eligible `cow`
+subvolumes without nested subvolumes use snapshots; other sources retain
+portable semantics under `auto`. Detected
+capabilities are eligible only when the corresponding strategy is implemented
+and its exact storage-path safety probe passes. Kernel OverlayFS is active only
+after its exact storage path passes the contained mount probe. fuse-overlayfs
+is also active only after
+its exact-path mount/isolation/unmount probe succeeds; `/dev/fuse` and the
+binary alone are insufficient. Snapshot helpers are active only when explicitly
+configured and never participate in `auto`.
 
 ## Resource Accounting
 
@@ -73,6 +90,5 @@ diagnosis where possible.
 
 Reload candidates are parsed and cross-validated before replacing the active
 catalog. Running instances keep the definitions with which they were created.
-Host configuration, output policy, forwarding, lobby mode, ports, memory, and
-security require a Velocity restart.
-
+Host configuration, storage strategy, output policy, forwarding, lobby mode,
+ports, memory, and security require a Velocity restart.

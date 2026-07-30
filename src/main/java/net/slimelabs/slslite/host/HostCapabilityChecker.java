@@ -1,6 +1,8 @@
 package net.slimelabs.slslite.host;
 
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.config.StorageStrategy;
+import net.slimelabs.slslite.config.StorageConfig;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.network.PortAllocationException;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
@@ -18,10 +20,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class HostCapabilityChecker {
 
     private static final long PROCESS_TIMEOUT_SECONDS = 5;
+    private static final Pattern VERSIONED_RUNTIME_PATH = Pattern.compile(
+            "(?:^|/)java-([0-9]+)(?:/|$)"
+    );
 
     public HostCapabilityReport check(
             Path instancesDirectory,
@@ -31,21 +38,137 @@ public final class HostCapabilityChecker {
             JavaJarProcessSpecFactory processSpecFactory,
             int managedMemoryMiB
     ) {
+        return check(
+                instancesDirectory,
+                portAllocator,
+                blueprints,
+                profiles,
+                processSpecFactory,
+                managedMemoryMiB,
+                StorageStrategy.AUTO
+        );
+    }
+
+    public HostCapabilityReport check(
+            Path instancesDirectory,
+            LoopbackPortAllocator portAllocator,
+            Collection<Blueprint> blueprints,
+            Collection<SoftwareProfile> profiles,
+            JavaJarProcessSpecFactory processSpecFactory,
+            int managedMemoryMiB,
+            StorageStrategy requestedStorageStrategy
+    ) {
+        return check(
+                instancesDirectory,
+                portAllocator,
+                blueprints,
+                profiles,
+                processSpecFactory,
+                managedMemoryMiB,
+                new StorageConfig(requestedStorageStrategy)
+        );
+    }
+
+    public HostCapabilityReport check(
+            Path instancesDirectory,
+            LoopbackPortAllocator portAllocator,
+            Collection<Blueprint> blueprints,
+            Collection<SoftwareProfile> profiles,
+            JavaJarProcessSpecFactory processSpecFactory,
+            int managedMemoryMiB,
+            StorageConfig storage
+    ) {
         List<HostCapability> results = new ArrayList<>();
         results.add(checkWritableStorage(instancesDirectory));
+        HostStorageCapabilityChecker.StorageCheck storageCheck =
+                new HostStorageCapabilityChecker().checkWithSelection(
+                    instancesDirectory,
+                    storage
+            );
+        results.addAll(
+                storageCheck.capabilities()
+        );
         results.add(checkLoopbackPort(portAllocator));
+        results.add(checkProcessIdentity());
         results.addAll(checkJavaProcesses(
                 blueprints,
                 profiles,
                 processSpecFactory
         ));
+        results.add(checkContainerMemory());
         results.add(new HostCapability(
                 "Managed memory",
-                HostCapabilityStatus.WARNING,
+                HostCapabilityStatus.INFO,
                 managedMemoryMiB + " MiB is an SLS-LITE admission budget, not "
                         + "a measurement of panel or container memory"
         ));
-        return new HostCapabilityReport(results);
+        return new HostCapabilityReport(
+                results,
+                storageCheck.selection().selected()
+        );
+    }
+
+    private static HostCapability checkContainerMemory() {
+        return new CgroupMemoryDetector().detect()
+                .map(memory -> {
+                    String detail = memory.source() + " hard limit="
+                            + mebibytes(memory.limitBytes()) + " MiB";
+                    if (memory.currentBytes() >= 0) {
+                        detail += ", current="
+                                + mebibytes(memory.currentBytes()) + " MiB"
+                                + ", currently available="
+                                + mebibytes(memory.availableBytes()) + " MiB";
+                    }
+                    return pass("Container memory", detail);
+                })
+                .orElseGet(() -> new HostCapability(
+                        "Container memory",
+                        HostCapabilityStatus.INFO,
+                        "No reliable finite cgroup v1/v2 hard limit was exposed; "
+                                + "the configured managed-memory budget remains "
+                                + "the only admission limit"
+                ));
+    }
+
+    private static String mebibytes(long bytes) {
+        return String.format(
+                java.util.Locale.ROOT,
+                "%.1f",
+                bytes / 1024.0 / 1024.0
+        );
+    }
+
+    private static HostCapability checkProcessIdentity() {
+        try {
+            ProcessHandle current = ProcessHandle.current();
+            if (current.pid() <= 0) {
+                return new HostCapability(
+                        "Process identity",
+                        HostCapabilityStatus.WARNING,
+                        "The JVM did not expose a positive process ID; orphan "
+                                + "reconciliation will remain conservative"
+                );
+            }
+            if (current.info().startInstant().isEmpty()) {
+                return new HostCapability(
+                        "Process identity",
+                        HostCapabilityStatus.WARNING,
+                        "PID " + current.pid() + " is available but process start "
+                                + "time is not; orphan reconciliation will remain "
+                                + "conservative"
+                );
+            }
+            return pass(
+                    "Process identity",
+                    "ProcessHandle PID and start-time identity are available"
+            );
+        } catch (RuntimeException exception) {
+            return new HostCapability(
+                    "Process identity",
+                    HostCapabilityStatus.WARNING,
+                    message(exception)
+            );
+        }
     }
 
     private static HostCapability checkWritableStorage(Path instancesDirectory) {
@@ -136,10 +259,33 @@ public final class HostCapabilityChecker {
         for (String executable : requiredExecutables) {
             results.add(checkJavaProcess(executable, true));
         }
+        List<String> unavailableOptional = new ArrayList<>();
         for (String executable : optionalExecutables) {
-            results.add(checkJavaProcess(executable, false));
+            HostCapability capability = checkJavaProcess(executable, false);
+            if (capability.status() == HostCapabilityStatus.INFO) {
+                unavailableOptional.add(optionalRuntimeLabel(executable));
+            } else if (capability.status() == HostCapabilityStatus.FAILURE) {
+                results.add(capability);
+            }
+        }
+        if (!unavailableOptional.isEmpty()) {
+            results.add(new HostCapability(
+                    "Optional Java runtimes",
+                    HostCapabilityStatus.INFO,
+                    "Unavailable and not required by loaded blueprints: "
+                            + String.join(", ", unavailableOptional)
+            ));
         }
         return results;
+    }
+
+    private static String optionalRuntimeLabel(String executable) {
+        String portable = executable.replace('\\', '/');
+        Matcher matcher = VERSIONED_RUNTIME_PATH.matcher(portable);
+        if (matcher.find()) {
+            return "Java " + matcher.group(1);
+        }
+        return executable;
     }
 
     private static HostCapability checkJavaProcess(
@@ -194,7 +340,7 @@ public final class HostCapabilityChecker {
                 ? failure(name, detail)
                 : new HostCapability(
                         name,
-                        HostCapabilityStatus.WARNING,
+                        HostCapabilityStatus.INFO,
                         detail + " (configured but unused runtime)"
                 );
     }

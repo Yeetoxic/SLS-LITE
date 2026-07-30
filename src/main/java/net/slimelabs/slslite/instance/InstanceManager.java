@@ -6,6 +6,20 @@ import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
+import net.slimelabs.slslite.instance.configuration.PaperForwardingEditor;
+import net.slimelabs.slslite.instance.configuration.ServerPropertiesEditor;
+import net.slimelabs.slslite.instance.configuration.TextFileConfigEditor;
+import net.slimelabs.slslite.instance.configuration.YamlConfigEditor;
+import net.slimelabs.slslite.instance.diagnostics.FailedStartDiagnostics;
+import net.slimelabs.slslite.instance.diagnostics.InstanceTimingReporter;
+import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
+import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
+import net.slimelabs.slslite.instance.metadata.InstanceMetadataService;
+import net.slimelabs.slslite.instance.model.InstanceDefinitionIdentity;
+import net.slimelabs.slslite.instance.model.InstanceIdGenerator;
+import net.slimelabs.slslite.instance.model.InstanceMetadata;
+import net.slimelabs.slslite.instance.model.InstanceState;
+import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.network.PortAllocationException;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
@@ -56,13 +70,13 @@ public final class InstanceManager implements ServerController {
     private final ForwardingConfig forwardingConfig;
     private final LoopbackPortAllocator portAllocator;
     private final InstanceDirectoryPreparer directoryPreparer;
-    private final InstanceMetadataStore metadataStore;
+    private final InstanceMetadataService metadata;
     private final JavaJarProcessSpecFactory processSpecFactory;
     private final SoftwareInstallationService installationService;
     private final ProcessSupervisor processSupervisor;
     private final BackendRegistry backendRegistry;
-    private final PaperRuntimeCachePromoter runtimeCachePromoter;
     private final FailedStartDiagnostics failedStartDiagnostics;
+    private final InstanceTimingReporter timingReporter;
     private final Logger logger;
     private final InstanceIdGenerator idGenerator;
     private final ThreadPoolExecutor operationExecutor;
@@ -121,17 +135,17 @@ public final class InstanceManager implements ServerController {
         this.forwardingConfig = forwardingConfig;
         this.portAllocator = portAllocator;
         this.directoryPreparer = directoryPreparer;
-        this.metadataStore = new InstanceMetadataStore(directoryPreparer.root());
+        this.metadata = new InstanceMetadataService(directoryPreparer.root(), logger);
         this.processSpecFactory = processSpecFactory;
         this.installationService = installationService;
         this.processSupervisor = processSupervisor;
         this.backendRegistry = backendRegistry;
-        this.runtimeCachePromoter = new PaperRuntimeCachePromoter();
         this.failedStartDiagnostics = new FailedStartDiagnostics(
                 directoryPreparer.root().resolveSibling("diagnostics")
                         .resolve("failed-starts")
         );
         this.logger = logger;
+        this.timingReporter = new InstanceTimingReporter(logger);
         this.idGenerator = new InstanceIdGenerator();
         this.operationExecutor = new ThreadPoolExecutor(
                 2,
@@ -229,34 +243,7 @@ public final class InstanceManager implements ServerController {
 
     @Override
     public Collection<String> persistentInstanceIds(String blueprintId) {
-        if (!Files.isDirectory(directoryPreparer.root())) {
-            return List.of();
-        }
-        try (var directories = Files.list(directoryPreparer.root())) {
-            return directories
-                    .filter(Files::isDirectory)
-                    .map(directory -> {
-                        try {
-                            return metadataStore.read(directory).orElse(null);
-                        } catch (IOException | RuntimeException exception) {
-                            return null;
-                        }
-                    })
-                    .filter(java.util.Objects::nonNull)
-                    .filter(InstanceMetadata::persistent)
-                    .filter(metadata -> blueprintId == null
-                            || metadata.blueprintId().equals(blueprintId))
-                    .map(InstanceMetadata::instanceId)
-                    .distinct()
-                    .sorted()
-                    .toList();
-        } catch (IOException exception) {
-            logger.warn(
-                    "Unable to discover persistent instances: {}",
-                    exception.getMessage()
-            );
-            return List.of();
-        }
+        return metadata.persistentInstanceIds(blueprintId);
     }
 
     @Override
@@ -293,6 +280,7 @@ public final class InstanceManager implements ServerController {
     public CompletableFuture<Integer> stop(String instanceId) throws InstanceOperationException {
         ManagedInstance instance = get(instanceId);
         synchronized (instance) {
+            instance.timings().begin(InstancePhaseTimings.Phase.SHUTDOWN);
             logger.info(
                     "Instance stop requested: {} (state {})",
                     instanceId,
@@ -301,7 +289,7 @@ public final class InstanceManager implements ServerController {
             if (instance.state() == InstanceState.PREPARING) {
                 instance.requestStop();
                 instance.lifecycle().transitionTo(InstanceState.STOPPING);
-                writeMetadataBestEffort(instance, InstanceState.STOPPING, null);
+                metadata.writeBestEffort(instance, InstanceState.STOPPING, null);
                 instance.readyFuture().completeExceptionally(
                         new CancellationException(
                                 "Instance startup was cancelled: " + instanceId
@@ -322,7 +310,7 @@ public final class InstanceManager implements ServerController {
             try {
                 if (instance.state() == InstanceState.STARTING) {
                     instance.requestStop();
-                    writeMetadataBestEffort(instance, InstanceState.STOPPING, process);
+                    metadata.writeBestEffort(instance, InstanceState.STOPPING, process);
                     instance.readyFuture().completeExceptionally(
                             new CancellationException(
                                     "Instance startup was cancelled: " + instanceId
@@ -330,7 +318,7 @@ public final class InstanceManager implements ServerController {
                     );
                     process.cancelStartup();
                 } else {
-                    writeMetadataBestEffort(instance, InstanceState.STOPPING, process);
+                    metadata.writeBestEffort(instance, InstanceState.STOPPING, process);
                     process.stop();
                 }
                 return instance.stoppedFuture();
@@ -373,9 +361,9 @@ public final class InstanceManager implements ServerController {
             active = instances.get(instanceId);
             try {
                 metadata = active == null
-                        ? readPersistentMetadata(instanceId)
-                        : metadataFor(active);
-                requireRestartable(metadata, active);
+                        ? this.metadata.readPersistent(instanceId)
+                        : this.metadata.snapshot(active);
+                this.metadata.requireRestartable(metadata, active != null);
                 if (!reset) {
                     metadata = requireCompatibleDefinition(metadata);
                 }
@@ -414,8 +402,8 @@ public final class InstanceManager implements ServerController {
     }
 
     private void resetPersistent(String instanceId) throws InstanceOperationException {
-        InstanceMetadata metadata = readPersistentMetadata(instanceId);
-        requireRestartable(metadata, null);
+        InstanceMetadata metadata = this.metadata.readPersistent(instanceId);
+        this.metadata.requireRestartable(metadata, false);
         ResolvedDefinition definition = resolveDefinition(
                 metadata.blueprintId(),
                 "Persistent instance " + instanceId
@@ -439,7 +427,7 @@ public final class InstanceManager implements ServerController {
                     baseDirectory,
                     blueprint.volumes(),
                     blueprint.copies(),
-                    directory -> metadataStore.write(directory, stopped)
+                    directory -> this.metadata.write(directory, stopped)
             );
         } catch (ProcessSpecificationException | InstancePreparationException exception) {
             throw new InstanceOperationException(exception.getMessage(), exception);
@@ -457,13 +445,16 @@ public final class InstanceManager implements ServerController {
             snapshot = List.copyOf(instances.values());
         }
 
+        snapshot.forEach(instance ->
+                instance.timings().begin(InstancePhaseTimings.Phase.SHUTDOWN)
+        );
         for (ManagedInstance instance : snapshot) {
             synchronized (instance) {
                 if (instance.process() == null
                         && instance.state() == InstanceState.PREPARING) {
                     instance.requestStop();
                     instance.lifecycle().transitionTo(InstanceState.STOPPING);
-                    writeMetadataBestEffort(instance, InstanceState.STOPPING, null);
+                    metadata.writeBestEffort(instance, InstanceState.STOPPING, null);
                     instance.readyFuture().completeExceptionally(
                             new CancellationException(
                                     "Instance startup was cancelled during proxy shutdown: "
@@ -492,7 +483,8 @@ public final class InstanceManager implements ServerController {
             SoftwareProfile profile,
             boolean reuseDirectory
     ) {
-        long preparationStartedAt = System.nanoTime();
+        InstancePhaseTimings timings = instance.timings();
+        timings.finish(InstancePhaseTimings.Phase.DISPATCH_QUEUE);
         instance.preparationStarted();
         try {
             logger.info(
@@ -501,20 +493,20 @@ public final class InstanceManager implements ServerController {
                     instance.blueprint().volumes().size(),
                     instance.blueprint().copies().size()
             );
-            long softwareStartedAt = System.nanoTime();
+            timings.begin(InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION);
             Path baseDirectory = resolveBaseDirectory(
                     profile,
                     instance.blueprint(),
                     instance::stopRequested
             );
-            long softwareReadyAt = System.nanoTime();
+            timings.finish(InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION);
             logger.info(
-                    "Instance software ready: {} ({} {} in {} ms)",
+                    "Instance software ready: {} ({} {})",
                     instance.id(),
                     profile.id(),
-                    instance.blueprint().version(),
-                    elapsedMillis(softwareStartedAt, softwareReadyAt)
+                    instance.blueprint().version()
             );
+            timings.begin(InstancePhaseTimings.Phase.FILE_PREPARATION);
             Path prepared;
             if (reuseDirectory) {
                 prepared = instance.directory();
@@ -523,6 +515,7 @@ public final class InstanceManager implements ServerController {
                             "Persistent instance directory does not exist: " + prepared
                     );
                 }
+                directoryPreparer.resume(instance.id());
             } else {
                 prepared = directoryPreparer.prepare(
                         instance.id(),
@@ -532,19 +525,19 @@ public final class InstanceManager implements ServerController {
                         instance::stopRequested
                 );
             }
-            long filesReadyAt = System.nanoTime();
+            timings.finish(InstancePhaseTimings.Phase.FILE_PREPARATION);
             logger.info(
-                    "Instance files ready: {} ({} volume(s), {} copy entry(s) in {} ms)",
+                    "Instance files ready: {} ({} volume(s), {} copy entry(s))",
                     instance.id(),
                     instance.blueprint().volumes().size(),
-                    instance.blueprint().copies().size(),
-                    elapsedMillis(softwareReadyAt, filesReadyAt)
+                    instance.blueprint().copies().size()
             );
             if (!prepared.equals(instance.directory())) {
                 throw new InstanceOperationException("Prepared instance path changed unexpectedly");
             }
+            timings.begin(InstancePhaseTimings.Phase.CONFIGURATION);
             instance.configureOutput(outputConfig);
-            writeMetadata(instance, InstanceState.PREPARING, null);
+            metadata.write(instance, InstanceState.PREPARING, null);
             Map<String, String> configuredProperties = new java.util.LinkedHashMap<>(
                     profile.serverProperties()
             );
@@ -573,13 +566,15 @@ public final class InstanceManager implements ServerController {
                     prepared,
                     instance.port()
             );
+            timings.finish(InstancePhaseTimings.Phase.CONFIGURATION);
             SupervisedProcess process;
             synchronized (instance) {
                 if (instance.stopRequested()) {
                     finishCancelledPreparation(instance);
                     return;
                 }
-                writeMetadata(instance, InstanceState.STARTING, null);
+                metadata.write(instance, InstanceState.STARTING, null);
+                timings.begin(InstancePhaseTimings.Phase.PROCESS_LAUNCH);
                 process = processSupervisor.start(
                         instance.id(),
                         spec,
@@ -597,12 +592,13 @@ public final class InstanceManager implements ServerController {
                         }
                 );
                 instance.attachProcess(process);
+                timings.finish(InstancePhaseTimings.Phase.PROCESS_LAUNCH);
+                timings.begin(InstancePhaseTimings.Phase.READINESS);
                 logger.info(
-                        "Instance process started: {} (PID {}, prepared in {} ms, "
-                                + "readiness timeout {} seconds)",
+                        "Instance process started: {} (PID {}, readiness timeout "
+                                + "{} seconds)",
                         instance.id(),
                         process.processId(),
-                        elapsedMillis(preparationStartedAt, System.nanoTime()),
                         profile.startupTimeoutSeconds()
                 );
             }
@@ -632,6 +628,7 @@ public final class InstanceManager implements ServerController {
                             : failure;
                     recordFailedStart(instance, "process-exit", diagnosticFailure);
                 }
+                timings.finish(InstancePhaseTimings.Phase.SHUTDOWN);
                 cleanup(instance);
                 if (failure == null) {
                     instance.stoppedFuture().complete(exitCode);
@@ -639,10 +636,11 @@ public final class InstanceManager implements ServerController {
                     instance.stoppedFuture().completeExceptionally(failure);
                 }
             });
-            writeMetadata(instance, InstanceState.STARTING, process);
+            metadata.write(instance, InstanceState.STARTING, process);
             process.readyFuture().whenComplete((ignored, failure) -> {
+                timings.finish(InstancePhaseTimings.Phase.READINESS);
                 if (failure == null) {
-                    registerReady(instance, profile, baseDirectory);
+                    registerReady(instance);
                 } else {
                     Throwable cause = rootCause(failure);
                     if (cause instanceof CancellationException) {
@@ -656,6 +654,11 @@ public final class InstanceManager implements ServerController {
                         );
                         recordFailedStart(instance, "readiness", cause);
                     }
+                    timingReporter.logProvisioning(
+                            instance.id(),
+                            instance.timings(),
+                            "readiness-failed"
+                    );
                     instance.readyFuture().completeExceptionally(failure);
                 }
             });
@@ -719,21 +722,24 @@ public final class InstanceManager implements ServerController {
         }
     }
 
-    private void registerReady(
-            ManagedInstance instance,
-            SoftwareProfile profile,
-            Path baseDirectory
-    ) {
-        boolean registered = false;
+    private void registerReady(ManagedInstance instance) {
+        InstancePhaseTimings timings = instance.timings();
+        timings.begin(InstancePhaseTimings.Phase.REGISTRATION);
         synchronized (instance) {
             if (instance.state() != InstanceState.READY || !isActive(instance)) {
+                timings.finish(InstancePhaseTimings.Phase.REGISTRATION);
+                timingReporter.logProvisioning(
+                        instance.id(),
+                        instance.timings(),
+                        "registration-cancelled"
+                );
                 instance.readyFuture().completeExceptionally(
                         new IllegalStateException("Instance exited before Velocity registration")
                 );
                 return;
             }
             try {
-                writeMetadata(instance, InstanceState.READY, instance.process());
+                metadata.write(instance, InstanceState.READY, instance.process());
                 backendRegistry.register(
                         instance.id(),
                         new InetSocketAddress(
@@ -743,20 +749,26 @@ public final class InstanceManager implements ServerController {
                         instance.blueprint().version()
                 );
                 instance.registered(true);
+                timings.finish(InstancePhaseTimings.Phase.REGISTRATION);
+                timings.provisioned();
+                timingReporter.logProvisioning(
+                        instance.id(),
+                        instance.timings(),
+                        "ready"
+                );
                 instance.readyFuture().complete(instance);
                 logger.info(
-                        "Instance {} is ready on loopback port {} after {} ms",
+                        "Instance {} is ready on loopback port {}",
                         instance.id(),
-                        instance.port(),
-                        instance.processStartedAt()
-                                .map(started -> Duration.between(
-                                        started,
-                                        Instant.now()
-                                ).toMillis())
-                                .orElse(-1L)
+                        instance.port()
                 );
-                registered = true;
             } catch (InstancePreparationException | RuntimeException exception) {
+                timings.finish(InstancePhaseTimings.Phase.REGISTRATION);
+                timingReporter.logProvisioning(
+                        instance.id(),
+                        instance.timings(),
+                        "registration-failed"
+                );
                 instance.readyFuture().completeExceptionally(exception);
                 recordFailedStart(instance, "registration", exception);
                 logger.warn(
@@ -767,48 +779,10 @@ public final class InstanceManager implements ServerController {
                 );
                 SupervisedProcess process = instance.process();
                 if (process != null) {
+                    timings.begin(InstancePhaseTimings.Phase.SHUTDOWN);
                     process.forceStop();
                 }
             }
-        }
-        if (registered && profile.configurator() == SoftwareConfigurator.PAPER) {
-            scheduleRuntimeCachePromotion(instance, baseDirectory);
-        }
-    }
-
-    private void scheduleRuntimeCachePromotion(
-            ManagedInstance instance,
-            Path baseDirectory
-    ) {
-        try {
-            operationExecutor.execute(() -> {
-                try {
-                    List<String> promoted = runtimeCachePromoter.promote(
-                            instance.directory(),
-                            baseDirectory
-                    );
-                    if (!promoted.isEmpty()) {
-                        logger.info(
-                                "Promoted Paper runtime cache for {} {}: {}",
-                                instance.blueprint().software(),
-                                instance.blueprint().version(),
-                                String.join(", ", promoted)
-                        );
-                    }
-                } catch (IOException exception) {
-                    logger.warn(
-                            "Unable to promote Paper runtime cache for {}: {}",
-                            instance.id(),
-                            exception.getMessage()
-                    );
-                }
-            });
-        } catch (RuntimeException exception) {
-            logger.warn(
-                    "Paper runtime cache promotion was not scheduled for {}: {}",
-                    instance.id(),
-                    exception.getMessage()
-            );
         }
     }
 
@@ -827,8 +801,14 @@ public final class InstanceManager implements ServerController {
             process = instance.process();
         }
         recordFailedStart(instance, "preparation", exception);
+        timingReporter.logProvisioning(
+                instance.id(),
+                instance.timings(),
+                "preparation-failed"
+        );
         logger.error("Unable to start managed instance " + instance.id(), exception);
         if (process != null) {
+            instance.timings().begin(InstancePhaseTimings.Phase.SHUTDOWN);
             process.forceStop();
             return;
         }
@@ -839,6 +819,12 @@ public final class InstanceManager implements ServerController {
         if (instance.state() == InstanceState.STOPPING) {
             instance.lifecycle().transitionTo(InstanceState.STOPPED);
         }
+        instance.timings().finish(InstancePhaseTimings.Phase.SHUTDOWN);
+        timingReporter.logProvisioning(
+                instance.id(),
+                instance.timings(),
+                "cancelled"
+        );
         cleanup(instance);
         instance.stoppedFuture().complete(0);
         logger.info("Cancelled instance startup for {}", instance.id());
@@ -851,6 +837,8 @@ public final class InstanceManager implements ServerController {
                     return;
                 }
             }
+            InstancePhaseTimings timings = instance.timings();
+            timings.begin(InstancePhaseTimings.Phase.CLEANUP);
             unregister(instance);
             instance.closeOutput();
             instance.takeOutputFailure().ifPresent(failure -> logger.warn(
@@ -860,6 +848,14 @@ public final class InstanceManager implements ServerController {
             ));
             portAllocator.release(instance.port());
             resourceBudget.release(instance.id());
+            try {
+                directoryPreparer.suspend(instance.id());
+            } catch (InstancePreparationException exception) {
+                logger.error(
+                        "Unable to suspend instance storage " + instance.directory(),
+                        exception
+                );
+            }
             if (!instance.blueprint().save()) {
                 try {
                     directoryPreparer.delete(instance.id());
@@ -870,7 +866,7 @@ public final class InstanceManager implements ServerController {
                     );
                 }
             } else {
-                writeMetadataBestEffort(instance, instance.state(), null);
+                metadata.writeBestEffort(instance, instance.state(), null);
             }
             if (!instance.readyFuture().isDone()) {
                 instance.readyFuture().completeExceptionally(
@@ -880,6 +876,17 @@ public final class InstanceManager implements ServerController {
             synchronized (this) {
                 instances.remove(instance.id(), instance);
             }
+            timings.finish(InstancePhaseTimings.Phase.CLEANUP);
+            timingReporter.logProvisioning(
+                    instance.id(),
+                    instance.timings(),
+                    instance.state().name()
+            );
+            timingReporter.logTermination(
+                    instance.id(),
+                    instance.timings(),
+                    instance.state().name()
+            );
         }
     }
 
@@ -940,13 +947,9 @@ public final class InstanceManager implements ServerController {
                 : cause.getMessage();
     }
 
-    private static long elapsedMillis(long startedAt, long finishedAt) {
-        return TimeUnit.NANOSECONDS.toMillis(finishedAt - startedAt);
-    }
-
     private ManagedInstance startPersistent(String instanceId)
             throws InstanceOperationException {
-        InstanceMetadata metadata = readPersistentMetadata(instanceId);
+        InstanceMetadata metadata = this.metadata.readPersistent(instanceId);
         ResolvedDefinition definition = resolveDefinition(
                 metadata.blueprintId(),
                 "Persistent instance " + instanceId
@@ -954,7 +957,7 @@ public final class InstanceManager implements ServerController {
         );
         Blueprint blueprint = definition.blueprint();
         SoftwareProfile profile = definition.softwareProfile();
-        requireRestartable(metadata, null);
+        this.metadata.requireRestartable(metadata, false);
         metadata = requireCompatibleDefinition(metadata, definition);
         InstanceDefinitionIdentity definitionIdentity =
                 InstanceDefinitionIdentity.from(blueprint, profile);
@@ -1012,58 +1015,6 @@ public final class InstanceManager implements ServerController {
         return instance;
     }
 
-    private InstanceMetadata readPersistentMetadata(String instanceId)
-            throws InstanceOperationException {
-        Path directory = directoryPreparer.root().resolve(instanceId);
-        try {
-            InstanceMetadata metadata = metadataStore.read(directory).orElseThrow(
-                    () -> new InstanceOperationException(
-                            "No persistent SLS-LITE instance exists: " + instanceId
-                    )
-            );
-            if (!metadata.instanceId().equals(instanceId)) {
-                throw new InstanceOperationException(
-                        "Persistent metadata does not match instance ID: " + instanceId
-                );
-            }
-            return metadata;
-        } catch (IOException exception) {
-            throw new InstanceOperationException(
-                    "Unable to read persistent instance metadata: " + instanceId,
-                    exception
-            );
-        }
-    }
-
-    private static InstanceMetadata metadataFor(ManagedInstance instance) {
-        return new InstanceMetadata(
-                instance.id(),
-                instance.blueprint().id(),
-                instance.definitionIdentity(),
-                instance.blueprint().save(),
-                instance.state(),
-                instance.createdAt(),
-                instance.processId().isPresent() ? instance.processId().getAsLong() : null,
-                instance.processStartedAt().orElse(null)
-        );
-    }
-
-    private static void requireRestartable(
-            InstanceMetadata metadata,
-            ManagedInstance active
-    ) throws InstanceOperationException {
-        if (!metadata.persistent()) {
-            throw new InstanceOperationException(
-                    "Instance is ephemeral and cannot be restarted: " + metadata.instanceId()
-            );
-        }
-        if (active == null && isRecordedProcessRunning(metadata)) {
-            throw new InstanceOperationException(
-                    "Persistent instance process is still running: " + metadata.instanceId()
-            );
-        }
-    }
-
     private InstanceMetadata requireCompatibleDefinition(InstanceMetadata metadata)
             throws InstanceOperationException {
         ResolvedDefinition definition = resolveDefinition(
@@ -1078,62 +1029,15 @@ public final class InstanceManager implements ServerController {
             InstanceMetadata metadata,
             ResolvedDefinition definition
     ) throws InstanceOperationException {
-        InstanceDefinitionIdentity recorded = metadata.definitionIdentity();
         InstanceDefinitionIdentity current = InstanceDefinitionIdentity.from(
                 definition.blueprint(),
                 definition.softwareProfile()
         );
-        if (recorded == null) {
-            if (metadata.persistent() != definition.blueprint().save()) {
-                throw new InstanceOperationException(
-                        "Persistent instance " + metadata.instanceId()
-                                + " uses legacy metadata, but its blueprint now has "
-                                + "save: false; restore save: true to migrate it "
-                                + "without deleting its contents"
-                );
-            }
-            InstanceMetadata migrated = metadata.withDefinitionIdentity(current);
-            Path directory = directoryPreparer.root().resolve(metadata.instanceId());
-            try {
-                metadataStore.write(directory, migrated);
-            } catch (IOException exception) {
-                throw new InstanceOperationException(
-                        "Unable to migrate legacy metadata for persistent instance "
-                                + metadata.instanceId(),
-                        exception
-                );
-            }
-            logger.warn(
-                    "Migrated legacy metadata for persistent instance {} using "
-                            + "the current {}/{} definition; reset it explicitly if "
-                            + "its template contents are no longer compatible",
-                    metadata.instanceId(),
-                    current.softwareId(),
-                    current.softwareVersion()
-            );
-            return migrated;
-        }
-        if (!recorded.equals(current)) {
-            throw new InstanceOperationException(
-                    "Persistent instance " + metadata.instanceId()
-                            + " was created from a different software, configuration, "
-                            + "or volume definition; reset it before restarting"
-            );
-        }
-        return metadata;
-    }
-
-    private static boolean isRecordedProcessRunning(InstanceMetadata metadata) {
-        if (metadata.processId() == null) {
-            return false;
-        }
-        return ProcessHandle.of(metadata.processId())
-                .filter(ProcessHandle::isAlive)
-                .filter(handle -> metadata.processStartedAt() == null
-                        || handle.info().startInstant().isEmpty()
-                        || handle.info().startInstant().orElseThrow()
-                                .equals(metadata.processStartedAt()))
-                .isPresent();
+        return this.metadata.requireCompatibleDefinition(
+                metadata,
+                current,
+                definition.blueprint().save()
+        );
     }
 
     private String uniqueInstanceId(String blueprintId) throws InstanceOperationException {
@@ -1189,54 +1093,6 @@ public final class InstanceManager implements ServerController {
             Blueprint blueprint,
             SoftwareProfile softwareProfile
     ) {
-    }
-
-    private void writeMetadata(
-            ManagedInstance instance,
-            InstanceState state,
-            SupervisedProcess process
-    ) throws InstancePreparationException {
-        Long processId = process == null ? null : process.processId();
-        java.time.Instant processStartedAt = process == null
-                ? null
-                : process.processStartedAt().orElse(null);
-        InstanceMetadata metadata = new InstanceMetadata(
-                instance.id(),
-                instance.blueprint().id(),
-                instance.definitionIdentity(),
-                instance.blueprint().save(),
-                state,
-                instance.createdAt(),
-                processId,
-                processStartedAt
-        );
-        try {
-            metadataStore.write(instance.directory(), metadata);
-        } catch (IOException exception) {
-            throw new InstancePreparationException(
-                    "Unable to write instance metadata for " + instance.id(),
-                    exception
-            );
-        }
-    }
-
-    private void writeMetadataBestEffort(
-            ManagedInstance instance,
-            InstanceState state,
-            SupervisedProcess process
-    ) {
-        if (!Files.isDirectory(instance.directory())) {
-            return;
-        }
-        try {
-            writeMetadata(instance, state, process);
-        } catch (InstancePreparationException exception) {
-            logger.warn(
-                    "Unable to update instance metadata for {}: {}",
-                    instance.id(),
-                    exception.getMessage()
-            );
-        }
     }
 
     private static ThreadFactory threadFactory() {

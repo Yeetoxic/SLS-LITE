@@ -1,5 +1,7 @@
 package net.slimelabs.slslite.instance;
 
+import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
+import net.slimelabs.slslite.instance.model.InstanceState;
 import com.velocitypowered.api.proxy.ConnectionRequestBuilder;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;

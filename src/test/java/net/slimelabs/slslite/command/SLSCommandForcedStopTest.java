@@ -32,6 +32,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -283,6 +284,23 @@ class SLSCommandForcedStopTest {
         assertEquals(0, lobby.evacuations);
         assertEquals(1, lobby.cycles);
         assertTrue(lobby.lastReset);
+    }
+
+    @Test
+    void offlineProtectedLobbyRestartWithoutForceReturnsGuidance() {
+        TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+        SLSCommand command = command(new TrackingController(null), lobby);
+        List<Component> messages = new ArrayList<>();
+
+        assertDoesNotThrow(() -> command.execute(invocation(
+                source(Set.of("sls.command.restart"), messages),
+                "restart",
+                INSTANCE_ID
+        )));
+
+        assertEquals(1, messages.size());
+        assertEquals(0, lobby.begins);
+        assertEquals(0, lobby.cycles);
     }
 
     @Test

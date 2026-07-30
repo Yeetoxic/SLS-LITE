@@ -1,0 +1,19 @@
+services:
+  wings:
+    volumes: !override
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - sls-cow-wings-config:/etc/pterodactyl
+      - sls-cow-game-data:/var/lib/docker/volumes/${SLS_COW_GAME_VOLUME}/_data
+      - /var/log/pterodactyl:/var/log/pterodactyl
+      - /tmp/pterodactyl:/tmp/pterodactyl
+      - /run/wings:/run/wings
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+
+volumes:
+  sls-cow-wings-config:
+    external: true
+    name: ${SLS_COW_WINGS_CONFIG_VOLUME}
+  sls-cow-game-data:
+    external: true
+    name: ${SLS_COW_GAME_VOLUME}

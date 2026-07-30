@@ -43,7 +43,7 @@ name a player and cannot use player-only selectors.
 | `/sls start <registry> <blueprint>` | `start` | Start a managed instance without joining it. The additive `/sls start <blueprint>` form also works for a globally unique ID. |
 | `/sls info <server\|this>` | `info` | Detailed instance information. |
 | `/sls status <server\|this>` | `status` | Lifecycle state. |
-| `/sls stats [server\|this]` | `stats` | Uptime, CPU time, configured memory, and log retention. |
+| `/sls stats [server\|this]` | `stats` | Uptime, CPU time, configured/current memory, Linux process I/O where measurable, and log retention. |
 | `/sls console <server\|this> <command...>` | `console` | Write one command to the child process input. |
 | `/sls logs <server\|this> [page] [lines]` | `logs` | Read retained child output; up to 100 lines per page. |
 | `/sls stop <server\|this>` | `stop` | Evacuate and gracefully stop an instance. |
@@ -53,7 +53,7 @@ name a player and cannot use player-only selectors.
 | `/sls reload [all\|blueprints\|software]` | `reload` | Atomically reload definition catalogs. |
 | `/sls install info` | `install` | Show software installation state. |
 | `/sls install logs <software> <version>` | `install` | Show recent provider-install output. |
-| `/sls system` | `system` | Host capabilities and local resource diagnostics. |
+| `/sls system` | `system` | Host resources, filesystem/process capabilities, native COW probes, and selected local strategy. |
 
 `/sls stats` without a server resolves to `this` and therefore requires a
 player currently connected to a managed backend.

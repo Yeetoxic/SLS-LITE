@@ -1,5 +1,6 @@
 package net.slimelabs.slslite.instance;
 
+import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ForwardingMode;

@@ -1,0 +1,16 @@
+services:
+  wings:
+    volumes: !override
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ${PTERO_STATE_DIR}/wings-native:/etc/pterodactyl
+      - sls-native-game-data:/var/lib/docker/volumes/sls-ptero-native-game-data/_data
+      - /var/log/pterodactyl:/var/log/pterodactyl
+      - /tmp/pterodactyl:/tmp/pterodactyl
+      - /run/wings:/run/wings
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+
+volumes:
+  sls-native-game-data:
+    external: true
+    name: sls-ptero-native-game-data
