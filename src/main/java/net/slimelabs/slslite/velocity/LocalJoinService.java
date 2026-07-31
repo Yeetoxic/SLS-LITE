@@ -481,15 +481,15 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
             return;
         }
         actionBar.stop(entry.ticket.playerId());
-        entry.completion.completeExceptionally(new TimeoutException(
-                "Queue timed out after " + queueTimeout.toSeconds() + " seconds"
-        ));
         timingReporter.complete(
                 entry.instance.id(),
                 entry.timings,
                 "timeout"
         );
         stopOrphaned(entry.instance);
+        entry.completion.completeExceptionally(new TimeoutException(
+                "Queue timed out after " + queueTimeout.toSeconds() + " seconds"
+        ));
     }
 
     private void fail(QueueEntry entry, Throwable failure) {
@@ -498,15 +498,13 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         }
         actionBar.stop(entry.ticket.playerId());
         entry.cancelTimeout();
-        entry.completion.completeExceptionally(failure);
         timingReporter.complete(
                 entry.instance.id(),
                 entry.timings,
                 "failed"
         );
-        synchronized (this) {
-            queueOwnedInstances.remove(entry.instance.id());
-        }
+        stopOrphaned(entry.instance);
+        entry.completion.completeExceptionally(failure);
     }
 
     private void cancel(QueueEntry entry, String message) {

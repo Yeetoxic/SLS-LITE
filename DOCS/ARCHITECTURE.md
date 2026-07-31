@@ -214,6 +214,11 @@ documentation define the removal boundary.
 
 ## Important Invariants
 
+The detailed ownership, state-machine, locking, accounting, path-security, and
+compatibility rules are maintained in
+[Internal Invariants](Internal_Invariants.md). The following are the compact
+review checklist:
+
 - No command shell is used for managed server launch.
 - Managed backends bind to loopback.
 - Configured and generated paths stay within controlled roots.

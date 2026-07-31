@@ -136,6 +136,7 @@ class LocalJoinServiceTest {
 
             assertInstanceOf(TimeoutException.class, failure.getCause());
             assertTrue(service.queuedPlayers().isEmpty());
+            assertEquals(1, fixture.controller().stopCount());
         }
     }
 
@@ -155,6 +156,7 @@ class LocalJoinServiceTest {
             );
             assertEquals("startup failed", failure.getCause().getMessage());
             assertTrue(service.queuedPlayers().isEmpty());
+            assertEquals(1, fixture.controller().stopCount());
         }
     }
 

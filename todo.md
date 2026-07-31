@@ -207,7 +207,7 @@ data, leaking resources, or trapping players in unexplained states.
       matchmaking, lobbies, Velocity integration, and presentation.
 - [x] Remove dead compatibility code/resources only after tests or migration
       documentation prove they are obsolete.
-- [ ] Document lifecycle invariants, concurrency boundaries, resource
+- [x] Document lifecycle invariants, concurrency boundaries, resource
       accounting, path security, and non-obvious compatibility adaptations.
 - [ ] Organize bundled defaults, templates, examples, protocol data, tests, and
       third-party resources without changing generated operator paths or keys.
