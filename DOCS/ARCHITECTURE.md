@@ -101,12 +101,19 @@ to focused command-family handlers. The remaining large pressure points are
 only along tested ownership boundaries, not during unrelated behavioral
 rewrites.
 
-`InstanceDirectoryPreparer` owns storage transactions and selected-strategy
-layer orchestration. `BlueprintContentResolver` separately owns normalization,
+`InstanceDirectoryPreparer` is the public preparation facade and composes the
+selected storage services. `BlueprintContentResolver` separately owns normalization,
 containment, overlap detection, symlink rejection, and resolution of untrusted
 blueprint volume/copy declarations. `DirectoryCopyEngine` owns safe directory
 traversal, bounded parallel copy execution, retry/backoff, cancellation
-polling, and merge/replace copy semantics.
+polling, and merge/replace copy semantics. `VolumeApplicator` owns selected
+portable, reflink-backed portable, Btrfs, OverlayFS/FUSE, and snapshot-hook
+volume materialization. `PreparedStorageLifecycle` owns strategy-aware
+resume/suspend handling, mount-safety validation, and cleanup of prepared
+storage. `PersistentInstanceTransaction` owns persistent reset swaps,
+rollback, committed-backup cleanup, and crash-recovery sequencing.
+`InstanceDirectoryPreparer` remains the public facade that validates requests
+and composes these storage services.
 
 `InstanceManager` now delegates metadata persistence and persistent-instance
 compatibility to `InstanceMetadataService`, lifecycle timing presentation to
