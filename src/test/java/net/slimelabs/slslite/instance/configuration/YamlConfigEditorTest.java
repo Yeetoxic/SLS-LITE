@@ -63,15 +63,26 @@ class YamlConfigEditorTest {
   }
 
   @Test
-  void refusesPreexistingTemporaryPath() throws Exception {
+  void ignoresButPreservesLegacyTemporaryPath() throws Exception {
     Files.writeString(temporaryDirectory.resolve("bukkit.yml.tmp"), "do-not-replace");
+
+    YamlConfigEditor.apply(
+        temporaryDirectory, Map.of("bukkit.yml", Map.of("settings", Map.of("allow-end", true))));
+
+    assertEquals("do-not-replace", Files.readString(temporaryDirectory.resolve("bukkit.yml.tmp")));
+    assertTrue(Files.isRegularFile(temporaryDirectory.resolve("bukkit.yml")));
+  }
+
+  @Test
+  void rejectsOversizedYamlInput() throws Exception {
+    Files.writeString(
+        temporaryDirectory.resolve("large.yml"),
+        "x: " + "a".repeat(ConfinedConfigFile.MAX_CONFIG_BYTES));
 
     assertThrows(
         java.io.IOException.class,
         () ->
             YamlConfigEditor.apply(
-                temporaryDirectory,
-                Map.of("bukkit.yml", Map.of("settings", Map.of("allow-end", true)))));
-    assertEquals("do-not-replace", Files.readString(temporaryDirectory.resolve("bukkit.yml.tmp")));
+                temporaryDirectory, Map.of("large.yml", Map.of("enabled", true))));
   }
 }

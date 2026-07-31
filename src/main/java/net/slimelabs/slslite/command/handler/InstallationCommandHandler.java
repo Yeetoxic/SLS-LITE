@@ -5,6 +5,9 @@ import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.slimelabs.slslite.blueprint.Blueprint;
@@ -23,13 +26,16 @@ import net.slimelabs.slslite.software.SoftwareProfileRepository;
 /**
  * Owns the complete {@code /sls install} inspection and completion surface.
  */
-public final class InstallationCommandHandler {
+public final class InstallationCommandHandler implements AutoCloseable {
+
+  private static final int MAXIMUM_CANDIDATE_MESSAGES = 20;
 
   private final BlueprintRepository blueprints;
   private final SoftwareProfileRepository softwareProfiles;
   private final InstallationStatusSource installations;
   private final CommandAuthorizer authorizer;
   private final ServerController instances;
+  private final ExecutorService maintenanceExecutor;
 
   public InstallationCommandHandler(
       BlueprintRepository blueprints,
@@ -58,9 +64,11 @@ public final class InstallationCommandHandler {
                   Duration minimumAge,
                   boolean dryRun,
                   boolean confirmed,
-                  Set<InstallationKey> protectedKeys)
+                  Set<InstallationKey> protectedKeys,
+                  java.util.Collection<SoftwareProfile> knownProfiles)
                   throws Exception {
-                return installations.cleanupCache(minimumAge, dryRun, confirmed, protectedKeys);
+                return installations.cleanupCache(
+                    minimumAge, dryRun, confirmed, protectedKeys, knownProfiles);
               }
 
               @Override
@@ -100,6 +108,13 @@ public final class InstallationCommandHandler {
     this.installations = installations;
     this.authorizer = authorizer;
     this.instances = instances;
+    this.maintenanceExecutor =
+        Executors.newSingleThreadExecutor(
+            runnable -> {
+              Thread thread = new Thread(runnable, "sls-lite-install-maintenance");
+              thread.setDaemon(true);
+              return thread;
+            });
   }
 
   public void execute(CommandSource source, String[] arguments) {
@@ -203,6 +218,15 @@ public final class InstallationCommandHandler {
   }
 
   private void cleanup(CommandSource source, String[] arguments) {
+    try {
+      maintenanceExecutor.execute(() -> cleanupNow(source, arguments));
+    } catch (RejectedExecutionException exception) {
+      source.sendMessage(
+          CommandMessages.message("Software maintenance is shutting down.", NamedTextColor.RED));
+    }
+  }
+
+  private void cleanupNow(CommandSource source, String[] arguments) {
     if (instances == null) {
       source.sendMessage(
           CommandMessages.message(
@@ -236,14 +260,18 @@ public final class InstallationCommandHandler {
       protectedKeys.addAll(instances.protectedSoftwareVersions());
       SoftwareCacheCleanupReport report =
           installations.cleanup(
-              Duration.ofHours(hours), !confirmed, confirmed, Set.copyOf(protectedKeys));
+              Duration.ofHours(hours),
+              !confirmed,
+              confirmed,
+              Set.copyOf(protectedKeys),
+              softwareProfiles.getAll());
       source.sendMessage(
           CommandMessages.message(
               (report.dryRun() ? "Software cleanup dry run" : "Software cleanup complete")
                   + ": "
-                  + report.eligible().size()
+                  + report.eligibleCount()
                   + " eligible, "
-                  + report.removed().size()
+                  + report.removedCount()
                   + " removed, "
                   + report.protectedCount()
                   + " protected, "
@@ -256,14 +284,28 @@ public final class InstallationCommandHandler {
                 "Review the candidates, then repeat with --confirm to delete them.",
                 NamedTextColor.GRAY));
       }
-      report
-          .eligible()
+      report.eligible().stream()
+          .limit(MAXIMUM_CANDIDATE_MESSAGES)
           .forEach(
               entry ->
                   source.sendMessage(
                       CommandMessages.message(
                           (report.dryRun() ? "Would remove " : "Removed ") + entry.key(),
                           NamedTextColor.GRAY)));
+      if (report.eligibleCount() > MAXIMUM_CANDIDATE_MESSAGES) {
+        source.sendMessage(
+            CommandMessages.message(
+                "... and "
+                    + (report.eligibleCount() - MAXIMUM_CANDIDATE_MESSAGES)
+                    + " more candidate(s).",
+                NamedTextColor.GRAY));
+      }
+      if (report.scanLimitReached()) {
+        source.sendMessage(
+            CommandMessages.message(
+                "Cleanup reached its bounded scan limit; run it again to continue.",
+                NamedTextColor.YELLOW));
+      }
     } catch (InstanceOperationException exception) {
       source.sendMessage(
           CommandMessages.message(
@@ -274,6 +316,11 @@ public final class InstallationCommandHandler {
           CommandMessages.message(
               "Software cleanup failed: " + exception.getMessage(), NamedTextColor.RED));
     }
+  }
+
+  @Override
+  public void close() {
+    maintenanceExecutor.shutdownNow();
   }
 
   private void sendInfo(CommandSource source) {
@@ -356,7 +403,11 @@ public final class InstallationCommandHandler {
     InstallationSnapshot snapshot(String softwareId, String version);
 
     default SoftwareCacheCleanupReport cleanup(
-        Duration minimumAge, boolean dryRun, boolean confirmed, Set<InstallationKey> protectedKeys)
+        Duration minimumAge,
+        boolean dryRun,
+        boolean confirmed,
+        Set<InstallationKey> protectedKeys,
+        java.util.Collection<SoftwareProfile> knownProfiles)
         throws Exception {
       throw new UnsupportedOperationException("Software cleanup is unavailable");
     }

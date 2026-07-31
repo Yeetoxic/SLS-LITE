@@ -150,7 +150,7 @@ final class InstancePreparationPipeline {
           "Instance process started: {} (PID {}, readiness timeout {} seconds)",
           instance.id(),
           process.processId(),
-          profile.startupTimeoutSeconds());
+          spec.startupTimeout().toSeconds());
       return process;
     }
   }

@@ -6,11 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.velocitypowered.api.command.CommandSource;
 import java.lang.reflect.Proxy;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.slimelabs.slslite.command.CommandAuthorizer;
@@ -18,7 +24,11 @@ import net.slimelabs.slslite.command.CommandPermissions;
 import net.slimelabs.slslite.install.InstallationKey;
 import net.slimelabs.slslite.install.InstallationSnapshot;
 import net.slimelabs.slslite.install.InstallationState;
+import net.slimelabs.slslite.install.SoftwareCacheCleanupReport;
+import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.security.AdministratorStore;
+import net.slimelabs.slslite.software.SoftwareProfile;
+import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -111,6 +121,144 @@ class InstallationCommandHandlerTest {
     assertFalse(text.contains("line-2"));
     assertEquals("line-3", text.get(2));
     assertEquals("line-12", text.getLast());
+  }
+
+  @Test
+  void warmupInvokesInstallerAndReportsCompletion() throws Exception {
+    SoftwareProfileRepository profiles = softwareProfiles();
+    AtomicReference<String> requested = new AtomicReference<>();
+    InstallationCommandHandler.InstallationStatusSource statuses =
+        new InstallationCommandHandler.InstallationStatusSource() {
+          @Override
+          public List<InstallationSnapshot> snapshots() {
+            return List.of();
+          }
+
+          @Override
+          public InstallationSnapshot snapshot(String softwareId, String version) {
+            return null;
+          }
+
+          @Override
+          public CompletableFuture<Path> warmup(SoftwareProfile profile, String version) {
+            requested.set(profile.id() + ":" + version);
+            return CompletableFuture.completedFuture(temporaryDirectory);
+          }
+        };
+    InstallationCommandHandler handler =
+        new InstallationCommandHandler(
+            new net.slimelabs.slslite.blueprint.BlueprintRepository(
+                temporaryDirectory.resolve("blueprints")),
+            profiles,
+            statuses,
+            authorizer);
+    List<Component> messages = new ArrayList<>();
+    try {
+      handler.execute(
+          source(Set.of(CommandPermissions.ADMIN), messages),
+          new String[] {"install", "warmup", "paper", "1.21.11"});
+    } finally {
+      handler.close();
+    }
+
+    assertEquals("paper:1.21.11", requested.get());
+    assertTrue(
+        messages.stream()
+            .map(InstallationCommandHandlerTest::plainText)
+            .anyMatch(message -> message.contains("Software cache ready")));
+  }
+
+  @Test
+  void cleanupRunsOffThreadAndBoundsCandidateMessages() throws Exception {
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    List<SoftwareCacheCleanupReport.Entry> entries =
+        java.util.stream.IntStream.range(0, 25)
+            .mapToObj(
+                index ->
+                    new SoftwareCacheCleanupReport.Entry(
+                        new InstallationKey("paper", "1." + index),
+                        temporaryDirectory.resolve("cache-" + index)))
+            .toList();
+    InstallationCommandHandler.InstallationStatusSource statuses =
+        new InstallationCommandHandler.InstallationStatusSource() {
+          @Override
+          public List<InstallationSnapshot> snapshots() {
+            return List.of();
+          }
+
+          @Override
+          public InstallationSnapshot snapshot(String softwareId, String version) {
+            return null;
+          }
+
+          @Override
+          public SoftwareCacheCleanupReport cleanup(
+              Duration minimumAge,
+              boolean dryRun,
+              boolean confirmed,
+              Set<InstallationKey> protectedKeys,
+              java.util.Collection<SoftwareProfile> knownProfiles)
+              throws Exception {
+            entered.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return new SoftwareCacheCleanupReport(true, entries, List.of(), 25, 0, 0, 0, false);
+          }
+        };
+    ServerController instances =
+        (ServerController)
+            Proxy.newProxyInstance(
+                ServerController.class.getClassLoader(),
+                new Class<?>[] {ServerController.class},
+                (ignored, method, arguments) ->
+                    "protectedSoftwareVersions".equals(method.getName())
+                        ? Set.of()
+                        : defaultValue(method.getReturnType()));
+    InstallationCommandHandler handler =
+        new InstallationCommandHandler(
+            new net.slimelabs.slslite.blueprint.BlueprintRepository(
+                temporaryDirectory.resolve("blueprints")),
+            new SoftwareProfileRepository(temporaryDirectory.resolve("profiles")),
+            statuses,
+            authorizer,
+            instances);
+    List<Component> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+    try {
+      handler.execute(
+          source(Set.of(CommandPermissions.ADMIN), messages),
+          new String[] {"install", "cleanup", "24"});
+      assertTrue(entered.await(5, TimeUnit.SECONDS));
+      assertTrue(messages.isEmpty());
+      release.countDown();
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+      while (messages.size() < 23 && System.nanoTime() < deadline) {
+        Thread.sleep(10);
+      }
+    } finally {
+      release.countDown();
+      handler.close();
+    }
+
+    List<String> text = messages.stream().map(InstallationCommandHandlerTest::plainText).toList();
+    assertEquals(23, text.size());
+    assertTrue(text.getLast().contains("5 more candidate"));
+  }
+
+  private SoftwareProfileRepository softwareProfiles() throws Exception {
+    Path directory = Files.createDirectories(temporaryDirectory.resolve("software-profiles"));
+    Files.writeString(
+        directory.resolve("paper.yml"),
+        """
+        software:
+          id: paper
+          source: paper
+          accept_eula: true
+          base_directory: software/paper/{version}
+          server_jar: paper.jar
+        """);
+    SoftwareProfileRepository repository = new SoftwareProfileRepository(directory);
+    repository.reload();
+    return repository;
   }
 
   private static CommandSource source(Set<String> permissions, List<Component> messages) {

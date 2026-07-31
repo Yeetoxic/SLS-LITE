@@ -11,7 +11,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -75,6 +74,7 @@ public final class InstanceManager implements ServerController {
   private final ThreadPoolExecutor operationExecutor;
   private final PersistentInstanceOperations persistentOperations;
   private final InstancePreparationPipeline preparationPipeline;
+  private final InstanceSoftwareProtectionInventory softwareProtection;
   private final ExecutorService finalizationExecutor;
   private final Map<String, ManagedInstance> instances = new java.util.HashMap<>();
 
@@ -161,6 +161,7 @@ public final class InstanceManager implements ServerController {
             processSupervisor,
             timingReporter,
             logger);
+    this.softwareProtection = new InstanceSoftwareProtectionInventory(metadata, blueprints);
     this.finalizationExecutor =
         Executors.newFixedThreadPool(2, threadFactory("sls-lite-instance-finalization-"));
   }
@@ -258,31 +259,11 @@ public final class InstanceManager implements ServerController {
 
   @Override
   public Collection<InstallationKey> protectedSoftwareVersions() throws InstanceOperationException {
-    java.util.Set<InstallationKey> protectedVersions = new java.util.HashSet<>();
+    List<ManagedInstance> active;
     synchronized (this) {
-      instances
-          .values()
-          .forEach(
-              instance ->
-                  protectedVersions.add(
-                      new InstallationKey(
-                          instance.blueprint().software(), instance.blueprint().version())));
+      active = List.copyOf(instances.values());
     }
-    for (String instanceId : persistentInstanceIds()) {
-      InstanceMetadata persistent = metadata.readPersistent(instanceId);
-      if (persistent.definitionIdentity() != null) {
-        protectedVersions.add(
-            new InstallationKey(
-                persistent.definitionIdentity().softwareId(),
-                persistent.definitionIdentity().softwareVersion()));
-      } else {
-        Blueprint blueprint = blueprints.get(persistent.blueprintId()).orElse(null);
-        if (blueprint != null) {
-          protectedVersions.add(new InstallationKey(blueprint.software(), blueprint.version()));
-        }
-      }
-    }
-    return Set.copyOf(protectedVersions);
+    return softwareProtection.collect(active);
   }
 
   @Override

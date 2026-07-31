@@ -341,6 +341,7 @@ public final class SLSCommand implements SimpleCommand {
 
   public void close() {
     debugPlayers.clear();
+    installationHandler.close();
     consoleOutput.close();
     joinProbes.close();
   }

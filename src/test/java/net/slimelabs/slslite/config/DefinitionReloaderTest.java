@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
@@ -155,6 +156,46 @@ class DefinitionReloaderTest {
     assertEquals("java_21", blueprints.get("test").orElseThrow().image());
   }
 
+  @Test
+  void concurrentPartialReloadsDoNotRevertEachOther() throws Exception {
+    Path blueprintsPath = Files.createDirectories(temporaryDirectory.resolve("partial-blueprints"));
+    Path profilesPath = Files.createDirectories(temporaryDirectory.resolve("partial-profiles"));
+    writeBlueprint(blueprintsPath, "alpha");
+    writeNamedProfile(profilesPath, "alpha", "alpha.jar");
+    writeNamedProfile(profilesPath, "beta", "beta.jar");
+    DefinitionCatalog catalog = new DefinitionCatalog();
+    BlueprintRepository blueprints = new BlueprintRepository(blueprintsPath, catalog);
+    SoftwareProfileRepository profiles = new SoftwareProfileRepository(profilesPath, catalog);
+    profiles.reload();
+    blueprints.reload();
+    SLSConfig config = config();
+
+    for (int iteration = 0; iteration < 30; iteration++) {
+      String selected = iteration % 2 == 0 ? "beta" : "alpha";
+      String alphaJar = "alpha-" + iteration + ".jar";
+      writeBlueprint(blueprintsPath, selected);
+      writeNamedProfile(profilesPath, "alpha", alphaJar);
+      CyclicBarrier start = new CyclicBarrier(2);
+      CompletableFuture<Void> blueprintReload =
+          CompletableFuture.runAsync(
+              () -> {
+                await(start);
+                reload(config, blueprints, profiles, true, false);
+              });
+      CompletableFuture<Void> softwareReload =
+          CompletableFuture.runAsync(
+              () -> {
+                await(start);
+                reload(config, blueprints, profiles, false, true);
+              });
+
+      CompletableFuture.allOf(blueprintReload, softwareReload).join();
+
+      assertEquals(selected, blueprints.get("test").orElseThrow().software());
+      assertEquals(alphaJar, profiles.get("alpha").orElseThrow().serverJar());
+    }
+  }
+
   private Repositories repositories() throws Exception {
     Path blueprintsPath = Files.createDirectories(temporaryDirectory.resolve("blueprints"));
     Path profilesPath = Files.createDirectories(temporaryDirectory.resolve("profiles"));
@@ -187,15 +228,44 @@ class DefinitionReloaderTest {
   }
 
   private void writeProfile(Path directory, String id) throws Exception {
+    writeProfileFile(directory.resolve("paper.yml"), id, "paper.jar");
+  }
+
+  private void writeNamedProfile(Path directory, String id, String serverJar) throws Exception {
+    writeProfileFile(directory.resolve(id + ".yml"), id, serverJar);
+  }
+
+  private void writeProfileFile(Path destination, String id, String serverJar) throws Exception {
     Files.writeString(
-        directory.resolve("paper.yml"),
+        destination,
         """
                 software:
                   id: %s
                   base_directory: software/paper/{version}
-                  server_jar: paper.jar
+                  server_jar: %s
                 """
-            .formatted(id));
+            .formatted(id, serverJar));
+  }
+
+  private static void await(CyclicBarrier barrier) {
+    try {
+      barrier.await();
+    } catch (Exception exception) {
+      throw new java.util.concurrent.CompletionException(exception);
+    }
+  }
+
+  private static void reload(
+      SLSConfig config,
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository profiles,
+      boolean reloadBlueprints,
+      boolean reloadSoftware) {
+    try {
+      DefinitionReloader.reload(config, blueprints, profiles, reloadBlueprints, reloadSoftware);
+    } catch (Exception exception) {
+      throw new java.util.concurrent.CompletionException(exception);
+    }
   }
 
   private SLSConfig config() {

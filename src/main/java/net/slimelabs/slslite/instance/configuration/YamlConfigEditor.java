@@ -3,13 +3,8 @@ package net.slimelabs.slslite.instance.configuration;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.yaml.snakeyaml.DumperOptions;
@@ -31,26 +26,17 @@ public final class YamlConfigEditor {
 
   private static void apply(Path root, String configuredTarget, Map<String, Object> patch)
       throws IOException {
-    Path relative = Path.of(configuredTarget).normalize();
-    if (relative.isAbsolute() || relative.startsWith("..")) {
-      throw new IOException("YAML config target must stay inside the instance");
-    }
-    Path target = root.resolve(relative).normalize();
-    if (!target.startsWith(root)) {
-      throw new IOException("YAML config target must stay inside the instance");
-    }
-    rejectSymbolicLinks(root, relative);
-    Files.createDirectories(target.getParent());
+    Path target = ConfinedConfigFile.resolve(root, configuredTarget, "YAML config");
 
     Map<String, Object> values = new LinkedHashMap<>();
-    if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-      if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
-        throw new IOException("YAML config target is not a regular file: " + target);
-      }
+    if (ConfinedConfigFile.existsRegular(target, "YAML config")) {
       LoaderOptions options = new LoaderOptions();
       options.setAllowDuplicateKeys(false);
+      options.setCodePointLimit(ConfinedConfigFile.MAX_CONFIG_BYTES);
+      options.setMaxAliasesForCollections(50);
+      options.setNestingDepthLimit(50);
       Yaml yaml = new Yaml(new SafeConstructor(options));
-      try (InputStream input = Files.newInputStream(target)) {
+      try (InputStream input = ConfinedConfigFile.openBounded(target)) {
         Object loaded = yaml.load(input);
         if (loaded != null) {
           values.putAll(stringMap(loaded, target));
@@ -59,41 +45,19 @@ public final class YamlConfigEditor {
     }
     merge(values, patch);
 
-    Path temporary = target.resolveSibling(target.getFileName() + ".tmp");
-    if (Files.exists(temporary, LinkOption.NOFOLLOW_LINKS)) {
-      throw new IOException("YAML config temporary path already exists: " + temporary);
-    }
+    Path temporary = ConfinedConfigFile.createTemporary(target);
     try {
       DumperOptions options = new DumperOptions();
       options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
       options.setPrettyFlow(true);
       options.setIndent(2);
-      try (Writer output =
-          Files.newBufferedWriter(
-              temporary,
-              StandardCharsets.UTF_8,
-              StandardOpenOption.CREATE_NEW,
-              StandardOpenOption.WRITE)) {
+      try (Writer output = ConfinedConfigFile.openTemporaryWriter(temporary)) {
         new Yaml(options).dump(values, output);
       }
-      try {
-        Files.move(
-            temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-      } catch (AtomicMoveNotSupportedException ignored) {
-        Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
-      }
+      ConfinedConfigFile.requireBoundedOutput(temporary, target);
+      ConfinedConfigFile.replace(temporary, target);
     } finally {
       Files.deleteIfExists(temporary);
-    }
-  }
-
-  private static void rejectSymbolicLinks(Path root, Path relative) throws IOException {
-    Path current = root;
-    for (Path segment : relative) {
-      current = current.resolve(segment);
-      if (Files.isSymbolicLink(current)) {
-        throw new IOException("YAML config path contains a symbolic link: " + current);
-      }
     }
   }
 

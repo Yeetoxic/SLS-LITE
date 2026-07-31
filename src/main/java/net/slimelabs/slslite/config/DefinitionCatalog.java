@@ -16,7 +16,7 @@ public final class DefinitionCatalog {
     return active.get();
   }
 
-  public void installBlueprints(Map<String, Blueprint> blueprints) {
+  public synchronized void installBlueprints(Map<String, Blueprint> blueprints) {
     active.updateAndGet(
         current ->
             new Snapshot(
@@ -24,14 +24,14 @@ public final class DefinitionCatalog {
                 current.softwareProfiles()));
   }
 
-  public void installSoftwareProfiles(Map<String, SoftwareProfile> softwareProfiles) {
+  public synchronized void installSoftwareProfiles(Map<String, SoftwareProfile> softwareProfiles) {
     active.updateAndGet(
         current ->
             new Snapshot(
                 resolveBlueprints(current.blueprints(), softwareProfiles), softwareProfiles));
   }
 
-  public void install(
+  public synchronized void install(
       Map<String, Blueprint> blueprints, Map<String, SoftwareProfile> softwareProfiles) {
     active.set(new Snapshot(resolveBlueprints(blueprints, softwareProfiles), softwareProfiles));
   }

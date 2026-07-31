@@ -2,6 +2,7 @@ package net.slimelabs.slslite.instance.configuration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -76,5 +77,36 @@ class ServerPropertiesEditorTest {
     assertEquals("false", properties.getProperty("online-mode"));
     assertEquals("127.0.0.1", properties.getProperty("server-ip"));
     assertEquals("Original", properties.getProperty("motd"));
+  }
+
+  @Test
+  void rejectsSymbolicPropertiesTarget() throws Exception {
+    Path outside = temporaryDirectory.resolveSibling("outside.properties");
+    Files.writeString(outside, "preserve=true\n");
+    try {
+      Files.createSymbolicLink(temporaryDirectory.resolve("server.properties"), outside);
+    } catch (UnsupportedOperationException | java.io.IOException exception) {
+      org.junit.jupiter.api.Assumptions.abort("Symbolic links unavailable: " + exception);
+    }
+
+    assertThrows(
+        java.io.IOException.class,
+        () ->
+            ServerPropertiesEditor.applyManagedNetworkSettings(
+                temporaryDirectory, 25571, 12, Map.of()));
+    assertEquals("preserve=true\n", Files.readString(outside));
+  }
+
+  @Test
+  void rejectsOversizedPropertiesInput() throws Exception {
+    Files.writeString(
+        temporaryDirectory.resolve("server.properties"),
+        "x".repeat(ConfinedConfigFile.MAX_CONFIG_BYTES + 1));
+
+    assertThrows(
+        java.io.IOException.class,
+        () ->
+            ServerPropertiesEditor.applyManagedNetworkSettings(
+                temporaryDirectory, 25571, 12, Map.of()));
   }
 }

@@ -4,15 +4,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ForwardingMode;
 import net.slimelabs.slslite.instance.InstancePreparationException;
+import net.slimelabs.slslite.io.BoundedFileReader;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -21,6 +21,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 public final class PaperForwardingEditor {
 
   private static final int MAXIMUM_SECRET_LENGTH = 4096;
+  private static final int MAXIMUM_SECRET_BYTES = 16 * 1024;
 
   private PaperForwardingEditor() {}
 
@@ -31,11 +32,12 @@ public final class PaperForwardingEditor {
     String secret = modern ? readSecret(config.secretFile()) : "";
 
     try {
-      Map<String, Object> spigot = readYaml(root.resolve("spigot.yml"));
-      nestedMap(spigot, "settings", root.resolve("spigot.yml")).put("bungeecord", false);
-      writeYaml(root.resolve("spigot.yml"), spigot);
+      Path spigotPath = ConfinedConfigFile.resolve(root, "spigot.yml", "Paper config");
+      Map<String, Object> spigot = readYaml(spigotPath);
+      nestedMap(spigot, "settings", spigotPath).put("bungeecord", false);
+      writeYaml(spigotPath, spigot);
 
-      Path paperPath = root.resolve("config/paper-global.yml");
+      Path paperPath = ConfinedConfigFile.resolve(root, "config/paper-global.yml", "Paper config");
       Map<String, Object> paper = readYaml(paperPath);
       Map<String, Object> proxies = nestedMap(paper, "proxies", paperPath);
       Map<String, Object> velocity = nestedMap(proxies, "velocity", paperPath);
@@ -51,11 +53,15 @@ public final class PaperForwardingEditor {
 
   private static String readSecret(Path secretFile) throws InstancePreparationException {
     try {
-      if (!Files.isRegularFile(secretFile)) {
+      if (Files.isSymbolicLink(secretFile)
+          || !Files.isRegularFile(secretFile, LinkOption.NOFOLLOW_LINKS)) {
         throw new InstancePreparationException(
-            "Velocity forwarding secret file does not exist: " + secretFile);
+            "Velocity forwarding secret file must be a regular non-symbolic file: " + secretFile);
       }
-      String secret = Files.readString(secretFile, StandardCharsets.UTF_8).trim();
+      String secret =
+          BoundedFileReader.readStringNoFollow(
+                  secretFile, StandardCharsets.UTF_8, MAXIMUM_SECRET_BYTES)
+              .trim();
       if (secret.isEmpty()) {
         throw new InstancePreparationException(
             "Velocity forwarding secret file is empty: " + secretFile);
@@ -73,13 +79,16 @@ public final class PaperForwardingEditor {
 
   private static Map<String, Object> readYaml(Path path)
       throws IOException, InstancePreparationException {
-    if (!Files.exists(path)) {
+    if (!ConfinedConfigFile.existsRegular(path, "Paper config")) {
       return new LinkedHashMap<>();
     }
     LoaderOptions options = new LoaderOptions();
     options.setAllowDuplicateKeys(false);
+    options.setCodePointLimit(ConfinedConfigFile.MAX_CONFIG_BYTES);
+    options.setMaxAliasesForCollections(50);
+    options.setNestingDepthLimit(50);
     Yaml yaml = new Yaml(new SafeConstructor(options));
-    try (InputStream input = Files.newInputStream(path)) {
+    try (InputStream input = ConfinedConfigFile.openBounded(path)) {
       Object loaded = yaml.load(input);
       if (loaded == null) {
         return new LinkedHashMap<>();
@@ -123,23 +132,18 @@ public final class PaperForwardingEditor {
   }
 
   private static void writeYaml(Path path, Map<String, Object> values) throws IOException {
-    Files.createDirectories(path.getParent());
-    Path temporary = Files.createTempFile(path.getParent(), path.getFileName().toString(), ".tmp");
+    Path temporary = ConfinedConfigFile.createTemporary(path);
     DumperOptions options = new DumperOptions();
     options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
     options.setIndent(2);
     options.setPrettyFlow(true);
     Yaml yaml = new Yaml(options);
     try {
-      try (Writer output = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+      try (Writer output = ConfinedConfigFile.openTemporaryWriter(temporary)) {
         yaml.dump(values, output);
       }
-      try {
-        Files.move(
-            temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-      } catch (AtomicMoveNotSupportedException exception) {
-        Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
-      }
+      ConfinedConfigFile.requireBoundedOutput(temporary, path);
+      ConfinedConfigFile.replace(temporary, path);
     } finally {
       Files.deleteIfExists(temporary);
     }

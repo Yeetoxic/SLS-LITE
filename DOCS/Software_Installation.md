@@ -166,13 +166,27 @@ retained. A later start or join request retries a failed installation. Provider
 access requires outbound HTTPS; manual profiles remain available when a host
 blocks it.
 
-Cache cleanup scans only provider caches carrying valid SLS-LITE installation
-metadata. Its default invocation is a dry run and requires a minimum age of at
+Cache cleanup runs on a bounded background maintenance worker, scans at most
+10,000 metadata files per request, and considers at most 1,000 candidates.
+Command output lists at most 20 candidates while retaining exact aggregate
+counts. Its default invocation is a dry run and requires a minimum age of at
 least one hour. Deletion additionally requires the exact `--confirm` modifier.
-Versions referenced by loaded blueprints, active or persistent instances, or
-an installation currently in progress are protected. Manual directories,
-unrecognized metadata, symlinks, and paths outside the software root are never
-cleanup candidates.
+
+Only provider caches carrying valid SLS-LITE ownership metadata are considered.
+The scan validates each candidate against the currently loaded profile and its
+exact resolved `base_directory`, including custom directories below the
+SLS-LITE data root. Versions referenced by loaded blueprints, active or
+persistent instances, or an installation currently in progress are protected
+by both logical installation key and resolved directory. Cleanup is serialized
+with installation admission and protects staging through publication. It uses
+atomic sibling renames before recursive deletion, restoring the renamed
+directory when deletion fails.
+
+Aged verified caches, retained incomplete-cache quarantines, and staging
+directories carrying SLS-LITE staging ownership metadata are eligible.
+Manual directories, unrecognized metadata, symbolic links, and paths outside
+the SLS-LITE data root are never cleanup candidates. Interrupted cleanup stops
+before beginning another candidate.
 
 Warmup uses the same EULA gate, exact provider/channel resolution, staging
 directory, size/digest verification, cancellation, and atomic publication as a

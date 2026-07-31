@@ -182,10 +182,11 @@ Startup patch precedence is deterministic:
    win last.
 
 Every target is resolved below the prepared instance root. Traversal,
-symbolic-link paths, wrong file types, ambiguous prefixes, and oversized input
-are rejected. Properties, YAML, and text writes use sibling temporary files
-and atomic replacement when the filesystem supports it. JSON/TOML parsers are
-not added because no approved retained blueprint requires them.
+symbolic-link paths, wrong file types, ambiguous prefixes, and input or output
+larger than 8 MiB are rejected. Properties, YAML, forwarding, and text writes
+use randomized sibling temporary files and atomic replacement when the
+filesystem supports it. JSON/TOML parsers are not added because no approved
+retained blueprint requires them.
 
 ### Memory Input Contract
 

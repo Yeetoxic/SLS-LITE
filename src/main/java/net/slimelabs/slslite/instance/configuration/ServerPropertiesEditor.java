@@ -3,11 +3,7 @@ package net.slimelabs.slslite.instance.configuration;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.Properties;
 
@@ -26,11 +22,14 @@ public final class ServerPropertiesEditor {
     }
 
     Path root = instanceDirectory.toAbsolutePath().normalize();
-    Path propertiesPath = root.resolve("server.properties");
-    Path temporaryPath = root.resolve("server.properties.tmp");
+    Path propertiesPath =
+        ConfinedConfigFile.resolve(root, "server.properties", "Properties config");
     Properties properties = new Properties();
-    if (Files.exists(propertiesPath)) {
-      try (Reader input = Files.newBufferedReader(propertiesPath, StandardCharsets.UTF_8)) {
+    if (ConfinedConfigFile.existsRegular(propertiesPath, "Properties config")) {
+      try (Reader input =
+          new java.io.InputStreamReader(
+              ConfinedConfigFile.openBounded(propertiesPath),
+              java.nio.charset.StandardCharsets.UTF_8)) {
         properties.load(input);
       }
     }
@@ -49,21 +48,15 @@ public final class ServerPropertiesEditor {
     properties.setProperty("online-mode", "false");
     properties.setProperty("max-players", Integer.toString(maxPlayers));
 
+    Path temporaryPath = ConfinedConfigFile.createTemporary(propertiesPath);
     try {
-      try (Writer output = Files.newBufferedWriter(temporaryPath, StandardCharsets.UTF_8)) {
+      try (Writer output = ConfinedConfigFile.openTemporaryWriter(temporaryPath)) {
         properties.store(output, "Managed by SLS-LITE");
       }
-      try {
-        Files.move(
-            temporaryPath,
-            propertiesPath,
-            StandardCopyOption.ATOMIC_MOVE,
-            StandardCopyOption.REPLACE_EXISTING);
-      } catch (AtomicMoveNotSupportedException ignored) {
-        Files.move(temporaryPath, propertiesPath, StandardCopyOption.REPLACE_EXISTING);
-      }
+      ConfinedConfigFile.requireBoundedOutput(temporaryPath, propertiesPath);
+      ConfinedConfigFile.replace(temporaryPath, propertiesPath);
     } finally {
-      Files.deleteIfExists(temporaryPath);
+      java.nio.file.Files.deleteIfExists(temporaryPath);
     }
   }
 }

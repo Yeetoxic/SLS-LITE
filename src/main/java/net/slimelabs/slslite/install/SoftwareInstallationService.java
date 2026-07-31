@@ -40,6 +40,10 @@ public final class SoftwareInstallationService implements AutoCloseable {
   private static final int MAX_HISTORY = 100;
   private static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(30);
   private static final String INSTALL_METADATA = ".sls-install.properties";
+  private static final String STAGING_METADATA = ".sls-staging.properties";
+  private static final int MAX_SCANNED_METADATA = 10_000;
+  private static final int MAX_CLEANUP_CANDIDATES = 1_000;
+  private static final int MAX_REPORTED_CANDIDATES = 100;
   static final int MAX_INSTALL_METADATA_BYTES = 64 * 1024;
   static final int MAX_EULA_BYTES = 64 * 1024;
 
@@ -77,19 +81,21 @@ public final class SoftwareInstallationService implements AutoCloseable {
   }
 
   public CompletableFuture<Path> ensureInstalled(SoftwareProfile profile, String version) {
-    if (closed.get()) {
-      return CompletableFuture.failedFuture(
-          new SoftwareInstallationException("Software installer is shut down"));
-    }
     InstallationKey key = new InstallationKey(profile.id(), version);
     Path target;
     try {
       target = paths.resolveBaseDirectory(profile, version);
-      if (isReady(profile, version, target)) {
-        history.computeIfAbsent(
-            key, ignored -> MutableInstallation.ready(key, "Already installed"));
-        pruneHistory();
-        return CompletableFuture.completedFuture(target);
+      synchronized (lifecycleLock) {
+        if (closed.get()) {
+          return CompletableFuture.failedFuture(
+              new SoftwareInstallationException("Software installer is shut down"));
+        }
+        if (isReady(profile, version, target)) {
+          history.computeIfAbsent(
+              key, ignored -> MutableInstallation.ready(key, "Already installed"));
+          pruneHistory();
+          return CompletableFuture.completedFuture(target);
+        }
       }
     } catch (ProcessSpecificationException exception) {
       return CompletableFuture.failedFuture(exception);
@@ -160,10 +166,15 @@ public final class SoftwareInstallationService implements AutoCloseable {
   }
 
   public SoftwareCacheCleanupReport cleanupCache(
-      Duration minimumAge, boolean dryRun, boolean confirmed, Set<InstallationKey> protectedKeys)
+      Duration minimumAge,
+      boolean dryRun,
+      boolean confirmed,
+      Set<InstallationKey> protectedKeys,
+      Collection<SoftwareProfile> knownProfiles)
       throws SoftwareInstallationException {
     java.util.Objects.requireNonNull(minimumAge, "minimumAge");
     java.util.Objects.requireNonNull(protectedKeys, "protectedKeys");
+    java.util.Objects.requireNonNull(knownProfiles, "knownProfiles");
     if (minimumAge.compareTo(Duration.ofHours(1)) < 0) {
       throw new SoftwareInstallationException(
           "Software cleanup minimum age must be at least 1 hour");
@@ -172,58 +183,113 @@ public final class SoftwareInstallationService implements AutoCloseable {
       throw new SoftwareInstallationException(
           "Software cleanup deletion requires explicit confirmation");
     }
+    synchronized (lifecycleLock) {
+      return cleanupCacheLocked(
+          minimumAge, dryRun, protectedKeys, java.util.List.copyOf(knownProfiles));
+    }
+  }
+
+  private SoftwareCacheCleanupReport cleanupCacheLocked(
+      Duration minimumAge,
+      boolean dryRun,
+      Set<InstallationKey> protectedKeys,
+      Collection<SoftwareProfile> knownProfiles)
+      throws SoftwareInstallationException {
+    requireCleanupNotInterrupted();
+    Map<String, SoftwareProfile> profiles = new java.util.HashMap<>();
+    knownProfiles.forEach(profile -> profiles.put(profile.id(), profile));
     Set<InstallationKey> protectedSnapshot = new java.util.HashSet<>(protectedKeys);
     active.values().stream()
         .map(installation -> new InstallationKey(installation.softwareId(), installation.version()))
         .forEach(protectedSnapshot::add);
-    Path softwareRoot = paths.dataDirectory().resolve("software").normalize();
-    if (!Files.isDirectory(softwareRoot)) {
-      return new SoftwareCacheCleanupReport(dryRun, List.of(), List.of(), 0, 0);
+    Set<Path> protectedDirectories = protectedDirectories(protectedSnapshot, profiles);
+    Path dataRoot = paths.dataDirectory().toAbsolutePath().normalize();
+    if (!Files.isDirectory(dataRoot)) {
+      return new SoftwareCacheCleanupReport(dryRun, List.of(), List.of(), 0, 0, 0, 0, false);
     }
 
-    List<SoftwareCacheCleanupReport.Entry> eligible = new java.util.ArrayList<>();
+    List<CacheCandidate> candidates = new java.util.ArrayList<>();
     int protectedCount = 0;
     int tooNewCount = 0;
+    int scanned = 0;
+    boolean scanLimitReached = false;
     Instant cutoff = Instant.now().minus(minimumAge);
     try (var files =
         Files.find(
-            softwareRoot,
-            8,
+            dataRoot,
+            12,
             (path, attributes) ->
                 attributes.isRegularFile()
-                    && INSTALL_METADATA.equals(path.getFileName().toString()))) {
-      for (Path metadataPath : files.sorted().toList()) {
-        CacheCandidate candidate = cacheCandidate(softwareRoot, metadataPath);
+                    && (INSTALL_METADATA.equals(path.getFileName().toString())
+                        || STAGING_METADATA.equals(path.getFileName().toString())))) {
+      java.util.Iterator<Path> iterator = files.iterator();
+      while (iterator.hasNext()) {
+        requireCleanupNotInterrupted();
+        if (scanned >= MAX_SCANNED_METADATA || candidates.size() >= MAX_CLEANUP_CANDIDATES) {
+          scanLimitReached = true;
+          break;
+        }
+        Path metadataPath = iterator.next();
+        scanned++;
+        CacheCandidate candidate = cacheCandidate(dataRoot, metadataPath, profiles);
         if (candidate == null) {
           continue;
         }
-        if (protectedSnapshot.contains(candidate.key())) {
+        if (candidate.kind() != CacheCandidateKind.QUARANTINE
+            && (protectedSnapshot.contains(candidate.key())
+                || protectedDirectories.contains(candidate.directory()))) {
           protectedCount++;
         } else if (candidate.modifiedAt().isAfter(cutoff)) {
           tooNewCount++;
         } else {
-          eligible.add(
-              new SoftwareCacheCleanupReport.Entry(candidate.key(), candidate.directory()));
+          candidates.add(candidate);
         }
       }
-    } catch (IOException exception) {
+    } catch (IOException | java.io.UncheckedIOException exception) {
       throw new SoftwareInstallationException("Unable to inspect software cache", exception);
     }
 
+    List<SoftwareCacheCleanupReport.Entry> eligible =
+        candidates.stream()
+            .limit(MAX_REPORTED_CANDIDATES)
+            .map(
+                candidate ->
+                    new SoftwareCacheCleanupReport.Entry(candidate.key(), candidate.directory()))
+            .toList();
     List<SoftwareCacheCleanupReport.Entry> removed = new java.util.ArrayList<>();
+    int removedCount = 0;
     if (!dryRun) {
-      for (SoftwareCacheCleanupReport.Entry entry : eligible) {
+      for (CacheCandidate candidate : candidates) {
+        requireCleanupNotInterrupted();
         try {
-          deleteCacheDirectory(softwareRoot, entry.directory());
-          removed.add(entry);
+          deleteCacheDirectory(dataRoot, candidate.directory());
+          removedCount++;
+          if (removed.size() < MAX_REPORTED_CANDIDATES) {
+            removed.add(
+                new SoftwareCacheCleanupReport.Entry(candidate.key(), candidate.directory()));
+          }
         } catch (IOException exception) {
           throw new SoftwareInstallationException(
-              "Unable to remove software cache " + entry.key() + ": " + exception.getMessage(),
+              "Unable to remove software cache " + candidate.key() + ": " + exception.getMessage(),
               exception);
         }
       }
     }
-    return new SoftwareCacheCleanupReport(dryRun, eligible, removed, protectedCount, tooNewCount);
+    return new SoftwareCacheCleanupReport(
+        dryRun,
+        eligible,
+        removed,
+        candidates.size(),
+        removedCount,
+        protectedCount,
+        tooNewCount,
+        scanLimitReached);
+  }
+
+  private static void requireCleanupNotInterrupted() throws SoftwareInstallationException {
+    if (Thread.currentThread().isInterrupted()) {
+      throw new SoftwareInstallationException("Software cleanup was interrupted");
+    }
   }
 
   @Override
@@ -275,6 +341,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
       }
       cleanAbandonedStaging(target);
       Files.createDirectories(staging);
+      writeStagingMetadata(profile, version, staging);
       record.log(
           "Installing "
               + profile.id()
@@ -285,6 +352,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
       InstallationArtifact artifact = provider.install(profile, version, staging, record::log);
       Files.writeString(staging.resolve("eula.txt"), "eula=true" + System.lineSeparator());
       writeInstallMetadata(profile, version, staging, artifact);
+      Files.deleteIfExists(staging.resolve(STAGING_METADATA));
       if (!isReady(profile, version, staging)) {
         throw new SoftwareInstallationException("Installer output failed cache verification");
       }
@@ -412,13 +480,45 @@ public final class SoftwareInstallationService implements AutoCloseable {
     }
   }
 
-  private static CacheCandidate cacheCandidate(Path softwareRoot, Path metadataPath) {
+  private static void writeStagingMetadata(SoftwareProfile profile, String version, Path directory)
+      throws IOException {
+    Properties metadata = new Properties();
+    metadata.setProperty("format", "1");
+    metadata.setProperty("software", profile.id());
+    metadata.setProperty("version", version);
+    metadata.setProperty("source", profile.source().name());
+    metadata.setProperty("channel", profile.channel().name());
+    try (OutputStream output = Files.newOutputStream(directory.resolve(STAGING_METADATA))) {
+      metadata.store(output, "SLS-LITE software staging ownership");
+    }
+  }
+
+  private Set<Path> protectedDirectories(
+      Set<InstallationKey> protectedKeys, Map<String, SoftwareProfile> profiles) {
+    Set<Path> protectedPaths = new java.util.HashSet<>();
+    for (InstallationKey key : protectedKeys) {
+      SoftwareProfile profile = profiles.get(key.softwareId());
+      if (profile == null) {
+        continue;
+      }
+      try {
+        Path path = paths.resolveBaseDirectory(profile, key.version()).toAbsolutePath().normalize();
+        protectedPaths.add(Files.exists(path) ? path.toRealPath() : path);
+      } catch (IOException | ProcessSpecificationException ignored) {
+        // The logical key still protects a matching cache even when its current path is invalid.
+      }
+    }
+    return Set.copyOf(protectedPaths);
+  }
+
+  private CacheCandidate cacheCandidate(
+      Path dataRoot, Path metadataPath, Map<String, SoftwareProfile> profiles) {
     try {
       if (Files.isSymbolicLink(metadataPath)) {
         return null;
       }
       Path directory = metadataPath.getParent().toAbsolutePath().normalize();
-      Path realRoot = softwareRoot.toRealPath();
+      Path realRoot = dataRoot.toRealPath();
       Path realDirectory = directory.toRealPath();
       if (realDirectory.equals(realRoot) || !realDirectory.startsWith(realRoot)) {
         return null;
@@ -435,25 +535,77 @@ public final class SoftwareInstallationService implements AutoCloseable {
       if (software == null || software.isBlank() || version == null || version.isBlank()) {
         return null;
       }
+      SoftwareProfile profile = profiles.get(software);
+      if (profile == null
+          || profile.source() == SoftwareSource.MANUAL
+          || !profile.source().name().equals(metadata.getProperty("source"))
+          || !profile.channel().name().equals(metadata.getProperty("channel"))) {
+        return null;
+      }
+      Path expected = paths.resolveBaseDirectory(profile, version).toAbsolutePath().normalize();
+      Path expectedParent = expected.getParent();
+      if (expectedParent == null || !Files.isDirectory(expectedParent)) {
+        return null;
+      }
+      Path realExpectedParent = expectedParent.toRealPath();
+      String directoryName = directory.getFileName().toString();
+      String expectedName = expected.getFileName().toString();
+      boolean staging = STAGING_METADATA.equals(metadataPath.getFileName().toString());
+      CacheCandidateKind kind;
+      if (staging) {
+        if (!realDirectory.getParent().equals(realExpectedParent)
+            || !directoryName.startsWith("." + expectedName + ".installing-")) {
+          return null;
+        }
+        kind = CacheCandidateKind.STAGING;
+      } else if (Files.exists(expected)
+          && realDirectory.equals(expected.toRealPath())
+          && profile.serverJar().equals(metadata.getProperty("jar"))) {
+        kind = CacheCandidateKind.CACHE;
+      } else {
+        if (!realDirectory.getParent().equals(realExpectedParent)
+            || !directoryName.startsWith("." + expectedName + ".incomplete-")
+            || !profile.serverJar().equals(metadata.getProperty("jar"))) {
+          return null;
+        }
+        kind = CacheCandidateKind.QUARANTINE;
+      }
       return new CacheCandidate(
           new InstallationKey(software, version),
           realDirectory,
-          Files.getLastModifiedTime(metadataPath).toInstant());
-    } catch (IOException exception) {
+          Files.getLastModifiedTime(metadataPath).toInstant(),
+          kind);
+    } catch (IOException | ProcessSpecificationException exception) {
       return null;
     }
   }
 
-  private static void deleteCacheDirectory(Path softwareRoot, Path directory) throws IOException {
-    Path realRoot = softwareRoot.toRealPath();
+  private static void deleteCacheDirectory(Path dataRoot, Path directory) throws IOException {
+    Path realRoot = dataRoot.toRealPath();
     Path realDirectory = directory.toRealPath();
     if (realDirectory.equals(realRoot) || !realDirectory.startsWith(realRoot)) {
-      throw new IOException("Cache directory escapes the software root");
+      throw new IOException("Cache directory escapes the SLS-LITE data root");
     }
-    try (var entries = Files.walk(realDirectory)) {
-      for (Path entry : entries.sorted(Comparator.reverseOrder()).toList()) {
-        Files.delete(entry);
+    Path tombstone =
+        realDirectory.resolveSibling(
+            "." + realDirectory.getFileName() + ".cleanup-" + System.nanoTime());
+    moveDirectory(realDirectory, tombstone);
+    try {
+      try (var entries = Files.walk(tombstone)) {
+        for (Path entry : entries.sorted(Comparator.reverseOrder()).toList()) {
+          Files.delete(entry);
+        }
       }
+    } catch (IOException deletionFailure) {
+      if (Files.exists(tombstone, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+          && !Files.exists(realDirectory, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+        try {
+          moveDirectory(tombstone, realDirectory);
+        } catch (IOException restoreFailure) {
+          deletionFailure.addSuppressed(restoreFailure);
+        }
+      }
+      throw deletionFailure;
     }
   }
 
@@ -596,5 +748,12 @@ public final class SoftwareInstallationService implements AutoCloseable {
     }
   }
 
-  private record CacheCandidate(InstallationKey key, Path directory, Instant modifiedAt) {}
+  private record CacheCandidate(
+      InstallationKey key, Path directory, Instant modifiedAt, CacheCandidateKind kind) {}
+
+  private enum CacheCandidateKind {
+    CACHE,
+    QUARANTINE,
+    STAGING
+  }
 }

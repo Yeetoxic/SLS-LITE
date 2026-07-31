@@ -86,8 +86,27 @@ class PaperForwardingEditorTest {
                         true,
                         temporaryDirectory.resolve("missing.secret"))));
 
-    assertTrue(exception.getMessage().contains("does not exist"));
+    assertTrue(exception.getMessage().contains("regular non-symbolic file"));
     assertFalse(Files.exists(temporaryDirectory.resolve("spigot.yml")));
+  }
+
+  @Test
+  void refusesSymbolicPaperConfigDirectory() throws Exception {
+    Path outside = Files.createDirectories(temporaryDirectory.resolveSibling("outside-config"));
+    try {
+      Files.createSymbolicLink(temporaryDirectory.resolve("config"), outside);
+    } catch (UnsupportedOperationException | java.io.IOException exception) {
+      org.junit.jupiter.api.Assumptions.abort("Symbolic links unavailable: " + exception);
+    }
+
+    assertThrows(
+        InstancePreparationException.class,
+        () ->
+            PaperForwardingEditor.apply(
+                temporaryDirectory,
+                new ForwardingConfig(
+                    ForwardingMode.NONE, false, temporaryDirectory.resolve("unused.secret"))));
+    assertFalse(Files.exists(outside.resolve("paper-global.yml")));
   }
 
   @SuppressWarnings("unchecked")

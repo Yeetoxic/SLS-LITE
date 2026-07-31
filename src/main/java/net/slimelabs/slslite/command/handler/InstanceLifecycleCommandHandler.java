@@ -414,40 +414,27 @@ public final class InstanceLifecycleCommandHandler {
     source.sendMessage(
         CommandMessages.message(
             "Deleting " + targets.size() + " managed server(s)...", NamedTextColor.YELLOW));
-    int[] completed = {0};
-    int[] failures = {0};
-    CompletableFuture<Void> sequence = CompletableFuture.completedFuture(null);
-    for (String instanceId : targets) {
-      sequence =
-          sequence.thenCompose(
-              ignored -> {
-                ManagedInstance active = instanceAccess.find(instanceId);
-                return deleteTarget(instanceId, active)
-                    .handle(
-                        (result, failure) -> {
-                          reportDelete(source, instanceId, result, failure);
-                          if (failure == null) {
-                            completed[0]++;
-                          } else {
-                            failures[0]++;
-                          }
-                          return null;
-                        });
-              });
-    }
-    sequence.thenRun(
-        () ->
-            source.sendMessage(
-                CommandMessages.message(
-                    "Delete-all complete: "
-                        + completed[0]
-                        + " deleted, "
-                        + failures[0]
-                        + " failed"
-                        + (protectedIds.isEmpty()
-                            ? "."
-                            : ", " + protectedIds.size() + " protected lobby skipped."),
-                    failures[0] == 0 ? NamedTextColor.GREEN : NamedTextColor.YELLOW)));
+    SequentialCommandBatch.run(
+            targets,
+            instanceId -> {
+              ManagedInstance active = instanceAccess.find(instanceId);
+              return deleteTarget(instanceId, active)
+                  .whenComplete(
+                      (result, failure) -> reportDelete(source, instanceId, result, failure));
+            })
+        .thenAccept(
+            result ->
+                source.sendMessage(
+                    CommandMessages.message(
+                        "Delete-all complete: "
+                            + result.completed()
+                            + " deleted, "
+                            + result.failures()
+                            + " failed"
+                            + (protectedIds.isEmpty()
+                                ? "."
+                                : ", " + protectedIds.size() + " protected lobby skipped."),
+                        result.failures() == 0 ? NamedTextColor.GREEN : NamedTextColor.YELLOW)));
   }
 
   private void killAll(CommandSource source, boolean forceCleanup) {
@@ -480,41 +467,28 @@ public final class InstanceLifecycleCommandHandler {
         protectedIds.size(),
         forceCleanup ? "included" : "skipped");
     source.sendMessage(CommandMessages.message("Killing all servers.", NamedTextColor.GRAY));
-    int[] completed = {0};
-    int[] failures = {0};
-    CompletableFuture<Void> sequence = CompletableFuture.completedFuture(null);
-    for (String instanceId : targets) {
-      sequence =
-          sequence.thenCompose(
-              ignored -> {
-                boolean protectedLobby = lobbyProvider.isLobby(instanceId);
-                reportKillStart(source, instanceId, protectedLobby);
-                return killTarget(instanceId, protectedLobby, forceCleanup)
-                    .handle(
-                        (exitCode, failure) -> {
-                          reportKill(source, instanceId, exitCode, failure);
-                          if (failure == null) {
-                            completed[0]++;
-                          } else {
-                            failures[0]++;
-                          }
-                          return null;
-                        });
-              });
-    }
-    sequence.thenRun(
-        () ->
-            source.sendMessage(
-                CommandMessages.message(
-                    "Kill-all complete: "
-                        + completed[0]
-                        + " terminated, "
-                        + failures[0]
-                        + " failed"
-                        + (!forceCleanup && !protectedIds.isEmpty()
-                            ? ", " + protectedIds.size() + " protected lobby skipped."
-                            : "."),
-                    failures[0] == 0 ? NamedTextColor.GREEN : NamedTextColor.YELLOW)));
+    SequentialCommandBatch.run(
+            targets,
+            instanceId -> {
+              boolean protectedLobby = lobbyProvider.isLobby(instanceId);
+              reportKillStart(source, instanceId, protectedLobby);
+              return killTarget(instanceId, protectedLobby, forceCleanup)
+                  .whenComplete(
+                      (exitCode, failure) -> reportKill(source, instanceId, exitCode, failure));
+            })
+        .thenAccept(
+            result ->
+                source.sendMessage(
+                    CommandMessages.message(
+                        "Kill-all complete: "
+                            + result.completed()
+                            + " terminated, "
+                            + result.failures()
+                            + " failed"
+                            + (!forceCleanup && !protectedIds.isEmpty()
+                                ? ", " + protectedIds.size() + " protected lobby skipped."
+                                : "."),
+                        result.failures() == 0 ? NamedTextColor.GREEN : NamedTextColor.YELLOW)));
   }
 
   private void reportKillStart(CommandSource source, String instanceId, boolean protectedLobby) {
@@ -617,41 +591,29 @@ public final class InstanceLifecycleCommandHandler {
         protectedIds.size(),
         force ? "included" : "skipped");
     source.sendMessage(CommandMessages.message("Stopping all servers.", NamedTextColor.GRAY));
-    int[] completed = {0};
-    int[] failures = {0};
-    CompletableFuture<Void> sequence = CompletableFuture.completedFuture(null);
-    for (String instanceId : targets) {
-      sequence =
-          sequence.thenCompose(
-              ignored -> {
-                boolean protectedLobby = lobbyProvider.isLobby(instanceId);
-                reportStopStart(source, instanceId, protectedLobby);
-                return stopTarget(source, instanceId, protectedLobby)
-                    .handle(
-                        (exitCode, failure) -> {
-                          reportStop(source, instanceId, protectedLobby, exitCode, failure);
-                          if (failure == null) {
-                            completed[0]++;
-                          } else {
-                            failures[0]++;
-                          }
-                          return null;
-                        });
-              });
-    }
-    sequence.thenRun(
-        () ->
-            source.sendMessage(
-                CommandMessages.message(
-                    "Stop-all complete: "
-                        + completed[0]
-                        + " stopped, "
-                        + failures[0]
-                        + " failed"
-                        + (!force && !protectedIds.isEmpty()
-                            ? ", " + protectedIds.size() + " protected lobby skipped."
-                            : "."),
-                    failures[0] == 0 ? NamedTextColor.GREEN : NamedTextColor.YELLOW)));
+    SequentialCommandBatch.run(
+            targets,
+            instanceId -> {
+              boolean protectedLobby = lobbyProvider.isLobby(instanceId);
+              reportStopStart(source, instanceId, protectedLobby);
+              return stopTarget(source, instanceId, protectedLobby)
+                  .whenComplete(
+                      (exitCode, failure) ->
+                          reportStop(source, instanceId, protectedLobby, exitCode, failure));
+            })
+        .thenAccept(
+            result ->
+                source.sendMessage(
+                    CommandMessages.message(
+                        "Stop-all complete: "
+                            + result.completed()
+                            + " stopped, "
+                            + result.failures()
+                            + " failed"
+                            + (!force && !protectedIds.isEmpty()
+                                ? ", " + protectedIds.size() + " protected lobby skipped."
+                                : "."),
+                        result.failures() == 0 ? NamedTextColor.GREEN : NamedTextColor.YELLOW)));
   }
 
   private void reportStopStart(CommandSource source, String instanceId, boolean protectedLobby) {

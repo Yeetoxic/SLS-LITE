@@ -283,14 +283,25 @@ class SoftwareInstallationServiceTest {
       InstallationKey protectedKey = new InstallationKey("fixture", "2.0");
 
       SoftwareCacheCleanupReport dryRun =
-          service.cleanupCache(Duration.ofHours(24), true, false, Set.of(protectedKey));
+          service.cleanupCache(
+              Duration.ofHours(24),
+              true,
+              false,
+              Set.of(protectedKey),
+              List.of(profile(SoftwareSource.PAPER)));
 
       assertEquals(1, dryRun.eligible().size());
+      assertEquals(1, dryRun.eligibleCount());
       assertEquals(1, dryRun.protectedCount());
       assertEquals(true, Files.isDirectory(removable));
 
       SoftwareCacheCleanupReport committed =
-          service.cleanupCache(Duration.ofHours(24), false, true, Set.of(protectedKey));
+          service.cleanupCache(
+              Duration.ofHours(24),
+              false,
+              true,
+              Set.of(protectedKey),
+              List.of(profile(SoftwareSource.PAPER)));
 
       assertEquals(1, committed.removed().size());
       assertEquals(false, Files.exists(removable));
@@ -303,10 +314,160 @@ class SoftwareInstallationServiceTest {
     try (SoftwareInstallationService service = service(List.of())) {
       assertThrows(
           SoftwareInstallationException.class,
-          () -> service.cleanupCache(Duration.ZERO, true, false, Set.of()));
+          () -> service.cleanupCache(Duration.ZERO, true, false, Set.of(), List.of()));
       assertThrows(
           SoftwareInstallationException.class,
-          () -> service.cleanupCache(Duration.ofHours(1), false, false, Set.of()));
+          () -> service.cleanupCache(Duration.ofHours(1), false, false, Set.of(), List.of()));
+    }
+  }
+
+  @Test
+  void cacheCleanupDiscoversConfiguredDirectoriesOutsideDefaultSoftwareRoot() throws Exception {
+    SoftwareInstallationProvider provider = providerWritingVersion();
+    SoftwareProfile custom =
+        profile("custom", SoftwareSource.PAPER, "provider-cache/custom/{version}");
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      Path installed = service.ensureInstalled(custom, "1.0").join();
+      Files.setLastModifiedTime(
+          installed.resolve(".sls-install.properties"),
+          FileTime.from(java.time.Instant.now().minus(Duration.ofDays(2))));
+
+      SoftwareCacheCleanupReport report =
+          service.cleanupCache(Duration.ofHours(24), true, false, Set.of(), List.of(custom));
+
+      assertEquals(1, report.eligibleCount());
+      assertEquals(installed.toRealPath(), report.eligible().getFirst().directory());
+    }
+  }
+
+  @Test
+  void cacheCleanupProtectsAliasedResolvedDirectory() throws Exception {
+    SoftwareProfile owner = profile(SoftwareSource.PAPER);
+    SoftwareProfile alias = profile("alias", SoftwareSource.PAPER, owner.baseDirectory());
+    try (SoftwareInstallationService service = service(List.of(providerWritingVersion()))) {
+      Path installed = service.ensureInstalled(owner, "1.0").join();
+      Files.setLastModifiedTime(
+          installed.resolve(".sls-install.properties"),
+          FileTime.from(java.time.Instant.now().minus(Duration.ofDays(2))));
+
+      SoftwareCacheCleanupReport report =
+          service.cleanupCache(
+              Duration.ofHours(24),
+              true,
+              false,
+              Set.of(new InstallationKey("alias", "1.0")),
+              List.of(owner, alias));
+
+      assertEquals(0, report.eligibleCount());
+      assertEquals(1, report.protectedCount());
+    }
+  }
+
+  @Test
+  void cacheCleanupRemovesAgedIncompleteQuarantineButProtectsReplacement() throws Exception {
+    AtomicInteger installs = new AtomicInteger();
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile profile,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log)
+              throws Exception {
+            Path jar = stagingDirectory.resolve("server.jar");
+            Files.writeString(jar, "install-" + installs.incrementAndGet());
+            return artifact(jar);
+          }
+        };
+    SoftwareProfile profile = profile(SoftwareSource.PAPER);
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      Path installed = service.ensureInstalled(profile, "1.0").join();
+      Files.writeString(installed.resolve("server.jar"), "corrupt");
+      service.ensureInstalled(profile, "1.0").join();
+      Path quarantine;
+      try (var siblings = Files.list(installed.getParent())) {
+        quarantine =
+            siblings
+                .filter(path -> path.getFileName().toString().startsWith(".1.0.incomplete-"))
+                .findFirst()
+                .orElseThrow();
+      }
+      FileTime old = FileTime.from(java.time.Instant.now().minus(Duration.ofDays(2)));
+      Files.setLastModifiedTime(quarantine.resolve(".sls-install.properties"), old);
+      Files.setLastModifiedTime(installed.resolve(".sls-install.properties"), old);
+
+      SoftwareCacheCleanupReport report =
+          service.cleanupCache(
+              Duration.ofHours(24),
+              false,
+              true,
+              Set.of(new InstallationKey("fixture", "1.0")),
+              List.of(profile));
+
+      assertEquals(1, report.removedCount());
+      assertEquals(false, Files.exists(quarantine));
+      assertEquals(true, Files.isDirectory(installed));
+    }
+  }
+
+  @Test
+  void cacheCleanupProtectsAnInstallationCurrentlyBeingPublished() throws Exception {
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile profile,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log)
+              throws Exception {
+            entered.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            Path jar = stagingDirectory.resolve("server.jar");
+            Files.writeString(jar, version);
+            return artifact(jar);
+          }
+        };
+    SoftwareProfile profile = profile(SoftwareSource.PAPER);
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      var installation = service.ensureInstalled(profile, "1.0");
+      assertEquals(true, entered.await(5, TimeUnit.SECONDS));
+      Path expected = temporaryDirectory.resolve("software/fixture/1.0");
+      Path staging;
+      try (var siblings = Files.list(expected.getParent())) {
+        staging =
+            siblings
+                .filter(path -> path.getFileName().toString().startsWith(".1.0.installing-"))
+                .findFirst()
+                .orElseThrow();
+      }
+      Files.setLastModifiedTime(
+          staging.resolve(".sls-staging.properties"),
+          FileTime.from(java.time.Instant.now().minus(Duration.ofDays(2))));
+
+      SoftwareCacheCleanupReport report =
+          service.cleanupCache(Duration.ofHours(24), false, true, Set.of(), List.of(profile));
+
+      assertEquals(0, report.removedCount());
+      assertEquals(1, report.protectedCount());
+      assertEquals(true, Files.isDirectory(staging));
+      release.countDown();
+      assertEquals(expected, installation.join());
+    } finally {
+      release.countDown();
     }
   }
 
@@ -439,6 +600,27 @@ class SoftwareInstallationServiceTest {
         LoggerFactory.getLogger(getClass()));
   }
 
+  private static SoftwareInstallationProvider providerWritingVersion() {
+    return new SoftwareInstallationProvider() {
+      @Override
+      public SoftwareSource source() {
+        return SoftwareSource.PAPER;
+      }
+
+      @Override
+      public InstallationArtifact install(
+          SoftwareProfile profile,
+          String version,
+          Path stagingDirectory,
+          java.util.function.Consumer<String> log)
+          throws Exception {
+        Path jar = stagingDirectory.resolve("server.jar");
+        Files.writeString(jar, version);
+        return artifact(jar);
+      }
+    };
+  }
+
   private static InstallationArtifact artifact(Path jar) throws Exception {
     byte[] contents = Files.readAllBytes(jar);
     String checksum =
@@ -447,8 +629,12 @@ class SoftwareInstallationServiceTest {
   }
 
   private SoftwareProfile profile(SoftwareSource source) {
+    return profile("fixture", source, "software/fixture/{version}");
+  }
+
+  private SoftwareProfile profile(String id, SoftwareSource source, String baseDirectory) {
     return new SoftwareProfile(
-        "fixture",
+        id,
         SoftwareRuntime.JAVA_JAR,
         SoftwareConfigurator.GENERIC,
         source,
@@ -456,7 +642,7 @@ class SoftwareInstallationServiceTest {
         source != SoftwareSource.MANUAL,
         "java",
         java.util.Map.of(),
-        "software/fixture/{version}",
+        baseDirectory,
         "server.jar",
         List.of("-Xmx{memory_mib}M"),
         List.of("--nogui"),
