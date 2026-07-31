@@ -51,6 +51,7 @@ public final class SLSCommand implements SimpleCommand {
   private final InspectionCommandHandler inspectionHandler;
   private final PlayerRoutingCommandHandler playerRoutingHandler;
   private final DebugPlayerRegistry debugPlayers;
+  private final ConsoleOutputSessions consoleOutput;
   private final Logger logger;
 
   public SLSCommand(
@@ -133,6 +134,7 @@ public final class SLSCommand implements SimpleCommand {
         new PlayerRoutingCommandHandler(
             proxy, blueprints, joinService, authorizer, instanceAccess, logger);
     this.debugPlayers = new DebugPlayerRegistry();
+    this.consoleOutput = new ConsoleOutputSessions();
     this.logger = logger;
   }
 
@@ -239,6 +241,12 @@ public final class SLSCommand implements SimpleCommand {
     if (arguments.length == 3 && "admin".equals(operation)) {
       return completed(adminHandler.suggestions(source, arguments));
     }
+    if (arguments.length == 3
+        && "console".equals(operation)
+        && authorizer.canAdminister(source, "console")) {
+      return completed(
+          List.of(VSLSCommandContract.CONSOLE_FOLLOW, VSLSCommandContract.CONSOLE_UNFOLLOW));
+    }
     if (arguments.length == 3 && "logs".equals(operation)) {
       return completed(inspectionHandler.suggestions(source, operation, arguments));
     }
@@ -313,11 +321,17 @@ public final class SLSCommand implements SimpleCommand {
   }
 
   public void disconnectDebugPlayer(UUID playerId) {
+    disconnectPlayer(playerId);
+  }
+
+  public void disconnectPlayer(UUID playerId) {
     debugPlayers.remove(playerId);
+    consoleOutput.remove(playerId);
   }
 
   public void close() {
     debugPlayers.clear();
+    consoleOutput.close();
   }
 
   private void console(CommandSource source, String[] arguments) {
@@ -339,12 +353,42 @@ public final class SLSCommand implements SimpleCommand {
     if (instance == null) {
       return;
     }
+    if (arguments.length == 3
+        && VSLSCommandContract.CONSOLE_FOLLOW.equalsIgnoreCase(arguments[2])) {
+      boolean replaced = consoleOutput.follow(source, instance);
+      source.sendMessage(
+          CommandMessages.message(
+              (replaced ? "Console follow moved to " : "Following console output from ")
+                  + instance.id()
+                  + ". Use /sls console "
+                  + instance.id()
+                  + " "
+                  + VSLSCommandContract.CONSOLE_UNFOLLOW
+                  + " to stop.",
+              NamedTextColor.GRAY));
+      return;
+    }
+    if (arguments.length == 3
+        && VSLSCommandContract.CONSOLE_UNFOLLOW.equalsIgnoreCase(arguments[2])) {
+      boolean removed = consoleOutput.unfollow(source);
+      source.sendMessage(
+          CommandMessages.message(
+              removed
+                  ? "Stopped following managed console output."
+                  : "You are not following managed console output.",
+              NamedTextColor.GRAY));
+      return;
+    }
     String command = String.join(" ", java.util.Arrays.copyOfRange(arguments, 2, arguments.length));
     try {
+      long outputCursor = instance.outputCursor();
       instances.sendCommand(instance.id(), command);
       logger.info("Console command sent by {} to {}", commandSourceName(source), instance.id());
       source.sendMessage(
           CommandMessages.message("Command executed successfully", NamedTextColor.GRAY));
+      if (!consoleOutput.isFollowing(source)) {
+        consoleOutput.capture(source, instance, outputCursor);
+      }
     } catch (InstanceOperationException exception) {
       source.sendMessage(
           CommandMessages.message(

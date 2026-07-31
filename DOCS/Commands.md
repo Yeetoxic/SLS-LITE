@@ -47,7 +47,9 @@ name a player and cannot use player-only selectors.
 | `/sls info <server\|this>` | `info` | Detailed instance information. |
 | `/sls status [server\|this] [remote]` | `status` | Lifecycle state. Players may omit the target for their current server. `remote` is retained as an explicit local-mode boundary response because no daemon exists. |
 | `/sls stats [server\|this]` | `stats` | Uptime, CPU time, configured/current memory, Linux process I/O where measurable, and log retention. |
-| `/sls console <server\|this> <command...>` | `console` | Write one command to the child process input. |
+| `/sls console <server\|this> <command...>` | `console` | Write one command to the child process input, then asynchronously show up to eight new output lines captured during the bounded two-second response window. |
+| `/sls console <server\|this> --follow` | `console` | Opt into a bounded nonblocking live output stream. Starting another follow moves the same source to the new instance. |
+| `/sls console <server\|this> --unfollow` | `console` | Stop the source's active live output stream. |
 | `/sls logs <server\|this> [page] [lines]` | `logs` | Read retained child output; up to 100 lines per page. |
 | `/sls delete <server\|this>` | `delete` | Evacuate an active server, stop it cleanly, and transactionally remove its owned instance storage. |
 | `/sls delete all` | `delete` | Sequentially delete every ordinary managed instance with per-server results. The managed lobby is always skipped. |
@@ -98,6 +100,19 @@ lines containing the invoked `/sls` operation and sender. Command arguments,
 child-console content, host paths, credentials, and other unbounded details are
 not copied into debug chat. The subscription is memory-only and is removed on
 disable, disconnect, or proxy shutdown.
+
+Console response capture reads only output appended after the command is sent;
+it never replays old retained lines. Capture waits away from Velocity's command
+thread, stops after two seconds or eight lines, and renders at most 320
+characters per line. A quiet command receives a concise no-output response.
+
+`--follow` is an additive operator mode and does not alter the pinned
+`console <server> <command...>` form. It uses the same cursor-backed buffer in
+bounded 16-line batches without blocking the managed process's output reader.
+If output outruns the 1,000-line retention buffer, the operator is told how many
+expired lines were skipped. Each source can follow one instance at a time.
+Follow ends on `--unfollow`, instance stop, player disconnect, replacement by a
+different follow, or proxy shutdown.
 
 ## Force Operations
 

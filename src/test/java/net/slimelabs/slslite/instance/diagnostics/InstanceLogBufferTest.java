@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class InstanceLogBufferTest {
@@ -44,5 +46,57 @@ class InstanceLogBufferTest {
     assertTrue(buffer.page(Integer.MAX_VALUE, Integer.MAX_VALUE).lines().isEmpty());
     assertThrows(IllegalArgumentException.class, () -> buffer.page(0, 1));
     assertThrows(IllegalArgumentException.class, () -> buffer.page(1, 0));
+  }
+
+  @Test
+  void cursorCaptureReturnsOnlyNewOutputInOrder() {
+    InstanceLogBuffer buffer = new InstanceLogBuffer();
+    buffer.append("old");
+    long cursor = buffer.cursor();
+    buffer.append("first");
+    buffer.append("second");
+
+    InstanceOutputBatch batch = buffer.awaitAfter(cursor, 8, Duration.ZERO, Duration.ofMillis(100));
+
+    assertEquals(List.of("first", "second"), batch.lines());
+    assertEquals(0, batch.droppedLines());
+    assertEquals(buffer.cursor(), batch.cursor());
+  }
+
+  @Test
+  void cursorCaptureWaitsOffThreadForNewOutput() throws Exception {
+    InstanceLogBuffer buffer = new InstanceLogBuffer();
+    long cursor = buffer.cursor();
+    Thread writer =
+        Thread.ofVirtual()
+            .start(
+                () -> {
+                  try {
+                    Thread.sleep(20);
+                  } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                  }
+                  buffer.append("response");
+                });
+
+    InstanceOutputBatch batch =
+        buffer.awaitAfter(cursor, 8, Duration.ofMillis(10), Duration.ofSeconds(1));
+    writer.join();
+
+    assertEquals(List.of("response"), batch.lines());
+  }
+
+  @Test
+  void cursorCaptureReportsRetentionLossAndCapsEachBatch() {
+    InstanceLogBuffer buffer = new InstanceLogBuffer();
+    for (int index = 0; index < InstanceLogBuffer.CAPACITY + 5; index++) {
+      buffer.append("line-" + index);
+    }
+
+    InstanceOutputBatch batch = buffer.awaitAfter(0, 3, Duration.ZERO, Duration.ofMillis(100));
+
+    assertEquals(5, batch.droppedLines());
+    assertEquals(List.of("line-5", "line-6", "line-7"), batch.lines());
+    assertTrue(batch.cursor() < buffer.cursor());
   }
 }

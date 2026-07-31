@@ -284,6 +284,26 @@ final class SLSCommandSurfaceTest {
   }
 
   @Test
+  void consoleFollowCompletionIsPermissionFiltered() {
+    assertEquals(
+        List.of("--follow", "--unfollow"),
+        command
+            .suggestAsync(
+                invocation(
+                    source(Set.of("sls.command.console"), new ArrayList<>()),
+                    "console",
+                    "server.abcdef",
+                    ""))
+            .join());
+    assertEquals(
+        List.of(),
+        command
+            .suggestAsync(
+                invocation(source(Set.of(), new ArrayList<>()), "console", "server.abcdef", ""))
+            .join());
+  }
+
+  @Test
   void capabilityLinesIncludeDetailForConsoleSendersAndBoundLongValues() {
     String detail = "x".repeat(300);
 

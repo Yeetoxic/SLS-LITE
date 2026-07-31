@@ -371,7 +371,7 @@ public final class SLSLite {
   @Subscribe
   public void onDisconnect(DisconnectEvent event) {
     if (slsCommand != null) {
-      slsCommand.disconnectDebugPlayer(event.getPlayer().getUniqueId());
+      slsCommand.disconnectPlayer(event.getPlayer().getUniqueId());
     }
     if (limboHandoff != null) {
       limboHandoff.disconnect(event.getPlayer().getUniqueId());

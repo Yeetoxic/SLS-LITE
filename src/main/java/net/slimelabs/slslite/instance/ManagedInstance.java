@@ -11,6 +11,7 @@ import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.instance.diagnostics.InstanceLogPage;
 import net.slimelabs.slslite.instance.diagnostics.InstanceOutput;
+import net.slimelabs.slslite.instance.diagnostics.InstanceOutputBatch;
 import net.slimelabs.slslite.instance.diagnostics.ProcessResourceMetrics;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
@@ -140,6 +141,15 @@ public final class ManagedInstance {
 
   public int retainedLogLines() {
     return output.retainedLines();
+  }
+
+  public long outputCursor() {
+    return output.cursor();
+  }
+
+  public InstanceOutputBatch awaitOutputAfter(
+      long cursor, int maximumLines, Duration quietPeriod, Duration timeout) {
+    return output.awaitAfter(cursor, maximumLines, quietPeriod, timeout);
   }
 
   public int logRetentionCapacity() {

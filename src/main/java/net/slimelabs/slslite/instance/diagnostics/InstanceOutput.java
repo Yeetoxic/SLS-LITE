@@ -2,6 +2,7 @@ package net.slimelabs.slslite.instance.diagnostics;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Optional;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 
@@ -47,6 +48,15 @@ public final class InstanceOutput {
 
   public int retainedLines() {
     return logs.size();
+  }
+
+  public long cursor() {
+    return logs.cursor();
+  }
+
+  public InstanceOutputBatch awaitAfter(
+      long cursor, int maximumLines, Duration quietPeriod, Duration timeout) {
+    return logs.awaitAfter(cursor, maximumLines, quietPeriod, timeout);
   }
 
   public int retentionCapacity() {

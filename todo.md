@@ -253,7 +253,7 @@ data, leaking resources, or trapping players in unexplained states.
       transactionality, cleanup, and audit diagnostics:
   - [x] Persistent delete.
   - [x] Explicit force-kill.
-- [ ] Add bounded `/sls console` response capture and opt-in nonblocking live
+- [x] Add bounded `/sls console` response capture and opt-in nonblocking live
       console follow.
 - [x] Add create-time overrides for memory, save mode, seed, view distance, and
       selected safe configuration fields.

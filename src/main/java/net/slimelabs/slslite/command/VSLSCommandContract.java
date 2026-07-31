@@ -35,6 +35,8 @@ public final class VSLSCommandContract {
   public static final String ADDITIVE_FORCE = "--force";
   public static final String REMOTE_STATUS = "remote";
   public static final String RELOAD_CONFIG = "config";
+  public static final String CONSOLE_FOLLOW = "--follow";
+  public static final String CONSOLE_UNFOLLOW = "--unfollow";
 
   static final List<String> PUBLIC_ROOT = List.of("join", "list", "find", "dequeue", "version");
 
@@ -171,6 +173,18 @@ public final class VSLSCommandContract {
               "console <server|this> <command...>",
               "console",
               Completion.INSTANCE_OR_THIS),
+          branch(
+              "console.follow",
+              "console <server|this> <--follow|--unfollow>",
+              Origin.ADDITIVE,
+              Availability.SUPPORTED,
+              Access.ADMIN,
+              Sender.ANY,
+              List.of("sls.command.console"),
+              List.of(),
+              List.of(CONSOLE_FOLLOW, CONSOLE_UNFOLLOW),
+              Completion.INSTANCE_OR_THIS,
+              Completion.CONSOLE_FOLLOW),
           adminBranch("blueprint.id", "blueprint <id>", "blueprint", Completion.BLUEPRINT),
           branch(
               "blueprints",
@@ -381,7 +395,8 @@ public final class VSLSCommandContract {
     SOFTWARE,
     SOFTWARE_VERSION,
     ADMIN_ACTION,
-    ADMINISTRATOR
+    ADMINISTRATOR,
+    CONSOLE_FOLLOW
   }
 
   public record Branch(
