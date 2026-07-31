@@ -9,10 +9,12 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
@@ -20,6 +22,8 @@ import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandInstanceAccess;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.security.AdministratorStore;
+import net.slimelabs.slslite.velocity.LocalJoinService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,6 +34,7 @@ class PlayerRoutingCommandHandlerTest {
   @TempDir Path temporaryDirectory;
 
   private PlayerRoutingCommandHandler handler;
+  private LocalJoinService joinService;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -38,14 +43,23 @@ class PlayerRoutingCommandHandlerTest {
     administrators.initialize();
     ProxyServer proxy = proxy(List.of(player("Zulu"), player("Alpha")));
     CommandAuthorizer authorizer = new CommandAuthorizer(administrators);
+    BlueprintRepository blueprints =
+        new BlueprintRepository(temporaryDirectory.resolve("blueprints"));
+    ServerController controller = controller();
+    joinService = new LocalJoinService(proxy, blueprints, controller, Duration.ofSeconds(30));
     handler =
         new PlayerRoutingCommandHandler(
             proxy,
-            new BlueprintRepository(temporaryDirectory.resolve("blueprints")),
-            null,
+            blueprints,
+            joinService,
             authorizer,
-            new CommandInstanceAccess(proxy, controller()),
+            new CommandInstanceAccess(proxy, controller),
             LoggerFactory.getLogger(PlayerRoutingCommandHandlerTest.class));
+  }
+
+  @AfterEach
+  void closeJoinService() {
+    joinService.close();
   }
 
   @Test
@@ -94,6 +108,36 @@ class PlayerRoutingCommandHandlerTest {
     assertTrue(plainText(messages.getFirst()).contains("Console must specify all or a player."));
   }
 
+  @Test
+  void consoleLocalDequeueDoesNotEmitFalseSuccess() {
+    List<Component> messages = new ArrayList<>();
+
+    handler.dequeue(
+        consoleSource(Set.of("sls.command.dequeue.others"), messages),
+        new String[] {"dequeue", "local"});
+
+    assertEquals(1, messages.size());
+    assertTrue(plainText(messages.getFirst()).contains("cannot use the local player selector"));
+  }
+
+  @Test
+  void dequeuePreservesPinnedBranchSpecificEmptyFeedback() {
+    List<Component> selfMessages = new ArrayList<>();
+    List<Component> targetMessages = new ArrayList<>();
+    List<Component> allMessages = new ArrayList<>();
+
+    handler.dequeue(playerSource("Self", selfMessages), new String[] {"dequeue"});
+    handler.dequeue(
+        source(Set.of("sls.command.dequeue.others"), targetMessages),
+        new String[] {"dequeue", "Alpha"});
+    handler.dequeue(
+        source(Set.of("sls.command.dequeue.others"), allMessages), new String[] {"dequeue", "all"});
+
+    assertTrue(plainText(selfMessages.getFirst()).contains("You are not in queue."));
+    assertTrue(plainText(targetMessages.getFirst()).contains("Alpha is not in queue."));
+    assertTrue(plainText(allMessages.getFirst()).contains("Dequeued all players"));
+  }
+
   private static Player player(String username) {
     return (Player)
         Proxy.newProxyInstance(
@@ -102,6 +146,28 @@ class PlayerRoutingCommandHandlerTest {
             (ignored, method, arguments) ->
                 switch (method.getName()) {
                   case "getUsername" -> username;
+                  case "getUniqueId" ->
+                      UUID.nameUUIDFromBytes(
+                          username.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                  default -> defaultValue(method.getReturnType());
+                });
+  }
+
+  private static Player playerSource(String username, List<Component> messages) {
+    UUID playerId =
+        UUID.nameUUIDFromBytes(username.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    return (Player)
+        Proxy.newProxyInstance(
+            Player.class.getClassLoader(),
+            new Class<?>[] {Player.class},
+            (ignored, method, arguments) ->
+                switch (method.getName()) {
+                  case "getUsername" -> username;
+                  case "getUniqueId" -> playerId;
+                  case "sendMessage" -> {
+                    messages.add((Component) arguments[0]);
+                    yield null;
+                  }
                   default -> defaultValue(method.getReturnType());
                 });
   }
@@ -114,7 +180,16 @@ class PlayerRoutingCommandHandlerTest {
             (ignored, method, arguments) ->
                 switch (method.getName()) {
                   case "getAllPlayers" -> players;
-                  case "getPlayer", "getServer" -> Optional.empty();
+                  case "getPlayer" -> {
+                    Object requested = arguments[0];
+                    yield players.stream()
+                        .filter(
+                            player ->
+                                requested.equals(player.getUsername())
+                                    || requested.equals(player.getUniqueId()))
+                        .findFirst();
+                  }
+                  case "getServer" -> Optional.empty();
                   default -> defaultValue(method.getReturnType());
                 });
   }

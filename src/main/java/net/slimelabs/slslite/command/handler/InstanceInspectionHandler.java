@@ -250,18 +250,20 @@ final class InstanceInspectionHandler {
     if (!requireAdmin(source, permission, "inspect managed instances")) {
       return;
     }
+    boolean currentStatus = "status".equals(permission) && arguments.length == 1;
     boolean remote =
         "status".equals(permission)
             && arguments.length == 3
             && VSLSCommandContract.REMOTE_STATUS.equalsIgnoreCase(arguments[2]);
-    if (arguments.length != 2 && !remote) {
+    if (arguments.length != 2 && !currentStatus && !remote) {
       source.sendMessage(
           CommandMessages.usage(
               "/sls " + permission,
               "status".equals(permission) ? "server | server remote" : "server"));
       return;
     }
-    ManagedInstance instance = instanceAccess.resolve(source, arguments[1]);
+    ManagedInstance instance =
+        instanceAccess.resolve(source, currentStatus ? "this" : arguments[1]);
     if (instance == null) {
       return;
     }

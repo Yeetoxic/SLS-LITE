@@ -174,7 +174,32 @@ final class SLSCommandSurfaceTest {
     assertEquals(
         emptyMessages.stream().map(SLSCommandSurfaceTest::plainText).toList(),
         unknownMessages.stream().map(SLSCommandSurfaceTest::plainText).toList());
-    assertTrue(plainText(emptyMessages.get(1)).contains("/sls <join | list | find | dequeue>"));
+    assertTrue(
+        plainText(emptyMessages.get(1)).contains("/sls <join | list | find | dequeue | version>"));
+  }
+
+  @Test
+  void granularProviderHelpExposesOnlyItsAdministrativeBranch() {
+    List<Component> messages = new ArrayList<>();
+
+    command.execute(invocation(source(Set.of("sls.command.stop"), messages)));
+
+    String usage = plainText(messages.getLast());
+    assertTrue(usage.contains("stop"));
+    assertTrue(!usage.contains("kill"));
+    assertTrue(usage.contains("version"));
+  }
+
+  @Test
+  void zeroArgumentPublicBranchesRejectTrailingInput() {
+    for (String operation : List.of("list", "registries", "version")) {
+      List<Component> messages = new ArrayList<>();
+
+      command.execute(invocation(source(Set.of(), messages), operation, "unexpected"));
+
+      assertEquals(1, messages.size(), operation);
+      assertTrue(plainText(messages.getFirst()).contains("Usage: /sls " + operation), operation);
+    }
   }
 
   @Test

@@ -187,9 +187,9 @@ public final class SLSCommand implements SimpleCommand {
       case "install" -> installationHandler.execute(invocation.source(), arguments);
       case "join" -> playerRoutingHandler.join(invocation.source(), arguments);
       case "kill" -> lifecycleHandler.kill(invocation.source(), arguments);
-      case "list" -> inspectionHandler.list(invocation.source());
+      case "list" -> list(invocation.source(), arguments);
       case "logs" -> inspectionHandler.logs(invocation.source(), arguments);
-      case "registries" -> inspectionHandler.registries(invocation.source());
+      case "registries" -> registries(invocation.source(), arguments);
       case "reload" -> reload(invocation.source(), arguments);
       case "reset" -> lifecycleHandler.reset(invocation.source(), arguments);
       case "restart" -> lifecycleHandler.restart(invocation.source(), arguments);
@@ -198,7 +198,7 @@ public final class SLSCommand implements SimpleCommand {
       case "status" -> inspectionHandler.status(invocation.source(), arguments);
       case "stop" -> lifecycleHandler.stop(invocation.source(), arguments);
       case "system" -> inspectionHandler.system(invocation.source(), arguments);
-      case "version" -> sendVersion(invocation.source());
+      case "version" -> sendVersion(invocation.source(), arguments);
       case "pause", "resume" -> unavailable(invocation.source(), arguments[0], false);
       case "node" -> unavailable(invocation.source(), arguments[0], true);
       default -> sendRootHelp(invocation.source());
@@ -301,13 +301,19 @@ public final class SLSCommand implements SimpleCommand {
 
   private void sendRootHelp(CommandSource source) {
     source.sendMessage(CommandMessages.incorrectUsage());
+    List<String> options = new java.util.ArrayList<>(VSLSCommandContract.PUBLIC_ROOT);
     if (authorizer.canAdminister(source, "admin")) {
-      source.sendMessage(
-          CommandMessages.usage("/sls", VSLSCommandContract.ADMIN_ROOT.toArray(String[]::new)));
+      options = VSLSCommandContract.ADMIN_ROOT;
     } else {
-      source.sendMessage(
-          CommandMessages.usage("/sls", VSLSCommandContract.PUBLIC_ROOT.toArray(String[]::new)));
+      for (String entry : VSLSCommandContract.ADMIN_ROOT) {
+        int separator = entry.indexOf(' ');
+        String root = entry.substring(0, separator < 0 ? entry.length() : separator);
+        if (!options.contains(entry) && authorizer.canAdminister(source, root)) {
+          options.add(entry);
+        }
+      }
     }
+    source.sendMessage(CommandMessages.usage("/sls", options.toArray(String[]::new)));
   }
 
   private void debug(CommandSource source, String[] arguments) {
@@ -429,7 +435,27 @@ public final class SLSCommand implements SimpleCommand {
     }
   }
 
-  private void sendVersion(CommandSource source) {
+  private void list(CommandSource source, String[] arguments) {
+    if (arguments.length != 1) {
+      source.sendMessage(CommandMessages.usage("/sls list"));
+      return;
+    }
+    inspectionHandler.list(source);
+  }
+
+  private void registries(CommandSource source, String[] arguments) {
+    if (arguments.length != 1) {
+      source.sendMessage(CommandMessages.usage("/sls registries"));
+      return;
+    }
+    inspectionHandler.registries(source);
+  }
+
+  private void sendVersion(CommandSource source, String[] arguments) {
+    if (arguments.length != 1) {
+      source.sendMessage(CommandMessages.usage("/sls version"));
+      return;
+    }
     source.sendMessage(
         CommandMessages.prefix()
             .append(

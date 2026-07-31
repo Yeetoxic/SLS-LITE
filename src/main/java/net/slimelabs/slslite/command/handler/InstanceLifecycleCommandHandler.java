@@ -127,14 +127,19 @@ public final class InstanceLifecycleCommandHandler {
     if (!requireAdmin(source, "stop", "stop managed servers")) {
       return;
     }
-    if (arguments.length < 2
+    if (arguments.length < 1
         || arguments.length > 3
         || arguments.length == 3 && !isForceModifier(arguments[2])) {
-      source.sendMessage(CommandMessages.usage("/sls stop", "server", "server force"));
+      source.sendMessage(CommandMessages.usage("/sls stop", "server", "all", "server force"));
       return;
     }
     boolean force = arguments.length == 3;
-    ManagedInstance instance = instanceAccess.resolve(source, arguments[1]);
+    String requested = arguments.length == 1 ? "this" : arguments[1];
+    if ("all".equalsIgnoreCase(requested)) {
+      stopAll(source, force);
+      return;
+    }
+    ManagedInstance instance = instanceAccess.resolve(source, requested);
     if (instance == null) {
       return;
     }
@@ -153,71 +158,11 @@ public final class InstanceLifecycleCommandHandler {
               NamedTextColor.RED));
       return;
     }
-    if (protectedLobby) {
-      logger.warn(
-          "Forced managed lobby stop requested by {} for {}",
-          commandSourceName(source),
-          instance.id());
-      if (!lobbyProvider.beginIntentionalStop(instance.id())) {
-        logger.warn(
-            "Forced managed lobby stop by {} for {} was cancelled because "
-                + "the lobby is already stopping or changed",
-            commandSourceName(source),
-            instance.id());
-        source.sendMessage(
-            CommandMessages.message(
-                "Stop cancelled: the active lobby is already stopping or changed.",
-                NamedTextColor.RED));
-        return;
-      }
-    }
-    source.sendMessage(
-        CommandMessages.message(
-            protectedLobby
-                ? "Moving players to SLS-Limbo before stopping " + instance.id() + "..."
-                : "Moving players to the lobby before stopping " + instance.id() + "...",
-            NamedTextColor.YELLOW));
-    CompletableFuture<Void> evacuation =
-        protectedLobby
-            ? lobbyProvider.evacuateForIntentionalStop(instance.id())
-            : lobbyProvider.evacuate(instance.id());
-    evacuation.whenComplete(
-        (ignored, evacuationFailure) -> {
-          if (evacuationFailure != null) {
-            if (protectedLobby) {
-              lobbyProvider.cancelIntentionalStop(instance.id());
-              logger.warn(
-                  "Forced managed lobby stop by {} for {} was cancelled: {}",
-                  commandSourceName(source),
-                  instance.id(),
-                  rootMessage(evacuationFailure));
-            }
-            source.sendMessage(
-                CommandMessages.message(
-                    "Stop cancelled: " + rootMessage(evacuationFailure), NamedTextColor.RED));
-            return;
-          }
-          if (protectedLobby && !lobbyProvider.prepareIntentionalStop(instance.id())) {
-            lobbyProvider.cancelIntentionalStop(instance.id());
-            logger.warn(
-                "Forced managed lobby stop by {} for {} was cancelled because "
-                    + "the lobby changed during evacuation",
-                commandSourceName(source),
-                instance.id());
-            source.sendMessage(
-                CommandMessages.message(
-                    "Stop cancelled: the active lobby changed during evacuation.",
-                    NamedTextColor.RED));
-            return;
-          }
-          if (protectedLobby) {
-            source.sendMessage(
-                CommandMessages.message(
-                    "Automatic managed-lobby recovery is suppressed until " + "Velocity restarts.",
-                    NamedTextColor.GRAY));
-          }
-          stopInstance(source, instance.id(), protectedLobby);
-        });
+    reportStopStart(source, instance.id(), protectedLobby);
+    stopTarget(source, instance.id(), protectedLobby)
+        .whenComplete(
+            (exitCode, failure) ->
+                reportStop(source, instance.id(), protectedLobby, exitCode, failure));
   }
 
   public void delete(CommandSource source, String[] arguments) {
@@ -340,7 +285,7 @@ public final class InstanceLifecycleCommandHandler {
                 : List.of();
         case "stop" ->
             authorizer.canAdminister(source, "stop")
-                ? withPrefix("this", instanceAccess.activeIds())
+                ? withPrefix("all", withPrefix("this", instanceAccess.activeIds()))
                 : List.of();
         default -> List.of();
       };
@@ -370,7 +315,13 @@ public final class InstanceLifecycleCommandHandler {
     if (arguments.length == 3
         && "stop".equals(operation)
         && authorizer.canAdminister(source, "stop")) {
-      ManagedInstance target = instanceAccess.find(arguments[1]);
+      if ("all".equalsIgnoreCase(arguments[1])) {
+        boolean hasProtected = instanceAccess.activeIds().stream().anyMatch(lobbyProvider::isLobby);
+        return !hasProtected || authorizer.canAdminister(source, "stop.force")
+            ? List.of(VSLSCommandContract.FORCE, VSLSCommandContract.ADDITIVE_FORCE)
+            : List.of();
+      }
+      ManagedInstance target = completionTarget(source, arguments[1]);
       if (target != null
           && (!lobbyProvider.isLobby(target.id())
               || authorizer.canAdminister(source, "stop.force"))) {
@@ -385,9 +336,22 @@ public final class InstanceLifecycleCommandHandler {
     if (arguments.length == 3
         && ("restart".equals(operation) || "reset".equals(operation))
         && authorizer.canAdminister(source, operation + ".force")) {
-      return List.of("--force");
+      ManagedInstance target = completionTarget(source, arguments[1]);
+      String targetId = target == null ? arguments[1] : target.id();
+      return lobbyProvider.isLobby(targetId) ? List.of("--force") : List.of();
     }
     return List.of();
+  }
+
+  private ManagedInstance completionTarget(CommandSource source, String requested) {
+    if ("this".equalsIgnoreCase(requested) && source instanceof Player player) {
+      return player
+          .getCurrentServer()
+          .map(connection -> connection.getServerInfo().getName())
+          .map(instanceAccess::find)
+          .orElse(null);
+    }
+    return instanceAccess.find(requested);
   }
 
   private static void reportDelete(
@@ -617,53 +581,177 @@ public final class InstanceLifecycleCommandHandler {
         || VSLSCommandContract.ADDITIVE_FORCE.equalsIgnoreCase(argument);
   }
 
-  private void stopInstance(CommandSource source, String instanceId, boolean forcedProtectedStop) {
-    try {
-      logger.info(
-          "Stop command accepted from {} for {}{}",
-          commandSourceName(source),
-          instanceId,
-          forcedProtectedStop ? " (forced protected stop)" : "");
+  private void stopAll(CommandSource source, boolean force) {
+    List<String> activeIds = instanceAccess.activeIds();
+    List<String> protectedIds = activeIds.stream().filter(lobbyProvider::isLobby).toList();
+    List<String> ordinaryIds = activeIds.stream().filter(id -> !lobbyProvider.isLobby(id)).toList();
+    List<String> targets = new ArrayList<>(ordinaryIds);
+    if (force
+        && !protectedIds.isEmpty()
+        && !requireAdmin(source, "stop.force", "force-stop protected managed lobby servers")) {
+      return;
+    }
+    if (force) {
+      targets.addAll(protectedIds);
+    }
+    if (targets.isEmpty()) {
       source.sendMessage(
-          CommandMessages.message("Stopping " + instanceId + "...", NamedTextColor.YELLOW));
-      instances
-          .stop(instanceId)
-          .whenComplete(
-              (exitCode, failure) -> {
-                if (failure == null) {
-                  source.sendMessage(
-                      CommandMessages.message(
-                          "Stopped " + instanceId + " with exit code " + exitCode + ".",
-                          NamedTextColor.GREEN));
-                  if (forcedProtectedStop) {
-                    logger.info(
-                        "Forced managed lobby stop by {} for {} completed " + "with exit code {}",
-                        commandSourceName(source),
-                        instanceId,
-                        exitCode);
-                  }
-                } else {
-                  source.sendMessage(
-                      CommandMessages.message(
-                          "Stop failed: " + rootMessage(failure), NamedTextColor.RED));
-                  if (forcedProtectedStop) {
-                    logger.warn(
-                        "Forced managed lobby stop by {} for {} failed: {}",
-                        commandSourceName(source),
-                        instanceId,
-                        rootMessage(failure));
-                  }
-                }
+          CommandMessages.message(
+              protectedIds.isEmpty()
+                  ? "No servers are running."
+                  : "There are no stoppable servers; the managed lobby is protected.",
+              protectedIds.isEmpty() ? NamedTextColor.RED : NamedTextColor.YELLOW));
+      return;
+    }
+
+    logger.info(
+        "Stop-all command accepted from {} for {} server(s); {} protected lobby server(s) {}",
+        commandSourceName(source),
+        targets.size(),
+        protectedIds.size(),
+        force ? "included" : "skipped");
+    source.sendMessage(CommandMessages.message("Stopping all servers.", NamedTextColor.GRAY));
+    int[] completed = {0};
+    int[] failures = {0};
+    CompletableFuture<Void> sequence = CompletableFuture.completedFuture(null);
+    for (String instanceId : targets) {
+      sequence =
+          sequence.thenCompose(
+              ignored -> {
+                boolean protectedLobby = lobbyProvider.isLobby(instanceId);
+                reportStopStart(source, instanceId, protectedLobby);
+                return stopTarget(source, instanceId, protectedLobby)
+                    .handle(
+                        (exitCode, failure) -> {
+                          reportStop(source, instanceId, protectedLobby, exitCode, failure);
+                          if (failure == null) {
+                            completed[0]++;
+                          } else {
+                            failures[0]++;
+                          }
+                          return null;
+                        });
               });
+    }
+    sequence.thenRun(
+        () ->
+            source.sendMessage(
+                CommandMessages.message(
+                    "Stop-all complete: "
+                        + completed[0]
+                        + " stopped, "
+                        + failures[0]
+                        + " failed"
+                        + (!force && !protectedIds.isEmpty()
+                            ? ", " + protectedIds.size() + " protected lobby skipped."
+                            : "."),
+                    failures[0] == 0 ? NamedTextColor.GREEN : NamedTextColor.YELLOW)));
+  }
+
+  private void reportStopStart(CommandSource source, String instanceId, boolean protectedLobby) {
+    logger.info(
+        "Stop command accepted from {} for {}{}",
+        commandSourceName(source),
+        instanceId,
+        protectedLobby ? " (forced protected stop)" : "");
+    source.sendMessage(
+        CommandMessages.message(
+            protectedLobby
+                ? "Moving players to SLS-Limbo before stopping " + instanceId + "..."
+                : "Moving players to the lobby before stopping " + instanceId + "...",
+            NamedTextColor.YELLOW));
+  }
+
+  private CompletableFuture<Integer> stopTarget(
+      CommandSource source, String instanceId, boolean protectedLobby) {
+    if (!protectedLobby) {
+      return lobbyProvider
+          .evacuate(instanceId)
+          .handle(
+              (ignored, failure) -> {
+                if (failure != null) {
+                  throw new StopCancelledException(rootMessage(failure));
+                }
+                return null;
+              })
+          .thenCompose(ignored -> invokeStop(instanceId));
+    }
+    logger.warn(
+        "Forced managed lobby stop requested by {} for {}", commandSourceName(source), instanceId);
+    if (!lobbyProvider.beginIntentionalStop(instanceId)) {
+      return CompletableFuture.failedFuture(
+          new StopCancelledException("The active lobby is already stopping or changed"));
+    }
+    return lobbyProvider
+        .evacuateForIntentionalStop(instanceId)
+        .handle(
+            (ignored, failure) -> {
+              if (failure != null) {
+                lobbyProvider.cancelIntentionalStop(instanceId);
+                throw new StopCancelledException(rootMessage(failure));
+              }
+              if (!lobbyProvider.prepareIntentionalStop(instanceId)) {
+                lobbyProvider.cancelIntentionalStop(instanceId);
+                throw new StopCancelledException("The active lobby changed during evacuation");
+              }
+              source.sendMessage(
+                  CommandMessages.message(
+                      "Automatic managed-lobby recovery is suppressed until Velocity restarts.",
+                      NamedTextColor.GRAY));
+              return null;
+            })
+        .thenCompose(ignored -> invokeStop(instanceId));
+  }
+
+  private CompletableFuture<Integer> invokeStop(String instanceId) {
+    try {
+      return instances.stop(instanceId);
     } catch (InstanceOperationException exception) {
-      if (forcedProtectedStop) {
-        logger.warn(
-            "Forced managed lobby stop by {} for {} failed: {}",
+      return CompletableFuture.failedFuture(exception);
+    }
+  }
+
+  private void reportStop(
+      CommandSource source,
+      String instanceId,
+      boolean protectedLobby,
+      Integer exitCode,
+      Throwable failure) {
+    if (failure == null) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Stopped " + instanceId + " with exit code " + exitCode + ".", NamedTextColor.GREEN));
+      if (protectedLobby) {
+        logger.info(
+            "Forced managed lobby stop by {} for {} completed with exit code {}",
             commandSourceName(source),
             instanceId,
-            exception.getMessage());
+            exitCode);
       }
-      source.sendMessage(CommandMessages.message(exception.getMessage(), NamedTextColor.RED));
+      return;
+    }
+    source.sendMessage(
+        CommandMessages.message(
+            (rootCause(failure) instanceof StopCancelledException
+                    ? "Stop cancelled: "
+                    : "Stop failed: ")
+                + rootMessage(failure),
+            NamedTextColor.RED));
+    if (protectedLobby) {
+      logger.warn(
+          "Forced managed lobby stop by {} for {} failed: {}",
+          commandSourceName(source),
+          instanceId,
+          rootMessage(failure));
+    }
+  }
+
+  private static final class StopCancelledException extends RuntimeException {
+
+    private static final long serialVersionUID = 1L;
+
+    private StopCancelledException(String message) {
+      super(message);
     }
   }
 
@@ -672,7 +760,7 @@ public final class InstanceLifecycleCommandHandler {
     if (!requireAdmin(source, operation, operation + " persistent servers")) {
       return;
     }
-    if (arguments.length < 2
+    if (arguments.length < 1
         || arguments.length > 3
         || arguments.length == 3 && !"--force".equalsIgnoreCase(arguments[2])) {
       source.sendMessage(CommandMessages.usage("/sls " + operation, "server", "server --force"));
@@ -685,7 +773,7 @@ public final class InstanceLifecycleCommandHandler {
       return;
     }
 
-    String instanceId = arguments[1];
+    String instanceId = arguments.length == 1 ? "this" : arguments[1];
     ManagedInstance active;
     if ("this".equalsIgnoreCase(instanceId)) {
       active = instanceAccess.resolve(source, instanceId);

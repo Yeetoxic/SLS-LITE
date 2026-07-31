@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.velocitypowered.api.command.CommandSource;
+import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
+import com.velocitypowered.api.proxy.ServerConnection;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -174,20 +176,7 @@ class InspectionCommandHandlerTest {
     ManagedInstance instance =
         ManagedInstanceTestFactory.preparing(
             "arena.abcdef", blueprint, 25570, temporaryDirectory.resolve("arena.abcdef"));
-    ServerController instances = controller(instance);
-    handler =
-        new InspectionCommandHandler(
-            blueprints,
-            null,
-            null,
-            instances,
-            null,
-            null,
-            null,
-            null,
-            null,
-            new CommandAuthorizer(administratorStore()),
-            new CommandInstanceAccess(proxy(), instances));
+    handler = handler(instance);
     List<Component> messages = new ArrayList<>();
 
     handler.status(
@@ -195,6 +184,22 @@ class InspectionCommandHandlerTest {
         new String[] {"status", "arena.abcdef", "remote"});
 
     assertTrue(plainText(messages.getFirst()).contains("local process state is authoritative"));
+  }
+
+  @Test
+  void playerMayOmitCurrentServerFromStatus() {
+    Blueprint blueprint =
+        new Blueprint("arena", "Arena", "minigame", "paper-auto", "1.21.5", 1024, false, Map.of());
+    ManagedInstance instance =
+        ManagedInstanceTestFactory.preparing(
+            "arena.abcdef", blueprint, 25570, temporaryDirectory.resolve("arena-current"));
+    handler = handler(instance);
+    List<Component> messages = new ArrayList<>();
+
+    handler.status(playerSource("arena.abcdef", messages), new String[] {"status"});
+
+    assertTrue(plainText(messages.getFirst()).contains("Status:"));
+    assertTrue(!plainText(messages.getFirst()).contains("No such server"));
   }
 
   @Test
@@ -235,6 +240,51 @@ class InspectionCommandHandlerTest {
     } catch (Exception exception) {
       throw new IllegalStateException(exception);
     }
+  }
+
+  private InspectionCommandHandler handler(ManagedInstance instance) {
+    ServerController instances = controller(instance);
+    return new InspectionCommandHandler(
+        blueprints,
+        null,
+        null,
+        instances,
+        null,
+        null,
+        null,
+        null,
+        null,
+        new CommandAuthorizer(administratorStore()),
+        new CommandInstanceAccess(proxy(), instances));
+  }
+
+  private static Player playerSource(String serverName, List<Component> messages) {
+    com.velocitypowered.api.proxy.server.ServerInfo serverInfo =
+        new com.velocitypowered.api.proxy.server.ServerInfo(
+            serverName, new java.net.InetSocketAddress("127.0.0.1", 25570));
+    ServerConnection connection =
+        (ServerConnection)
+            Proxy.newProxyInstance(
+                ServerConnection.class.getClassLoader(),
+                new Class<?>[] {ServerConnection.class},
+                (ignored, method, arguments) ->
+                    "getServerInfo".equals(method.getName())
+                        ? serverInfo
+                        : defaultValue(method.getReturnType()));
+    return (Player)
+        Proxy.newProxyInstance(
+            Player.class.getClassLoader(),
+            new Class<?>[] {Player.class},
+            (ignored, method, arguments) ->
+                switch (method.getName()) {
+                  case "hasPermission" -> true;
+                  case "getCurrentServer" -> java.util.Optional.of(connection);
+                  case "sendMessage" -> {
+                    messages.add((Component) arguments[0]);
+                    yield null;
+                  }
+                  default -> defaultValue(method.getReturnType());
+                });
   }
 
   private static ProxyServer proxy() {

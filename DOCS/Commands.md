@@ -45,7 +45,7 @@ name a player and cannot use player-only selectors.
 | `/sls debug` | `debug` | Player-only toggle for bounded SLS-LITE command-dispatch diagnostics in chat. |
 | `/sls start <registry> <blueprint>` | `start` | Start a managed instance without joining it. The additive `/sls start <blueprint>` form also works for a globally unique ID. |
 | `/sls info <server\|this>` | `info` | Detailed instance information. |
-| `/sls status <server\|this> [remote]` | `status` | Lifecycle state. `remote` is retained as an explicit local-mode boundary response because no daemon exists. |
+| `/sls status [server\|this] [remote]` | `status` | Lifecycle state. Players may omit the target for their current server. `remote` is retained as an explicit local-mode boundary response because no daemon exists. |
 | `/sls stats [server\|this]` | `stats` | Uptime, CPU time, configured/current memory, Linux process I/O where measurable, and log retention. |
 | `/sls console <server\|this> <command...>` | `console` | Write one command to the child process input. |
 | `/sls logs <server\|this> [page] [lines]` | `logs` | Read retained child output; up to 100 lines per page. |
@@ -53,9 +53,10 @@ name a player and cannot use player-only selectors.
 | `/sls delete all` | `delete` | Sequentially delete every ordinary managed instance with per-server results. The managed lobby is always skipped. |
 | `/sls kill [server\|this] [force]` | `kill` | Evacuate players, immediately terminate the process without a graceful save, and perform normal owned-resource cleanup. A player may omit the target to select their current server. |
 | `/sls kill all [force]` | `kill` | Sequentially force-terminate active ordinary servers before any explicitly forced managed lobby. |
-| `/sls stop <server\|this> [force]` | `stop` | Evacuate and gracefully stop an instance. The pinned `force` spelling and additive `--force` alias are accepted. |
-| `/sls restart <server\|this>` | `restart` | Restart a persistent instance with the same data. |
-| `/sls reset <server\|this>` | `reset` | Rebuild a persistent instance from current sources. |
+| `/sls stop [server\|this] [force]` | `stop` | Evacuate and gracefully stop an instance. Players may omit the target. The pinned `force` spelling and additive `--force` alias are accepted. |
+| `/sls stop all [force]` | `stop` | Sequentially stop every ordinary server. The protected managed lobby is skipped unless force and `stop.force` permission are both present, and is always processed last. |
+| `/sls restart [server\|this]` | `restart` | Restart a persistent instance with the same data; players may omit the current target. |
+| `/sls reset [server\|this]` | `reset` | Rebuild a persistent instance from current sources; players may omit the current target. |
 | `/sls dequeue <player\|all\|local>` | `dequeue`, `dequeue.others`, or admin | Cancel matching queued joins. |
 | `/sls reload [all\|blueprints\|software\|config]` | `reload` | Atomically reload definition catalogs. `config` explains that host-wide settings require a Velocity restart. |
 | `/sls install info` | `install` | Show software installation state. |
@@ -125,6 +126,8 @@ disable, disconnect, or proxy shutdown.
 - Protected-lobby stop requires `sls.command.stop.force`.
 - Protected-lobby restart requires `sls.command.restart.force`.
 - Protected-lobby reset requires `sls.command.reset.force`.
+- Force completion is hidden for ordinary restart/reset targets because those
+  modifiers are valid only for the protected managed lobby.
 - `sls.command.admin` and built-in administrators include all force access.
 
 Forced lobby operations divert new arrivals, evacuate players to SLS-Limbo,

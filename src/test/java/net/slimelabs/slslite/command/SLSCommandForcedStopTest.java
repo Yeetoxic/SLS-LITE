@@ -226,6 +226,59 @@ class SLSCommandForcedStopTest {
   }
 
   @Test
+  void stopAllGracefullyProcessesOrdinaryTargetsAndSuggestsSelector() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby("other-lobby.abc123");
+    SLSCommand command = command(controller, lobby);
+    List<Component> messages = new ArrayList<>();
+    CommandSource source = source(Set.of("sls.command.stop"), messages);
+
+    command.execute(invocation(source, "stop", "all"));
+
+    assertEquals(1, lobby.normalEvacuations);
+    assertEquals(1, controller.stops);
+    assertTrue(plainText(messages.getLast()).contains("1 stopped, 0 failed"));
+    assertTrue(
+        command
+            .suggestAsync(invocation(source, "stop", ""))
+            .join()
+            .containsAll(List.of("all", "this")));
+  }
+
+  @Test
+  void stopAllSkipsProtectedLobbyWithoutForce() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+    SLSCommand command = command(controller, lobby);
+    List<Component> messages = new ArrayList<>();
+
+    command.execute(invocation(source(Set.of("sls.command.stop"), messages), "stop", "all"));
+
+    assertEquals(0, controller.stops);
+    assertTrue(plainText(messages.getLast()).contains("protected"));
+  }
+
+  @Test
+  void stopAllForceIncludesProtectedLobbyWithDistinctPermission() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+    SLSCommand command = command(controller, lobby);
+    List<Component> messages = new ArrayList<>();
+
+    command.execute(
+        invocation(
+            source(Set.of("sls.command.stop", "sls.command.stop.force"), messages),
+            "stop",
+            "all",
+            "force"));
+
+    assertEquals(1, lobby.begins);
+    assertEquals(1, lobby.evacuations);
+    assertEquals(1, controller.stops);
+    assertTrue(plainText(messages.getLast()).contains("1 stopped, 0 failed"));
+  }
+
+  @Test
   void forceModifierRequiresDistinctPermission() {
     TrackingController controller = new TrackingController(instance);
     TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
@@ -254,6 +307,24 @@ class SLSCommandForcedStopTest {
   }
 
   @Test
+  void playerMayOmitCurrentServerForStopRestartAndReset() throws Exception {
+    UUID uniqueId = UUID.randomUUID();
+    administrators.add(uniqueId, "Admin");
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby("other-lobby.abc123");
+    SLSCommand command = command(controller, lobby);
+    Player player = player(uniqueId, INSTANCE_ID);
+
+    command.execute(invocation(player, "stop"));
+    command.execute(invocation(player, "restart"));
+    command.execute(invocation(player, "reset"));
+
+    assertEquals(1, controller.stops);
+    assertEquals(1, controller.restarts);
+    assertEquals(1, controller.resets);
+  }
+
+  @Test
   void builtInAdministratorCanForceStopThisLobby() throws Exception {
     UUID uniqueId = UUID.randomUUID();
     administrators.add(uniqueId, "Admin");
@@ -277,10 +348,11 @@ class SLSCommandForcedStopTest {
     lobby.evacuation =
         CompletableFuture.failedFuture(new IllegalStateException("No alternate lobby is ready"));
     SLSCommand command = command(controller, lobby);
+    List<Component> messages = new ArrayList<>();
 
     command.execute(
         invocation(
-            source(Set.of("sls.command.stop", "sls.command.stop.force"), new ArrayList<>()),
+            source(Set.of("sls.command.stop", "sls.command.stop.force"), messages),
             "stop",
             INSTANCE_ID,
             "--force"));
@@ -290,6 +362,7 @@ class SLSCommandForcedStopTest {
     assertEquals(1, lobby.begins);
     assertEquals(1, lobby.cancellations);
     assertEquals(0, controller.stops);
+    assertTrue(plainText(messages.getLast()).contains("Stop cancelled"));
   }
 
   @Test
@@ -346,6 +419,30 @@ class SLSCommandForcedStopTest {
             .join();
 
     assertEquals(List.of("force", "--force"), suggestions);
+  }
+
+  @Test
+  void currentServerStopCompletionResolvesThisForAPlayer() throws Exception {
+    UUID uniqueId = UUID.randomUUID();
+    administrators.add(uniqueId, "Admin");
+    SLSCommand command =
+        command(new TrackingController(instance), new TrackingLobby("other-lobby.abc123"));
+
+    List<String> suggestions =
+        command.suggestAsync(invocation(player(uniqueId, INSTANCE_ID), "stop", "this", "")).join();
+
+    assertEquals(List.of("force", "--force"), suggestions);
+  }
+
+  @Test
+  void ordinaryPersistentCycleDoesNotSuggestProtectedLobbyForce() {
+    SLSCommand command =
+        command(new TrackingController(instance), new TrackingLobby("other-lobby.abc123"));
+    CommandSource source =
+        source(Set.of("sls.command.restart", "sls.command.restart.force"), new ArrayList<>());
+
+    assertEquals(
+        List.of(), command.suggestAsync(invocation(source, "restart", INSTANCE_ID, "")).join());
   }
 
   @Test
@@ -586,6 +683,8 @@ class SLSCommandForcedStopTest {
     private int kills;
     private boolean forcedKillCleanup;
     private int deletes;
+    private int restarts;
+    private int resets;
 
     private TrackingController(ManagedInstance instance) {
       this.instance = instance;
@@ -631,6 +730,18 @@ class SLSCommandForcedStopTest {
     public CompletableFuture<InstanceDeletionResult> delete(String instanceId) {
       deletes++;
       return CompletableFuture.completedFuture(new InstanceDeletionResult(instanceId, true));
+    }
+
+    @Override
+    public CompletableFuture<ManagedInstance> restart(String instanceId) {
+      restarts++;
+      return CompletableFuture.completedFuture(instance);
+    }
+
+    @Override
+    public CompletableFuture<ManagedInstance> reset(String instanceId) {
+      resets++;
+      return CompletableFuture.completedFuture(instance);
     }
 
     @Override

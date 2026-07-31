@@ -241,7 +241,7 @@ data, leaking resources, or trapping players in unexplained states.
         feedback, and bounded sanitized diagnostic behavior.
 - [x] Finish retained modifier behavior, including force semantics, and enumerate
       every intentionally unavailable daemon-backed modifier.
-- [ ] Finish output, permission, selector, sender, usage-error, and
+- [x] Finish output, permission, selector, sender, usage-error, and
       tab-completion parity for every supported branch.
 - [ ] Extend the versioned command contract across every argument branch,
       permission node, sender restriction, selector, modifier, and completion.

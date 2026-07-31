@@ -127,6 +127,7 @@ public final class PlayerRoutingCommandHandler {
     }
 
     List<LocalJoinService.QueueTicket> removed;
+    String selector = arguments.length == 1 ? "self" : arguments[1];
     if (arguments.length == 1) {
       if (!(source instanceof Player player)) {
         source.sendMessage(
@@ -143,6 +144,18 @@ public final class PlayerRoutingCommandHandler {
       if ("all".equalsIgnoreCase(target)) {
         removed = joinService.dequeueAll();
       } else if ("local".equalsIgnoreCase(target)) {
+        if (!(source instanceof Player player)) {
+          source.sendMessage(
+              CommandMessages.message(
+                  "Console cannot use the local player selector.", NamedTextColor.RED));
+          return;
+        }
+        if (player.getCurrentServer().isEmpty()) {
+          source.sendMessage(
+              CommandMessages.message(
+                  "You are not connected to a backend server.", NamedTextColor.RED));
+          return;
+        }
         List<Player> local = resolveTargets(source, "local");
         removed = joinService.dequeue(local.stream().map(Player::getUniqueId).toList());
       } else {
@@ -156,13 +169,40 @@ public final class PlayerRoutingCommandHandler {
     }
 
     if (removed.isEmpty()) {
-      source.sendMessage(
-          CommandMessages.message("No matching players were queued.", NamedTextColor.YELLOW));
+      if ("self".equals(selector)) {
+        source.sendMessage(CommandMessages.message("You are not in queue.", NamedTextColor.GRAY));
+      } else if ("all".equalsIgnoreCase(selector)) {
+        source.sendMessage(
+            CommandMessages.message("Dequeued all players", NamedTextColor.DARK_AQUA));
+      } else if ("local".equalsIgnoreCase(selector)) {
+        source.sendMessage(
+            CommandMessages.message("Dequeued local players", NamedTextColor.DARK_AQUA));
+      } else {
+        source.sendMessage(
+            CommandMessages.message(selector + " is not in queue.", NamedTextColor.RED));
+      }
       return;
     }
-    source.sendMessage(
-        CommandMessages.message(
-            "Removed " + removed.size() + " player(s) from matchmaking.", NamedTextColor.GREEN));
+    if ("self".equals(selector)) {
+      source.sendMessage(CommandMessages.message("You have been dequeued.", NamedTextColor.RED));
+      return;
+    }
+    removed.forEach(
+        ticket ->
+            proxy
+                .getPlayer(ticket.playerId())
+                .ifPresent(
+                    player ->
+                        player.sendMessage(
+                            CommandMessages.message(
+                                "You have been dequeued.", NamedTextColor.RED))));
+    String feedback =
+        "all".equalsIgnoreCase(selector)
+            ? "Dequeued all players"
+            : "local".equalsIgnoreCase(selector)
+                ? "Dequeued local players"
+                : "Dequeued " + selector;
+    source.sendMessage(CommandMessages.message(feedback, NamedTextColor.DARK_AQUA));
   }
 
   public void find(CommandSource source, String[] arguments) {

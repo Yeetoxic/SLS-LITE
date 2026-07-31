@@ -266,6 +266,18 @@ non-dashed `stop ... force` form. It stopped gracefully with exit code zero,
 released its ephemeral directory, and left only Velocity, NanoLimbo, and the
 managed lobby JVM running. The panel remained healthy.
 
+The Stage 3.5 supported-branch parity gate passed on 2026-07-31 with JAR
+SHA-256
+`95265280201F0557493046387E4221DDF580E6BF674572830BFAC9AE0E8DF58B`.
+The normal fixture rejected trailing `/sls list` input with pinned usage,
+rejected targetless console status, and returned only the local-selector error
+for console dequeue. With only the managed lobby active, `stop all` reported
+that no ordinary target was stoppable. After a disposable
+`stage1_lifecycle.7wn5ss` reached readiness, `stop all` gracefully stopped it
+with exit code zero, reported `1 stopped, 0 failed, 1 protected lobby skipped`,
+removed its ephemeral directory, and left Velocity, NanoLimbo, and the managed
+lobby healthy.
+
 ### Representative Storage and Resource Samples
 
 The repeated 2026-07-30 portable-copy pass used unchanged fixture worlds and

@@ -29,7 +29,7 @@ public final class VSLSCommandContract {
   public static final String REMOTE_STATUS = "remote";
   public static final String RELOAD_CONFIG = "config";
 
-  static final List<String> PUBLIC_ROOT = List.of("join", "list", "find", "dequeue");
+  static final List<String> PUBLIC_ROOT = List.of("join", "list", "find", "dequeue", "version");
 
   static final List<String> ADMIN_ROOT =
       List.of(
