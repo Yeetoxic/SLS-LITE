@@ -6,10 +6,7 @@ import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
-import net.slimelabs.slslite.instance.configuration.PaperForwardingEditor;
-import net.slimelabs.slslite.instance.configuration.ServerPropertiesEditor;
-import net.slimelabs.slslite.instance.configuration.TextFileConfigEditor;
-import net.slimelabs.slslite.instance.configuration.YamlConfigEditor;
+import net.slimelabs.slslite.instance.configuration.InstanceLaunchConfigurator;
 import net.slimelabs.slslite.instance.diagnostics.FailedStartDiagnostics;
 import net.slimelabs.slslite.instance.diagnostics.InstanceTimingReporter;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
@@ -30,7 +27,6 @@ import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.process.SupervisedProcess;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.software.SoftwareProfile;
-import net.slimelabs.slslite.software.SoftwareConfigurator;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
 import net.slimelabs.slslite.velocity.BackendRegistry;
 import org.slf4j.Logger;
@@ -49,13 +45,10 @@ import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BooleanSupplier;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -67,12 +60,11 @@ public final class InstanceManager implements ServerController {
     private final SoftwareProfileRepository softwareProfiles;
     private final ResourceBudget resourceBudget;
     private final ManagedOutputConfig outputConfig;
-    private final ForwardingConfig forwardingConfig;
     private final LoopbackPortAllocator portAllocator;
     private final InstanceDirectoryPreparer directoryPreparer;
     private final InstanceMetadataService metadata;
-    private final JavaJarProcessSpecFactory processSpecFactory;
-    private final SoftwareInstallationService installationService;
+    private final SoftwareBaseDirectoryResolver softwareDirectories;
+    private final InstanceLaunchConfigurator launchConfigurator;
     private final ProcessSupervisor processSupervisor;
     private final BackendRegistry backendRegistry;
     private final FailedStartDiagnostics failedStartDiagnostics;
@@ -132,12 +124,17 @@ public final class InstanceManager implements ServerController {
         this.softwareProfiles = softwareProfiles;
         this.resourceBudget = resourceBudget;
         this.outputConfig = outputConfig;
-        this.forwardingConfig = forwardingConfig;
         this.portAllocator = portAllocator;
         this.directoryPreparer = directoryPreparer;
         this.metadata = new InstanceMetadataService(directoryPreparer.root(), logger);
-        this.processSpecFactory = processSpecFactory;
-        this.installationService = installationService;
+        this.softwareDirectories = new SoftwareBaseDirectoryResolver(
+                processSpecFactory,
+                installationService
+        );
+        this.launchConfigurator = new InstanceLaunchConfigurator(
+                forwardingConfig,
+                processSpecFactory
+        );
         this.processSupervisor = processSupervisor;
         this.backendRegistry = backendRegistry;
         this.failedStartDiagnostics = new FailedStartDiagnostics(
@@ -412,9 +409,10 @@ public final class InstanceManager implements ServerController {
         Blueprint blueprint = definition.blueprint();
         SoftwareProfile profile = definition.softwareProfile();
         try {
-            Path baseDirectory = resolveBaseDirectory(
+            Path baseDirectory = softwareDirectories.resolve(
                     profile,
-                    blueprint,
+                    blueprint.version(),
+                    blueprint.softwarePath(),
                     () -> false
             );
             InstanceMetadata stopped = metadata
@@ -494,9 +492,10 @@ public final class InstanceManager implements ServerController {
                     instance.blueprint().copies().size()
             );
             timings.begin(InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION);
-            Path baseDirectory = resolveBaseDirectory(
+            Path baseDirectory = softwareDirectories.resolve(
                     profile,
-                    instance.blueprint(),
+                    instance.blueprint().version(),
+                    instance.blueprint().softwarePath(),
                     instance::stopRequested
             );
             timings.finish(InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION);
@@ -538,28 +537,7 @@ public final class InstanceManager implements ServerController {
             timings.begin(InstancePhaseTimings.Phase.CONFIGURATION);
             instance.configureOutput(outputConfig);
             metadata.write(instance, InstanceState.PREPARING, null);
-            Map<String, String> configuredProperties = new java.util.LinkedHashMap<>(
-                    profile.serverProperties()
-            );
-            configuredProperties.putAll(instance.blueprint().serverProperties());
-            TextFileConfigEditor.apply(
-                    prepared,
-                    instance.blueprint().textFileConfigs()
-            );
-            ServerPropertiesEditor.applyManagedNetworkSettings(
-                    prepared,
-                    instance.port(),
-                    instance.blueprint().maxPlayers(),
-                    configuredProperties
-            );
-            YamlConfigEditor.apply(
-                    prepared,
-                    instance.blueprint().yamlConfigs()
-            );
-            if (profile.configurator() == SoftwareConfigurator.PAPER) {
-                PaperForwardingEditor.apply(prepared, forwardingConfig);
-            }
-            ProcessSpec spec = processSpecFactory.create(
+            ProcessSpec spec = launchConfigurator.configure(
                     profile,
                     instance.blueprint(),
                     instance.id(),
@@ -666,59 +644,6 @@ public final class InstanceManager implements ServerController {
             failPreparation(instance, exception);
         } finally {
             instance.preparationFinished();
-        }
-    }
-
-    private Path resolveBaseDirectory(
-            SoftwareProfile profile,
-            Blueprint blueprint,
-            BooleanSupplier cancellationRequested
-    ) throws ProcessSpecificationException {
-        if (blueprint.softwarePath() != null) {
-            if (cancellationRequested.getAsBoolean()) {
-                throw new ProcessSpecificationException(
-                        "Software path resolution was cancelled"
-                );
-            }
-            return processSpecFactory.resolveSoftwareOverridePath(
-                    blueprint.softwarePath()
-            );
-        }
-        if (installationService == null) {
-            return processSpecFactory.resolveBaseDirectory(
-                    profile,
-                    blueprint.version()
-            );
-        }
-        CompletableFuture<Path> installation =
-                installationService.ensureInstalled(profile, blueprint.version());
-        try {
-            while (true) {
-                if (cancellationRequested.getAsBoolean()) {
-                    throw new ProcessSpecificationException(
-                            "Software installation wait was cancelled"
-                    );
-                }
-                try {
-                    return installation.get(100, TimeUnit.MILLISECONDS);
-                } catch (TimeoutException ignored) {
-                    // Polling cancels only this instance's wait, not the shared install.
-                }
-            }
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new ProcessSpecificationException(
-                    "Interrupted while waiting for software installation",
-                    exception
-            );
-        } catch (ExecutionException exception) {
-            Throwable cause = exception.getCause() == null ? exception : exception.getCause();
-            throw new ProcessSpecificationException(
-                    cause.getMessage() == null
-                            ? "Software installation failed"
-                            : cause.getMessage(),
-                    cause
-            );
         }
     }
 

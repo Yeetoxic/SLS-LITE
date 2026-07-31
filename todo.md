@@ -201,9 +201,9 @@ data, leaking resources, or trapping players in unexplained states.
       existing focused package.
 - [x] Decompose the command implementation into focused handlers without
       changing syntax, output, permissions, sender rules, or completion.
-- [ ] Audit other large/multi-purpose classes and extract abstractions only where
+- [x] Audit other large/multi-purpose classes and extract abstractions only where
       they reduce demonstrated complexity or duplication.
-- [ ] Clarify ownership for configuration, blueprints, installation, instances,
+- [x] Clarify ownership for configuration, blueprints, installation, instances,
       matchmaking, lobbies, Velocity integration, and presentation.
 - [ ] Remove dead compatibility code/resources only after tests or migration
       documentation prove they are obsolete.

@@ -33,6 +33,7 @@ public final class LocalLobbyProvider implements LobbyProvider {
     private final LobbyConfig config;
     private final Logger logger;
     private final ScheduledExecutorService scheduler;
+    private final LobbyRecoveryPolicy recoveryPolicy;
 
     private volatile CompletableFuture<RegisteredServer> ready = new CompletableFuture<>();
     private volatile ManagedInstance managedInstance;
@@ -82,6 +83,7 @@ public final class LocalLobbyProvider implements LobbyProvider {
         this.config = config;
         this.logger = logger;
         this.scheduler = scheduler;
+        this.recoveryPolicy = LobbyRecoveryPolicy.from(config);
     }
 
     @Override
@@ -413,7 +415,7 @@ public final class LocalLobbyProvider implements LobbyProvider {
             if (recoveryAttempts > 0) {
                 stableTask = scheduler.schedule(
                         () -> markStable(instance, attemptGeneration),
-                        config.stableAfterSeconds(),
+                        recoveryPolicy.stableAfterSeconds(),
                         TimeUnit.SECONDS
                 );
             }
@@ -443,7 +445,7 @@ public final class LocalLobbyProvider implements LobbyProvider {
             if (status == LobbyStatus.READY || ready.isDone()) {
                 ready = new CompletableFuture<>();
             }
-            exhausted = recoveryAttempts >= config.maxRestartAttempts();
+            exhausted = recoveryPolicy.exhausted(recoveryAttempts);
             if (exhausted) {
                 status = LobbyStatus.OFFLINE;
                 ready.completeExceptionally(failure);
@@ -451,7 +453,7 @@ public final class LocalLobbyProvider implements LobbyProvider {
                 delay = 0;
             } else {
                 nextAttempt = ++recoveryAttempts;
-                delay = backoffSeconds(nextAttempt);
+                delay = recoveryPolicy.backoffSeconds(nextAttempt);
                 status = LobbyStatus.RECOVERING;
                 try {
                     retryTask = scheduler.schedule(
@@ -477,7 +479,7 @@ public final class LocalLobbyProvider implements LobbyProvider {
             logger.warn(
                     "Managed lobby unavailable; recovery attempt {}/{} starts in {} second(s): {}",
                     nextAttempt,
-                    config.maxRestartAttempts(),
+                    recoveryPolicy.maxAttempts(),
                     delay,
                     rootMessage(failure)
             );
@@ -498,16 +500,8 @@ public final class LocalLobbyProvider implements LobbyProvider {
         logger.info(
                 "Managed lobby {} has been stable for {} seconds; recovery budget reset",
                 instance.id(),
-                config.stableAfterSeconds()
+                recoveryPolicy.stableAfterSeconds()
         );
-    }
-
-    private long backoffSeconds(int attempt) {
-        long delay = config.initialBackoffSeconds();
-        for (int index = 1; index < attempt; index++) {
-            delay = Math.min(config.maxBackoffSeconds(), delay * 2);
-        }
-        return delay;
     }
 
     private void stopSuperseded(ManagedInstance instance) {

@@ -46,7 +46,7 @@ backend protocol synchronization all succeed.
 | `host` | Startup capability probes and diagnostics. |
 | `install` | Provider-backed software acquisition and bounded installation state. |
 | `instance` | Public local-server facade and orchestration. |
-| `instance.configuration` | Instance-confined forwarding, properties, YAML, and text-file edits. |
+| `instance.configuration` | Instance-confined forwarding, properties, YAML, text-file edits, and launch configuration assembly. |
 | `instance.diagnostics` | Bounded output, temporary logs, failed-start reports, and process-resource sampling. |
 | `instance.lifecycle` | State transitions, phase timing, idle admission, and idle-instance reaping. |
 | `instance.model` | Immutable instance identity, definition fingerprint, metadata, and state values. |
@@ -80,7 +80,7 @@ lifecycle boundaries are complete:
 | `instance.lifecycle` | State transitions, admission coordination, idle policy, and phase timing. | `instance.model` and narrow service interfaces. |
 | `instance.storage` | Transactional preparation and all copy, reflink, Btrfs, OverlayFS, FUSE, and snapshot-hook lifecycles. | Blueprint volume/config models and filesystem/process primitives; never Velocity or command code. |
 | `instance.reconcile` | Startup recovery, persistent reuse/reset decisions, and ownership-safe stale cleanup. | `instance.model`, `instance.storage`, and metadata persistence. |
-| `instance.configuration` | Instance-confined properties, YAML, text, and forwarding edits. | Configuration models and filesystem primitives. |
+| `instance.configuration` | Instance-confined properties, YAML, text, forwarding edits, and launch configuration assembly. | Configuration models, process-spec construction, and filesystem primitives. |
 | `instance.diagnostics` | Bounded logs, failed-start records, process resource readings, and lifecycle summaries. | `instance.model` and process read-only views. |
 | `host.storage` | Read-only per-path storage capability probes and automatic strategy selection. | Storage configuration plus probe process/filesystem primitives; no instance mutation. |
 | `command.handler` | One focused handler per command family, sharing authorization, target resolution, messages, and the pinned command contract. | Public service interfaces; never concrete storage or process internals. |
@@ -118,11 +118,14 @@ and composes these storage services.
 `InstanceManager` now delegates metadata persistence and persistent-instance
 compatibility to `InstanceMetadataService`, lifecycle timing presentation to
 `InstanceTimingReporter`, storage transactions to `InstanceDirectoryPreparer`,
-and child execution to `ProcessSupervisor`. It still owns the synchronized
-active-instance registry, admission reservations, asynchronous start/stop
-coordination, and Velocity registration. Those stateful responsibilities must
-move only with tests that exercise cancellation and callback races; package
-organization alone is not a reason to split the state machine.
+software override/install-on-demand resolution to
+`SoftwareBaseDirectoryResolver`, instance-confined launch configuration to
+`InstanceLaunchConfigurator`, and child execution to `ProcessSupervisor`. It
+still owns the synchronized active-instance registry, admission reservations,
+asynchronous start/stop coordination, and Velocity registration. Those
+stateful responsibilities must move only with tests that exercise cancellation
+and callback races; package organization alone is not a reason to split the
+state machine.
 
 `SLSCommand` is being reduced to dispatch and shared presentation. The
 `command.handler` package owns complete command families, including their
@@ -138,13 +141,42 @@ shared by handlers. `SLSCommand` retains dispatch and the small cross-family
 surface. A family must move with its permission, sender, usage, output, and
 completion tests so dispatch cannot drift from suggestions.
 
+`LocalJoinService` retains the synchronized queue, matchmaking selection,
+draining, cancellation, and queue-owned instance cleanup as one race-sensitive
+state machine. `TransferActionBar` owns transfer UI, while
+`JoinTimingReporter` owns first-player and connection timing presentation.
+
+The lobby providers keep separate lifecycle ownership:
+`LocalLobbyProvider` owns the managed or external primary,
+`SLSLimboProvider` owns the isolated fallback process and its reserved
+resources, and `FallbackLobbyProvider` coordinates routing and evacuation
+between them. `LobbyRecoveryPolicy` is the only shared recovery abstraction;
+it defines the bounded retry ceiling, exponential backoff, and stable-runtime
+reset window without combining the providers' distinct cleanup, registration,
+or generation-guarded state machines.
+
 ## Core Models
 
 `Blueprint` is immutable launch intent: identity, registry, software/version,
 limits, persistence, properties, annotations, and volumes.
 
+`BlueprintParser` validates and normalizes one YAML document into immutable
+launch intent. `BlueprintRepository` owns recursive discovery, bundled-template
+installation, duplicate detection, snapshots, and catalog publication.
+
 `SoftwareProfile` is immutable execution policy: source, configurator, cache
 path, Java executables, argument lists, readiness pattern, and stop behavior.
+
+`SLSConfigRepository` owns installation and atomic publication of the host
+configuration snapshot. Its strict YAML validation, defaults, compatibility
+alias handling, and confined-path resolution remain together until the planned
+operator-YAML normalization defines stable section boundaries; splitting that
+single parse transaction earlier would duplicate key and path context.
+
+`SoftwareInstallationService` keeps the active-installation registry,
+consumer cancellation, staging transaction, integrity metadata, and bounded
+history together because they share one publication boundary. Individual
+download and version-resolution behavior belongs to the provider classes.
 
 `ManagedInstance` owns one composite ID, blueprint snapshot, directory,
 loopback port, resource reservation, lifecycle, process reference, readiness
@@ -152,6 +184,20 @@ future, and bounded logs.
 
 `DefinitionCatalog` installs validated blueprint and software snapshots
 together so requests do not observe a half-reloaded pair.
+
+`HostStorageCapabilityChecker` coordinates the bounded storage report,
+cache use, severity for explicit versus automatic requests, and final strategy
+selection. Kernel/filesystem operations remain in the focused Btrfs, OverlayFS,
+FUSE, snapshot-hook, and probe-cache collaborators; the coordinator is kept
+intact so capability evidence and automatic-selection policy remain readable
+together.
+
+`SLSCommand` retains root dispatch, help, host/reload/version presentation, and
+shared failure formatting. Command-family behavior belongs to
+`command.handler`. `InstanceDirectoryPreparer` likewise remains the storage
+transaction facade; content resolution, copying, volume materialization,
+prepared lifecycle, and persistent replacement are already delegated to
+focused collaborators.
 
 ## Important Invariants
 

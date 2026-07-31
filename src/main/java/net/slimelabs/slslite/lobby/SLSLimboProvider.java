@@ -45,6 +45,7 @@ public final class SLSLimboProvider implements LobbyProvider {
     private final BackendRegistry backends;
     private final Logger logger;
     private final ScheduledExecutorService recoveryScheduler;
+    private final LobbyRecoveryPolicy recoveryPolicy;
     private final CompletableFuture<RegisteredServer> ready = new CompletableFuture<>();
     private final AtomicBoolean resourcesReleased = new AtomicBoolean();
 
@@ -118,6 +119,7 @@ public final class SLSLimboProvider implements LobbyProvider {
         this.backends = backends;
         this.logger = logger;
         this.recoveryScheduler = recoveryScheduler;
+        this.recoveryPolicy = LobbyRecoveryPolicy.from(config);
     }
 
     @Override
@@ -176,7 +178,7 @@ public final class SLSLimboProvider implements LobbyProvider {
                 config.advertisedProtocol(),
                 port < 0 ? OptionalInt.empty() : OptionalInt.of(port),
                 recoveryAttempts,
-                config.maxRestartAttempts(),
+                recoveryPolicy.maxAttempts(),
                 Optional.ofNullable(lastFailure)
         ));
     }
@@ -359,7 +361,7 @@ public final class SLSLimboProvider implements LobbyProvider {
                 if (recoveryAttempts > 0) {
                     stableTask = recoveryScheduler.schedule(
                             () -> markStable(launched, attemptGeneration),
-                            config.stableAfterSeconds(),
+                            recoveryPolicy.stableAfterSeconds(),
                             TimeUnit.SECONDS
                     );
                 }
@@ -396,7 +398,7 @@ public final class SLSLimboProvider implements LobbyProvider {
                 failedProcess.forceStop();
             }
 
-            exhausted = recoveryAttempts >= config.maxRestartAttempts();
+            exhausted = recoveryPolicy.exhausted(recoveryAttempts);
             if (exhausted) {
                 status = LobbyStatus.OFFLINE;
                 nextAttempt = recoveryAttempts;
@@ -406,7 +408,7 @@ public final class SLSLimboProvider implements LobbyProvider {
                 }
             } else {
                 nextAttempt = ++recoveryAttempts;
-                delay = backoffSeconds(nextAttempt);
+                delay = recoveryPolicy.backoffSeconds(nextAttempt);
                 status = LobbyStatus.RECOVERING;
                 try {
                     retryTask = recoveryScheduler.schedule(
@@ -437,7 +439,7 @@ public final class SLSLimboProvider implements LobbyProvider {
                     "SLS-Limbo unavailable; recovery attempt {}/{} starts "
                             + "in {} second(s): {}",
                     nextAttempt,
-                    config.maxRestartAttempts(),
+                    recoveryPolicy.maxAttempts(),
                     delay,
                     rootMessage(failure)
             );
@@ -460,16 +462,8 @@ public final class SLSLimboProvider implements LobbyProvider {
         }
         logger.info(
                 "SLS-Limbo has been stable for {} seconds; recovery budget reset",
-                config.stableAfterSeconds()
+                recoveryPolicy.stableAfterSeconds()
         );
-    }
-
-    private long backoffSeconds(int attempt) {
-        long delay = config.initialBackoffSeconds();
-        for (int index = 1; index < attempt; index++) {
-            delay = Math.min(config.maxBackoffSeconds(), delay * 2);
-        }
-        return delay;
     }
 
     private void unregister() {
