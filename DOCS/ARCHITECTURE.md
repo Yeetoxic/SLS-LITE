@@ -104,8 +104,9 @@ rewrites.
 `InstanceDirectoryPreparer` owns storage transactions and selected-strategy
 layer orchestration. `BlueprintContentResolver` separately owns normalization,
 containment, overlap detection, symlink rejection, and resolution of untrusted
-blueprint volume/copy declarations. Low-level copy execution remains the next
-reviewable boundary.
+blueprint volume/copy declarations. `DirectoryCopyEngine` owns safe directory
+traversal, bounded parallel copy execution, retry/backoff, cancellation
+polling, and merge/replace copy semantics.
 
 `InstanceManager` now delegates metadata persistence and persistent-instance
 compatibility to `InstanceMetadataService`, lifecycle timing presentation to

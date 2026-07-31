@@ -13,11 +13,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
@@ -42,24 +39,16 @@ public final class InstanceDirectoryPreparer {
     private static final Pattern STAGING_DIRECTORY = Pattern.compile(
             "^\\.(.+)\\.reset-([0-9a-f-]{36})$"
     );
-    private static final long[] COPY_RETRY_DELAYS_MILLIS = {
-        250,
-        750,
-        2_000,
-        5_000
-    };
     private static final int MAX_COPY_PARALLELISM = 4;
 
     private final Path instancesRoot;
     private final BlueprintContentResolver contentResolver;
-    private final FileCopyOperation fileCopy;
-    private final RetrySleeper retrySleeper;
+    private final DirectoryCopyEngine copyEngine;
     private final StorageStrategy selectedStrategy;
     private final OverlayFsLayerManager overlayLayers;
     private final BtrfsSnapshotManager btrfsSnapshots;
     private final SnapshotHookLayerManager snapshotHooks;
     private final boolean btrfsPortableFallbackAllowed;
-    private final int copyParallelism;
 
     public InstanceDirectoryPreparer(Path instancesRoot) {
         this(instancesRoot, instancesRoot);
@@ -245,10 +234,10 @@ public final class InstanceDirectoryPreparer {
                 this.instancesRoot,
                 contentRoot
         );
-        this.fileCopy = java.util.Objects.requireNonNull(fileCopy, "fileCopy");
-        this.retrySleeper = java.util.Objects.requireNonNull(
+        this.copyEngine = new DirectoryCopyEngine(
+                fileCopy,
                 retrySleeper,
-                "retrySleeper"
+                copyParallelism
         );
         this.selectedStrategy = java.util.Objects.requireNonNull(
                 selectedStrategy,
@@ -271,7 +260,6 @@ public final class InstanceDirectoryPreparer {
                     "Snapshot-hook strategy requires a configured helper"
             );
         }
-        this.copyParallelism = copyParallelism;
     }
 
     private static int productionCopyParallelism() {
@@ -396,7 +384,7 @@ public final class InstanceDirectoryPreparer {
             List<ResolvedCopy> resolvedCopies =
                     contentResolver.resolveCopies(copies, destination);
             Files.createDirectories(instancesRoot);
-            copyDirectory(source, destination, cancellationRequested);
+            copyEngine.copyDirectory(source, destination, cancellationRequested);
             applyVolumes(destination, resolvedVolumes, cancellationRequested);
             applyCopies(resolvedCopies, cancellationRequested);
             checkCancelled(cancellationRequested);
@@ -525,7 +513,7 @@ public final class InstanceDirectoryPreparer {
                     contentResolver.resolveVolumes(volumes, staging);
             List<ResolvedCopy> resolvedCopies =
                     contentResolver.resolveCopies(copies, staging);
-            copyDirectory(source, staging, () -> false);
+            copyEngine.copyDirectory(source, staging, () -> false);
             applyVolumes(staging, resolvedVolumes, () -> false);
             applyCopies(resolvedCopies, () -> false);
             suspendDirectory(staging);
@@ -674,7 +662,7 @@ public final class InstanceDirectoryPreparer {
             }
             List<Path> lowers = new ArrayList<>();
             for (ResolvedVolume volume : entry.getValue()) {
-                validateCowSource(
+                copyEngine.validateSource(
                         volume.source(),
                         cancellationRequested
                 );
@@ -716,7 +704,7 @@ public final class InstanceDirectoryPreparer {
                 );
             }
             if (first != null) {
-                mergeDirectoryFirstWins(
+                copyEngine.mergeDirectoryFirstWins(
                         volume.source(),
                         volume.target(),
                         cancellationRequested
@@ -724,7 +712,7 @@ public final class InstanceDirectoryPreparer {
                 continue;
             }
             if (volume.volume().mode() != BlueprintVolume.Mode.COW) {
-                copyDirectory(
+                copyEngine.copyDirectory(
                         volume.source(),
                         volume.target(),
                         cancellationRequested
@@ -732,7 +720,7 @@ public final class InstanceDirectoryPreparer {
                 appliedTargets.put(volume.target(), volume);
                 continue;
             }
-            validateCowSource(
+            copyEngine.validateSource(
                     volume.source(),
                     cancellationRequested
             );
@@ -745,7 +733,7 @@ public final class InstanceDirectoryPreparer {
                                     + volume.source()
                     );
                 }
-                copyDirectory(
+                copyEngine.copyDirectory(
                         volume.source(),
                         volume.target(),
                         cancellationRequested
@@ -788,13 +776,13 @@ public final class InstanceDirectoryPreparer {
                 );
             }
             if (first != null) {
-                mergeDirectoryFirstWins(
+                copyEngine.mergeDirectoryFirstWins(
                         volume.source(),
                         volume.target(),
                         cancellationRequested
                 );
             } else if (volume.volume().mode() == BlueprintVolume.Mode.COW) {
-                validateCowSource(
+                copyEngine.validateSource(
                         volume.source(),
                         cancellationRequested
                 );
@@ -805,7 +793,7 @@ public final class InstanceDirectoryPreparer {
                 );
                 appliedTargets.put(volume.target(), volume);
             } else {
-                copyDirectory(
+                copyEngine.copyDirectory(
                         volume.source(),
                         volume.target(),
                         cancellationRequested
@@ -830,47 +818,20 @@ public final class InstanceDirectoryPreparer {
                 );
             }
             if (first == null) {
-                copyDirectory(
+                copyEngine.copyDirectory(
                         volume.source(),
                         volume.target(),
                         cancellationRequested
                 );
                 appliedTargets.put(volume.target(), volume);
             } else {
-                mergeDirectoryFirstWins(
+                copyEngine.mergeDirectoryFirstWins(
                         volume.source(),
                         volume.target(),
                         cancellationRequested
                 );
             }
         }
-    }
-
-    private static void validateCowSource(
-            Path source,
-            BooleanSupplier cancellationRequested
-    ) throws IOException {
-        Files.walkFileTree(source, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(
-                    Path directory,
-                    BasicFileAttributes attrs
-            ) throws IOException {
-                checkCancelled(cancellationRequested);
-                rejectSymbolicLink(directory, attrs);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(
-                    Path file,
-                    BasicFileAttributes attrs
-            ) throws IOException {
-                checkCancelled(cancellationRequested);
-                rejectSymbolicLink(file, attrs);
-                return FileVisitResult.CONTINUE;
-            }
-        });
     }
 
     private void applyCopies(
@@ -887,7 +848,7 @@ public final class InstanceDirectoryPreparer {
                                     + copy.copy().target()
                     );
                 }
-                copyDirectoryReplacing(
+                copyEngine.copyDirectoryReplacing(
                         copy.source(),
                         copy.target(),
                         cancellationRequested
@@ -900,82 +861,13 @@ public final class InstanceDirectoryPreparer {
                 }
                 Files.createDirectories(copy.target().getParent());
                 Files.deleteIfExists(copy.target());
-                copyFileWithRetry(copy.source(), copy.target(), cancellationRequested);
+                copyEngine.copyFile(
+                        copy.source(),
+                        copy.target(),
+                        cancellationRequested
+                );
             }
         }
-    }
-
-    private void copyDirectoryReplacing(
-            Path source,
-            Path destination,
-            BooleanSupplier cancellationRequested
-    ) throws IOException {
-        Files.walkFileTree(source, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(
-                    Path directory,
-                    BasicFileAttributes attrs
-            ) throws IOException {
-                checkCancelled(cancellationRequested);
-                rejectSymbolicLink(directory, attrs);
-                Path target = destination.resolve(source.relativize(directory));
-                if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)
-                        && !Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
-                    throw new IOException("Copy directory target is not a directory: " + target);
-                }
-                Files.createDirectories(target);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                    throws IOException {
-                checkCancelled(cancellationRequested);
-                rejectSymbolicLink(file, attrs);
-                Path target = destination.resolve(source.relativize(file));
-                if (Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
-                    throw new IOException("Copy file target is a directory: " + target);
-                }
-                Files.deleteIfExists(target);
-                copyFileWithRetry(file, target, cancellationRequested);
-                return FileVisitResult.CONTINUE;
-            }
-        });
-    }
-
-    private void mergeDirectoryFirstWins(
-            Path source,
-            Path destination,
-            BooleanSupplier cancellationRequested
-    ) throws IOException {
-        Files.walkFileTree(source, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(
-                    Path directory,
-                    BasicFileAttributes attrs
-            ) throws IOException {
-                checkCancelled(cancellationRequested);
-                rejectSymbolicLink(directory, attrs);
-                Path target = destination.resolve(source.relativize(directory));
-                if (Files.exists(target) && !Files.isDirectory(target)) {
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
-                Files.createDirectories(target);
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                    throws IOException {
-                checkCancelled(cancellationRequested);
-                rejectSymbolicLink(file, attrs);
-                Path target = destination.resolve(source.relativize(file));
-                if (!Files.exists(target)) {
-                    copyFileWithRetry(file, target, cancellationRequested);
-                }
-                return FileVisitResult.CONTINUE;
-            }
-        });
     }
 
     private Path destination(String instanceId) throws InstancePreparationException {
@@ -992,149 +884,6 @@ public final class InstanceDirectoryPreparer {
         return destination;
     }
 
-    private void copyDirectory(
-            Path source,
-            Path destination,
-            BooleanSupplier cancellationRequested
-    ) throws IOException {
-        if (copyParallelism == 1) {
-            copyDirectorySequentially(
-                    source,
-                    destination,
-                    cancellationRequested
-            );
-            return;
-        }
-        int maximumInFlight = copyParallelism * 2;
-        try (BoundedCopyBatch batch =
-                     new BoundedCopyBatch(copyParallelism, maximumInFlight)) {
-            Files.walkFileTree(source, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(
-                        Path directory,
-                        BasicFileAttributes attrs
-                ) throws IOException {
-                    checkCancelled(cancellationRequested);
-                    rejectSymbolicLink(directory, attrs);
-                    Path relative = source.relativize(directory);
-                    Files.createDirectories(destination.resolve(relative));
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFile(
-                        Path file,
-                        BasicFileAttributes attrs
-                ) throws IOException {
-                    checkCancelled(cancellationRequested);
-                    rejectSymbolicLink(file, attrs);
-                    Path target = destination.resolve(
-                            source.relativize(file)
-                    );
-                    batch.submit(() -> copyFileWithRetry(
-                            file,
-                            target,
-                            cancellationRequested
-                    ));
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-            batch.complete();
-        }
-    }
-
-    private void copyDirectorySequentially(
-            Path source,
-            Path destination,
-            BooleanSupplier cancellationRequested
-    ) throws IOException {
-        Files.walkFileTree(source, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attrs)
-                    throws IOException {
-                checkCancelled(cancellationRequested);
-                rejectSymbolicLink(directory, attrs);
-                Path relative = source.relativize(directory);
-                Files.createDirectories(destination.resolve(relative));
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                    throws IOException {
-                checkCancelled(cancellationRequested);
-                rejectSymbolicLink(file, attrs);
-                Path target = destination.resolve(source.relativize(file));
-                copyFileWithRetry(
-                        file,
-                        target,
-                        cancellationRequested
-                );
-                return FileVisitResult.CONTINUE;
-            }
-        });
-    }
-
-    private void copyFileWithRetry(
-            Path source,
-            Path target,
-            BooleanSupplier cancellationRequested
-    ) throws IOException {
-        IOException lastFailure = null;
-        for (int attempt = 0; attempt <= COPY_RETRY_DELAYS_MILLIS.length; attempt++) {
-            checkCancelled(cancellationRequested);
-            try {
-                fileCopy.copy(source, target);
-                checkCancelled(cancellationRequested);
-                return;
-            } catch (IOException exception) {
-                if (exception instanceof PreparationCancelledException) {
-                    throw exception;
-                }
-                lastFailure = exception;
-                if (attempt == COPY_RETRY_DELAYS_MILLIS.length
-                        || !isRetryableCopyFailure(exception)) {
-                    throw exception;
-                }
-                try {
-                    Files.deleteIfExists(target);
-                } catch (IOException cleanupFailure) {
-                    exception.addSuppressed(cleanupFailure);
-                    throw exception;
-                }
-                try {
-                    sleepWithCancellation(
-                            COPY_RETRY_DELAYS_MILLIS[attempt],
-                            cancellationRequested
-                    );
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    IOException failure = new IOException(
-                            "Interrupted while retrying file copy: " + source,
-                            interrupted
-                    );
-                    failure.addSuppressed(exception);
-                    throw failure;
-                }
-            }
-        }
-        throw lastFailure;
-    }
-
-    private void sleepWithCancellation(
-            long milliseconds,
-            BooleanSupplier cancellationRequested
-    ) throws InterruptedException, PreparationCancelledException {
-        long remaining = milliseconds;
-        while (remaining > 0) {
-            checkCancelled(cancellationRequested);
-            long slice = Math.min(remaining, 100);
-            retrySleeper.sleep(slice);
-            remaining -= slice;
-        }
-        checkCancelled(cancellationRequested);
-    }
-
     private static void checkCancelled(BooleanSupplier cancellationRequested)
             throws PreparationCancelledException {
         if (cancellationRequested.getAsBoolean()) {
@@ -1142,27 +891,11 @@ public final class InstanceDirectoryPreparer {
         }
     }
 
-    private static boolean isRetryableCopyFailure(IOException exception) {
-        return exception instanceof FileSystemException
-                && !(exception instanceof FileAlreadyExistsException)
-                && !(exception instanceof NoSuchFileException);
-    }
-
     private static void moveDirectory(Path source, Path destination) throws IOException {
         try {
             Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE);
         } catch (java.nio.file.AtomicMoveNotSupportedException exception) {
             Files.move(source, destination);
-        }
-    }
-
-    private static void rejectSymbolicLink(Path path, BasicFileAttributes attrs)
-            throws IOException {
-        if (attrs.isSymbolicLink() || attrs.isOther()) {
-            throw new IOException(
-                    "Symbolic links and special filesystem entries are not allowed "
-                            + "in copied directories: " + path
-            );
         }
     }
 
