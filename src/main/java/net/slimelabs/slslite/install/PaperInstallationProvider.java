@@ -116,6 +116,9 @@ public final class PaperInstallationProvider implements SoftwareInstallationProv
     if (!(parsed instanceof List<?> builds)) {
       throw new SoftwareInstallationException("Paper build metadata has an unexpected format");
     }
+    Map<?, ?> selected = null;
+    String selectedChannel = null;
+    long selectedBuild = -1;
     for (Object value : builds) {
       if (!(value instanceof Map<?, ?> build)) {
         continue;
@@ -124,14 +127,32 @@ public final class PaperInstallationProvider implements SoftwareInstallationProv
       if (!channelAllowed(channel, buildChannel)) {
         continue;
       }
-      Map<?, ?> downloads = map(build.get("downloads"), "downloads");
+      String buildId = required(build, "id");
+      long buildNumber;
+      try {
+        buildNumber = Long.parseLong(buildId);
+      } catch (NumberFormatException exception) {
+        throw new SoftwareInstallationException(
+            "Paper build has an invalid numeric ID: " + buildId);
+      }
+      if (buildNumber < 0) {
+        throw new SoftwareInstallationException("Paper build has a negative ID: " + buildId);
+      }
+      if (selected == null || buildNumber > selectedBuild) {
+        selectedBuild = buildNumber;
+        selected = build;
+        selectedChannel = buildChannel;
+      }
+    }
+    if (selected != null) {
+      Map<?, ?> downloads = map(selected.get("downloads"), "downloads");
       Map<?, ?> artifact = map(downloads.get("server:default"), "server:default");
       Map<?, ?> checksums = map(artifact.get("checksums"), "checksums");
       URI url = URI.create(required(artifact, "url"));
       validateDownloadUrl(url);
       return new PaperDownload(
-          String.valueOf(build.get("id")),
-          buildChannel,
+          Long.toString(selectedBuild),
+          selectedChannel,
           url,
           Long.parseLong(String.valueOf(artifact.get("size"))),
           required(checksums, "sha256").toLowerCase());

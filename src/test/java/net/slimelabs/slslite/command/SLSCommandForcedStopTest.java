@@ -366,6 +366,27 @@ class SLSCommandForcedStopTest {
   }
 
   @Test
+  void stopFailureAfterPreparationRestoresLobbyRecovery() {
+    TrackingController controller = new TrackingController(instance);
+    controller.stopResult =
+        CompletableFuture.failedFuture(new IllegalStateException("stop request failed"));
+    TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+    SLSCommand command = command(controller, lobby);
+
+    command.execute(
+        invocation(
+            source(Set.of("sls.command.stop", "sls.command.stop.force"), new ArrayList<>()),
+            "stop",
+            INSTANCE_ID,
+            "--force"));
+
+    assertEquals(1, lobby.preparations);
+    assertFalse(lobby.prepared);
+    assertEquals(1, lobby.cancellations);
+    assertFalse(lobby.draining);
+  }
+
+  @Test
   void secondForcedStopIsRejectedWhileLobbyIsDraining() {
     TrackingController controller = new TrackingController(instance);
     TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
@@ -685,6 +706,8 @@ class SLSCommandForcedStopTest {
     private int deletes;
     private int restarts;
     private int resets;
+    private CompletableFuture<Integer> stopResult = CompletableFuture.completedFuture(0);
+    private CompletableFuture<Integer> killResult = CompletableFuture.completedFuture(137);
 
     private TrackingController(ManagedInstance instance) {
       this.instance = instance;
@@ -711,13 +734,13 @@ class SLSCommandForcedStopTest {
     @Override
     public CompletableFuture<Integer> stop(String instanceId) {
       stops++;
-      return CompletableFuture.completedFuture(0);
+      return stopResult;
     }
 
     @Override
     public CompletableFuture<Integer> kill(String instanceId) {
       kills++;
-      return CompletableFuture.completedFuture(137);
+      return killResult;
     }
 
     @Override
@@ -755,6 +778,7 @@ class SLSCommandForcedStopTest {
     private int normalEvacuations;
     private int begins;
     private int cancellations;
+    private int preparations;
     private int cycles;
     private boolean draining;
     private boolean prepared;
@@ -811,14 +835,16 @@ class SLSCommandForcedStopTest {
 
     @Override
     public void cancelIntentionalStop(String serverName) {
-      if (draining && lobbyId.equals(serverName)) {
+      if ((draining || prepared) && lobbyId.equals(serverName)) {
         draining = false;
+        prepared = false;
         cancellations++;
       }
     }
 
     @Override
     public boolean prepareIntentionalStop(String serverName) {
+      preparations++;
       prepared = draining && lobbyId.equals(serverName);
       draining = false;
       return prepared;

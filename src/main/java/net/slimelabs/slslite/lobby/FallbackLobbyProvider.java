@@ -30,6 +30,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
   private final AtomicBoolean externalProbeInFlight = new AtomicBoolean();
   private volatile boolean primaryAvailable;
   private volatile String drainingPrimary;
+  private volatile String suppressedPrimary;
   private volatile boolean dualFailureReported;
   private boolean started;
   private volatile boolean closed;
@@ -194,7 +195,10 @@ public final class FallbackLobbyProvider implements LobbyProvider {
 
   @Override
   public synchronized boolean beginIntentionalStop(String serverName) {
-    if (closed || drainingPrimary != null || !primary.isLobby(serverName)) {
+    if (closed
+        || drainingPrimary != null
+        || suppressedPrimary != null
+        || !primary.isLobby(serverName)) {
       return false;
     }
     drainingPrimary = serverName;
@@ -204,10 +208,12 @@ public final class FallbackLobbyProvider implements LobbyProvider {
 
   @Override
   public synchronized void cancelIntentionalStop(String serverName) {
-    if (!serverName.equals(drainingPrimary)) {
+    if (!serverName.equals(drainingPrimary) && !serverName.equals(suppressedPrimary)) {
       return;
     }
+    primary.cancelIntentionalStop(serverName);
     drainingPrimary = null;
+    suppressedPrimary = null;
     refreshPrimaryAvailability();
   }
 
@@ -218,6 +224,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     }
     boolean prepared = primary.prepareIntentionalStop(serverName);
     drainingPrimary = null;
+    suppressedPrimary = prepared ? serverName : null;
     primaryAvailable = false;
     if (!prepared) {
       refreshPrimaryAvailability();

@@ -13,6 +13,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
@@ -106,6 +107,7 @@ public final class ProcessSupervisor implements AutoCloseable {
   }
 
   public void shutdown(Duration timeout) {
+    long deadline = System.nanoTime() + timeout.toNanos();
     List<SupervisedProcess> snapshot;
     synchronized (this) {
       if (closed) {
@@ -125,19 +127,29 @@ public final class ProcessSupervisor implements AutoCloseable {
       }
     }
 
+    boolean interrupted = false;
     try {
       CompletableFuture.allOf(exits.toArray(CompletableFuture[]::new))
-          .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-    } catch (Exception exception) {
+          .get(Math.max(0L, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+    } catch (InterruptedException exception) {
+      interrupted = true;
+      snapshot.forEach(SupervisedProcess::forceStop);
+    } catch (java.util.concurrent.ExecutionException | TimeoutException exception) {
       snapshot.forEach(SupervisedProcess::forceStop);
       try {
-        CompletableFuture.allOf(exits.toArray(CompletableFuture[]::new)).get(5, TimeUnit.SECONDS);
-      } catch (Exception ignored) {
+        CompletableFuture.allOf(exits.toArray(CompletableFuture[]::new))
+            .get(Math.max(0L, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+      } catch (InterruptedException interruptedException) {
+        interrupted = true;
+      } catch (java.util.concurrent.ExecutionException | TimeoutException ignored) {
         // The processes have already received forced termination.
       }
     } finally {
       outputExecutor.shutdownNow();
       scheduler.shutdownNow();
+      if (interrupted) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 

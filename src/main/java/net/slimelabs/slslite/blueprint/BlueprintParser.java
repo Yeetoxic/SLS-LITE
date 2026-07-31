@@ -2,7 +2,6 @@ package net.slimelabs.slslite.blueprint;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -10,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import net.slimelabs.slslite.io.BoundedFileReader;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
@@ -21,13 +21,14 @@ final class BlueprintParser {
   private static final int DEFAULT_MEMORY_MIB = 1024;
   private static final int DEFAULT_MAX_PLAYERS = 20;
   private static final int DEFAULT_MAX_INSTANCES = 1;
+  static final int MAX_BLUEPRINT_BYTES = 1024 * 1024;
 
   Blueprint parse(Path path) throws BlueprintException {
     LoaderOptions options = new LoaderOptions();
     options.setAllowDuplicateKeys(false);
     Yaml yaml = new Yaml(new SafeConstructor(options));
 
-    try (InputStream input = Files.newInputStream(path)) {
+    try (InputStream input = BoundedFileReader.open(path, MAX_BLUEPRINT_BYTES)) {
       Object document = yaml.load(input);
       Map<String, Object> root = asMap(document, "root", path);
       Map<String, Object> metadata = requiredMap(root, "blueprint", path);

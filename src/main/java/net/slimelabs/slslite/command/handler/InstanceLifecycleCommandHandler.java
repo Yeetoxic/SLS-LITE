@@ -34,6 +34,7 @@ public final class InstanceLifecycleCommandHandler {
   private final CommandAuthorizer authorizer;
   private final CommandInstanceAccess instanceAccess;
   private final Logger logger;
+  private final PersistentInstanceCommandHandler persistentCommands;
 
   public InstanceLifecycleCommandHandler(
       BlueprintRepository blueprints,
@@ -48,6 +49,9 @@ public final class InstanceLifecycleCommandHandler {
     this.authorizer = authorizer;
     this.instanceAccess = instanceAccess;
     this.logger = logger;
+    this.persistentCommands =
+        new PersistentInstanceCommandHandler(
+            instances, lobbyProvider, authorizer, instanceAccess, logger);
   }
 
   public void start(CommandSource source, String[] arguments) {
@@ -257,11 +261,11 @@ public final class InstanceLifecycleCommandHandler {
   }
 
   public void restart(CommandSource source, String[] arguments) {
-    cyclePersistent(source, arguments, false);
+    persistentCommands.restart(source, arguments);
   }
 
   public void reset(CommandSource source, String[] arguments) {
-    cyclePersistent(source, arguments, true);
+    persistentCommands.reset(source, arguments);
   }
 
   public List<String> suggestions(CommandSource source, String operation, String[] arguments) {
@@ -553,7 +557,9 @@ public final class InstanceLifecycleCommandHandler {
               }
               return null;
             })
-        .thenCompose(ignored -> invokeKill(instanceId, forceCleanup));
+        .thenCompose(
+            ignored ->
+                rollbackIntentionalStopOnFailure(instanceId, invokeKill(instanceId, forceCleanup)));
   }
 
   private CompletableFuture<Integer> invokeKill(String instanceId, boolean forceCleanup) {
@@ -700,7 +706,18 @@ public final class InstanceLifecycleCommandHandler {
                       NamedTextColor.GRAY));
               return null;
             })
-        .thenCompose(ignored -> invokeStop(instanceId));
+        .thenCompose(
+            ignored -> rollbackIntentionalStopOnFailure(instanceId, invokeStop(instanceId)));
+  }
+
+  private <T> CompletableFuture<T> rollbackIntentionalStopOnFailure(
+      String instanceId, CompletableFuture<T> operation) {
+    return operation.whenComplete(
+        (ignored, failure) -> {
+          if (failure != null) {
+            lobbyProvider.cancelIntentionalStop(instanceId);
+          }
+        });
   }
 
   private CompletableFuture<Integer> invokeStop(String instanceId) {
@@ -755,243 +772,6 @@ public final class InstanceLifecycleCommandHandler {
     }
   }
 
-  private void cyclePersistent(CommandSource source, String[] arguments, boolean reset) {
-    String operation = reset ? "reset" : "restart";
-    if (!requireAdmin(source, operation, operation + " persistent servers")) {
-      return;
-    }
-    if (arguments.length < 1
-        || arguments.length > 3
-        || arguments.length == 3 && !"--force".equalsIgnoreCase(arguments[2])) {
-      source.sendMessage(CommandMessages.usage("/sls " + operation, "server", "server --force"));
-      return;
-    }
-    boolean force = arguments.length == 3;
-    if (force
-        && !requireAdmin(
-            source, operation + ".force", "force-" + operation + " protected managed servers")) {
-      return;
-    }
-
-    String instanceId = arguments.length == 1 ? "this" : arguments[1];
-    ManagedInstance active;
-    if ("this".equalsIgnoreCase(instanceId)) {
-      active = instanceAccess.resolve(source, instanceId);
-      if (active == null) {
-        return;
-      }
-      instanceId = active.id();
-    } else {
-      active = instanceAccess.find(instanceId);
-    }
-    boolean protectedLobby = lobbyProvider.isLobby(instanceId);
-    if (protectedLobby && !force) {
-      source.sendMessage(
-          CommandMessages.message(
-              "The active lobby is protected. Use /sls "
-                  + operation
-                  + " "
-                  + instanceId
-                  + " --force to "
-                  + operation
-                  + " it intentionally.",
-              NamedTextColor.RED));
-      return;
-    }
-    if (force && !protectedLobby) {
-      source.sendMessage(
-          CommandMessages.message(
-              instanceId + " is not protected; use /sls " + operation + " " + instanceId + ".",
-              NamedTextColor.YELLOW));
-      return;
-    }
-
-    if (protectedLobby) {
-      if (active == null) {
-        cycleUnavailableProtectedLobby(source, instanceId, reset);
-      } else {
-        cycleProtectedLobby(source, active, reset);
-      }
-      return;
-    }
-
-    String targetId = instanceId;
-    Runnable beginRestart =
-        () -> {
-          try {
-            logger.info(
-                "{} command accepted from {} for {}",
-                capitalize(operation),
-                commandSourceName(source),
-                targetId);
-            source.sendMessage(
-                CommandMessages.message(
-                    (reset ? "Resetting" : "Restarting") + " persistent server " + targetId + "...",
-                    NamedTextColor.YELLOW));
-            CompletableFuture<ManagedInstance> cycle =
-                reset ? instances.reset(targetId) : instances.restart(targetId);
-            cycle.whenComplete(
-                (restarted, failure) -> {
-                  if (failure != null) {
-                    source.sendMessage(
-                        CommandMessages.message(
-                            capitalize(operation) + " failed: " + rootMessage(failure),
-                            NamedTextColor.RED));
-                    return;
-                  }
-                  restarted
-                      .readyFuture()
-                      .whenComplete(
-                          (ready, readyFailure) -> {
-                            if (readyFailure == null) {
-                              source.sendMessage(
-                                  CommandMessages.message(
-                                      "Server "
-                                          + ready.id()
-                                          + " "
-                                          + (reset ? "reset" : "restarted")
-                                          + ".",
-                                      NamedTextColor.GREEN));
-                            } else {
-                              source.sendMessage(
-                                  CommandMessages.message(
-                                      capitalize(operation)
-                                          + " failed: "
-                                          + rootMessage(readyFailure),
-                                      NamedTextColor.RED));
-                            }
-                          });
-                });
-          } catch (InstanceOperationException exception) {
-            source.sendMessage(CommandMessages.message(exception.getMessage(), NamedTextColor.RED));
-          }
-        };
-
-    if (active == null) {
-      beginRestart.run();
-      return;
-    }
-    source.sendMessage(
-        CommandMessages.message(
-            "Moving players to the lobby before "
-                + (reset ? "resetting " : "restarting ")
-                + targetId
-                + "...",
-            NamedTextColor.YELLOW));
-    lobbyProvider
-        .evacuate(targetId)
-        .whenComplete(
-            (ignored, failure) -> {
-              if (failure == null) {
-                beginRestart.run();
-              } else {
-                source.sendMessage(
-                    CommandMessages.message(
-                        capitalize(operation) + " cancelled: " + rootMessage(failure),
-                        NamedTextColor.RED));
-              }
-            });
-  }
-
-  private void cycleProtectedLobby(CommandSource source, ManagedInstance instance, boolean reset) {
-    String operation = reset ? "reset" : "restart";
-    if (!lobbyProvider.beginIntentionalStop(instance.id())) {
-      source.sendMessage(
-          CommandMessages.message(
-              "The active lobby is already draining or changed.", NamedTextColor.RED));
-      return;
-    }
-    logger.warn(
-        "Forced managed lobby {} requested by {} for {}",
-        operation,
-        commandSourceName(source),
-        instance.id());
-    source.sendMessage(
-        CommandMessages.message(
-            "Moving players to SLS-Limbo before "
-                + (reset ? "resetting " : "restarting ")
-                + instance.id()
-                + "...",
-            NamedTextColor.YELLOW));
-    lobbyProvider
-        .evacuateForIntentionalStop(instance.id())
-        .whenComplete(
-            (ignored, evacuationFailure) -> {
-              if (evacuationFailure != null) {
-                lobbyProvider.cancelIntentionalStop(instance.id());
-                source.sendMessage(
-                    CommandMessages.message(
-                        capitalize(operation) + " cancelled: " + rootMessage(evacuationFailure),
-                        NamedTextColor.RED));
-                return;
-              }
-              source.sendMessage(
-                  CommandMessages.message(
-                      (reset ? "Resetting" : "Restarting")
-                          + " protected lobby "
-                          + instance.id()
-                          + "...",
-                      NamedTextColor.YELLOW));
-              lobbyProvider
-                  .cyclePrimary(instance.id(), reset)
-                  .whenComplete(
-                      (server, cycleFailure) -> {
-                        if (cycleFailure == null) {
-                          source.sendMessage(
-                              CommandMessages.message(
-                                  "Server "
-                                      + instance.id()
-                                      + " "
-                                      + (reset ? "reset" : "restarted")
-                                      + ".",
-                                  NamedTextColor.GREEN));
-                        } else {
-                          source.sendMessage(
-                              CommandMessages.message(
-                                  capitalize(operation) + " failed: " + rootMessage(cycleFailure),
-                                  NamedTextColor.RED));
-                        }
-                      });
-            });
-  }
-
-  private void cycleUnavailableProtectedLobby(
-      CommandSource source, String instanceId, boolean reset) {
-    String operation = reset ? "reset" : "restart";
-    if (!lobbyProvider.beginIntentionalStop(instanceId)) {
-      source.sendMessage(
-          CommandMessages.message(
-              "The active lobby is already draining or changed.", NamedTextColor.RED));
-      return;
-    }
-    logger.warn(
-        "Forced offline managed lobby {} requested by {} for {}",
-        operation,
-        commandSourceName(source),
-        instanceId);
-    source.sendMessage(
-        CommandMessages.message(
-            (reset ? "Resetting" : "Restarting") + " offline protected lobby " + instanceId + "...",
-            NamedTextColor.YELLOW));
-    lobbyProvider
-        .cyclePrimary(instanceId, reset)
-        .whenComplete(
-            (server, failure) -> {
-              if (failure == null) {
-                source.sendMessage(
-                    CommandMessages.message(
-                        "Server " + instanceId + " " + (reset ? "reset" : "restarted") + ".",
-                        NamedTextColor.GREEN));
-              } else {
-                lobbyProvider.cancelIntentionalStop(instanceId);
-                source.sendMessage(
-                    CommandMessages.message(
-                        capitalize(operation) + " failed: " + rootMessage(failure),
-                        NamedTextColor.RED));
-              }
-            });
-  }
-
   private Optional<Blueprint> resolveBlueprint(String[] arguments) {
     if (arguments.length >= 3) {
       return blueprints.get(arguments[1], arguments[2]);
@@ -1040,9 +820,5 @@ public final class InstanceLifecycleCommandHandler {
       current = current.getCause();
     }
     return current;
-  }
-
-  private static String capitalize(String value) {
-    return Character.toUpperCase(value.charAt(0)) + value.substring(1);
   }
 }

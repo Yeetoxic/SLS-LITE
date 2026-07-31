@@ -14,6 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.model.InstanceState;
@@ -276,6 +277,32 @@ class ProcessSupervisorTest {
     releaseFirst.countDown();
 
     assertTrue(replacementCompleted.await(1, TimeUnit.SECONDS));
+  }
+
+  @Test
+  void shutdownRestoresInterruptionAfterForcingChildren() throws Exception {
+    supervisor = new ProcessSupervisor(1);
+    SupervisedProcess process =
+        supervisor.start(
+            "test-interrupted-shutdown",
+            spec("ignore-stop", Duration.ofSeconds(5), Duration.ofSeconds(30)),
+            preparingLifecycle("test-interrupted-shutdown"),
+            line -> {});
+    process.readyFuture().get(5, TimeUnit.SECONDS);
+    AtomicBoolean interruptionRestored = new AtomicBoolean();
+    Thread shutdown =
+        new Thread(
+            () -> {
+              supervisor.shutdown(Duration.ofSeconds(10));
+              interruptionRestored.set(Thread.currentThread().isInterrupted());
+            });
+    shutdown.start();
+    Thread.sleep(100);
+    shutdown.interrupt();
+    shutdown.join(5000);
+
+    assertEquals(false, shutdown.isAlive());
+    assertEquals(true, interruptionRestored.get());
   }
 
   private ProcessSpec spec(String mode, Duration startupTimeout, Duration stopTimeout) {

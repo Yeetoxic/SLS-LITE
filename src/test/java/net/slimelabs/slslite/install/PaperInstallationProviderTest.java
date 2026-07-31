@@ -56,6 +56,17 @@ class PaperInstallationProviderTest {
                         }
                       },
                       {
+                        "id": 41,
+                        "channel": "STABLE",
+                        "downloads": {
+                          "server:default": {
+                            "url": "%s/artifact.jar",
+                            "size": %d,
+                            "checksums": {"sha256": "%s"}
+                          }
+                        }
+                      },
+                      {
                         "id": 42,
                         "channel": "STABLE",
                         "downloads": {
@@ -68,7 +79,16 @@ class PaperInstallationProviderTest {
                       }
                     ]
                     """)
-                  .formatted(base, artifact.length, hash, base, artifact.length, hash)
+                  .formatted(
+                      base,
+                      artifact.length,
+                      hash,
+                      base,
+                      artifact.length,
+                      hash,
+                      base,
+                      artifact.length,
+                      hash)
                   .getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().add("Content-Type", "application/json");
           exchange.sendResponseHeaders(200, body.length);
@@ -82,9 +102,11 @@ class PaperInstallationProviderTest {
               "http://127.0.0.1:" + server.getAddress().getPort() + "/v3/projects/paper/versions/");
       PaperInstallationProvider provider =
           new PaperInstallationProvider(HttpClient.newHttpClient(), api, false);
-      provider.install(profile(), "1.0", temporaryDirectory, ignored -> {});
+      List<String> stableLogs = new ArrayList<>();
+      provider.install(profile(), "1.0", temporaryDirectory, stableLogs::add);
 
       assertArrayEquals(artifact, Files.readAllBytes(temporaryDirectory.resolve("paper.jar")));
+      assertTrue(stableLogs.stream().anyMatch(line -> line.contains("stable Paper build 42")));
 
       Path betaDirectory = temporaryDirectory.resolve("beta");
       Files.createDirectories(betaDirectory);

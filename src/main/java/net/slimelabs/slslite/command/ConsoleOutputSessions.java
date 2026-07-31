@@ -3,11 +3,11 @@ package net.slimelabs.slslite.command;
 import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.proxy.Player;
 import java.time.Duration;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -22,22 +22,25 @@ final class ConsoleOutputSessions implements AutoCloseable {
   static final int CAPTURE_LINES = 8;
   static final int FOLLOW_BATCH_LINES = 16;
   static final int DISPLAY_LINE_LENGTH = 320;
+  static final int MAX_CONCURRENT_CAPTURES = 16;
   static final Duration CAPTURE_QUIET_PERIOD = Duration.ofMillis(250);
   static final Duration CAPTURE_TIMEOUT = Duration.ofSeconds(2);
   static final Duration FOLLOW_QUIET_PERIOD = Duration.ofMillis(100);
   static final Duration FOLLOW_POLL_TIMEOUT = Duration.ofSeconds(1);
 
   private final ConcurrentMap<Object, FollowSession> followers = new ConcurrentHashMap<>();
-  private final Set<Thread> captureThreads = ConcurrentHashMap.newKeySet();
+  private final ConcurrentMap<CaptureKey, Thread> captures = new ConcurrentHashMap<>();
+  private final Semaphore capturePermits = new Semaphore(MAX_CONCURRENT_CAPTURES);
   private final AtomicBoolean closed = new AtomicBoolean();
 
-  void capture(CommandSource source, ManagedInstance instance, long cursor) {
-    capture(source, new ManagedOutputFeed(instance), cursor);
+  boolean capture(CommandSource source, ManagedInstance instance, long cursor) {
+    return capture(source, new ManagedOutputFeed(instance), cursor);
   }
 
-  void capture(CommandSource source, OutputFeed feed, long cursor) {
-    if (closed.get()) {
-      return;
+  boolean capture(CommandSource source, OutputFeed feed, long cursor) {
+    CaptureKey captureKey = new CaptureKey(key(source), feed.id());
+    if (closed.get() || !capturePermits.tryAcquire()) {
+      return false;
     }
     Thread thread =
         Thread.ofVirtual()
@@ -67,11 +70,16 @@ final class ConsoleOutputSessions implements AutoCloseable {
                     }
                     batch.lines().forEach(line -> sendLine(source, feed.id(), line));
                   } finally {
-                    captureThreads.remove(Thread.currentThread());
+                    captures.remove(captureKey, Thread.currentThread());
+                    capturePermits.release();
                   }
                 });
-    captureThreads.add(thread);
+    if (closed.get() || captures.putIfAbsent(captureKey, thread) != null) {
+      capturePermits.release();
+      return false;
+    }
     thread.start();
+    return true;
   }
 
   boolean follow(CommandSource source, ManagedInstance instance) {
@@ -123,8 +131,8 @@ final class ConsoleOutputSessions implements AutoCloseable {
     }
     followers.values().forEach(FollowSession::stop);
     followers.clear();
-    captureThreads.forEach(Thread::interrupt);
-    captureThreads.clear();
+    captures.values().forEach(Thread::interrupt);
+    captures.clear();
   }
 
   private void runFollow(FollowSession session) {
@@ -181,6 +189,8 @@ final class ConsoleOutputSessions implements AutoCloseable {
   private static Object key(CommandSource source) {
     return source instanceof Player player ? player.getUniqueId() : source;
   }
+
+  private record CaptureKey(Object source, String instanceId) {}
 
   interface OutputFeed {
 

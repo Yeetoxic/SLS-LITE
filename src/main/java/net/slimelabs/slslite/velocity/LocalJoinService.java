@@ -257,10 +257,12 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   private Optional<QueueTicket> dequeue(UUID playerId, boolean showFeedback) {
     QueueEntry entry;
     synchronized (this) {
-      entry = queue.remove(playerId);
-    }
-    if (entry == null) {
-      return Optional.empty();
+      entry = queue.get(playerId);
+      if (entry == null || entry.state != QueueState.QUEUED) {
+        return Optional.empty();
+      }
+      queue.remove(playerId);
+      entry.state = QueueState.CANCELLED;
     }
     cancel(entry, "Matchmaking request was cancelled");
     proxy
@@ -316,6 +318,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       }
       closed = true;
       entries = List.copyOf(queue.values());
+      entries.forEach(entry -> entry.state = QueueState.CANCELLED);
       queue.clear();
       drainingInstances.clear();
     }
@@ -403,9 +406,6 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   }
 
   private void connect(QueueEntry entry, ManagedInstance instance) {
-    if (!isQueued(entry)) {
-      return;
-    }
     Player player = proxy.getPlayer(entry.ticket.playerId()).filter(Player::isActive).orElse(null);
     if (player == null) {
       dequeue(entry.ticket.playerId(), false);
@@ -420,16 +420,23 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
               "Ready instance is not registered with Velocity: " + instance.id()));
       return;
     }
+    if (!beginTransfer(entry)) {
+      return;
+    }
     actionBar.joining(player, instance.blueprint().name());
     entry.timings.transferStarted();
-    player
-        .createConnectionRequest(registered)
-        .connect()
-        .whenComplete((result, failure) -> finish(entry, result, failure));
+    try {
+      player
+          .createConnectionRequest(registered)
+          .connect()
+          .whenComplete((result, failure) -> finish(entry, result, failure));
+    } catch (RuntimeException failure) {
+      finish(entry, null, failure);
+    }
   }
 
   private void finish(QueueEntry entry, ConnectionRequestBuilder.Result result, Throwable failure) {
-    if (!remove(entry)) {
+    if (!remove(entry, QueueState.TRANSFERRING, QueueState.COMPLETE)) {
       return;
     }
     entry.cancelTimeout();
@@ -454,7 +461,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   }
 
   private void timeout(QueueEntry entry) {
-    if (!remove(entry)) {
+    if (!remove(entry, QueueState.QUEUED, QueueState.TIMED_OUT)) {
       return;
     }
     actionBar.stop(entry.ticket.playerId());
@@ -465,7 +472,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   }
 
   private void fail(QueueEntry entry, Throwable failure) {
-    if (!remove(entry)) {
+    if (!remove(entry, QueueState.QUEUED, QueueState.FAILED)) {
       return;
     }
     actionBar.stop(entry.ticket.playerId());
@@ -482,12 +489,22 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     timingReporter.complete(entry.instance.id(), entry.timings, "cancelled");
   }
 
-  private synchronized boolean isQueued(QueueEntry entry) {
-    return queue.get(entry.ticket.playerId()) == entry;
+  private synchronized boolean beginTransfer(QueueEntry entry) {
+    if (queue.get(entry.ticket.playerId()) != entry || entry.state != QueueState.QUEUED) {
+      return false;
+    }
+    entry.state = QueueState.TRANSFERRING;
+    return true;
   }
 
-  private synchronized boolean remove(QueueEntry entry) {
-    return queue.remove(entry.ticket.playerId(), entry);
+  private synchronized boolean remove(
+      QueueEntry entry, QueueState expected, QueueState terminalState) {
+    if (queue.get(entry.ticket.playerId()) != entry || entry.state != expected) {
+      return false;
+    }
+    queue.remove(entry.ticket.playerId());
+    entry.state = terminalState;
+    return true;
   }
 
   private void stopOrphaned(ManagedInstance instance) {
@@ -537,6 +554,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     private final CompletableFuture<ConnectionRequestBuilder.Result> completion =
         new CompletableFuture<>();
     private volatile ScheduledFuture<?> timeout;
+    private QueueState state = QueueState.QUEUED;
 
     private QueueEntry(QueueTicket ticket, ManagedInstance instance) {
       this.ticket = ticket;
@@ -548,6 +566,15 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         timeout.cancel(false);
       }
     }
+  }
+
+  private enum QueueState {
+    QUEUED,
+    TRANSFERRING,
+    COMPLETE,
+    CANCELLED,
+    TIMED_OUT,
+    FAILED
   }
 
   public static final class QueueCancelledException extends RuntimeException {

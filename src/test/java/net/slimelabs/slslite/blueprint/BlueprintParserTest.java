@@ -60,4 +60,15 @@ class BlueprintParserTest {
     assertTrue(failure.getMessage().contains(source.toString()));
     assertTrue(failure.getMessage().contains("unsupported"));
   }
+
+  @Test
+  void rejectsBlueprintLargerThanRepositoryLimit() throws Exception {
+    Path source = temporaryDirectory.resolve("oversized.yml");
+    Files.write(source, new byte[BlueprintParser.MAX_BLUEPRINT_BYTES + 1]);
+
+    BlueprintException failure =
+        assertThrows(BlueprintException.class, () -> new BlueprintParser().parse(source));
+
+    assertTrue(failure.getMessage().contains("Unable to read blueprint"));
+  }
 }

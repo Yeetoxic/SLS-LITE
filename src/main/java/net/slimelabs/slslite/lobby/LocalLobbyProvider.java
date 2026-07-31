@@ -229,6 +229,29 @@ public final class LocalLobbyProvider implements LobbyProvider {
   }
 
   @Override
+  public void cancelIntentionalStop(String serverName) {
+    ManagedInstance instance;
+    long attemptGeneration;
+    synchronized (this) {
+      instance = managedInstance;
+      if (config.mode() != LobbyMode.MANAGED
+          || instance == null
+          || !instance.id().equals(serverName)
+          || status != LobbyStatus.OFFLINE
+          || closed) {
+        return;
+      }
+      attemptGeneration = ++generation;
+      handledGeneration = -1;
+      recoveryAttempts = 0;
+      status = LobbyStatus.RECOVERING;
+      ready = new CompletableFuture<>();
+    }
+    logger.warn("Restoring managed lobby recovery after failed intentional stop: {}", serverName);
+    observeManagedInstance(instance, attemptGeneration);
+  }
+
+  @Override
   public void close() {
     synchronized (this) {
       if (closed) {

@@ -464,8 +464,12 @@ public final class SLSCommand implements SimpleCommand {
       logger.info("Console command sent by {} to {}", commandSourceName(source), instance.id());
       source.sendMessage(
           CommandMessages.message("Command executed successfully", NamedTextColor.GRAY));
-      if (!consoleOutput.isFollowing(source)) {
-        consoleOutput.capture(source, instance, outputCursor);
+      if (!consoleOutput.isFollowing(source)
+          && !consoleOutput.capture(source, instance, outputCursor)) {
+        source.sendMessage(
+            CommandMessages.message(
+                "Console output capture is already pending or temporarily at capacity.",
+                NamedTextColor.YELLOW));
       }
     } catch (InstanceOperationException exception) {
       source.sendMessage(

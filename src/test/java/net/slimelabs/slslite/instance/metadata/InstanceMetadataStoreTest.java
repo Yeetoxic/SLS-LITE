@@ -103,6 +103,17 @@ final class InstanceMetadataStoreTest {
     assertEquals(null, loaded.definitionIdentity());
   }
 
+  @Test
+  void rejectsOversizedMetadataBeforeParsing() throws Exception {
+    Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+    Path instance = Files.createDirectories(root.resolve("smoke.abc123"));
+    Files.write(
+        instance.resolve(InstanceMetadataStore.FILE_NAME),
+        new byte[(int) InstanceMetadataStore.MAX_METADATA_BYTES + 1]);
+
+    assertThrows(IOException.class, () -> new InstanceMetadataStore(root).read(instance));
+  }
+
   private static java.util.Properties readProperties(Path path) throws Exception {
     java.util.Properties values = new java.util.Properties();
     try (var input = Files.newInputStream(path)) {

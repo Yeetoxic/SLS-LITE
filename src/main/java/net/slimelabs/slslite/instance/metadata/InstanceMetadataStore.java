@@ -1,5 +1,6 @@
 package net.slimelabs.slslite.instance.metadata;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -21,6 +22,7 @@ import net.slimelabs.slslite.instance.model.InstanceState;
 public final class InstanceMetadataStore {
 
   public static final String FILE_NAME = ".sls-lite-instance.properties";
+  static final long MAX_METADATA_BYTES = 64 * 1024;
   private static final String TEMP_FILE_NAME = FILE_NAME + ".tmp";
   private static final String LEGACY_SCHEMA_VERSION = "1";
   private static final String PREVIOUS_SCHEMA_VERSION = "2";
@@ -42,9 +44,22 @@ public final class InstanceMetadataStore {
     if (!Files.isRegularFile(metadataPath, LinkOption.NOFOLLOW_LINKS)) {
       throw new IOException("Instance metadata is not a regular file: " + metadataPath);
     }
+    long size = Files.size(metadataPath);
+    if (size > MAX_METADATA_BYTES) {
+      throw new IOException(
+          "Instance metadata exceeds " + MAX_METADATA_BYTES + " bytes: " + metadataPath);
+    }
 
-    Properties values = new Properties();
+    byte[] encoded;
     try (InputStream input = Files.newInputStream(metadataPath)) {
+      encoded = input.readNBytes((int) MAX_METADATA_BYTES + 1);
+    }
+    if (encoded.length > MAX_METADATA_BYTES) {
+      throw new IOException(
+          "Instance metadata exceeds " + MAX_METADATA_BYTES + " bytes: " + metadataPath);
+    }
+    Properties values = new Properties();
+    try (InputStream input = new ByteArrayInputStream(encoded)) {
       values.load(input);
     }
     return Optional.of(parse(values, metadataPath));

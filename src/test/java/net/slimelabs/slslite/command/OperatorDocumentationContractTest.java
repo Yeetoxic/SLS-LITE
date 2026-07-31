@@ -4,8 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -22,17 +26,19 @@ final class OperatorDocumentationContractTest {
   private static final Path PROJECT = Path.of("").toAbsolutePath().normalize();
   private static final Pattern CONFIGURATION_ROW =
       Pattern.compile("^\\| `([^`]+)` \\| ([^|]+) \\|", Pattern.MULTILINE);
+  private static final Pattern PERMISSION_ROW =
+      Pattern.compile("^\\| `(sls\\.command\\.[^`]+)` \\|", Pattern.MULTILINE);
 
   @Test
   void commandAndPermissionDocumentationCoversTheVersionedRuntimeContract() throws IOException {
     String commands = read("DOCS/Commands.md");
     String compatibility = read("DOCS/SLS_Command_Compatibility.md");
     String combined = commands + System.lineSeparator() + compatibility;
+    Map<String, String> commandRows = commandRows(commands, compatibility);
 
     for (VSLSCommandContract.Branch branch : VSLSCommandContract.BRANCHES) {
       assertTrue(
-          combined.contains("/sls " + branch.root())
-              || compatibility.contains("| `" + branch.root()),
+          commandRows.containsKey(branch.root()),
           () -> "Command documentation is missing root: " + branch.root());
       for (String permission : branch.permissionNodes()) {
         assertTrue(
@@ -40,13 +46,30 @@ final class OperatorDocumentationContractTest {
             () -> "Permission reference is missing: " + permission);
       }
       for (String modifier : branch.modifiers()) {
+        String branchDocumentation =
+            "create".equals(branch.root())
+                ? section(commands, "Create accepts", "Debug mode follows")
+                : commandRows.get(branch.root());
         assertTrue(
-            combined.contains(modifier),
-            () -> "Command documentation is missing modifier: " + modifier);
+            branchDocumentation.contains(modifier),
+            () ->
+                "Documentation for " + branch.root() + " is missing branch modifier: " + modifier);
       }
     }
 
-    assertTrue(commands.contains("`" + CommandPermissions.ADMIN + "`"));
+    Set<String> expectedPermissions = new LinkedHashSet<>();
+    expectedPermissions.add(CommandPermissions.ADMIN);
+    VSLSCommandContract.BRANCHES.stream()
+        .flatMap(branch -> branch.permissionNodes().stream())
+        .forEach(expectedPermissions::add);
+    assertEquals(expectedPermissions, permissionRows(commands));
+    assertTrue(
+        commands.contains("<!-- sls-command-contract-sha256:" + commandContractDigest() + " -->"),
+        () ->
+            "Commands.md must pin the complete command contract with: "
+                + "<!-- sls-command-contract-sha256:"
+                + commandContractDigest()
+                + " -->");
   }
 
   @Test
@@ -131,6 +154,62 @@ final class OperatorDocumentationContractTest {
       rows.put(matcher.group(1), matcher.group(2).trim());
     }
     return rows;
+  }
+
+  private static Map<String, String> commandRows(String commands, String compatibility) {
+    Map<String, StringBuilder> rows = new LinkedHashMap<>();
+    for (String line : (commands + System.lineSeparator() + compatibility).split("\\R")) {
+      if (!line.startsWith("| `")) {
+        continue;
+      }
+      int closing = line.indexOf('`', 3);
+      if (closing < 0) {
+        continue;
+      }
+      String syntax = line.substring(3, closing);
+      if (syntax.startsWith("/sls ")) {
+        syntax = syntax.substring(5);
+      }
+      String root = syntax.split("\\s+", 2)[0];
+      if (VSLSCommandContract.BRANCHES.stream().noneMatch(branch -> branch.root().equals(root))) {
+        continue;
+      }
+      rows.computeIfAbsent(root, ignored -> new StringBuilder()).append(line).append('\n');
+    }
+    Map<String, String> result = new LinkedHashMap<>();
+    rows.forEach((root, content) -> result.put(root, content.toString()));
+    return result;
+  }
+
+  private static Set<String> permissionRows(String document) {
+    Set<String> permissions = new LinkedHashSet<>();
+    Matcher matcher = PERMISSION_ROW.matcher(document);
+    while (matcher.find()) {
+      permissions.add(matcher.group(1));
+    }
+    return permissions;
+  }
+
+  private static String section(String document, String startMarker, String endMarker) {
+    int start = document.indexOf(startMarker);
+    int end = document.indexOf(endMarker, start + startMarker.length());
+    assertTrue(start >= 0 && end > start, () -> "Missing documentation section: " + startMarker);
+    return document.substring(start, end);
+  }
+
+  private static String commandContractDigest() {
+    String canonical =
+        VSLSCommandContract.BRANCHES.stream()
+            .map(VSLSCommandContract.Branch::toString)
+            .collect(java.util.stream.Collectors.joining("\n"));
+    try {
+      return HexFormat.of()
+          .formatHex(
+              MessageDigest.getInstance("SHA-256")
+                  .digest(canonical.getBytes(StandardCharsets.UTF_8)));
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 is unavailable", exception);
+    }
   }
 
   private static Map<String, Object> castMap(Object value) {

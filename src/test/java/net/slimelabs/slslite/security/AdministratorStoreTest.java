@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -77,5 +78,27 @@ class AdministratorStoreTest {
 
     assertThrows(IOException.class, () -> failing.remove("Existing"));
     assertTrue(failing.contains(existing));
+  }
+
+  @Test
+  void rejectsOversizedAdministratorStoreBeforeParsing() throws Exception {
+    Files.write(
+        temporaryDirectory.resolve(AdministratorStore.FILE_NAME),
+        new byte[(int) AdministratorStore.MAX_STORE_BYTES + 1]);
+
+    assertThrows(IOException.class, () -> new AdministratorStore(temporaryDirectory).initialize());
+  }
+
+  @Test
+  void rejectsAdministratorStoreSymbolicLink() throws Exception {
+    Path outside = temporaryDirectory.resolveSibling("outside-administrators.properties");
+    Files.writeString(outside, "schema=1\n");
+    try {
+      Files.createSymbolicLink(temporaryDirectory.resolve(AdministratorStore.FILE_NAME), outside);
+    } catch (IOException | UnsupportedOperationException exception) {
+      assumeTrue(false, "Symbolic links are unavailable: " + exception.getMessage());
+    }
+
+    assertThrows(IOException.class, () -> new AdministratorStore(temporaryDirectory).initialize());
   }
 }

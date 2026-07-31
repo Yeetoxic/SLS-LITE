@@ -14,6 +14,20 @@ class SLSConfigRepositoryTest {
   @TempDir Path temporaryDirectory;
 
   @Test
+  void rejectsConfigurationLargerThanRepositoryLimit() throws Exception {
+    Files.write(
+        temporaryDirectory.resolve("config.yml"),
+        new byte[SLSConfigRepository.MAX_CONFIG_BYTES + 1]);
+
+    ConfigurationException failure =
+        assertThrows(
+            ConfigurationException.class,
+            () -> new SLSConfigRepository(temporaryDirectory).reload());
+
+    assertTrue(failure.getMessage().contains("Unable to read"));
+  }
+
+  @Test
   void installsAndLoadsBundledConfiguration() throws Exception {
     SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
 

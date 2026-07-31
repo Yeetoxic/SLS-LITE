@@ -29,6 +29,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -159,6 +160,27 @@ class LocalJoinServiceTest {
       assertEquals(ConnectionRequestBuilder.Status.SUCCESS, result.getStatus());
       assertTrue(service.queuedPlayers().isEmpty());
       assertEquals(0, fixture.controller().stopCount());
+    }
+  }
+
+  @Test
+  void dequeueCannotClaimCancellationAfterTransferHasStarted() throws Exception {
+    CompletableFuture<ConnectionRequestBuilder.Result> connection = new CompletableFuture<>();
+    Fixture fixture = fixture(Duration.ofSeconds(5), 0, connection);
+    try (LocalJoinService service = fixture.service()) {
+      LocalJoinService.JoinAttempt attempt = service.join(fixture.player(), "test", "smoke");
+      ManagedInstance instance = fixture.controller().instance();
+      instance.lifecycle().transitionTo(InstanceState.STARTING);
+      instance.lifecycle().transitionTo(InstanceState.READY);
+
+      instance.readyFuture().complete(instance);
+
+      assertEquals(1, fixture.connectionRequests().get());
+      assertTrue(service.dequeue(fixture.playerId()).isEmpty());
+      connection.complete(connectionResult(registeredServer()));
+      assertEquals(
+          ConnectionRequestBuilder.Status.SUCCESS,
+          attempt.connection().get(1, TimeUnit.SECONDS).getStatus());
     }
   }
 
@@ -350,6 +372,14 @@ class LocalJoinServiceTest {
   }
 
   private Fixture fixture(Duration timeout, int connectedPlayers) throws Exception {
+    return fixture(timeout, connectedPlayers, null);
+  }
+
+  private Fixture fixture(
+      Duration timeout,
+      int connectedPlayers,
+      CompletableFuture<ConnectionRequestBuilder.Result> pendingConnection)
+      throws Exception {
     Path blueprintDirectory = temporaryDirectory.resolve("blueprints");
     BlueprintRepository blueprints = new BlueprintRepository(blueprintDirectory);
     Files.createDirectories(blueprintDirectory);
@@ -375,17 +405,33 @@ class LocalJoinServiceTest {
     UUID playerId = UUID.randomUUID();
     RegisteredServer registeredServer = registeredServer(connectedPlayers);
     ConnectionRequestBuilder.Result result = connectionResult(registeredServer);
+    AtomicInteger connectionRequests = new AtomicInteger();
     List<Component> actionBars = new CopyOnWriteArrayList<>();
     Player player =
-        player(
-            playerId, "QueueTester", registeredServer, result, Optional.empty(), actionBars::add);
+        pendingConnection == null
+            ? player(
+                playerId,
+                "QueueTester",
+                registeredServer,
+                result,
+                Optional.empty(),
+                actionBars::add)
+            : player(
+                playerId,
+                "QueueTester",
+                registeredServer,
+                pendingConnection,
+                Optional.empty(),
+                actionBars::add,
+                connectionRequests);
     ProxyServer proxy = proxy(player, registeredServer);
     return new Fixture(
         new LocalJoinService(proxy, blueprints, controller, timeout),
         controller,
         player,
         playerId,
-        actionBars);
+        actionBars,
+        connectionRequests);
   }
 
   private PoolFixture poolFixture() throws Exception {
@@ -438,6 +484,48 @@ class LocalJoinServiceTest {
       ConnectionRequestBuilder.Result result,
       Optional<ServerConnection> currentServer) {
     return player(playerId, username, registeredServer, result, currentServer, ignored -> {});
+  }
+
+  private static Player player(
+      UUID playerId,
+      String username,
+      RegisteredServer registeredServer,
+      CompletableFuture<ConnectionRequestBuilder.Result> connection,
+      Optional<ServerConnection> currentServer,
+      Consumer<Component> actionBar,
+      AtomicInteger connectionRequests) {
+    ConnectionRequestBuilder builder =
+        (ConnectionRequestBuilder)
+            Proxy.newProxyInstance(
+                ConnectionRequestBuilder.class.getClassLoader(),
+                new Class<?>[] {ConnectionRequestBuilder.class},
+                (proxy, method, arguments) ->
+                    switch (method.getName()) {
+                      case "getServer" -> registeredServer;
+                      case "connect" -> {
+                        connectionRequests.incrementAndGet();
+                        yield connection;
+                      }
+                      case "connectWithIndication" -> CompletableFuture.completedFuture(true);
+                      default -> defaultValue(method.getReturnType());
+                    });
+    return (Player)
+        Proxy.newProxyInstance(
+            Player.class.getClassLoader(),
+            new Class<?>[] {Player.class},
+            (proxy, method, arguments) ->
+                switch (method.getName()) {
+                  case "getUniqueId" -> playerId;
+                  case "getUsername" -> username;
+                  case "isActive" -> true;
+                  case "getCurrentServer" -> currentServer;
+                  case "createConnectionRequest" -> builder;
+                  case "sendActionBar" -> {
+                    actionBar.accept((Component) arguments[0]);
+                    yield null;
+                  }
+                  default -> defaultValue(method.getReturnType());
+                });
   }
 
   private static Player player(
@@ -565,7 +653,8 @@ class LocalJoinServiceTest {
       FakeController controller,
       Player player,
       UUID playerId,
-      List<Component> actionBars) {}
+      List<Component> actionBars,
+      AtomicInteger connectionRequests) {}
 
   private record PoolFixture(LocalJoinService service, FakeController controller, Player player) {}
 

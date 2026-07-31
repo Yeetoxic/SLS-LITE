@@ -1,5 +1,7 @@
 # Commands And Permissions
 
+<!-- sls-command-contract-sha256:a634b400e18244de9df0a226fd607884d0abd7c708d596d580a97def12eb9dd8 -->
+
 SLS-LITE uses `/sls` and mirrors the pinned vSLS command tree where the local
 operation exists. Composite instance IDs use `<blueprint>.<short-id>`. For
 server-targeting commands, player senders may use `this` for their current

@@ -298,8 +298,8 @@ public final class SupervisedProcess {
                   + exitCode
                   + " before becoming ready"));
     }
-    exit.complete(exitCode);
     owner.processExited(instanceId, this);
+    exit.complete(exitCode);
   }
 
   private void transitionToFailed() {

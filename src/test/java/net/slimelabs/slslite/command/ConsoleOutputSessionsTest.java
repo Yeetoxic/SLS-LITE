@@ -74,6 +74,21 @@ final class ConsoleOutputSessionsTest {
     assertFalse(sessions.follow(source, feed));
   }
 
+  @Test
+  void oneShotCapturesAreBoundedAndDuplicateRequestsAreRejected() {
+    ConsoleOutputSessions sessions = new ConsoleOutputSessions();
+    CommandSource source = source(new ArrayList<>(), new CountDownLatch(0));
+
+    assertTrue(sessions.capture(source, new FakeFeed("duplicate"), 0));
+    assertFalse(sessions.capture(source, new FakeFeed("duplicate"), 0));
+    for (int index = 1; index < ConsoleOutputSessions.MAX_CONCURRENT_CAPTURES; index++) {
+      assertTrue(sessions.capture(source, new FakeFeed("server-" + index), 0));
+    }
+    assertFalse(sessions.capture(source, new FakeFeed("over-capacity"), 0));
+
+    sessions.close();
+  }
+
   private static CommandSource source(List<Component> messages, CountDownLatch delivered) {
     return (CommandSource)
         Proxy.newProxyInstance(

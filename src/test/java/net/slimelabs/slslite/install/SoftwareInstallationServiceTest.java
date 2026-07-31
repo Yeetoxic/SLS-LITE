@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -95,6 +97,79 @@ class SoftwareInstallationServiceTest {
       assertThrows(Exception.class, () -> service.ensureInstalled(profile, "1.0").join());
       assertEquals(InstallationState.FAILED, service.snapshot("fixture", "1.0").state());
     }
+  }
+
+  @Test
+  void rehashesCachedJarWhenSizeAndTimestampAreUnchanged() throws Exception {
+    SoftwareProfile profile = profile(SoftwareSource.PAPER);
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile ignored,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log)
+              throws Exception {
+            Path jar = stagingDirectory.resolve("server.jar");
+            Files.writeString(jar, "original");
+            return artifact(jar);
+          }
+        };
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      Path installed = service.ensureInstalled(profile, "1.0").join();
+      Path jar = installed.resolve("server.jar");
+      FileTime timestamp = Files.getLastModifiedTime(jar);
+      Files.writeString(jar, "tampered");
+      Files.setLastModifiedTime(jar, timestamp);
+
+      assertThrows(Exception.class, () -> service.ensureInstalled(profile, "1.0").join());
+    }
+  }
+
+  @Test
+  void shutdownInterruptsAndAwaitsActiveInstallation() throws Exception {
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch interrupted = new CountDownLatch(1);
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile profile,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log)
+              throws Exception {
+            entered.countDown();
+            try {
+              Thread.sleep(TimeUnit.MINUTES.toMillis(1));
+            } catch (InterruptedException exception) {
+              interrupted.countDown();
+              throw exception;
+            }
+            throw new AssertionError("installation was not interrupted");
+          }
+        };
+    SoftwareInstallationService service = service(List.of(provider));
+    service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0");
+    assertEquals(true, entered.await(5, TimeUnit.SECONDS));
+
+    service.shutdown(Duration.ofSeconds(5));
+
+    assertEquals(true, interrupted.await(1, TimeUnit.SECONDS));
+    assertThrows(
+        Exception.class,
+        () -> service.ensureInstalled(profile(SoftwareSource.PAPER), "2.0").join());
   }
 
   @Test

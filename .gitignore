@@ -1,5 +1,6 @@
 # Maven
 /target/
+/.local-fixtures/
 /tools/protocol-smoke/node_modules/
 dependency-reduced-pom.xml
 pom.xml.*.backup

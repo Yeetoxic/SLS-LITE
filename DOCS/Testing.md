@@ -85,8 +85,12 @@ Run each example from the pinned SLS checkout independently:
 
 ```powershell
 mvn "-Dtest=BlueprintExamplesCompatibilityIT" `
-  "-Dsls.compatibility.examples=target/upstream-sls-v0.2.0/examples" test
+  "-Dsls.compatibility.examples=.local-fixtures/upstream-sls-v0.2.0/examples" test
 ```
+
+Keep source checkouts under `.local-fixtures/`, not Maven's `target/` build
+directory. Git pack files may be read-only on Windows and prevent `mvn clean`
+from removing `target/`.
 
 If a deliberately unsupported example is added later, use the exact
 `sls.compatibility.expectedRejected` filename list. The test fails if a new

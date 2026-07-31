@@ -9,13 +9,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -41,8 +42,6 @@ import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.network.PortAllocationException;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
-import net.slimelabs.slslite.process.ProcessSpec;
-import net.slimelabs.slslite.process.ProcessSpecificationException;
 import net.slimelabs.slslite.process.ProcessStartException;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.process.SupervisedProcess;
@@ -72,11 +71,12 @@ public final class InstanceManager implements ServerController {
   private final Logger logger;
   private final InstanceIdGenerator idGenerator;
   private final ThreadPoolExecutor operationExecutor;
+  private final PersistentInstanceOperations persistentOperations;
+  private final InstancePreparationPipeline preparationPipeline;
+  private final ExecutorService finalizationExecutor;
   private final Map<String, ManagedInstance> instances = new java.util.HashMap<>();
-  private final Set<String> pendingRestarts = new HashSet<>();
-  private final Set<String> pendingDeletes = new HashSet<>();
 
-  private boolean closed;
+  private volatile boolean closed;
 
   public InstanceManager(
       BlueprintRepository blueprints,
@@ -145,6 +145,22 @@ public final class InstanceManager implements ServerController {
             new ArrayBlockingQueue<>(32),
             threadFactory(),
             new ThreadPoolExecutor.AbortPolicy());
+    this.persistentOperations =
+        new PersistentInstanceOperations(
+            this, this.metadata, directoryPreparer, softwareDirectories, operationExecutor, logger);
+    this.preparationPipeline =
+        new InstancePreparationPipeline(
+            this,
+            softwareDirectories,
+            directoryPreparer,
+            outputConfig,
+            metadata,
+            launchConfigurator,
+            processSupervisor,
+            timingReporter,
+            logger);
+    this.finalizationExecutor =
+        Executors.newFixedThreadPool(2, threadFactory("sls-lite-instance-finalization-"));
   }
 
   @Override
@@ -211,7 +227,7 @@ public final class InstanceManager implements ServerController {
           port);
 
       try {
-        operationExecutor.execute(() -> prepareAndStart(instance, profile, false));
+        operationExecutor.execute(() -> preparationPipeline.run(instance, profile, false));
       } catch (RuntimeException exception) {
         instances.remove(instanceId);
         portAllocator.release(port);
@@ -360,187 +376,24 @@ public final class InstanceManager implements ServerController {
   @Override
   public CompletableFuture<ManagedInstance> restart(String instanceId)
       throws InstanceOperationException {
-    return cyclePersistent(instanceId, false);
+    return persistentOperations.restart(instanceId);
   }
 
   @Override
   public CompletableFuture<ManagedInstance> reset(String instanceId)
       throws InstanceOperationException {
-    return cyclePersistent(instanceId, true);
+    return persistentOperations.reset(instanceId);
   }
 
   @Override
   public CompletableFuture<InstanceDeletionResult> delete(String instanceId)
       throws InstanceOperationException {
-    ManagedInstance active;
-    synchronized (this) {
-      if (closed) {
-        throw new InstanceOperationException("Instance manager is shutting down");
-      }
-      if (!InstanceIdGenerator.isValid(instanceId)) {
-        throw new InstanceOperationException("Invalid instance ID: " + instanceId);
-      }
-      if (pendingRestarts.contains(instanceId) || !pendingDeletes.add(instanceId)) {
-        throw new InstanceOperationException(
-            "Instance restart, reset, or delete is already in progress: " + instanceId);
-      }
-      active = instances.get(instanceId);
-      try {
-        if (active == null) {
-          metadata.readPersistent(instanceId);
-        } else {
-          metadata.snapshot(active);
-        }
-      } catch (InstanceOperationException exception) {
-        pendingDeletes.remove(instanceId);
-        throw exception;
-      }
-    }
-
-    CompletableFuture<Integer> stopped;
-    try {
-      stopped = active == null ? CompletableFuture.completedFuture(0) : stop(instanceId);
-    } catch (InstanceOperationException exception) {
-      synchronized (this) {
-        pendingDeletes.remove(instanceId);
-      }
-      throw exception;
-    }
-
-    return stopped
-        .thenCompose(ignored -> submitDelete(instanceId))
-        .whenComplete(
-            (ignored, failure) -> {
-              synchronized (this) {
-                pendingDeletes.remove(instanceId);
-              }
-            });
-  }
-
-  private CompletableFuture<ManagedInstance> cyclePersistent(String instanceId, boolean reset)
-      throws InstanceOperationException {
-    ManagedInstance active;
-    InstanceMetadata metadata;
-    synchronized (this) {
-      if (closed) {
-        throw new InstanceOperationException("Instance manager is shutting down");
-      }
-      if (!InstanceIdGenerator.isValid(instanceId)) {
-        throw new InstanceOperationException("Invalid instance ID: " + instanceId);
-      }
-      if (pendingDeletes.contains(instanceId) || !pendingRestarts.add(instanceId)) {
-        throw new InstanceOperationException(
-            "Instance restart or reset is already in progress: " + instanceId);
-      }
-      active = instances.get(instanceId);
-      try {
-        metadata =
-            active == null
-                ? this.metadata.readPersistent(instanceId)
-                : this.metadata.snapshot(active);
-        this.metadata.requireRestartable(metadata, active != null);
-        if (!reset) {
-          requireCompatibleDefinition(metadata);
-        }
-      } catch (InstanceOperationException exception) {
-        pendingRestarts.remove(instanceId);
-        throw exception;
-      }
-    }
-
-    CompletableFuture<Integer> stopped;
-    try {
-      stopped = active == null ? CompletableFuture.completedFuture(0) : stop(instanceId);
-    } catch (InstanceOperationException exception) {
-      synchronized (this) {
-        pendingRestarts.remove(instanceId);
-      }
-      throw exception;
-    }
-
-    return stopped
-        .thenApply(
-            ignored -> {
-              try {
-                if (reset) {
-                  resetPersistent(instanceId);
-                }
-                return startPersistent(instanceId);
-              } catch (InstanceOperationException exception) {
-                throw new java.util.concurrent.CompletionException(exception);
-              }
-            })
-        .whenComplete(
-            (ignored, failure) -> {
-              synchronized (this) {
-                pendingRestarts.remove(instanceId);
-              }
-            });
-  }
-
-  private CompletableFuture<InstanceDeletionResult> submitDelete(String instanceId) {
-    CompletableFuture<InstanceDeletionResult> deletion = new CompletableFuture<>();
-    try {
-      operationExecutor.execute(
-          () -> {
-            try {
-              Path directory = directoryPreparer.root().resolve(instanceId);
-              if (!Files.exists(directory)) {
-                logger.info("Instance delete completed: {} (storage already removed)", instanceId);
-                deletion.complete(new InstanceDeletionResult(instanceId, true));
-                return;
-              }
-              metadata.readPersistent(instanceId);
-              boolean cleaned = directoryPreparer.deletePersistent(instanceId);
-              logger.info(
-                  "Instance delete committed: {} (tombstone cleanup {})",
-                  instanceId,
-                  cleaned ? "complete" : "deferred");
-              deletion.complete(new InstanceDeletionResult(instanceId, cleaned));
-            } catch (InstanceOperationException | InstancePreparationException exception) {
-              deletion.completeExceptionally(exception);
-            }
-          });
-    } catch (RuntimeException exception) {
-      deletion.completeExceptionally(
-          new InstanceOperationException("Instance deletion queue is full", exception));
-    }
-    return deletion;
-  }
-
-  private void resetPersistent(String instanceId) throws InstanceOperationException {
-    InstanceMetadata metadata = this.metadata.readPersistent(instanceId);
-    this.metadata.requireRestartable(metadata, false);
-    ResolvedDefinition definition =
-        resolveDefinition(
-            metadata.blueprintId(),
-            "Persistent instance "
-                + instanceId
-                + " references missing blueprint "
-                + metadata.blueprintId());
-    Blueprint blueprint = metadata.launchOverrides().applyTo(definition.blueprint());
-    SoftwareProfile profile = definition.softwareProfile();
-    try {
-      Path baseDirectory =
-          softwareDirectories.resolve(
-              profile, blueprint.version(), blueprint.softwarePath(), () -> false);
-      InstanceMetadata stopped =
-          metadata
-              .withDefinitionIdentity(InstanceDefinitionIdentity.from(blueprint, profile))
-              .withoutProcess(InstanceState.STOPPED);
-      directoryPreparer.replace(
-          instanceId,
-          baseDirectory,
-          blueprint.volumes(),
-          blueprint.copies(),
-          directory -> this.metadata.write(directory, stopped));
-    } catch (ProcessSpecificationException | InstancePreparationException exception) {
-      throw new InstanceOperationException(exception.getMessage(), exception);
-    }
+    return persistentOperations.delete(instanceId);
   }
 
   @Override
   public void shutdown(Duration timeout) {
+    long deadline = System.nanoTime() + timeout.toNanos();
     List<ManagedInstance> snapshot;
     synchronized (this) {
       if (closed) {
@@ -566,177 +419,91 @@ public final class InstanceManager implements ServerController {
       }
     }
     operationExecutor.shutdownNow();
-    processSupervisor.shutdown(timeout);
+    processSupervisor.shutdown(remaining(deadline));
+    finalizationExecutor.shutdown();
+    awaitExecutor(operationExecutor, deadline, "managed instance operation");
+    awaitExecutor(finalizationExecutor, deadline, "instance finalization");
+    finalizationExecutor.shutdownNow();
     for (ManagedInstance instance : snapshot) {
-      if (instance.preparationRunning()) {
-        logger.info("Waiting for cancelled preparation to release {}", instance.id());
-      } else {
-        cleanup(instance);
+      if (findActive(instance.id()) == instance) {
+        logger.warn(
+            "Deferring unfinished shutdown cleanup for {} to startup reconciliation",
+            instance.id());
       }
     }
   }
 
-  private void prepareAndStart(
-      ManagedInstance instance, SoftwareProfile profile, boolean reuseDirectory) {
-    InstancePhaseTimings timings = instance.timings();
-    timings.finish(InstancePhaseTimings.Phase.DISPATCH_QUEUE);
-    instance.preparationStarted();
+  private void awaitExecutor(ExecutorService executor, long deadline, String description) {
     try {
-      logger.info(
-          "Preparing instance {} with {} volume(s) and {} copy entry(s)",
-          instance.id(),
-          instance.blueprint().volumes().size(),
-          instance.blueprint().copies().size());
-      timings.begin(InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION);
-      Path baseDirectory =
-          softwareDirectories.resolve(
-              profile,
-              instance.blueprint().version(),
-              instance.blueprint().softwarePath(),
-              instance::stopRequested);
-      timings.finish(InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION);
-      logger.info(
-          "Instance software ready: {} ({} {})",
-          instance.id(),
-          profile.id(),
-          instance.blueprint().version());
-      timings.begin(InstancePhaseTimings.Phase.FILE_PREPARATION);
-      Path prepared;
-      if (reuseDirectory) {
-        prepared = instance.directory();
-        if (!Files.isDirectory(prepared)) {
-          throw new InstancePreparationException(
-              "Persistent instance directory does not exist: " + prepared);
-        }
-        directoryPreparer.resume(instance.id());
-      } else {
-        prepared =
-            directoryPreparer.prepare(
-                instance.id(),
-                baseDirectory,
-                instance.blueprint().volumes(),
-                instance.blueprint().copies(),
-                instance::stopRequested);
+      long remainingNanos = Math.max(0L, deadline - System.nanoTime());
+      if (!executor.awaitTermination(remainingNanos, TimeUnit.NANOSECONDS)) {
+        logger.warn("Timed out waiting for {} tasks to stop", description);
       }
-      timings.finish(InstancePhaseTimings.Phase.FILE_PREPARATION);
-      logger.info(
-          "Instance files ready: {} ({} volume(s), {} copy entry(s))",
-          instance.id(),
-          instance.blueprint().volumes().size(),
-          instance.blueprint().copies().size());
-      if (!prepared.equals(instance.directory())) {
-        throw new InstanceOperationException("Prepared instance path changed unexpectedly");
-      }
-      timings.begin(InstancePhaseTimings.Phase.CONFIGURATION);
-      instance.configureOutput(outputConfig);
-      metadata.write(instance, InstanceState.PREPARING, null);
-      ProcessSpec spec =
-          launchConfigurator.configure(
-              profile, instance.blueprint(), instance.id(), prepared, instance.port());
-      timings.finish(InstancePhaseTimings.Phase.CONFIGURATION);
-      SupervisedProcess process;
-      synchronized (instance) {
-        if (instance.stopRequested()) {
-          finishCancelledPreparation(instance);
-          return;
-        }
-        metadata.write(instance, InstanceState.STARTING, null);
-        timings.begin(InstancePhaseTimings.Phase.PROCESS_LAUNCH);
-        process =
-            processSupervisor.start(
-                instance.id(),
-                spec,
-                instance.lifecycle(),
-                line -> {
-                  instance.appendLog(line);
-                  if (instance.mirrorsOutputToProxyConsole()) {
-                    logger.info("[{}] {}", instance.id(), line);
-                  }
-                  instance
-                      .takeOutputFailure()
-                      .ifPresent(
-                          failure ->
-                              logger.warn(
-                                  "Temporary console log disabled for {}: {}",
-                                  instance.id(),
-                                  failure.getMessage()));
-                });
-        instance.attachProcess(process);
-        timings.finish(InstancePhaseTimings.Phase.PROCESS_LAUNCH);
-        timings.begin(InstancePhaseTimings.Phase.READINESS);
-        logger.info(
-            "Instance process started: {} (PID {}, readiness timeout " + "{} seconds)",
-            instance.id(),
-            process.processId(),
-            profile.startupTimeoutSeconds());
-      }
-      process
-          .exitFuture()
-          .whenComplete(
-              (exitCode, failure) -> {
-                boolean failedBeforeReadiness = instance.state() == InstanceState.FAILED;
-                if (failure == null) {
-                  logger.info(
-                      "Instance process exited: {} with code {} (state {})",
-                      instance.id(),
-                      exitCode,
-                      instance.state());
-                } else {
-                  logger.warn(
-                      "Instance process failed: {} (state {}): {}",
-                      instance.id(),
-                      instance.state(),
-                      rootMessage(failure));
-                }
-                if (failedBeforeReadiness) {
-                  Throwable diagnosticFailure =
-                      failure == null
-                          ? new ProcessStartException(
-                              "Managed process exited with code " + exitCode + " before readiness")
-                          : failure;
-                  recordFailedStart(instance, "process-exit", diagnosticFailure);
-                }
-                timings.finish(InstancePhaseTimings.Phase.SHUTDOWN);
-                cleanup(instance);
-                if (failure == null) {
-                  instance.stoppedFuture().complete(exitCode);
-                } else {
-                  instance.stoppedFuture().completeExceptionally(failure);
-                }
-              });
-      metadata.write(instance, InstanceState.STARTING, process);
-      process
-          .readyFuture()
-          .whenComplete(
-              (ignored, failure) -> {
-                timings.finish(InstancePhaseTimings.Phase.READINESS);
-                if (failure == null) {
-                  registerReady(instance);
-                } else {
-                  Throwable cause = rootCause(failure);
-                  if (cause instanceof CancellationException) {
-                    logger.info("Instance readiness cancelled: {}", instance.id());
-                  } else {
-                    logger.warn(
-                        "Instance readiness failed: {}: {}. Last output: {}",
-                        instance.id(),
-                        rootMessage(cause),
-                        lastOutput(instance));
-                    recordFailedStart(instance, "readiness", cause);
-                  }
-                  timingReporter.logProvisioning(
-                      instance.id(), instance.timings(), "readiness-failed");
-                  instance.readyFuture().completeExceptionally(failure);
-                }
-              });
-    } catch (Exception exception) {
-      failPreparation(instance, exception);
-    } finally {
-      instance.preparationFinished();
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      logger.warn("Interrupted while waiting for managed instance operations to stop");
     }
   }
 
-  private void registerReady(ManagedInstance instance) {
+  private static Duration remaining(long deadline) {
+    return Duration.ofNanos(Math.max(0L, deadline - System.nanoTime()));
+  }
+
+  void dispatchExitFinalization(
+      ManagedInstance instance, InstancePhaseTimings timings, Integer exitCode, Throwable failure) {
+    Runnable finalization = () -> finalizeExitedInstance(instance, timings, exitCode, failure);
+    try {
+      finalizationExecutor.execute(finalization);
+    } catch (RejectedExecutionException rejected) {
+      if (!closed) {
+        finalization.run();
+        return;
+      }
+      // Never let a late child exit start blocking storage work after the bounded plugin shutdown
+      // has ended. Durable metadata and the instance directory remain for startup reconciliation.
+      logger.warn("Deferring late exit cleanup for {} to startup reconciliation", instance.id());
+      if (failure == null) {
+        instance.stoppedFuture().complete(exitCode);
+      } else {
+        instance.stoppedFuture().completeExceptionally(failure);
+      }
+    }
+  }
+
+  private void finalizeExitedInstance(
+      ManagedInstance instance, InstancePhaseTimings timings, Integer exitCode, Throwable failure) {
+    boolean failedBeforeReadiness = instance.state() == InstanceState.FAILED;
+    if (failure == null) {
+      logger.info(
+          "Instance process exited: {} with code {} (state {})",
+          instance.id(),
+          exitCode,
+          instance.state());
+    } else {
+      logger.warn(
+          "Instance process failed: {} (state {}): {}",
+          instance.id(),
+          instance.state(),
+          rootMessage(failure));
+    }
+    if (failedBeforeReadiness) {
+      Throwable diagnosticFailure =
+          failure == null
+              ? new ProcessStartException(
+                  "Managed process exited with code " + exitCode + " before readiness")
+              : failure;
+      recordFailedStart(instance, "process-exit", diagnosticFailure);
+    }
+    timings.finish(InstancePhaseTimings.Phase.SHUTDOWN);
+    cleanup(instance);
+    if (failure == null) {
+      instance.stoppedFuture().complete(exitCode);
+    } else {
+      instance.stoppedFuture().completeExceptionally(failure);
+    }
+  }
+
+  void registerReady(ManagedInstance instance) {
     InstancePhaseTimings timings = instance.timings();
     timings.begin(InstancePhaseTimings.Phase.REGISTRATION);
     synchronized (instance) {
@@ -780,7 +547,7 @@ public final class InstanceManager implements ServerController {
     }
   }
 
-  private void failPreparation(ManagedInstance instance, Exception exception) {
+  void failPreparation(ManagedInstance instance, Exception exception) {
     SupervisedProcess process;
     synchronized (instance) {
       if (instance.state() == InstanceState.STOPPING && instance.stopRequested()) {
@@ -804,7 +571,7 @@ public final class InstanceManager implements ServerController {
     cleanup(instance);
   }
 
-  private void finishCancelledPreparation(ManagedInstance instance) {
+  void finishCancelledPreparation(ManagedInstance instance) {
     if (instance.state() == InstanceState.STOPPING) {
       instance.lifecycle().transitionTo(InstanceState.STOPPED);
     }
@@ -877,12 +644,12 @@ public final class InstanceManager implements ServerController {
     return instances.get(instance.id()) == instance && !closed;
   }
 
-  private static String lastOutput(ManagedInstance instance) {
+  static String lastOutput(ManagedInstance instance) {
     List<String> lines = instance.logs(1, 3).lines();
     return lines.isEmpty() ? "no managed process output" : String.join(" | ", lines);
   }
 
-  private void recordFailedStart(ManagedInstance instance, String phase, Throwable failure) {
+  void recordFailedStart(ManagedInstance instance, String phase, Throwable failure) {
     if (!instance.markFailedStartDiagnosticsRecorded()) {
       return;
     }
@@ -897,7 +664,7 @@ public final class InstanceManager implements ServerController {
     }
   }
 
-  private static Throwable rootCause(Throwable throwable) {
+  static Throwable rootCause(Throwable throwable) {
     Throwable current = throwable;
     while (current.getCause() != null) {
       current = current.getCause();
@@ -905,12 +672,12 @@ public final class InstanceManager implements ServerController {
     return current;
   }
 
-  private static String rootMessage(Throwable throwable) {
+  static String rootMessage(Throwable throwable) {
     Throwable cause = rootCause(throwable);
     return cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
   }
 
-  private ManagedInstance startPersistent(String instanceId) throws InstanceOperationException {
+  ManagedInstance startPersistent(String instanceId) throws InstanceOperationException {
     InstanceMetadata metadata = this.metadata.readPersistent(instanceId);
     ResolvedDefinition definition =
         resolveDefinition(
@@ -961,7 +728,7 @@ public final class InstanceManager implements ServerController {
               metadata.createdAt());
       instances.put(instanceId, instance);
       try {
-        operationExecutor.execute(() -> prepareAndStart(instance, profile, true));
+        operationExecutor.execute(() -> preparationPipeline.run(instance, profile, true));
       } catch (RuntimeException exception) {
         instances.remove(instanceId);
         portAllocator.release(port);
@@ -973,7 +740,7 @@ public final class InstanceManager implements ServerController {
     return instance;
   }
 
-  private InstanceMetadata requireCompatibleDefinition(InstanceMetadata metadata)
+  InstanceMetadata requireCompatibleDefinition(InstanceMetadata metadata)
       throws InstanceOperationException {
     ResolvedDefinition definition =
         resolveDefinition(
@@ -997,7 +764,7 @@ public final class InstanceManager implements ServerController {
     for (int attempt = 0; attempt < ID_ATTEMPTS; attempt++) {
       String candidate = idGenerator.generate(blueprintId);
       if (!instances.containsKey(candidate)
-          && !pendingDeletes.contains(candidate)
+          && !persistentOperations.hasPendingDelete(candidate)
           && !Files.exists(directoryPreparer.root().resolve(candidate))) {
         return candidate;
       }
@@ -1005,7 +772,7 @@ public final class InstanceManager implements ServerController {
     throw new InstanceOperationException("Unable to generate a unique instance ID");
   }
 
-  private ResolvedDefinition resolveDefinition(String blueprintId, String missingBlueprintMessage)
+  ResolvedDefinition resolveDefinition(String blueprintId, String missingBlueprintMessage)
       throws InstanceOperationException {
     DefinitionCatalog.Snapshot definitions = blueprints.catalog().snapshot();
     Blueprint blueprint =
@@ -1045,12 +812,24 @@ public final class InstanceManager implements ServerController {
     }
   }
 
-  private record ResolvedDefinition(Blueprint blueprint, SoftwareProfile softwareProfile) {}
+  synchronized ManagedInstance findActive(String instanceId) {
+    return instances.get(instanceId);
+  }
+
+  synchronized boolean isClosed() {
+    return closed;
+  }
+
+  record ResolvedDefinition(Blueprint blueprint, SoftwareProfile softwareProfile) {}
 
   private static ThreadFactory threadFactory() {
+    return threadFactory("sls-lite-operation-");
+  }
+
+  private static ThreadFactory threadFactory(String prefix) {
     AtomicInteger sequence = new AtomicInteger();
     return runnable -> {
-      Thread thread = new Thread(runnable, "sls-lite-operation-" + sequence.incrementAndGet());
+      Thread thread = new Thread(runnable, prefix + sequence.incrementAndGet());
       thread.setDaemon(true);
       return thread;
     };

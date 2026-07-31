@@ -7,9 +7,8 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Collection;
@@ -25,6 +24,9 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import net.slimelabs.slslite.io.BoundedFileReader;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSpecificationException;
 import net.slimelabs.slslite.software.SoftwareProfile;
@@ -35,15 +37,19 @@ public final class SoftwareInstallationService implements AutoCloseable {
 
   private static final int MAX_LOG_LINES = 200;
   private static final int MAX_HISTORY = 100;
+  private static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(30);
   private static final String INSTALL_METADATA = ".sls-install.properties";
+  static final int MAX_INSTALL_METADATA_BYTES = 64 * 1024;
+  static final int MAX_EULA_BYTES = 64 * 1024;
 
   private final JavaJarProcessSpecFactory paths;
   private final Map<SoftwareSource, SoftwareInstallationProvider> providers;
   private final Map<Path, ActiveInstallation> active = new ConcurrentHashMap<>();
   private final Map<InstallationKey, MutableInstallation> history = new ConcurrentHashMap<>();
-  private final Map<Path, ValidatedArtifact> validatedArtifacts = new ConcurrentHashMap<>();
   private final ExecutorService executor;
   private final Logger logger;
+  private final AtomicBoolean closed = new AtomicBoolean();
+  private final Object lifecycleLock = new Object();
 
   public SoftwareInstallationService(
       JavaJarProcessSpecFactory paths,
@@ -70,6 +76,10 @@ public final class SoftwareInstallationService implements AutoCloseable {
   }
 
   public CompletableFuture<Path> ensureInstalled(SoftwareProfile profile, String version) {
+    if (closed.get()) {
+      return CompletableFuture.failedFuture(
+          new SoftwareInstallationException("Software installer is shut down"));
+    }
     InstallationKey key = new InstallationKey(profile.id(), version);
     Path target;
     try {
@@ -94,19 +104,31 @@ public final class SoftwareInstallationService implements AutoCloseable {
                   + "after the operator reviews the Minecraft EULA"));
     }
     Path installationTarget = target.toAbsolutePath().normalize();
-    ActiveInstallation selected =
-        active.computeIfAbsent(
-            installationTarget,
-            ignored -> {
-              MutableInstallation record = new MutableInstallation(key);
-              history.put(key, record);
-              pruneHistory();
-              CompletableFuture<Path> future =
-                  CompletableFuture.supplyAsync(
-                      () -> install(profile, version, target, record), executor);
-              return new ActiveInstallation(
-                  profile.id(), version, profile.source(), profile.channel().name(), future);
-            });
+    ActiveInstallation selected;
+    synchronized (lifecycleLock) {
+      if (closed.get()) {
+        return CompletableFuture.failedFuture(
+            new SoftwareInstallationException("Software installer is shut down"));
+      }
+      try {
+        selected =
+            active.computeIfAbsent(
+                installationTarget,
+                ignored -> {
+                  MutableInstallation record = new MutableInstallation(key);
+                  history.put(key, record);
+                  pruneHistory();
+                  CompletableFuture<Path> future =
+                      CompletableFuture.supplyAsync(
+                          () -> install(profile, version, target, record), executor);
+                  return new ActiveInstallation(
+                      profile.id(), version, profile.source(), profile.channel().name(), future);
+                });
+      } catch (java.util.concurrent.RejectedExecutionException exception) {
+        return CompletableFuture.failedFuture(
+            new SoftwareInstallationException("Software installer is shut down", exception));
+      }
+    }
     if (!selected.matches(profile, version)) {
       return CompletableFuture.failedFuture(
           new SoftwareInstallationException(
@@ -138,7 +160,26 @@ public final class SoftwareInstallationService implements AutoCloseable {
 
   @Override
   public void close() {
-    executor.shutdownNow();
+    shutdown(DEFAULT_SHUTDOWN_TIMEOUT);
+  }
+
+  public void shutdown(Duration timeout) {
+    java.util.Objects.requireNonNull(timeout, "timeout");
+    synchronized (lifecycleLock) {
+      if (!closed.compareAndSet(false, true)) {
+        return;
+      }
+      active.values().forEach(installation -> installation.future().cancel(true));
+      executor.shutdownNow();
+    }
+    try {
+      if (!executor.awaitTermination(Math.max(0L, timeout.toNanos()), TimeUnit.NANOSECONDS)) {
+        logger.warn("Timed out waiting for software installer tasks to stop");
+      }
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      logger.warn("Interrupted while waiting for software installer tasks to stop");
+    }
   }
 
   private Path install(
@@ -179,7 +220,6 @@ public final class SoftwareInstallationService implements AutoCloseable {
       }
       Files.createDirectories(target.getParent());
       moveDirectory(staging, target);
-      validatedArtifacts.remove(staging.resolve(profile.serverJar()).normalize());
       record.ready("Installed at " + target);
       logger.info("Installed software {} {} at {}", profile.id(), version, target);
       return target;
@@ -209,14 +249,15 @@ public final class SoftwareInstallationService implements AutoCloseable {
       return false;
     }
     try {
-      if (!Files.readString(eulaPath)
+      if (!BoundedFileReader.readString(
+              eulaPath, java.nio.charset.StandardCharsets.UTF_8, MAX_EULA_BYTES)
           .lines()
           .map(String::trim)
           .anyMatch("eula=true"::equalsIgnoreCase)) {
         return false;
       }
       Properties metadata = new Properties();
-      try (InputStream input = Files.newInputStream(metadataPath)) {
+      try (InputStream input = BoundedFileReader.open(metadataPath, MAX_INSTALL_METADATA_BYTES)) {
         metadata.load(input);
       }
       if (!"1".equals(metadata.getProperty("format"))
@@ -233,31 +274,13 @@ public final class SoftwareInstallationService implements AutoCloseable {
         return false;
       }
       String expectedChecksum = metadata.getProperty("checksum", "");
-      BasicFileAttributes attributes =
-          Files.readAttributes(
-              jar, BasicFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
-      if (expectedSize != attributes.size()) {
-        validatedArtifacts.remove(jar);
+      if (expectedSize != Files.size(jar)) {
         return false;
       }
-      ValidatedArtifact expected =
-          new ValidatedArtifact(
-              expectedSize, attributes.lastModifiedTime(), algorithm, expectedChecksum);
-      if (expected.equals(validatedArtifacts.get(jar))) {
-        return true;
-      }
-      boolean matches =
-          MessageDigest.isEqual(
-              digest(jar, algorithm).getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-              expectedChecksum.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-      if (matches) {
-        validatedArtifacts.put(jar, expected);
-      } else {
-        validatedArtifacts.remove(jar);
-      }
-      return matches;
+      return MessageDigest.isEqual(
+          digest(jar, algorithm).getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+          expectedChecksum.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
     } catch (Exception exception) {
-      validatedArtifacts.remove(jar);
       return false;
     }
   }
@@ -418,7 +441,4 @@ public final class SoftwareInstallationService implements AutoCloseable {
           && channel.equals(profile.channel().name());
     }
   }
-
-  private record ValidatedArtifact(
-      long size, FileTime modifiedAt, String digestAlgorithm, String checksum) {}
 }

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 
 public final class InstanceOutput {
@@ -15,7 +16,7 @@ public final class InstanceOutput {
 
   private volatile ManagedOutputConfig config = new ManagedOutputConfig(false, false, 4096);
   private volatile TemporaryInstanceLog temporaryLog;
-  private volatile IOException failure;
+  private final AtomicReference<IOException> failure = new AtomicReference<>();
   private volatile boolean temporaryOutputDisabled;
 
   public InstanceOutput(Path instanceDirectory) {
@@ -37,7 +38,7 @@ public final class InstanceOutput {
         current.append(line);
       } catch (IOException exception) {
         temporaryOutputDisabled = true;
-        failure = exception;
+        recordFailure(exception);
       }
     }
   }
@@ -78,9 +79,7 @@ public final class InstanceOutput {
   }
 
   public Optional<IOException> takeFailure() {
-    IOException current = failure;
-    failure = null;
-    return Optional.ofNullable(current);
+    return Optional.ofNullable(failure.getAndSet(null));
   }
 
   public void close() {
@@ -90,8 +89,12 @@ public final class InstanceOutput {
       try {
         current.close();
       } catch (IOException exception) {
-        failure = exception;
+        recordFailure(exception);
       }
     }
+  }
+
+  void recordFailure(IOException exception) {
+    failure.compareAndSet(null, exception);
   }
 }

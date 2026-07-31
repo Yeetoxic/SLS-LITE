@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,6 +19,43 @@ import org.junit.jupiter.api.io.TempDir;
 class SoftwareProfileRepositoryTest {
 
   @TempDir Path temporaryDirectory;
+
+  @Test
+  void rejectsProfileLargerThanRepositoryLimit() throws Exception {
+    Files.write(
+        temporaryDirectory.resolve("oversized.yml"),
+        new byte[SoftwareProfileRepository.MAX_PROFILE_BYTES + 1]);
+
+    ConfigurationException failure =
+        assertThrows(
+            ConfigurationException.class,
+            () -> new SoftwareProfileRepository(temporaryDirectory).reload());
+
+    assertTrue(failure.getMessage().contains("Unable to read software profile"));
+  }
+
+  @Test
+  void ignoresProfileFilesThatAreSymbolicLinks() throws Exception {
+    Path outside = temporaryDirectory.resolveSibling("outside-software-profile.yml");
+    Files.writeString(
+        outside,
+        """
+                software:
+                  id: outside
+                  base_directory: software/outside/{version}
+                  server_jar: outside.jar
+                """);
+    try {
+      Files.createSymbolicLink(temporaryDirectory.resolve("linked.yml"), outside);
+    } catch (IOException | UnsupportedOperationException exception) {
+      assumeTrue(false, "Symbolic links are unavailable: " + exception.getMessage());
+    }
+
+    SoftwareProfileRepository repository = new SoftwareProfileRepository(temporaryDirectory);
+    repository.reload();
+
+    assertTrue(repository.getAll().isEmpty());
+  }
 
   @Test
   void installsAndLoadsBundledPaperProfile() throws Exception {

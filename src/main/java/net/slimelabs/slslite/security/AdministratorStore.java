@@ -1,10 +1,12 @@
 package net.slimelabs.slslite.security;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -16,6 +18,7 @@ import java.util.UUID;
 
 public final class AdministratorStore {
 
+  static final long MAX_STORE_BYTES = 1024 * 1024;
   static final String FILE_NAME = "administrators.properties";
   private static final String TEMP_FILE_NAME = FILE_NAME + ".tmp";
   private static final String SCHEMA_KEY = "schema";
@@ -39,17 +42,29 @@ public final class AdministratorStore {
 
   public synchronized void initialize() throws IOException {
     Files.createDirectories(dataDirectory);
-    if (!Files.exists(storePath)) {
+    if (!Files.exists(storePath, LinkOption.NOFOLLOW_LINKS)) {
       Properties initial = new Properties();
       initial.setProperty(SCHEMA_KEY, SCHEMA_VERSION);
       persist(initial);
       return;
     }
-    if (!Files.isRegularFile(storePath)) {
+    if (!Files.isRegularFile(storePath, LinkOption.NOFOLLOW_LINKS)) {
       throw new IOException("Administrator store is not a regular file: " + storePath);
     }
-    Properties loaded = new Properties();
+    if (Files.size(storePath) > MAX_STORE_BYTES) {
+      throw new IOException(
+          "Administrator store exceeds " + MAX_STORE_BYTES + " bytes: " + storePath);
+    }
+    byte[] encoded;
     try (InputStream input = Files.newInputStream(storePath)) {
+      encoded = input.readNBytes((int) MAX_STORE_BYTES + 1);
+    }
+    if (encoded.length > MAX_STORE_BYTES) {
+      throw new IOException(
+          "Administrator store exceeds " + MAX_STORE_BYTES + " bytes: " + storePath);
+    }
+    Properties loaded = new Properties();
+    try (InputStream input = new ByteArrayInputStream(encoded)) {
       loaded.load(input);
     }
     if (!SCHEMA_VERSION.equals(loaded.getProperty(SCHEMA_KEY))) {

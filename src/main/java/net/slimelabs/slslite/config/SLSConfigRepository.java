@@ -6,11 +6,13 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Map;
+import net.slimelabs.slslite.io.BoundedFileReader;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 public final class SLSConfigRepository {
+  static final int MAX_CONFIG_BYTES = 1024 * 1024;
 
   private static final String DEFAULT_CONFIG_RESOURCE = "defaults/host/config.yml";
 
@@ -85,7 +87,7 @@ public final class SLSConfigRepository {
     options.setAllowDuplicateKeys(false);
     Yaml yaml = new Yaml(new SafeConstructor(options));
 
-    try (InputStream input = Files.newInputStream(configPath)) {
+    try (InputStream input = BoundedFileReader.open(configPath, MAX_CONFIG_BYTES)) {
       Map<String, Object> root = YamlValues.asMap(yaml.load(input), "root", configPath);
       Map<String, Object> resources = YamlValues.optionalMap(root, "resources", configPath);
       Map<String, Object> network = YamlValues.optionalMap(root, "network", configPath);

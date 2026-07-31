@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Comparator;
@@ -18,6 +19,7 @@ import java.util.stream.Stream;
 import net.slimelabs.slslite.config.ConfigurationException;
 import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.YamlValues;
+import net.slimelabs.slslite.io.BoundedFileReader;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
@@ -35,6 +37,7 @@ public final class SoftwareProfileRepository {
   private static final int DEFAULT_STARTUP_TIMEOUT_SECONDS = 180;
   private static final String DEFAULT_STOP_COMMAND = "stop";
   private static final int DEFAULT_STOP_TIMEOUT_SECONDS = 30;
+  static final int MAX_PROFILE_BYTES = 1024 * 1024;
 
   private final Path directory;
   private final DefinitionCatalog catalog;
@@ -97,7 +100,7 @@ public final class SoftwareProfileRepository {
     options.setAllowDuplicateKeys(false);
     Yaml yaml = new Yaml(new SafeConstructor(options));
 
-    try (InputStream input = Files.newInputStream(path)) {
+    try (InputStream input = BoundedFileReader.open(path, MAX_PROFILE_BYTES)) {
       Map<String, Object> root = YamlValues.asMap(yaml.load(input), "root", path);
       Map<String, Object> software = YamlValues.optionalMap(root, "software", path);
       Map<String, Object> launch = YamlValues.optionalMap(root, "launch", path);
@@ -264,7 +267,7 @@ public final class SoftwareProfileRepository {
   private List<Path> profileFiles() throws IOException {
     try (Stream<Path> files = Files.walk(directory)) {
       return files
-          .filter(Files::isRegularFile)
+          .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
           .filter(SoftwareProfileRepository::isYaml)
           .sorted()
           .toList();
