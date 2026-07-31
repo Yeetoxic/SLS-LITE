@@ -2,9 +2,9 @@ package net.slimelabs.slslite.instance.lifecycle;
 
 public interface IdleAdmissionControl {
 
-    boolean hasPendingJoin(String instanceId);
+  boolean hasPendingJoin(String instanceId);
 
-    boolean tryDrain(String instanceId);
+  boolean tryDrain(String instanceId);
 
-    void cancelDrain(String instanceId);
+  void cancelDrain(String instanceId);
 }

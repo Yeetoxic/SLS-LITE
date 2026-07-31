@@ -8,37 +8,23 @@ import org.slf4j.Logger;
  */
 public final class InstanceTimingReporter {
 
-    private final Logger logger;
+  private final Logger logger;
 
-    public InstanceTimingReporter(Logger logger) {
-        this.logger = logger;
-    }
+  public InstanceTimingReporter(Logger logger) {
+    this.logger = logger;
+  }
 
-    public void logProvisioning(
-            String instanceId,
-            InstancePhaseTimings timings,
-            String outcome
-    ) {
-        timings.provisioningSummary(outcome).ifPresent(summary ->
-                logger.info(
-                        "Instance provisioning timings: {} {}",
-                        instanceId,
-                        summary
-                )
-        );
-    }
+  public void logProvisioning(String instanceId, InstancePhaseTimings timings, String outcome) {
+    timings
+        .provisioningSummary(outcome)
+        .ifPresent(
+            summary -> logger.info("Instance provisioning timings: {} {}", instanceId, summary));
+  }
 
-    public void logTermination(
-            String instanceId,
-            InstancePhaseTimings timings,
-            String outcome
-    ) {
-        timings.terminationSummary(outcome).ifPresent(summary ->
-                logger.info(
-                        "Instance termination timings: {} {}",
-                        instanceId,
-                        summary
-                )
-        );
-    }
+  public void logTermination(String instanceId, InstancePhaseTimings timings, String outcome) {
+    timings
+        .terminationSummary(outcome)
+        .ifPresent(
+            summary -> logger.info("Instance termination timings: {} {}", instanceId, summary));
+  }
 }

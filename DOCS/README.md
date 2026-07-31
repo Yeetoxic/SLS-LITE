@@ -44,6 +44,7 @@ intentional differences, and reproducible evidence.
 | Document | Purpose |
 | --- | --- |
 | [Architecture](ARCHITECTURE.md) | Runtime flow, package ownership, invariants, and modification points. |
+| [Contributor Architecture Guide](Contributor_Architecture.md) | Files that must change together for commands, blueprints, installers, lifecycle, storage, lobbies, messages, configuration, and tests. |
 | [Internal Invariants](Internal_Invariants.md) | Lifecycle state machine, concurrency ownership, resource accounting, path security, and compatibility boundaries. |
 | [Contributing](Contributing.md) | Build, test, change-scope, and documentation expectations. |
 | [Testing](Testing.md) | Automated and manual test entry points. |

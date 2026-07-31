@@ -10,9 +10,24 @@ mvn verify
 ```
 
 This compiles Java 21 bytecode, runs the JUnit suite, builds the shaded JAR, and
-packages license material. Tests cover parsing, validation, lifecycle,
-concurrency, resource accounting, installation, reconciliation, commands,
-lobbies, SLS-Limbo, protocol integration boundaries, and Velocity registration.
+packages license material. It also checks the pinned Google Java Format output
+and fails on high-priority SpotBugs findings. Tests cover parsing, validation,
+lifecycle, concurrency, resource accounting, installation, reconciliation,
+commands, lobbies, SLS-Limbo, protocol integration boundaries, and Velocity
+registration.
+
+During development:
+
+```powershell
+mvn spotless:apply
+mvn spotless:check
+mvn compile spotbugs:check
+```
+
+The formatter covers production and test Java sources. SpotBugs analyzes
+production bytecode at maximum effort; its build gate rejects high-priority
+findings. Review lower-priority findings when changing the affected code rather
+than establishing an unreviewed suppression baseline.
 
 For a clean dependency-resolution check:
 

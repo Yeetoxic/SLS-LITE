@@ -304,6 +304,10 @@ future alone is not proof that reservations and filesystem state were released.
 
 ## Extension Points
 
+For the concrete files, paired tests, documentation, and fixture obligations
+for each change area, use the
+[Contributor Architecture Guide](Contributor_Architecture.md).
+
 Typical changes belong in:
 
 - commands: `SLSCommand`, `CommandMessages`, `VSLSCommandContract`, and command

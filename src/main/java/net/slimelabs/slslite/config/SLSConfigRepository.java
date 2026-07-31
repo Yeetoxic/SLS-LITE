@@ -1,576 +1,398 @@
 package net.slimelabs.slslite.config;
 
-import org.yaml.snakeyaml.LoaderOptions;
-import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.SafeConstructor;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Map;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 public final class SLSConfigRepository {
 
-    private static final String DEFAULT_CONFIG_RESOURCE =
-            "defaults/host/config.yml";
+  private static final String DEFAULT_CONFIG_RESOURCE = "defaults/host/config.yml";
 
-    private static final int DEFAULT_TOTAL_MEMORY_MIB = 4096;
-    private static final int DEFAULT_PORT_RANGE_START = 25570;
-    private static final int DEFAULT_PORT_RANGE_END = 25670;
-    private static final int DEFAULT_QUEUE_TIMEOUT_SECONDS = 180;
-    private static final int DEFAULT_IDLE_SHUTDOWN_SECONDS = 180;
-    private static final boolean DEFAULT_MIRROR_MANAGED_OUTPUT = false;
-    private static final boolean DEFAULT_WRITE_TEMPORARY_LOG = true;
-    private static final int DEFAULT_TEMPORARY_LOG_MAX_KIB = 4096;
-    private static final String DEFAULT_FORWARDING_MODE = "none";
-    private static final boolean DEFAULT_FORWARDING_ONLINE_MODE = true;
-    private static final String DEFAULT_FORWARDING_SECRET_FILE = "forwarding.secret";
-    private static final boolean DEFAULT_ALLOW_INSECURE_OFFLINE_ADMINISTRATORS = false;
-    private static final int DEFAULT_CLAIM_CODE_EXPIRY_SECONDS = 600;
-    private static final boolean DEFAULT_LIMBO_ENABLED = true;
-    private static final int DEFAULT_LIMBO_MEMORY_MIB = 96;
-    private static final int DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS = 30;
-    private static final int DEFAULT_LIMBO_ADVERTISED_PROTOCOL = -1;
-    private static final int DEFAULT_LIMBO_MAX_RESTART_ATTEMPTS = 5;
-    private static final int DEFAULT_LIMBO_INITIAL_BACKOFF_SECONDS = 2;
-    private static final int DEFAULT_LIMBO_MAX_BACKOFF_SECONDS = 30;
-    private static final int DEFAULT_LIMBO_STABLE_AFTER_SECONDS = 120;
-    private static final String DEFAULT_LOBBY_MODE = "external";
-    private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
-    private static final String DEFAULT_LOBBY_SERVER = "lobby";
-    private static final String DEFAULT_STORAGE_STRATEGY = "auto";
-    private static final int DEFAULT_SNAPSHOT_HOOK_TIMEOUT_SECONDS = 30;
-    private static final int DEFAULT_LOBBY_MAX_RESTART_ATTEMPTS = 5;
-    private static final int DEFAULT_LOBBY_INITIAL_BACKOFF_SECONDS = 5;
-    private static final int DEFAULT_LOBBY_MAX_BACKOFF_SECONDS = 60;
-    private static final int DEFAULT_LOBBY_STABLE_AFTER_SECONDS = 120;
-    private static final String DEFAULT_INSTANCES_DIRECTORY = "instances";
+  private static final int DEFAULT_TOTAL_MEMORY_MIB = 4096;
+  private static final int DEFAULT_PORT_RANGE_START = 25570;
+  private static final int DEFAULT_PORT_RANGE_END = 25670;
+  private static final int DEFAULT_QUEUE_TIMEOUT_SECONDS = 180;
+  private static final int DEFAULT_IDLE_SHUTDOWN_SECONDS = 180;
+  private static final boolean DEFAULT_MIRROR_MANAGED_OUTPUT = false;
+  private static final boolean DEFAULT_WRITE_TEMPORARY_LOG = true;
+  private static final int DEFAULT_TEMPORARY_LOG_MAX_KIB = 4096;
+  private static final String DEFAULT_FORWARDING_MODE = "none";
+  private static final boolean DEFAULT_FORWARDING_ONLINE_MODE = true;
+  private static final String DEFAULT_FORWARDING_SECRET_FILE = "forwarding.secret";
+  private static final boolean DEFAULT_ALLOW_INSECURE_OFFLINE_ADMINISTRATORS = false;
+  private static final int DEFAULT_CLAIM_CODE_EXPIRY_SECONDS = 600;
+  private static final boolean DEFAULT_LIMBO_ENABLED = true;
+  private static final int DEFAULT_LIMBO_MEMORY_MIB = 96;
+  private static final int DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS = 30;
+  private static final int DEFAULT_LIMBO_ADVERTISED_PROTOCOL = -1;
+  private static final int DEFAULT_LIMBO_MAX_RESTART_ATTEMPTS = 5;
+  private static final int DEFAULT_LIMBO_INITIAL_BACKOFF_SECONDS = 2;
+  private static final int DEFAULT_LIMBO_MAX_BACKOFF_SECONDS = 30;
+  private static final int DEFAULT_LIMBO_STABLE_AFTER_SECONDS = 120;
+  private static final String DEFAULT_LOBBY_MODE = "external";
+  private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
+  private static final String DEFAULT_LOBBY_SERVER = "lobby";
+  private static final String DEFAULT_STORAGE_STRATEGY = "auto";
+  private static final int DEFAULT_SNAPSHOT_HOOK_TIMEOUT_SECONDS = 30;
+  private static final int DEFAULT_LOBBY_MAX_RESTART_ATTEMPTS = 5;
+  private static final int DEFAULT_LOBBY_INITIAL_BACKOFF_SECONDS = 5;
+  private static final int DEFAULT_LOBBY_MAX_BACKOFF_SECONDS = 60;
+  private static final int DEFAULT_LOBBY_STABLE_AFTER_SECONDS = 120;
+  private static final String DEFAULT_INSTANCES_DIRECTORY = "instances";
 
-    private final Path dataDirectory;
-    private final Path proxyDirectory;
-    private final Path configPath;
-    private volatile SLSConfig config;
+  private final Path dataDirectory;
+  private final Path proxyDirectory;
+  private final Path configPath;
+  private volatile SLSConfig config;
 
-    public SLSConfigRepository(Path dataDirectory) {
-        this(dataDirectory, dataDirectory);
+  public SLSConfigRepository(Path dataDirectory) {
+    this(dataDirectory, dataDirectory);
+  }
+
+  public SLSConfigRepository(Path dataDirectory, Path proxyDirectory) {
+    this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
+    this.proxyDirectory = proxyDirectory.toAbsolutePath().normalize();
+    this.configPath = this.dataDirectory.resolve("config.yml");
+  }
+
+  public void initialize() throws IOException, ConfigurationException {
+    Files.createDirectories(dataDirectory);
+    installDefaultWhenMissing();
+    reload();
+    Files.createDirectories(get().instancesDirectory());
+  }
+
+  public synchronized void reload() throws ConfigurationException {
+    config = read();
+  }
+
+  public SLSConfig get() {
+    SLSConfig current = config;
+    if (current == null) {
+      throw new IllegalStateException("SLS-LITE configuration has not been initialized");
     }
+    return current;
+  }
 
-    public SLSConfigRepository(Path dataDirectory, Path proxyDirectory) {
-        this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
-        this.proxyDirectory = proxyDirectory.toAbsolutePath().normalize();
-        this.configPath = this.dataDirectory.resolve("config.yml");
-    }
+  private SLSConfig read() throws ConfigurationException {
+    LoaderOptions options = new LoaderOptions();
+    options.setAllowDuplicateKeys(false);
+    Yaml yaml = new Yaml(new SafeConstructor(options));
 
-    public void initialize() throws IOException, ConfigurationException {
-        Files.createDirectories(dataDirectory);
-        installDefaultWhenMissing();
-        reload();
-        Files.createDirectories(get().instancesDirectory());
-    }
+    try (InputStream input = Files.newInputStream(configPath)) {
+      Map<String, Object> root = YamlValues.asMap(yaml.load(input), "root", configPath);
+      Map<String, Object> resources = YamlValues.optionalMap(root, "resources", configPath);
+      Map<String, Object> network = YamlValues.optionalMap(root, "network", configPath);
+      Map<String, Object> ports = YamlValues.optionalMap(network, "ports", "network", configPath);
+      Map<String, Object> matchmaking = YamlValues.optionalMap(root, "matchmaking", configPath);
+      Map<String, Object> lifecycle = YamlValues.optionalMap(root, "lifecycle", configPath);
+      Map<String, Object> managedOutput =
+          YamlValues.optionalMap(root, "managed_output", configPath);
+      Map<String, Object> forwarding = YamlValues.optionalMap(root, "forwarding", configPath);
+      Map<String, Object> security = YamlValues.optionalMap(root, "security", configPath);
+      Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
+      Map<String, Object> lobbyRecovery =
+          YamlValues.optionalMap(lobby, "recovery", "lobby", configPath);
+      if (lobby.containsKey("limbo") && lobby.containsKey("emergency")) {
+        throw YamlValues.error(
+            configPath,
+            "'lobby.limbo' and deprecated 'lobby.emergency' " + "cannot both be configured");
+      }
+      Map<String, Object> limbo =
+          lobby.containsKey("limbo")
+              ? YamlValues.optionalMap(lobby, "limbo", "lobby", configPath)
+              : YamlValues.optionalMap(lobby, "emergency", "lobby", configPath);
+      String limboSection = lobby.containsKey("limbo") ? "lobby.limbo" : "lobby.emergency";
+      Map<String, Object> limboRecovery =
+          YamlValues.optionalMap(limbo, "recovery", limboSection, configPath);
+      Map<String, Object> storage = YamlValues.optionalMap(root, "storage", configPath);
+      Map<String, Object> snapshotHook =
+          YamlValues.optionalMap(storage, "snapshot_hook", "storage", configPath);
+      Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);
 
-    public synchronized void reload() throws ConfigurationException {
-        config = read();
-    }
+      YamlValues.requireOnlyKeys(
+          root,
+          "",
+          configPath,
+          "resources",
+          "network",
+          "matchmaking",
+          "lifecycle",
+          "managed_output",
+          "forwarding",
+          "security",
+          "lobby",
+          "storage",
+          "paths");
+      YamlValues.requireOnlyKeys(
+          resources, "resources", configPath, "total_memory_mib", "max_managed_processes");
+      YamlValues.requireOnlyKeys(network, "network", configPath, "ports");
+      YamlValues.requireOnlyKeys(ports, "network.ports", configPath, "start", "end");
+      YamlValues.requireOnlyKeys(matchmaking, "matchmaking", configPath, "queue_timeout_seconds");
+      YamlValues.requireOnlyKeys(lifecycle, "lifecycle", configPath, "idle_shutdown_seconds");
+      YamlValues.requireOnlyKeys(
+          managedOutput,
+          "managed_output",
+          configPath,
+          "mirror_to_proxy_console",
+          "write_temporary_file",
+          "temporary_file_max_kib");
+      YamlValues.requireOnlyKeys(
+          forwarding, "forwarding", configPath, "mode", "online_mode", "secret_file");
+      YamlValues.requireOnlyKeys(
+          security,
+          "security",
+          configPath,
+          "allow_insecure_offline_administrators",
+          "claim_code_expiry_seconds");
+      YamlValues.requireOnlyKeys(
+          lobby,
+          "lobby",
+          configPath,
+          "mode",
+          "registry",
+          "server",
+          "limbo",
+          "emergency",
+          "recovery");
+      YamlValues.requireOnlyKeys(
+          lobbyRecovery,
+          "lobby.recovery",
+          configPath,
+          "max_attempts",
+          "initial_backoff_seconds",
+          "max_backoff_seconds",
+          "stable_after_seconds");
+      YamlValues.requireOnlyKeys(
+          limbo,
+          limboSection,
+          configPath,
+          "enabled",
+          "memory_mib",
+          "startup_timeout_seconds",
+          "advertised_protocol",
+          "recovery");
+      YamlValues.requireOnlyKeys(
+          limboRecovery,
+          limboSection + ".recovery",
+          configPath,
+          "max_attempts",
+          "initial_backoff_seconds",
+          "max_backoff_seconds",
+          "stable_after_seconds");
+      YamlValues.requireOnlyKeys(storage, "storage", configPath, "strategy", "snapshot_hook");
+      YamlValues.requireOnlyKeys(
+          snapshotHook, "storage.snapshot_hook", configPath, "executable", "timeout_seconds");
+      YamlValues.requireOnlyKeys(paths, "paths", configPath, "instances");
 
-    public SLSConfig get() {
-        SLSConfig current = config;
-        if (current == null) {
-            throw new IllegalStateException("SLS-LITE configuration has not been initialized");
+      int totalMemory =
+          YamlValues.optionalPositiveInt(
+              resources, "total_memory_mib", DEFAULT_TOTAL_MEMORY_MIB, configPath);
+      int portStart =
+          YamlValues.optionalPositiveInt(ports, "start", DEFAULT_PORT_RANGE_START, configPath);
+      int portEnd =
+          YamlValues.optionalPositiveInt(ports, "end", DEFAULT_PORT_RANGE_END, configPath);
+      int maxManagedProcesses =
+          YamlValues.optionalPositiveInt(
+              resources, "max_managed_processes", portEnd - portStart + 1, configPath);
+      int queueTimeout =
+          YamlValues.optionalPositiveInt(
+              matchmaking, "queue_timeout_seconds", DEFAULT_QUEUE_TIMEOUT_SECONDS, configPath);
+      int idleShutdown =
+          YamlValues.optionalNonNegativeInt(
+              lifecycle, "idle_shutdown_seconds", DEFAULT_IDLE_SHUTDOWN_SECONDS, configPath);
+      boolean mirrorManagedOutput =
+          YamlValues.optionalBoolean(
+              managedOutput, "mirror_to_proxy_console", DEFAULT_MIRROR_MANAGED_OUTPUT, configPath);
+      boolean writeTemporaryLog =
+          YamlValues.optionalBoolean(
+              managedOutput, "write_temporary_file", DEFAULT_WRITE_TEMPORARY_LOG, configPath);
+      int temporaryLogMaxKiB =
+          YamlValues.optionalPositiveInt(
+              managedOutput, "temporary_file_max_kib", DEFAULT_TEMPORARY_LOG_MAX_KIB, configPath);
+      String forwardingMode =
+          YamlValues.optionalString(forwarding, "mode", DEFAULT_FORWARDING_MODE, configPath);
+      boolean forwardingOnlineMode =
+          YamlValues.optionalBoolean(
+              forwarding, "online_mode", DEFAULT_FORWARDING_ONLINE_MODE, configPath);
+      String forwardingSecretFile =
+          YamlValues.optionalString(
+              forwarding, "secret_file", DEFAULT_FORWARDING_SECRET_FILE, configPath);
+      boolean allowInsecureOfflineAdministrators =
+          YamlValues.optionalBoolean(
+              security,
+              "allow_insecure_offline_administrators",
+              DEFAULT_ALLOW_INSECURE_OFFLINE_ADMINISTRATORS,
+              configPath);
+      int claimCodeExpirySeconds =
+          YamlValues.optionalPositiveInt(
+              security, "claim_code_expiry_seconds", DEFAULT_CLAIM_CODE_EXPIRY_SECONDS, configPath);
+      String lobbyMode = YamlValues.optionalString(lobby, "mode", DEFAULT_LOBBY_MODE, configPath);
+      String lobbyRegistry =
+          YamlValues.optionalString(lobby, "registry", DEFAULT_LOBBY_REGISTRY, configPath);
+      String lobbyServer =
+          YamlValues.optionalString(lobby, "server", DEFAULT_LOBBY_SERVER, configPath);
+      int lobbyMaxRestartAttempts =
+          YamlValues.optionalNonNegativeInt(
+              lobbyRecovery, "max_attempts", DEFAULT_LOBBY_MAX_RESTART_ATTEMPTS, configPath);
+      int lobbyInitialBackoff =
+          YamlValues.optionalPositiveInt(
+              lobbyRecovery,
+              "initial_backoff_seconds",
+              DEFAULT_LOBBY_INITIAL_BACKOFF_SECONDS,
+              configPath);
+      int lobbyMaxBackoff =
+          YamlValues.optionalPositiveInt(
+              lobbyRecovery, "max_backoff_seconds", DEFAULT_LOBBY_MAX_BACKOFF_SECONDS, configPath);
+      int lobbyStableAfter =
+          YamlValues.optionalPositiveInt(
+              lobbyRecovery,
+              "stable_after_seconds",
+              DEFAULT_LOBBY_STABLE_AFTER_SECONDS,
+              configPath);
+      boolean limboEnabled =
+          YamlValues.optionalBoolean(limbo, "enabled", DEFAULT_LIMBO_ENABLED, configPath);
+      int limboMemory =
+          YamlValues.optionalPositiveInt(limbo, "memory_mib", DEFAULT_LIMBO_MEMORY_MIB, configPath);
+      int limboStartupTimeout =
+          YamlValues.optionalPositiveInt(
+              limbo, "startup_timeout_seconds", DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS, configPath);
+      int limboAdvertisedProtocol =
+          YamlValues.optionalMinusOneOrPositiveInt(
+              limbo, "advertised_protocol", DEFAULT_LIMBO_ADVERTISED_PROTOCOL, configPath);
+      int limboMaxRestartAttempts =
+          YamlValues.optionalNonNegativeInt(
+              limboRecovery, "max_attempts", DEFAULT_LIMBO_MAX_RESTART_ATTEMPTS, configPath);
+      int limboInitialBackoff =
+          YamlValues.optionalPositiveInt(
+              limboRecovery,
+              "initial_backoff_seconds",
+              DEFAULT_LIMBO_INITIAL_BACKOFF_SECONDS,
+              configPath);
+      int limboMaxBackoff =
+          YamlValues.optionalPositiveInt(
+              limboRecovery, "max_backoff_seconds", DEFAULT_LIMBO_MAX_BACKOFF_SECONDS, configPath);
+      int limboStableAfter =
+          YamlValues.optionalPositiveInt(
+              limboRecovery,
+              "stable_after_seconds",
+              DEFAULT_LIMBO_STABLE_AFTER_SECONDS,
+              configPath);
+      String storageStrategy =
+          YamlValues.optionalString(storage, "strategy", DEFAULT_STORAGE_STRATEGY, configPath);
+      String snapshotHookExecutable =
+          YamlValues.optionalString(snapshotHook, "executable", "", configPath);
+      int snapshotHookTimeoutSeconds =
+          YamlValues.optionalPositiveInt(
+              snapshotHook, "timeout_seconds", DEFAULT_SNAPSHOT_HOOK_TIMEOUT_SECONDS, configPath);
+      String instances =
+          YamlValues.optionalString(paths, "instances", DEFAULT_INSTANCES_DIRECTORY, configPath);
+
+      Path instancesDirectory = resolveManagedPath(instances, "paths.instances");
+      try {
+        StorageStrategy parsedStorageStrategy = StorageStrategy.parse(storageStrategy);
+        if (parsedStorageStrategy == StorageStrategy.SNAPSHOT_HOOK
+            && snapshotHookExecutable.isBlank()) {
+          throw new IllegalArgumentException(
+              "storage.snapshot_hook.executable is required when "
+                  + "storage.strategy is snapshot-hook");
         }
-        return current;
+        return new SLSConfig(
+            totalMemory,
+            maxManagedProcesses,
+            portStart,
+            portEnd,
+            queueTimeout,
+            idleShutdown,
+            new ManagedOutputConfig(mirrorManagedOutput, writeTemporaryLog, temporaryLogMaxKiB),
+            new ForwardingConfig(
+                ForwardingMode.parse(forwardingMode),
+                forwardingOnlineMode,
+                resolveProxyPath(forwardingSecretFile, "forwarding.secret_file")),
+            new SecurityConfig(allowInsecureOfflineAdministrators, claimCodeExpirySeconds),
+            new SLSLimboConfig(
+                limboEnabled,
+                limboMemory,
+                limboStartupTimeout,
+                limboAdvertisedProtocol,
+                limboMaxRestartAttempts,
+                limboInitialBackoff,
+                limboMaxBackoff,
+                limboStableAfter),
+            new LobbyConfig(
+                LobbyMode.parse(lobbyMode),
+                lobbyRegistry,
+                lobbyServer,
+                lobbyMaxRestartAttempts,
+                lobbyInitialBackoff,
+                lobbyMaxBackoff,
+                lobbyStableAfter),
+            new StorageConfig(
+                parsedStorageStrategy,
+                snapshotHookExecutable.isBlank()
+                    ? null
+                    : resolveManagedPath(
+                        snapshotHookExecutable, "storage.snapshot_hook.executable"),
+                snapshotHookTimeoutSeconds),
+            instancesDirectory);
+      } catch (IllegalArgumentException exception) {
+        throw YamlValues.error(configPath, exception.getMessage());
+      }
+    } catch (IOException exception) {
+      throw new ConfigurationException("Unable to read " + configPath, exception);
+    } catch (InvalidPathException exception) {
+      throw new ConfigurationException(
+          configPath + ": invalid path: " + exception.getMessage(), exception);
+    } catch (ConfigurationException exception) {
+      throw exception;
+    } catch (RuntimeException exception) {
+      throw new ConfigurationException(
+          "Invalid YAML in " + configPath + ": " + exception.getMessage(), exception);
+    }
+  }
+
+  private Path resolveManagedPath(String value, String key) throws ConfigurationException {
+    Path configured = Path.of(value);
+    if (configured.isAbsolute()) {
+      throw YamlValues.error(configPath, "'" + key + "' must be relative");
     }
 
-    private SLSConfig read() throws ConfigurationException {
-        LoaderOptions options = new LoaderOptions();
-        options.setAllowDuplicateKeys(false);
-        Yaml yaml = new Yaml(new SafeConstructor(options));
+    Path resolved = dataDirectory.resolve(configured).normalize();
+    if (!resolved.startsWith(dataDirectory)) {
+      throw YamlValues.error(configPath, "'" + key + "' must stay inside " + dataDirectory);
+    }
+    return resolved;
+  }
 
-        try (InputStream input = Files.newInputStream(configPath)) {
-            Map<String, Object> root = YamlValues.asMap(yaml.load(input), "root", configPath);
-            Map<String, Object> resources = YamlValues.optionalMap(root, "resources", configPath);
-            Map<String, Object> network = YamlValues.optionalMap(root, "network", configPath);
-            Map<String, Object> ports = YamlValues.optionalMap(
-                    network,
-                    "ports",
-                    "network",
-                    configPath
-            );
-            Map<String, Object> matchmaking =
-                    YamlValues.optionalMap(root, "matchmaking", configPath);
-            Map<String, Object> lifecycle =
-                    YamlValues.optionalMap(root, "lifecycle", configPath);
-            Map<String, Object> managedOutput =
-                    YamlValues.optionalMap(root, "managed_output", configPath);
-            Map<String, Object> forwarding =
-                    YamlValues.optionalMap(root, "forwarding", configPath);
-            Map<String, Object> security =
-                    YamlValues.optionalMap(root, "security", configPath);
-            Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
-            Map<String, Object> lobbyRecovery =
-                    YamlValues.optionalMap(
-                            lobby,
-                            "recovery",
-                            "lobby",
-                            configPath
-                    );
-            if (lobby.containsKey("limbo") && lobby.containsKey("emergency")) {
-                throw YamlValues.error(
-                        configPath,
-                        "'lobby.limbo' and deprecated 'lobby.emergency' "
-                                + "cannot both be configured"
-                );
-            }
-            Map<String, Object> limbo = lobby.containsKey("limbo")
-                    ? YamlValues.optionalMap(
-                            lobby,
-                            "limbo",
-                            "lobby",
-                            configPath
-                    )
-                    : YamlValues.optionalMap(
-                            lobby,
-                            "emergency",
-                            "lobby",
-                            configPath
-                    );
-            String limboSection = lobby.containsKey("limbo")
-                    ? "lobby.limbo"
-                    : "lobby.emergency";
-            Map<String, Object> limboRecovery =
-                    YamlValues.optionalMap(
-                            limbo,
-                            "recovery",
-                            limboSection,
-                            configPath
-                    );
-            Map<String, Object> storage =
-                    YamlValues.optionalMap(root, "storage", configPath);
-            Map<String, Object> snapshotHook =
-                    YamlValues.optionalMap(
-                            storage,
-                            "snapshot_hook",
-                            "storage",
-                            configPath
-                    );
-            Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);
+  private Path resolveProxyPath(String value, String key) throws ConfigurationException {
+    Path configured = Path.of(value);
+    if (configured.isAbsolute()) {
+      throw YamlValues.error(configPath, "'" + key + "' must be relative");
+    }
+    Path resolved = proxyDirectory.resolve(configured).normalize();
+    if (!resolved.startsWith(proxyDirectory)) {
+      throw YamlValues.error(configPath, "'" + key + "' must stay inside " + proxyDirectory);
+    }
+    return resolved;
+  }
 
-            YamlValues.requireOnlyKeys(
-                    root,
-                    "",
-                    configPath,
-                    "resources", "network", "matchmaking", "lifecycle", "managed_output",
-                    "forwarding", "security", "lobby", "storage", "paths"
-            );
-            YamlValues.requireOnlyKeys(
-                    resources,
-                    "resources",
-                    configPath,
-                    "total_memory_mib", "max_managed_processes"
-            );
-            YamlValues.requireOnlyKeys(network, "network", configPath, "ports");
-            YamlValues.requireOnlyKeys(ports, "network.ports", configPath, "start", "end");
-            YamlValues.requireOnlyKeys(
-                    matchmaking,
-                    "matchmaking",
-                    configPath,
-                    "queue_timeout_seconds"
-            );
-            YamlValues.requireOnlyKeys(
-                    lifecycle,
-                    "lifecycle",
-                    configPath,
-                    "idle_shutdown_seconds"
-            );
-            YamlValues.requireOnlyKeys(
-                    managedOutput,
-                    "managed_output",
-                    configPath,
-                    "mirror_to_proxy_console", "write_temporary_file",
-                    "temporary_file_max_kib"
-            );
-            YamlValues.requireOnlyKeys(
-                    forwarding,
-                    "forwarding",
-                    configPath,
-                    "mode", "online_mode", "secret_file"
-            );
-            YamlValues.requireOnlyKeys(
-                    security,
-                    "security",
-                    configPath,
-                    "allow_insecure_offline_administrators", "claim_code_expiry_seconds"
-            );
-            YamlValues.requireOnlyKeys(
-                    lobby,
-                    "lobby",
-                    configPath,
-                    "mode", "registry", "server", "limbo", "emergency", "recovery"
-            );
-            YamlValues.requireOnlyKeys(
-                    lobbyRecovery,
-                    "lobby.recovery",
-                    configPath,
-                    "max_attempts", "initial_backoff_seconds", "max_backoff_seconds",
-                    "stable_after_seconds"
-            );
-            YamlValues.requireOnlyKeys(
-                    limbo,
-                    limboSection,
-                    configPath,
-                    "enabled", "memory_mib", "startup_timeout_seconds",
-                    "advertised_protocol", "recovery"
-            );
-            YamlValues.requireOnlyKeys(
-                    limboRecovery,
-                    limboSection + ".recovery",
-                    configPath,
-                    "max_attempts", "initial_backoff_seconds", "max_backoff_seconds",
-                    "stable_after_seconds"
-            );
-            YamlValues.requireOnlyKeys(
-                    storage,
-                    "storage",
-                    configPath,
-                    "strategy", "snapshot_hook"
-            );
-            YamlValues.requireOnlyKeys(
-                    snapshotHook,
-                    "storage.snapshot_hook",
-                    configPath,
-                    "executable", "timeout_seconds"
-            );
-            YamlValues.requireOnlyKeys(paths, "paths", configPath, "instances");
-
-            int totalMemory = YamlValues.optionalPositiveInt(
-                    resources,
-                    "total_memory_mib",
-                    DEFAULT_TOTAL_MEMORY_MIB,
-                    configPath
-            );
-            int portStart = YamlValues.optionalPositiveInt(
-                    ports,
-                    "start",
-                    DEFAULT_PORT_RANGE_START,
-                    configPath
-            );
-            int portEnd = YamlValues.optionalPositiveInt(
-                    ports,
-                    "end",
-                    DEFAULT_PORT_RANGE_END,
-                    configPath
-            );
-            int maxManagedProcesses = YamlValues.optionalPositiveInt(
-                    resources,
-                    "max_managed_processes",
-                    portEnd - portStart + 1,
-                    configPath
-            );
-            int queueTimeout = YamlValues.optionalPositiveInt(
-                    matchmaking,
-                    "queue_timeout_seconds",
-                    DEFAULT_QUEUE_TIMEOUT_SECONDS,
-                    configPath
-            );
-            int idleShutdown = YamlValues.optionalNonNegativeInt(
-                    lifecycle,
-                    "idle_shutdown_seconds",
-                    DEFAULT_IDLE_SHUTDOWN_SECONDS,
-                    configPath
-            );
-            boolean mirrorManagedOutput = YamlValues.optionalBoolean(
-                    managedOutput,
-                    "mirror_to_proxy_console",
-                    DEFAULT_MIRROR_MANAGED_OUTPUT,
-                    configPath
-            );
-            boolean writeTemporaryLog = YamlValues.optionalBoolean(
-                    managedOutput,
-                    "write_temporary_file",
-                    DEFAULT_WRITE_TEMPORARY_LOG,
-                    configPath
-            );
-            int temporaryLogMaxKiB = YamlValues.optionalPositiveInt(
-                    managedOutput,
-                    "temporary_file_max_kib",
-                    DEFAULT_TEMPORARY_LOG_MAX_KIB,
-                    configPath
-            );
-            String forwardingMode = YamlValues.optionalString(
-                    forwarding,
-                    "mode",
-                    DEFAULT_FORWARDING_MODE,
-                    configPath
-            );
-            boolean forwardingOnlineMode = YamlValues.optionalBoolean(
-                    forwarding,
-                    "online_mode",
-                    DEFAULT_FORWARDING_ONLINE_MODE,
-                    configPath
-            );
-            String forwardingSecretFile = YamlValues.optionalString(
-                    forwarding,
-                    "secret_file",
-                    DEFAULT_FORWARDING_SECRET_FILE,
-                    configPath
-            );
-            boolean allowInsecureOfflineAdministrators = YamlValues.optionalBoolean(
-                    security,
-                    "allow_insecure_offline_administrators",
-                    DEFAULT_ALLOW_INSECURE_OFFLINE_ADMINISTRATORS,
-                    configPath
-            );
-            int claimCodeExpirySeconds = YamlValues.optionalPositiveInt(
-                    security,
-                    "claim_code_expiry_seconds",
-                    DEFAULT_CLAIM_CODE_EXPIRY_SECONDS,
-                    configPath
-            );
-            String lobbyMode = YamlValues.optionalString(
-                    lobby,
-                    "mode",
-                    DEFAULT_LOBBY_MODE,
-                    configPath
-            );
-            String lobbyRegistry = YamlValues.optionalString(
-                    lobby,
-                    "registry",
-                    DEFAULT_LOBBY_REGISTRY,
-                    configPath
-            );
-            String lobbyServer = YamlValues.optionalString(
-                    lobby,
-                    "server",
-                    DEFAULT_LOBBY_SERVER,
-                    configPath
-            );
-            int lobbyMaxRestartAttempts = YamlValues.optionalNonNegativeInt(
-                    lobbyRecovery,
-                    "max_attempts",
-                    DEFAULT_LOBBY_MAX_RESTART_ATTEMPTS,
-                    configPath
-            );
-            int lobbyInitialBackoff = YamlValues.optionalPositiveInt(
-                    lobbyRecovery,
-                    "initial_backoff_seconds",
-                    DEFAULT_LOBBY_INITIAL_BACKOFF_SECONDS,
-                    configPath
-            );
-            int lobbyMaxBackoff = YamlValues.optionalPositiveInt(
-                    lobbyRecovery,
-                    "max_backoff_seconds",
-                    DEFAULT_LOBBY_MAX_BACKOFF_SECONDS,
-                    configPath
-            );
-            int lobbyStableAfter = YamlValues.optionalPositiveInt(
-                    lobbyRecovery,
-                    "stable_after_seconds",
-                    DEFAULT_LOBBY_STABLE_AFTER_SECONDS,
-                    configPath
-            );
-            boolean limboEnabled = YamlValues.optionalBoolean(
-                    limbo,
-                    "enabled",
-                    DEFAULT_LIMBO_ENABLED,
-                    configPath
-            );
-            int limboMemory = YamlValues.optionalPositiveInt(
-                    limbo,
-                    "memory_mib",
-                    DEFAULT_LIMBO_MEMORY_MIB,
-                    configPath
-            );
-            int limboStartupTimeout = YamlValues.optionalPositiveInt(
-                    limbo,
-                    "startup_timeout_seconds",
-                    DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS,
-                    configPath
-            );
-            int limboAdvertisedProtocol =
-                    YamlValues.optionalMinusOneOrPositiveInt(
-                            limbo,
-                            "advertised_protocol",
-                            DEFAULT_LIMBO_ADVERTISED_PROTOCOL,
-                            configPath
-                    );
-            int limboMaxRestartAttempts = YamlValues.optionalNonNegativeInt(
-                    limboRecovery,
-                    "max_attempts",
-                    DEFAULT_LIMBO_MAX_RESTART_ATTEMPTS,
-                    configPath
-            );
-            int limboInitialBackoff = YamlValues.optionalPositiveInt(
-                    limboRecovery,
-                    "initial_backoff_seconds",
-                    DEFAULT_LIMBO_INITIAL_BACKOFF_SECONDS,
-                    configPath
-            );
-            int limboMaxBackoff = YamlValues.optionalPositiveInt(
-                    limboRecovery,
-                    "max_backoff_seconds",
-                    DEFAULT_LIMBO_MAX_BACKOFF_SECONDS,
-                    configPath
-            );
-            int limboStableAfter = YamlValues.optionalPositiveInt(
-                    limboRecovery,
-                    "stable_after_seconds",
-                    DEFAULT_LIMBO_STABLE_AFTER_SECONDS,
-                    configPath
-            );
-            String storageStrategy = YamlValues.optionalString(
-                    storage,
-                    "strategy",
-                    DEFAULT_STORAGE_STRATEGY,
-                    configPath
-            );
-            String snapshotHookExecutable = YamlValues.optionalString(
-                    snapshotHook,
-                    "executable",
-                    "",
-                    configPath
-            );
-            int snapshotHookTimeoutSeconds =
-                    YamlValues.optionalPositiveInt(
-                            snapshotHook,
-                            "timeout_seconds",
-                            DEFAULT_SNAPSHOT_HOOK_TIMEOUT_SECONDS,
-                            configPath
-                    );
-            String instances = YamlValues.optionalString(
-                    paths,
-                    "instances",
-                    DEFAULT_INSTANCES_DIRECTORY,
-                    configPath
-            );
-
-            Path instancesDirectory = resolveManagedPath(instances, "paths.instances");
-            try {
-                StorageStrategy parsedStorageStrategy =
-                        StorageStrategy.parse(storageStrategy);
-                if (parsedStorageStrategy == StorageStrategy.SNAPSHOT_HOOK
-                        && snapshotHookExecutable.isBlank()) {
-                    throw new IllegalArgumentException(
-                            "storage.snapshot_hook.executable is required when "
-                                    + "storage.strategy is snapshot-hook"
-                    );
-                }
-                return new SLSConfig(
-                        totalMemory,
-                        maxManagedProcesses,
-                        portStart,
-                        portEnd,
-                        queueTimeout,
-                        idleShutdown,
-                        new ManagedOutputConfig(
-                                mirrorManagedOutput,
-                                writeTemporaryLog,
-                                temporaryLogMaxKiB
-                        ),
-                        new ForwardingConfig(
-                                ForwardingMode.parse(forwardingMode),
-                                forwardingOnlineMode,
-                                resolveProxyPath(
-                                        forwardingSecretFile,
-                                        "forwarding.secret_file"
-                                )
-                        ),
-                        new SecurityConfig(
-                                allowInsecureOfflineAdministrators,
-                                claimCodeExpirySeconds
-                        ),
-                        new SLSLimboConfig(
-                                 limboEnabled,
-                                 limboMemory,
-                                 limboStartupTimeout,
-                                 limboAdvertisedProtocol,
-                                 limboMaxRestartAttempts,
-                                limboInitialBackoff,
-                                limboMaxBackoff,
-                                limboStableAfter
-                        ),
-                        new LobbyConfig(
-                                LobbyMode.parse(lobbyMode),
-                                lobbyRegistry,
-                                lobbyServer,
-                                lobbyMaxRestartAttempts,
-                                lobbyInitialBackoff,
-                                lobbyMaxBackoff,
-                                lobbyStableAfter
-                        ),
-                        new StorageConfig(
-                                parsedStorageStrategy,
-                                snapshotHookExecutable.isBlank()
-                                        ? null
-                                        : resolveManagedPath(
-                                                snapshotHookExecutable,
-                                                "storage.snapshot_hook.executable"
-                                        ),
-                                snapshotHookTimeoutSeconds
-                        ),
-                        instancesDirectory
-                );
-            } catch (IllegalArgumentException exception) {
-                throw YamlValues.error(configPath, exception.getMessage());
-            }
-        } catch (IOException exception) {
-            throw new ConfigurationException("Unable to read " + configPath, exception);
-        } catch (InvalidPathException exception) {
-            throw new ConfigurationException(configPath + ": invalid path: "
-                    + exception.getMessage(), exception);
-        } catch (ConfigurationException exception) {
-            throw exception;
-        } catch (RuntimeException exception) {
-            throw new ConfigurationException(
-                    "Invalid YAML in " + configPath + ": " + exception.getMessage(),
-                    exception
-            );
-        }
+  private void installDefaultWhenMissing() throws IOException {
+    if (Files.exists(configPath)) {
+      return;
     }
 
-    private Path resolveManagedPath(String value, String key) throws ConfigurationException {
-        Path configured = Path.of(value);
-        if (configured.isAbsolute()) {
-            throw YamlValues.error(configPath, "'" + key + "' must be relative");
-        }
-
-        Path resolved = dataDirectory.resolve(configured).normalize();
-        if (!resolved.startsWith(dataDirectory)) {
-            throw YamlValues.error(configPath, "'" + key + "' must stay inside "
-                    + dataDirectory);
-        }
-        return resolved;
+    try (InputStream source =
+        getClass().getClassLoader().getResourceAsStream(DEFAULT_CONFIG_RESOURCE)) {
+      if (source == null) {
+        throw new IOException("Bundled host default is missing: " + DEFAULT_CONFIG_RESOURCE);
+      }
+      Files.copy(source, configPath);
     }
-
-    private Path resolveProxyPath(String value, String key) throws ConfigurationException {
-        Path configured = Path.of(value);
-        if (configured.isAbsolute()) {
-            throw YamlValues.error(configPath, "'" + key + "' must be relative");
-        }
-        Path resolved = proxyDirectory.resolve(configured).normalize();
-        if (!resolved.startsWith(proxyDirectory)) {
-            throw YamlValues.error(
-                    configPath,
-                    "'" + key + "' must stay inside " + proxyDirectory
-            );
-        }
-        return resolved;
-    }
-
-    private void installDefaultWhenMissing() throws IOException {
-        if (Files.exists(configPath)) {
-            return;
-        }
-
-        try (InputStream source = getClass().getClassLoader()
-                .getResourceAsStream(DEFAULT_CONFIG_RESOURCE)) {
-            if (source == null) {
-                throw new IOException(
-                        "Bundled host default is missing: "
-                                + DEFAULT_CONFIG_RESOURCE
-                );
-            }
-            Files.copy(source, configPath);
-        }
-    }
+  }
 }

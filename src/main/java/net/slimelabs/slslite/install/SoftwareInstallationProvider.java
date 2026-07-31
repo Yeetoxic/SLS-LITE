@@ -1,19 +1,15 @@
 package net.slimelabs.slslite.install;
 
+import java.nio.file.Path;
+import java.util.function.Consumer;
 import net.slimelabs.slslite.software.SoftwareProfile;
 import net.slimelabs.slslite.software.SoftwareSource;
 
-import java.nio.file.Path;
-import java.util.function.Consumer;
-
 public interface SoftwareInstallationProvider {
 
-    SoftwareSource source();
+  SoftwareSource source();
 
-    InstallationArtifact install(
-            SoftwareProfile profile,
-            String version,
-            Path stagingDirectory,
-            Consumer<String> log
-    ) throws Exception;
+  InstallationArtifact install(
+      SoftwareProfile profile, String version, Path stagingDirectory, Consumer<String> log)
+      throws Exception;
 }

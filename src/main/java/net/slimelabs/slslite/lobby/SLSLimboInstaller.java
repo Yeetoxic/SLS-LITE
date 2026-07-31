@@ -1,9 +1,5 @@
 package net.slimelabs.slslite.lobby;
 
-import net.slimelabs.slslite.config.ForwardingConfig;
-import net.slimelabs.slslite.config.ForwardingMode;
-import net.slimelabs.slslite.config.SLSLimboConfig;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -14,119 +10,93 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Map;
+import net.slimelabs.slslite.config.ForwardingConfig;
+import net.slimelabs.slslite.config.ForwardingMode;
+import net.slimelabs.slslite.config.SLSLimboConfig;
 
 public final class SLSLimboInstaller {
 
-    public static final String NANOLIMBO_VERSION = "1.13.0";
-    public static final String NANOLIMBO_COMMIT =
-            "d192d57d1d4a5fdc7b87643f453d82cb7b9b4242";
-    public static final String RUNTIME_SHA256 =
-            "4811d42364287913c6ef601016f77049989d875d4741f7ce4c2b8d5364106de1";
+  public static final String NANOLIMBO_VERSION = "1.13.0";
+  public static final String NANOLIMBO_COMMIT = "d192d57d1d4a5fdc7b87643f453d82cb7b9b4242";
+  public static final String RUNTIME_SHA256 =
+      "4811d42364287913c6ef601016f77049989d875d4741f7ce4c2b8d5364106de1";
 
-    private static final String RESOURCE =
-            "/limbo/nanolimbo-" + NANOLIMBO_VERSION + ".jar";
-    private static final String RUNTIME_FILE =
-            "nanolimbo-" + NANOLIMBO_VERSION + ".jar";
+  private static final String RESOURCE = "/limbo/nanolimbo-" + NANOLIMBO_VERSION + ".jar";
+  private static final String RUNTIME_FILE = "nanolimbo-" + NANOLIMBO_VERSION + ".jar";
 
-    private final Path runtimeDirectory;
+  private final Path runtimeDirectory;
 
-    public SLSLimboInstaller(Path dataDirectory) {
-        runtimeDirectory = dataDirectory.toAbsolutePath().normalize()
-                .resolve("sls-limbo");
+  public SLSLimboInstaller(Path dataDirectory) {
+    runtimeDirectory = dataDirectory.toAbsolutePath().normalize().resolve("sls-limbo");
+  }
+
+  public SLSLimboInstallation install(int port, ForwardingConfig forwarding, int advertisedProtocol)
+      throws IOException {
+    Files.createDirectories(runtimeDirectory);
+    Path runtime = runtimeDirectory.resolve(RUNTIME_FILE);
+    if (!Files.isRegularFile(runtime) || !RUNTIME_SHA256.equalsIgnoreCase(sha256(runtime))) {
+      extractRuntime(runtime);
+    }
+    if (!RUNTIME_SHA256.equalsIgnoreCase(sha256(runtime))) {
+      throw new IOException("Bundled SLS-Limbo checksum verification failed");
+    }
+    Map<Integer, String> supportedProtocols = SLSLimboProtocolCatalog.inspect(runtime);
+    if (advertisedProtocol != -1 && !supportedProtocols.containsKey(advertisedProtocol)) {
+      throw new IOException(
+          "SLS-Limbo advertised protocol "
+              + advertisedProtocol
+              + " is not supported by bundled NanoLimbo "
+              + NANOLIMBO_VERSION);
+    }
+    if (advertisedProtocol != -1 && advertisedProtocol < SLSLimboConfig.MINIMUM_FIXED_PROTOCOL) {
+      throw new IOException(
+          "SLS-Limbo fixed protocol must be at least "
+              + SLSLimboConfig.MINIMUM_FIXED_PROTOCOL
+              + " because older NanoLimbo heightmaps cannot be "
+              + "safely translated across Minecraft 1.21.5");
     }
 
-    public SLSLimboInstallation install(
-            int port,
-            ForwardingConfig forwarding,
-            int advertisedProtocol
-    ) throws IOException {
-        Files.createDirectories(runtimeDirectory);
-        Path runtime = runtimeDirectory.resolve(RUNTIME_FILE);
-        if (!Files.isRegularFile(runtime)
-                || !RUNTIME_SHA256.equalsIgnoreCase(sha256(runtime))) {
-            extractRuntime(runtime);
-        }
-        if (!RUNTIME_SHA256.equalsIgnoreCase(sha256(runtime))) {
-            throw new IOException("Bundled SLS-Limbo checksum verification failed");
-        }
-        Map<Integer, String> supportedProtocols =
-                SLSLimboProtocolCatalog.inspect(runtime);
-        if (advertisedProtocol != -1
-                && !supportedProtocols.containsKey(advertisedProtocol)) {
-            throw new IOException(
-                    "SLS-Limbo advertised protocol " + advertisedProtocol
-                            + " is not supported by bundled NanoLimbo "
-                            + NANOLIMBO_VERSION
-            );
-        }
-        if (advertisedProtocol != -1
-                && advertisedProtocol
-                < SLSLimboConfig.MINIMUM_FIXED_PROTOCOL) {
-            throw new IOException(
-                    "SLS-Limbo fixed protocol must be at least "
-                            + SLSLimboConfig.MINIMUM_FIXED_PROTOCOL
-                            + " because older NanoLimbo heightmaps cannot be "
-                            + "safely translated across Minecraft 1.21.5"
-            );
-        }
-
-        String forwardingType = forwarding.mode() == ForwardingMode.MODERN
-                ? "MODERN"
-                : "NONE";
-        String forwardingSecret = "<UNUSED>";
-        if (forwarding.mode() == ForwardingMode.MODERN) {
-            if (!Files.isRegularFile(forwarding.secretFile())) {
-                throw new IOException(
-                        "Velocity forwarding secret does not exist: "
-                                + forwarding.secretFile()
-                );
-            }
-            Files.copy(
-                    forwarding.secretFile(),
-                    runtimeDirectory.resolve("forwarding.secret"),
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-            forwardingSecret = "@forwarding.secret";
-        }
-        Files.writeString(
-                runtimeDirectory.resolve("settings.yml"),
-                settings(
-                        port,
-                        forwardingType,
-                        forwardingSecret,
-                        advertisedProtocol
-                )
-        );
-        return new SLSLimboInstallation(runtimeDirectory, runtime);
+    String forwardingType = forwarding.mode() == ForwardingMode.MODERN ? "MODERN" : "NONE";
+    String forwardingSecret = "<UNUSED>";
+    if (forwarding.mode() == ForwardingMode.MODERN) {
+      if (!Files.isRegularFile(forwarding.secretFile())) {
+        throw new IOException(
+            "Velocity forwarding secret does not exist: " + forwarding.secretFile());
+      }
+      Files.copy(
+          forwarding.secretFile(),
+          runtimeDirectory.resolve("forwarding.secret"),
+          StandardCopyOption.REPLACE_EXISTING);
+      forwardingSecret = "@forwarding.secret";
     }
+    Files.writeString(
+        runtimeDirectory.resolve("settings.yml"),
+        settings(port, forwardingType, forwardingSecret, advertisedProtocol));
+    return new SLSLimboInstallation(runtimeDirectory, runtime);
+  }
 
-    private void extractRuntime(Path destination) throws IOException {
-        Path temporary = runtimeDirectory.resolve(RUNTIME_FILE + ".tmp");
-        try (InputStream input = getClass().getResourceAsStream(RESOURCE)) {
-            if (input == null) {
-                throw new IOException("Bundled SLS-Limbo resource is missing");
-            }
-            Files.copy(input, temporary, StandardCopyOption.REPLACE_EXISTING);
-        }
-        try {
-            Files.move(
-                    temporary,
-                    destination,
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-        } catch (AtomicMoveNotSupportedException ignored) {
-            Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
-        }
+  private void extractRuntime(Path destination) throws IOException {
+    Path temporary = runtimeDirectory.resolve(RUNTIME_FILE + ".tmp");
+    try (InputStream input = getClass().getResourceAsStream(RESOURCE)) {
+      if (input == null) {
+        throw new IOException("Bundled SLS-Limbo resource is missing");
+      }
+      Files.copy(input, temporary, StandardCopyOption.REPLACE_EXISTING);
     }
+    try {
+      Files.move(
+          temporary,
+          destination,
+          StandardCopyOption.ATOMIC_MOVE,
+          StandardCopyOption.REPLACE_EXISTING);
+    } catch (AtomicMoveNotSupportedException ignored) {
+      Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
+    }
+  }
 
-    private static String settings(
-            int port,
-            String forwardingType,
-            String forwardingSecret,
-            int advertisedProtocol
-    ) {
-        return """
+  private static String settings(
+      int port, String forwardingType, String forwardingSecret, int advertisedProtocol) {
+    return """
                 # Generated by SLS-LITE. Changes are replaced on proxy startup.
                 bind:
                   ip: "127.0.0.1"
@@ -183,33 +153,25 @@ public final class SLSLimboInstaller {
                   interval: 7.0
                   maxPacketRate: 500.0
                   maxPacketBytesRate: 4096.0
-                """.formatted(
-                port,
-                advertisedProtocol,
-                forwardingType,
-                forwardingSecret
-        );
-    }
+                """
+        .formatted(port, advertisedProtocol, forwardingType, forwardingSecret);
+  }
 
-    private static String sha256(Path path) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            try (InputStream input = Files.newInputStream(path)) {
-                byte[] buffer = new byte[8192];
-                int read;
-                while ((read = input.read(buffer)) != -1) {
-                    digest.update(buffer, 0, read);
-                }
-            }
-            return HexFormat.of().formatHex(digest.digest());
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
+  private static String sha256(Path path) throws IOException {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      try (InputStream input = Files.newInputStream(path)) {
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+          digest.update(buffer, 0, read);
         }
+      }
+      return HexFormat.of().formatHex(digest.digest());
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 is unavailable", exception);
     }
+  }
 
-    public record SLSLimboInstallation(
-            Path workingDirectory,
-            Path runtimeJar
-    ) {
-    }
+  public record SLSLimboInstallation(Path workingDirectory, Path runtimeJar) {}
 }

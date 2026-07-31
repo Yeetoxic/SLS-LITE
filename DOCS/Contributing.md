@@ -18,6 +18,18 @@ Run:
 mvn verify
 ```
 
+`verify` enforces Google Java Format through Spotless and runs the high-priority
+SpotBugs gate at maximum analysis effort. Before verification, apply the pinned
+formatter with:
+
+```powershell
+mvn spotless:apply
+```
+
+Use `mvn spotless:check` for a formatting-only check. Static-analysis findings
+must be reviewed; do not add broad exclusions or lower the configured gate to
+make a build pass.
+
 Do not commit generated `target/`, local Pterodactyl state, credentials,
 imported worlds, server caches, logs, or test allocation data.
 
@@ -36,8 +48,10 @@ imported worlds, server caches, logs, or test allocation data.
 
 ## Change Map
 
-Read [Architecture](ARCHITECTURE.md) before modifying commands, parsing,
-installation, lifecycle, lobby routing, or storage. Update all affected:
+Read [Architecture](ARCHITECTURE.md) for ownership and use the
+[Contributor Architecture Guide](Contributor_Architecture.md) to identify the
+implementation, tests, defaults, and documentation that must change together.
+Update all affected:
 
 - implementation and focused tests;
 - bundled commented examples;
@@ -75,4 +89,3 @@ A release candidate must be built from a reviewed source revision, pass the
 complete automated and documented manual suites, contain required license and
 third-party material, and publish a checksum. Snapshot artifacts are not
 production releases.
-

@@ -1,5 +1,12 @@
 package net.slimelabs.slslite.instance;
 
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.concurrent.CompletableFuture;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.instance.diagnostics.InstanceLogPage;
@@ -11,264 +18,250 @@ import net.slimelabs.slslite.instance.model.InstanceDefinitionIdentity;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.process.SupervisedProcess;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Optional;
-import java.util.OptionalLong;
-import java.util.concurrent.CompletableFuture;
-
 public final class ManagedInstance {
 
-    private final String id;
-    private final Blueprint blueprint;
-    private final InstanceDefinitionIdentity definitionIdentity;
-    private final int port;
-    private final Path directory;
-    private final InstanceLifecycle lifecycle;
-    private final Instant createdAt;
-    private final CompletableFuture<ManagedInstance> ready = new CompletableFuture<>();
-    private final CompletableFuture<Integer> stopped = new CompletableFuture<>();
-    private final InstanceOutput output;
-    private final InstancePhaseTimings timings = new InstancePhaseTimings();
+  private final String id;
+  private final Blueprint blueprint;
+  private final InstanceDefinitionIdentity definitionIdentity;
+  private final int port;
+  private final Path directory;
+  private final InstanceLifecycle lifecycle;
+  private final Instant createdAt;
+  private final CompletableFuture<ManagedInstance> ready = new CompletableFuture<>();
+  private final CompletableFuture<Integer> stopped = new CompletableFuture<>();
+  private final InstanceOutput output;
+  private final InstancePhaseTimings timings = new InstancePhaseTimings();
 
-    private volatile SupervisedProcess process;
-    private volatile boolean registered;
-    private volatile boolean stopRequested;
-    private volatile boolean preparationRunning;
-    private boolean failedStartDiagnosticsRecorded;
+  private volatile SupervisedProcess process;
+  private volatile boolean registered;
+  private volatile boolean stopRequested;
+  private volatile boolean preparationRunning;
+  private boolean failedStartDiagnosticsRecorded;
 
-    ManagedInstance(
-            String id,
-            Blueprint blueprint,
-            int port,
-            Path directory,
-            InstanceLifecycle lifecycle
-    ) {
-        this(id, blueprint, null, port, directory, lifecycle, Instant.now());
+  ManagedInstance(
+      String id, Blueprint blueprint, int port, Path directory, InstanceLifecycle lifecycle) {
+    this(id, blueprint, null, port, directory, lifecycle, Instant.now());
+  }
+
+  ManagedInstance(
+      String id,
+      Blueprint blueprint,
+      InstanceDefinitionIdentity definitionIdentity,
+      int port,
+      Path directory,
+      InstanceLifecycle lifecycle,
+      Instant createdAt) {
+    this.id = id;
+    this.blueprint = blueprint;
+    this.definitionIdentity = definitionIdentity;
+    this.port = port;
+    this.directory = directory;
+    this.output = new InstanceOutput(directory);
+    this.lifecycle = lifecycle;
+    this.createdAt = java.util.Objects.requireNonNull(createdAt, "createdAt");
+  }
+
+  ManagedInstance(
+      String id,
+      Blueprint blueprint,
+      int port,
+      Path directory,
+      InstanceLifecycle lifecycle,
+      Instant createdAt) {
+    this(id, blueprint, null, port, directory, lifecycle, createdAt);
+  }
+
+  public String id() {
+    return id;
+  }
+
+  public Blueprint blueprint() {
+    return blueprint;
+  }
+
+  public InstanceDefinitionIdentity definitionIdentity() {
+    return definitionIdentity;
+  }
+
+  public int port() {
+    return port;
+  }
+
+  public Path directory() {
+    return directory;
+  }
+
+  public InstanceState state() {
+    return lifecycle.state();
+  }
+
+  public Instant createdAt() {
+    return createdAt;
+  }
+
+  public CompletableFuture<ManagedInstance> readyFuture() {
+    return ready;
+  }
+
+  public CompletableFuture<Integer> stoppedFuture() {
+    return stopped;
+  }
+
+  public InstanceLogPage logs(int page, int linesPerPage) {
+    return output.page(page, linesPerPage);
+  }
+
+  public int retainedLogLines() {
+    return output.retainedLines();
+  }
+
+  public int logRetentionCapacity() {
+    return output.retentionCapacity();
+  }
+
+  public boolean mirrorsOutputToProxyConsole() {
+    return output.mirrorsToProxyConsole();
+  }
+
+  public boolean writesTemporaryLog() {
+    return output.writesTemporaryFile();
+  }
+
+  public Optional<Path> temporaryLogPath() {
+    return output.temporaryFilePath();
+  }
+
+  public OptionalLong processId() {
+    SupervisedProcess current = process;
+    if (current == null) {
+      return OptionalLong.empty();
     }
-
-    ManagedInstance(
-            String id,
-            Blueprint blueprint,
-            InstanceDefinitionIdentity definitionIdentity,
-            int port,
-            Path directory,
-            InstanceLifecycle lifecycle,
-            Instant createdAt
-    ) {
-        this.id = id;
-        this.blueprint = blueprint;
-        this.definitionIdentity = definitionIdentity;
-        this.port = port;
-        this.directory = directory;
-        this.output = new InstanceOutput(directory);
-        this.lifecycle = lifecycle;
-        this.createdAt = java.util.Objects.requireNonNull(createdAt, "createdAt");
+    try {
+      return OptionalLong.of(current.processId());
+    } catch (IllegalStateException exception) {
+      return OptionalLong.empty();
     }
+  }
 
-    ManagedInstance(
-            String id,
-            Blueprint blueprint,
-            int port,
-            Path directory,
-            InstanceLifecycle lifecycle,
-            Instant createdAt
-    ) {
-        this(id, blueprint, null, port, directory, lifecycle, createdAt);
+  public Optional<Instant> processStartedAt() {
+    SupervisedProcess current = process;
+    return current == null ? Optional.empty() : current.processStartedAt();
+  }
+
+  public Optional<Duration> processCpuTime() {
+    OptionalLong id = processId();
+    if (id.isEmpty()) {
+      return Optional.empty();
     }
+    return ProcessHandle.of(id.getAsLong()).flatMap(handle -> handle.info().totalCpuDuration());
+  }
 
-    public String id() {
-        return id;
+  public Optional<ProcessResourceSnapshot> processResources() {
+    OptionalLong id = processId();
+    if (id.isEmpty()) {
+      return Optional.empty();
     }
-
-    public Blueprint blueprint() {
-        return blueprint;
-    }
-
-    public InstanceDefinitionIdentity definitionIdentity() {
-        return definitionIdentity;
-    }
-
-    public int port() {
-        return port;
-    }
-
-    public Path directory() {
-        return directory;
-    }
-
-    public InstanceState state() {
-        return lifecycle.state();
-    }
-
-    public Instant createdAt() {
-        return createdAt;
-    }
-
-    public CompletableFuture<ManagedInstance> readyFuture() {
-        return ready;
-    }
-
-    public CompletableFuture<Integer> stoppedFuture() {
-        return stopped;
-    }
-
-    public InstanceLogPage logs(int page, int linesPerPage) {
-        return output.page(page, linesPerPage);
-    }
-
-    public int retainedLogLines() {
-        return output.retainedLines();
-    }
-
-    public int logRetentionCapacity() {
-        return output.retentionCapacity();
-    }
-
-    public boolean mirrorsOutputToProxyConsole() {
-        return output.mirrorsToProxyConsole();
-    }
-
-    public boolean writesTemporaryLog() {
-        return output.writesTemporaryFile();
-    }
-
-    public Optional<Path> temporaryLogPath() {
-        return output.temporaryFilePath();
-    }
-
-    public OptionalLong processId() {
-        SupervisedProcess current = process;
-        if (current == null) {
-            return OptionalLong.empty();
-        }
-        try {
-            return OptionalLong.of(current.processId());
-        } catch (IllegalStateException exception) {
-            return OptionalLong.empty();
-        }
-    }
-
-    public Optional<Instant> processStartedAt() {
-        SupervisedProcess current = process;
-        return current == null ? Optional.empty() : current.processStartedAt();
-    }
-
-    public Optional<Duration> processCpuTime() {
-        OptionalLong id = processId();
-        if (id.isEmpty()) {
-            return Optional.empty();
-        }
-        return ProcessHandle.of(id.getAsLong())
-                .flatMap(handle -> handle.info().totalCpuDuration());
-    }
-
-    public Optional<ProcessResourceSnapshot> processResources() {
-        OptionalLong id = processId();
-        if (id.isEmpty()) {
-            return Optional.empty();
-        }
-        ProcessHandle handle = ProcessHandle.of(id.getAsLong())
-                .filter(ProcessHandle::isAlive)
-                .orElse(null);
-        if (handle == null || processStartedAt()
-                .filter(started -> handle.info().startInstant()
+    ProcessHandle handle =
+        ProcessHandle.of(id.getAsLong()).filter(ProcessHandle::isAlive).orElse(null);
+    if (handle == null
+        || processStartedAt()
+            .filter(
+                started ->
+                    handle
+                        .info()
+                        .startInstant()
                         .map(actual -> !actual.equals(started))
                         .orElse(false))
-                .isPresent()) {
-            return Optional.empty();
-        }
-        return ProcessResourceMetrics.inspect(id.getAsLong()).map(snapshot ->
+            .isPresent()) {
+      return Optional.empty();
+    }
+    return ProcessResourceMetrics.inspect(id.getAsLong())
+        .map(
+            snapshot ->
                 new ProcessResourceSnapshot(
-                        snapshot.residentBytes(),
-                        snapshot.charactersRead(),
-                        snapshot.charactersWritten(),
-                        snapshot.storageBytesRead(),
-                        snapshot.storageBytesWritten()
-                )
-        );
-    }
+                    snapshot.residentBytes(),
+                    snapshot.charactersRead(),
+                    snapshot.charactersWritten(),
+                    snapshot.storageBytesRead(),
+                    snapshot.storageBytesWritten()));
+  }
 
-    public Optional<Duration> recordFirstPlayerConnected() {
-        return timings.firstPlayerConnected().map(Duration::ofNanos);
-    }
+  public Optional<Duration> recordFirstPlayerConnected() {
+    return timings.firstPlayerConnected().map(Duration::ofNanos);
+  }
 
-    void configureOutput(ManagedOutputConfig config) throws IOException {
-        output.configure(config);
-    }
+  void configureOutput(ManagedOutputConfig config) throws IOException {
+    output.configure(config);
+  }
 
-    void appendLog(String line) {
-        output.append(line);
-    }
+  void appendLog(String line) {
+    output.append(line);
+  }
 
-    Optional<IOException> takeOutputFailure() {
-        return output.takeFailure();
-    }
+  Optional<IOException> takeOutputFailure() {
+    return output.takeFailure();
+  }
 
-    void closeOutput() {
-        output.close();
-    }
+  void closeOutput() {
+    output.close();
+  }
 
-    InstanceLifecycle lifecycle() {
-        return lifecycle;
-    }
+  InstanceLifecycle lifecycle() {
+    return lifecycle;
+  }
 
-    InstancePhaseTimings timings() {
-        return timings;
-    }
+  InstancePhaseTimings timings() {
+    return timings;
+  }
 
-    SupervisedProcess process() {
-        return process;
-    }
+  SupervisedProcess process() {
+    return process;
+  }
 
-    void attachProcess(SupervisedProcess process) {
-        this.process = process;
-    }
+  void attachProcess(SupervisedProcess process) {
+    this.process = process;
+  }
 
-    boolean registered() {
-        return registered;
-    }
+  boolean registered() {
+    return registered;
+  }
 
-    void registered(boolean registered) {
-        this.registered = registered;
-    }
+  void registered(boolean registered) {
+    this.registered = registered;
+  }
 
-    boolean stopRequested() {
-        return stopRequested;
-    }
+  boolean stopRequested() {
+    return stopRequested;
+  }
 
-    void requestStop() {
-        stopRequested = true;
-    }
+  void requestStop() {
+    stopRequested = true;
+  }
 
-    boolean preparationRunning() {
-        return preparationRunning;
-    }
+  boolean preparationRunning() {
+    return preparationRunning;
+  }
 
-    void preparationStarted() {
-        preparationRunning = true;
-    }
+  void preparationStarted() {
+    preparationRunning = true;
+  }
 
-    void preparationFinished() {
-        preparationRunning = false;
-    }
+  void preparationFinished() {
+    preparationRunning = false;
+  }
 
-    synchronized boolean markFailedStartDiagnosticsRecorded() {
-        if (failedStartDiagnosticsRecorded) {
-            return false;
-        }
-        failedStartDiagnosticsRecorded = true;
-        return true;
+  synchronized boolean markFailedStartDiagnosticsRecorded() {
+    if (failedStartDiagnosticsRecorded) {
+      return false;
     }
+    failedStartDiagnosticsRecorded = true;
+    return true;
+  }
 
-    public record ProcessResourceSnapshot(
-            OptionalLong residentBytes,
-            OptionalLong charactersRead,
-            OptionalLong charactersWritten,
-            OptionalLong storageBytesRead,
-            OptionalLong storageBytesWritten
-    ) {
-    }
+  public record ProcessResourceSnapshot(
+      OptionalLong residentBytes,
+      OptionalLong charactersRead,
+      OptionalLong charactersWritten,
+      OptionalLong storageBytesRead,
+      OptionalLong storageBytesWritten) {}
 }

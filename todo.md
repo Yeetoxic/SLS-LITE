@@ -213,13 +213,13 @@ data, leaking resources, or trapping players in unexplained states.
       third-party resources without changing generated operator paths or keys.
 - [x] Normalize operator-edited YAML layout, ordering, comments, examples, and
       validation diagnostics.
-- [ ] Publish a contributor architecture guide covering normal modification
+- [x] Publish a contributor architecture guide covering normal modification
       points for commands, blueprints, installers, lifecycle, storage, lobbies,
       messages, and tests.
-- [ ] Apply moves in small reviewable passes, keep broad formatting separate,
+- [x] Apply moves in small reviewable passes, keep broad formatting separate,
       and run the full Maven suite plus focused Pterodactyl/Velocity smoke tests
       after every ownership-boundary change.
-- [ ] Add agreed automated formatting and lightweight static analysis in a
+- [x] Add agreed automated formatting and lightweight static analysis in a
       dedicated reviewable change.
 
 ### 3.5 Commands, Permissions, and Operator Workflows
