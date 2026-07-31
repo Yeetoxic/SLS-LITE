@@ -19,6 +19,9 @@ import java.util.stream.Stream;
 
 public final class BlueprintRepository {
 
+    private static final String DEFAULT_TEMPLATE_RESOURCE =
+            "defaults/blueprints/template.yml";
+
     private final Path directory;
     private final DefinitionCatalog catalog;
     private final BlueprintParser parser = new BlueprintParser();
@@ -119,10 +122,11 @@ public final class BlueprintRepository {
 
         try (InputStream source = getClass()
                 .getClassLoader()
-                .getResourceAsStream("template.yml")) {
+                .getResourceAsStream(DEFAULT_TEMPLATE_RESOURCE)) {
             if (source == null) {
                 throw new IOException(
-                        "Bundled blueprint template.yml is missing"
+                        "Bundled blueprint default is missing: "
+                                + DEFAULT_TEMPLATE_RESOURCE
                 );
             }
             Files.copy(source, directory.resolve("template.yml"));

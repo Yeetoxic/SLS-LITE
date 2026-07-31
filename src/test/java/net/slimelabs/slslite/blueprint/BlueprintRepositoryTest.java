@@ -66,7 +66,7 @@ class BlueprintRepositoryTest {
     @Test
     void loadsPinnedVSLSAnnotationsFromUpstreamFixture() throws Exception {
         copyResource(
-                "compatibility/sls-v0.2.0/example_vsls.yml",
+                "fixtures/compatibility/sls-v0.2.0/example_vsls.yml",
                 "archives/example_vsls.yml"
         );
 
@@ -96,7 +96,7 @@ class BlueprintRepositoryTest {
     @Test
     void loadsPinnedModernVolumeContractFixture() throws Exception {
         copyResource(
-                "compatibility/sls-v0.2.0/example_volumes.yml",
+                "fixtures/compatibility/sls-v0.2.0/example_volumes.yml",
                 "compatibility/example_volumes.yml"
         );
 
@@ -116,7 +116,7 @@ class BlueprintRepositoryTest {
     @Test
     void loadsPinnedModernStateContractFixture() throws Exception {
         copyResource(
-                "compatibility/sls-v0.2.0/example_state.yml",
+                "fixtures/compatibility/sls-v0.2.0/example_state.yml",
                 "compatibility/example_state.yml"
         );
 

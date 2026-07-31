@@ -13,6 +13,9 @@ import java.util.Map;
 
 public final class SLSConfigRepository {
 
+    private static final String DEFAULT_CONFIG_RESOURCE =
+            "defaults/host/config.yml";
+
     private static final int DEFAULT_TOTAL_MEMORY_MIB = 4096;
     private static final int DEFAULT_PORT_RANGE_START = 25570;
     private static final int DEFAULT_PORT_RANGE_END = 25670;
@@ -533,9 +536,13 @@ public final class SLSConfigRepository {
             return;
         }
 
-        try (InputStream source = getClass().getClassLoader().getResourceAsStream("config.yml")) {
+        try (InputStream source = getClass().getClassLoader()
+                .getResourceAsStream(DEFAULT_CONFIG_RESOURCE)) {
             if (source == null) {
-                throw new IOException("Bundled config.yml is missing");
+                throw new IOException(
+                        "Bundled host default is missing: "
+                                + DEFAULT_CONFIG_RESOURCE
+                );
             }
             Files.copy(source, configPath);
         }

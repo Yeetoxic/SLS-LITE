@@ -25,6 +25,11 @@ import java.util.stream.Stream;
 
 public final class SoftwareProfileRepository {
 
+    private static final String DEFAULT_PAPER_RESOURCE =
+            "defaults/software/paper-software.yml";
+    private static final String DEFAULT_VANILLA_RESOURCE =
+            "defaults/software/vanilla-software.yml";
+
     private static final Pattern VALID_ID = Pattern.compile("[a-z0-9][a-z0-9_-]{0,63}");
     private static final List<String> DEFAULT_JVM_ARGUMENTS =
             List.of("-Xms128M", "-Xmx{memory_mib}M");
@@ -332,16 +337,22 @@ public final class SoftwareProfileRepository {
         }
 
         try (InputStream source = getClass().getClassLoader()
-                .getResourceAsStream("paper-software.yml")) {
+                .getResourceAsStream(DEFAULT_PAPER_RESOURCE)) {
             if (source == null) {
-                throw new IOException("Bundled paper-software.yml is missing");
+                throw new IOException(
+                        "Bundled Paper software default is missing: "
+                                + DEFAULT_PAPER_RESOURCE
+                );
             }
             Files.copy(source, directory.resolve("paper.yml"));
         }
         try (InputStream source = getClass().getClassLoader()
-                .getResourceAsStream("vanilla-software.yml")) {
+                .getResourceAsStream(DEFAULT_VANILLA_RESOURCE)) {
             if (source == null) {
-                throw new IOException("Bundled vanilla-software.yml is missing");
+                throw new IOException(
+                        "Bundled vanilla software default is missing: "
+                                + DEFAULT_VANILLA_RESOURCE
+                );
             }
             Files.copy(source, directory.resolve("vanilla.yml"));
         }

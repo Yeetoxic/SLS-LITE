@@ -1,7 +1,8 @@
 # Configuration
 
 SLS-LITE generates `plugins/sls-lite/config.yml`. The bundled, commented
-[`config.yml`](../src/main/resources/config.yml) is the canonical default.
+[`config.yml`](../src/main/resources/defaults/host/config.yml) is the canonical
+default.
 Unknown structural keys are rejected. Host configuration changes require a
 Velocity restart; `/sls reload` reloads blueprints and software profiles only.
 

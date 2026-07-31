@@ -212,6 +212,20 @@ metadata adoption, the deprecated `lobby.emergency` configuration alias, and
 the pinned vSLS blueprint and command vocabulary. Their tests and migration
 documentation define the removal boundary.
 
+Packaged resources are organized by purpose:
+
+- `defaults/host`, `defaults/blueprints`, and `defaults/software` contain
+  canonical files copied to stable operator-facing names;
+- `limbo` contains the checksum-pinned child runtime;
+- `velocity-plugin.json` remains at the JAR root as required by Velocity;
+- compatibility samples live under test-only `fixtures/compatibility`;
+- source provenance remains in `THIRD_PARTY`, while licenses and notices are
+  copied into `META-INF` by Maven.
+
+Internal classpath paths are not operator contracts. The repositories and
+installer explicitly map them to the existing `config.yml`,
+`blueprints/template.yml`, software-profile, and `sls-limbo` runtime paths.
+
 ## Important Invariants
 
 The detailed ownership, state-machine, locking, accounting, path-security, and

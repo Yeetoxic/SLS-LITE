@@ -13,10 +13,10 @@ class BundledResourceTest {
     void packagesOnlyTheSupportedRuntimeResourceContract() {
         ClassLoader loader = getClass().getClassLoader();
         for (String resource : List.of(
-                "config.yml",
-                "paper-software.yml",
-                "template.yml",
-                "vanilla-software.yml",
+                "defaults/host/config.yml",
+                "defaults/blueprints/template.yml",
+                "defaults/software/paper-software.yml",
+                "defaults/software/vanilla-software.yml",
                 "velocity-plugin.json",
                 "limbo/nanolimbo-1.13.0.jar"
         )) {
@@ -28,5 +28,9 @@ class BundledResourceTest {
 
         assertNull(loader.getResource("Data_Versions"));
         assertNull(loader.getResource("Protocol_Versions"));
+        assertNull(loader.getResource("config.yml"));
+        assertNull(loader.getResource("paper-software.yml"));
+        assertNull(loader.getResource("template.yml"));
+        assertNull(loader.getResource("vanilla-software.yml"));
     }
 }

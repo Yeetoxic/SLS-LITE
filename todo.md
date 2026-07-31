@@ -209,7 +209,7 @@ data, leaking resources, or trapping players in unexplained states.
       documentation prove they are obsolete.
 - [x] Document lifecycle invariants, concurrency boundaries, resource
       accounting, path security, and non-obvious compatibility adaptations.
-- [ ] Organize bundled defaults, templates, examples, protocol data, tests, and
+- [x] Organize bundled defaults, templates, examples, protocol data, tests, and
       third-party resources without changing generated operator paths or keys.
 - [ ] Normalize operator-edited YAML layout, ordering, comments, examples, and
       validation diagnostics.
