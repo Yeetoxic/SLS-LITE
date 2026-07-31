@@ -240,6 +240,20 @@ class SLSCommandForcedStopTest {
   }
 
   @Test
+  void pinnedForceAliasIsAcceptedForAnOrdinaryServer() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby("other-lobby.abc123");
+    SLSCommand command = command(controller, lobby);
+
+    command.execute(
+        invocation(
+            source(Set.of("sls.command.stop"), new ArrayList<>()), "stop", INSTANCE_ID, "force"));
+
+    assertEquals(1, lobby.normalEvacuations);
+    assertEquals(1, controller.stops);
+  }
+
+  @Test
   void builtInAdministratorCanForceStopThisLobby() throws Exception {
     UUID uniqueId = UUID.randomUUID();
     administrators.add(uniqueId, "Admin");
@@ -316,7 +330,22 @@ class SLSCommandForcedStopTest {
             .join();
 
     assertTrue(normalSuggestions.isEmpty());
-    assertEquals(List.of("--force"), forceSuggestions);
+    assertEquals(List.of("force", "--force"), forceSuggestions);
+  }
+
+  @Test
+  void ordinaryStopSuggestsPinnedAndAdditiveForceWithNormalPermission() {
+    SLSCommand command =
+        command(new TrackingController(instance), new TrackingLobby("other-lobby.abc123"));
+
+    List<String> suggestions =
+        command
+            .suggestAsync(
+                invocation(
+                    source(Set.of("sls.command.stop"), new ArrayList<>()), "stop", INSTANCE_ID, ""))
+            .join();
+
+    assertEquals(List.of("force", "--force"), suggestions);
   }
 
   @Test

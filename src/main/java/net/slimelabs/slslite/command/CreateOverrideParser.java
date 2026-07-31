@@ -6,9 +6,7 @@ import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 
 public final class CreateOverrideParser {
 
-  public static final java.util.List<String> FLAGS =
-      java.util.List.of(
-          "--save=", "--memory=", "--seed=", "--view-distance=", "--enable-command-block=");
+  public static final java.util.List<String> FLAGS = VSLSCommandContract.LOCAL_CREATE_MODIFIERS;
 
   private CreateOverrideParser() {}
 
@@ -25,9 +23,15 @@ public final class CreateOverrideParser {
       if (value.isEmpty()) {
         throw new IllegalArgumentException("Create override --" + name + " requires a value");
       }
-      if (!isSupported(name)) {
+      String flag = "--" + name + "=";
+      if (VSLSCommandContract.DAEMON_CREATE_MODIFIERS.contains(flag)) {
         throw new IllegalArgumentException(
-            "Create override --" + name + " is unavailable in local mode");
+            "Create override --"
+                + name
+                + " is unavailable in local mode because it requires daemon/container control");
+      }
+      if (!isSupported(name)) {
+        throw new IllegalArgumentException("Unknown create override: --" + name);
       }
       if (values.putIfAbsent(name, value) != null) {
         throw new IllegalArgumentException("Duplicate create override: --" + name);

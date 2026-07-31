@@ -33,7 +33,11 @@ final class CreateOverrideParserTest {
 
   @Test
   void rejectsDaemonOnlyMalformedDuplicateAndInvalidOverrides() {
-    assertRejected("--node=node-one", "unavailable in local mode");
+    for (String flag : VSLSCommandContract.DAEMON_CREATE_MODIFIERS) {
+      String value = "--env=".equals(flag) ? "KEY=value" : "fixture";
+      assertRejected(flag + value, "requires daemon/container control");
+    }
+    assertRejected("--unknown=fixture", "Unknown create override");
     assertRejected("memory=1024", "--name=value");
     assertRejected("--memory=one", "integer");
     assertRejected("--save=maybe", "true or false");
@@ -43,6 +47,21 @@ final class CreateOverrideParserTest {
         () ->
             CreateOverrideParser.parse(
                 new String[] {"create", "minigame", "arena", "--memory=1024", "--memory=2048"}));
+  }
+
+  @Test
+  void pinnedCreateModifierInventoryIsExhaustiveAndDisjoint() {
+    assertEquals(
+        16,
+        java.util.stream.Stream.concat(
+                VSLSCommandContract.LOCAL_CREATE_MODIFIERS.stream(),
+                VSLSCommandContract.DAEMON_CREATE_MODIFIERS.stream())
+            .distinct()
+            .count());
+    assertTrue(
+        java.util.Collections.disjoint(
+            VSLSCommandContract.LOCAL_CREATE_MODIFIERS,
+            VSLSCommandContract.DAEMON_CREATE_MODIFIERS));
   }
 
   private static void assertRejected(String argument, String expected) {

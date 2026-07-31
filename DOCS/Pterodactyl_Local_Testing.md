@@ -255,6 +255,17 @@ removed immediately after the run. The reusable
 test commands, uses offline authentication, and is not packaged with the
 plugin.
 
+The Stage 3.5 retained-modifier gate passed on 2026-07-31 with JAR SHA-256
+`5A2B94FCD7CD00A7D898E3E4BB904A44345728A242FE8B79380E63EBD1F4880B`.
+On the normal unprivileged fixture, `reload config` directed the operator to
+restart Velocity, `status lobby.97f1ae remote` identified supervised local
+process state as authoritative, and `create lobby lobby --cpu=1` rejected the
+known daemon/container-only modifier before allocation. A disposable
+`stage1_lifecycle.3bvmsk` server then reached readiness and accepted the pinned
+non-dashed `stop ... force` form. It stopped gracefully with exit code zero,
+released its ephemeral directory, and left only Velocity, NanoLimbo, and the
+managed lobby JVM running. The panel remained healthy.
+
 ### Representative Storage and Resource Samples
 
 The repeated 2026-07-30 portable-copy pass used unchanged fixture worlds and

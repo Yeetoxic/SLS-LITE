@@ -18,6 +18,8 @@ import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandInstanceAccess;
 import net.slimelabs.slslite.command.CommandPermissions;
+import net.slimelabs.slslite.instance.ManagedInstance;
+import net.slimelabs.slslite.instance.ManagedInstanceTestFactory;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.security.AdministratorStore;
 import org.junit.jupiter.api.BeforeEach;
@@ -146,6 +148,12 @@ class InspectionCommandHandlerTest {
         handler.suggestions(
             source(Set.of(), new ArrayList<>()), "status", new String[] {"status", ""}));
     assertEquals(
+        List.of("remote"),
+        handler.suggestions(
+            source(Set.of(CommandPermissions.ADMIN), new ArrayList<>()),
+            "status",
+            new String[] {"status", "server.abcdef", ""}));
+    assertEquals(
         List.of("1"),
         handler.suggestions(
             source(Set.of(CommandPermissions.ADMIN), new ArrayList<>()),
@@ -157,6 +165,36 @@ class InspectionCommandHandlerTest {
             source(Set.of(CommandPermissions.ADMIN), new ArrayList<>()),
             "logs",
             new String[] {"logs", "server.abcdef", "1", ""}));
+  }
+
+  @Test
+  void remoteStatusModifierExplainsTheLocalAuthorityBoundary() {
+    Blueprint blueprint =
+        new Blueprint("arena", "Arena", "minigame", "paper-auto", "1.21.5", 1024, false, Map.of());
+    ManagedInstance instance =
+        ManagedInstanceTestFactory.preparing(
+            "arena.abcdef", blueprint, 25570, temporaryDirectory.resolve("arena.abcdef"));
+    ServerController instances = controller(instance);
+    handler =
+        new InspectionCommandHandler(
+            blueprints,
+            null,
+            null,
+            instances,
+            null,
+            null,
+            null,
+            null,
+            null,
+            new CommandAuthorizer(administratorStore()),
+            new CommandInstanceAccess(proxy(), instances));
+    List<Component> messages = new ArrayList<>();
+
+    handler.status(
+        source(Set.of(CommandPermissions.ADMIN), messages),
+        new String[] {"status", "arena.abcdef", "remote"});
+
+    assertTrue(plainText(messages.getFirst()).contains("local process state is authoritative"));
   }
 
   @Test
@@ -172,15 +210,31 @@ class InspectionCommandHandlerTest {
   }
 
   private static ServerController controller() {
+    return controller(null);
+  }
+
+  private static ServerController controller(ManagedInstance instance) {
     return (ServerController)
         Proxy.newProxyInstance(
             ServerController.class.getClassLoader(),
             new Class<?>[] {ServerController.class},
             (ignored, method, arguments) ->
                 switch (method.getName()) {
-                  case "getAll", "persistentInstanceIds" -> List.of();
+                  case "getAll" -> instance == null ? List.of() : List.of(instance);
+                  case "persistentInstanceIds" -> List.of();
                   default -> defaultValue(method.getReturnType());
                 });
+  }
+
+  private AdministratorStore administratorStore() {
+    try {
+      AdministratorStore administrators =
+          new AdministratorStore(temporaryDirectory.resolve("remote-status-security"));
+      administrators.initialize();
+      return administrators;
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
   }
 
   private static ProxyServer proxy() {

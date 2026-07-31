@@ -234,7 +234,8 @@ public final class SLSCommand implements SimpleCommand {
         case "dequeue" -> completed(playerRoutingHandler.suggestions(source, operation, arguments));
         case "reload" ->
             authorizer.canAdminister(source, "reload")
-                ? completed(List.of("all", "blueprints", "software"))
+                ? completed(
+                    List.of("all", "blueprints", "software", VSLSCommandContract.RELOAD_CONFIG))
                 : completed(List.of());
         case "create", "delete", "kill", "start", "reset", "restart" ->
             completed(lifecycleHandler.suggestions(source, operation, arguments));
@@ -266,9 +267,12 @@ public final class SLSCommand implements SimpleCommand {
     if (arguments.length == 3 && "logs".equals(operation)) {
       return completed(inspectionHandler.suggestions(source, operation, arguments));
     }
+    if (arguments.length == 3 && "status".equals(operation)) {
+      return completed(inspectionHandler.suggestions(source, operation, arguments));
+    }
     if (arguments.length == 3
         && "stop".equals(operation)
-        && authorizer.canAdminister(source, "stop.force")) {
+        && authorizer.canAdminister(source, "stop")) {
       return completed(lifecycleHandler.suggestions(source, operation, arguments));
     }
     if (arguments.length == 3
@@ -381,8 +385,19 @@ public final class SLSCommand implements SimpleCommand {
       return;
     }
     String mode = arguments.length == 1 ? "all" : arguments[1].toLowerCase(Locale.ROOT);
-    if (arguments.length > 2 || !List.of("all", "blueprints", "software").contains(mode)) {
-      source.sendMessage(CommandMessages.usage("/sls reload", "all", "blueprints", "software"));
+    if (arguments.length > 2
+        || !List.of("all", "blueprints", "software", VSLSCommandContract.RELOAD_CONFIG)
+            .contains(mode)) {
+      source.sendMessage(
+          CommandMessages.usage("/sls reload", "all", "blueprints", "software", "config"));
+      return;
+    }
+    if (VSLSCommandContract.RELOAD_CONFIG.equals(mode)) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Live config reload is unavailable in local mode; "
+                  + "restart Velocity to rebuild host-wide services safely.",
+              NamedTextColor.GRAY));
       return;
     }
     try {

@@ -188,6 +188,38 @@ final class SLSCommandSurfaceTest {
   }
 
   @Test
+  void configReloadModifierExplainsTheSafeLocalAlternative() {
+    List<Component> messages = new ArrayList<>();
+    CommandSource source = source(Set.of("sls.command.reload"), messages);
+
+    command.execute(invocation(source, "reload", "config"));
+
+    assertEquals(1, messages.size());
+    assertTrue(plainText(messages.getFirst()).contains("restart Velocity"));
+    assertTrue(command.suggestAsync(invocation(source, "reload", "")).join().contains("config"));
+  }
+
+  @Test
+  void remoteStatusModifierIsSuggestedOnlyWithStatusPermission() {
+    assertEquals(
+        List.of("remote"),
+        command
+            .suggestAsync(
+                invocation(
+                    source(Set.of("sls.command.status"), new ArrayList<>()),
+                    "status",
+                    "server.abcdef",
+                    ""))
+            .join());
+    assertEquals(
+        List.of(),
+        command
+            .suggestAsync(
+                invocation(source(Set.of(), new ArrayList<>()), "status", "server.abcdef", ""))
+            .join());
+  }
+
+  @Test
   void capabilityLinesIncludeDetailForConsoleSendersAndBoundLongValues() {
     String detail = "x".repeat(300);
 

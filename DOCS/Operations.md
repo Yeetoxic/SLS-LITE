@@ -64,6 +64,14 @@ skipped. Including the lobby requires `force` and `sls.command.kill.force`;
 ordinary targets are processed first, then players are diverted to SLS-Limbo
 before the lobby process is terminated.
 
+The pinned non-dashed `force` modifier is also retained for graceful
+`/sls stop`. For ordinary servers it does not weaken lifecycle ownership:
+SLS-LITE already unregisters the Velocity backend before requesting graceful
+shutdown, then retains process, port, memory, and storage ownership until
+verified exit. On the protected managed lobby, either `force` or the additive
+`--force` alias additionally requires `sls.command.stop.force` and activates
+the intentional SLS-Limbo drain workflow.
+
 ## Idle Cleanup
 
 Empty, ready, ephemeral instances stop after

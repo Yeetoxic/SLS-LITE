@@ -239,7 +239,7 @@ data, leaking resources, or trapping players in unexplained states.
         permission-aware ID completion.
   - [x] `debug`, preserving its pinned player-only sender, permission, toggle,
         feedback, and bounded sanitized diagnostic behavior.
-- [ ] Finish retained modifier behavior, including force semantics, and enumerate
+- [x] Finish retained modifier behavior, including force semantics, and enumerate
       every intentionally unavailable daemon-backed modifier.
 - [ ] Finish output, permission, selector, sender, usage-error, and
       tab-completion parity for every supported branch.

@@ -45,7 +45,7 @@ name a player and cannot use player-only selectors.
 | `/sls debug` | `debug` | Player-only toggle for bounded SLS-LITE command-dispatch diagnostics in chat. |
 | `/sls start <registry> <blueprint>` | `start` | Start a managed instance without joining it. The additive `/sls start <blueprint>` form also works for a globally unique ID. |
 | `/sls info <server\|this>` | `info` | Detailed instance information. |
-| `/sls status <server\|this>` | `status` | Lifecycle state. |
+| `/sls status <server\|this> [remote]` | `status` | Lifecycle state. `remote` is retained as an explicit local-mode boundary response because no daemon exists. |
 | `/sls stats [server\|this]` | `stats` | Uptime, CPU time, configured/current memory, Linux process I/O where measurable, and log retention. |
 | `/sls console <server\|this> <command...>` | `console` | Write one command to the child process input. |
 | `/sls logs <server\|this> [page] [lines]` | `logs` | Read retained child output; up to 100 lines per page. |
@@ -53,11 +53,11 @@ name a player and cannot use player-only selectors.
 | `/sls delete all` | `delete` | Sequentially delete every ordinary managed instance with per-server results. The managed lobby is always skipped. |
 | `/sls kill [server\|this] [force]` | `kill` | Evacuate players, immediately terminate the process without a graceful save, and perform normal owned-resource cleanup. A player may omit the target to select their current server. |
 | `/sls kill all [force]` | `kill` | Sequentially force-terminate active ordinary servers before any explicitly forced managed lobby. |
-| `/sls stop <server\|this>` | `stop` | Evacuate and gracefully stop an instance. |
+| `/sls stop <server\|this> [force]` | `stop` | Evacuate and gracefully stop an instance. The pinned `force` spelling and additive `--force` alias are accepted. |
 | `/sls restart <server\|this>` | `restart` | Restart a persistent instance with the same data. |
 | `/sls reset <server\|this>` | `reset` | Rebuild a persistent instance from current sources. |
 | `/sls dequeue <player\|all\|local>` | `dequeue`, `dequeue.others`, or admin | Cancel matching queued joins. |
-| `/sls reload [all\|blueprints\|software]` | `reload` | Atomically reload definition catalogs. |
+| `/sls reload [all\|blueprints\|software\|config]` | `reload` | Atomically reload definition catalogs. `config` explains that host-wide settings require a Velocity restart. |
 | `/sls install info` | `install` | Show software installation state. |
 | `/sls install logs <software> <version>` | `install` | Show recent provider-install output. |
 | `/sls system` | `system` | Host resources, filesystem/process capabilities, native COW probes, and selected local strategy. |
@@ -78,9 +78,18 @@ Create accepts this confined subset of vSLS `--name=value` overrides:
 Duplicate, malformed, empty, or out-of-range values are rejected before any
 instance resources are allocated. The effective definition is recorded in
 instance metadata, so persistent instances retain the same overrides through
-proxy restart, `/sls restart`, and `/sls reset`. Distributed placement,
-container, CPU, swap, disk, thread, image, and software/version overrides are
-intentionally unavailable in local mode.
+proxy restart, `/sls restart`, and `/sls reset`.
+
+The complete pinned daemon/container-only create modifier set is:
+
+```text
+--node= --cpu= --swap= --io_weight= --disk_space= --threads=
+--oom_disabled= --software= --version= --image= --env=
+```
+
+Each is recognized and rejected with an explicit local-mode explanation.
+Unknown flags are reported separately; they are not mislabeled as known
+daemon behavior.
 
 Debug mode follows the pinned vSLS player-only toggle and gray enabled/disabled
 feedback. While enabled, the player receives timestamp-hovered SLS-LITE debug
@@ -94,6 +103,7 @@ disable, disconnect, or proxy shutdown.
 ```text
 /sls join player <player> --force
 /sls kill <server|all> force
+/sls stop <server> force
 /sls stop <protected-lobby> --force
 /sls restart <protected-lobby> --force
 /sls reset <protected-lobby> --force
@@ -108,6 +118,10 @@ disable, disconnect, or proxy shutdown.
   as a SLS-LITE alias.
 - Killing the protected managed lobby additionally requires
   `sls.command.kill.force`. Without it, `kill all` skips the lobby.
+- On an ordinary server, stop `force` is a compatibility no-op because local
+  backend routing is already removed before the supervised graceful-stop
+  request. Process and resource ownership remains until verified process exit.
+  The additive `--force` spelling behaves identically.
 - Protected-lobby stop requires `sls.command.stop.force`.
 - Protected-lobby restart requires `sls.command.restart.force`.
 - Protected-lobby reset requires `sls.command.reset.force`.

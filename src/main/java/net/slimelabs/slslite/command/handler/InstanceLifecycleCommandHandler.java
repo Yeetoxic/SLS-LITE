@@ -15,6 +15,7 @@ import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandInstanceAccess;
 import net.slimelabs.slslite.command.CommandMessages;
 import net.slimelabs.slslite.command.CreateOverrideParser;
+import net.slimelabs.slslite.command.VSLSCommandContract;
 import net.slimelabs.slslite.instance.InstanceDeletionResult;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
@@ -128,19 +129,21 @@ public final class InstanceLifecycleCommandHandler {
     }
     if (arguments.length < 2
         || arguments.length > 3
-        || arguments.length == 3 && !"--force".equalsIgnoreCase(arguments[2])) {
-      source.sendMessage(CommandMessages.usage("/sls stop", "server", "server --force"));
+        || arguments.length == 3 && !isForceModifier(arguments[2])) {
+      source.sendMessage(CommandMessages.usage("/sls stop", "server", "server force"));
       return;
     }
     boolean force = arguments.length == 3;
-    if (force && !requireAdmin(source, "stop.force", "force-stop protected managed servers")) {
-      return;
-    }
     ManagedInstance instance = instanceAccess.resolve(source, arguments[1]);
     if (instance == null) {
       return;
     }
     boolean protectedLobby = lobbyProvider.isLobby(instance.id());
+    if (force
+        && protectedLobby
+        && !requireAdmin(source, "stop.force", "force-stop protected managed servers")) {
+      return;
+    }
     if (protectedLobby && !force) {
       source.sendMessage(
           CommandMessages.message(
@@ -150,14 +153,7 @@ public final class InstanceLifecycleCommandHandler {
               NamedTextColor.RED));
       return;
     }
-    if (force && !protectedLobby) {
-      source.sendMessage(
-          CommandMessages.message(
-              instance.id() + " is not protected; use /sls stop " + instance.id() + ".",
-              NamedTextColor.YELLOW));
-      return;
-    }
-    if (force) {
+    if (protectedLobby) {
       logger.warn(
           "Forced managed lobby stop requested by {} for {}",
           commandSourceName(source),
@@ -188,7 +184,7 @@ public final class InstanceLifecycleCommandHandler {
     evacuation.whenComplete(
         (ignored, evacuationFailure) -> {
           if (evacuationFailure != null) {
-            if (force) {
+            if (protectedLobby) {
               lobbyProvider.cancelIntentionalStop(instance.id());
               logger.warn(
                   "Forced managed lobby stop by {} for {} was cancelled: {}",
@@ -220,7 +216,7 @@ public final class InstanceLifecycleCommandHandler {
                     "Automatic managed-lobby recovery is suppressed until " + "Velocity restarts.",
                     NamedTextColor.GRAY));
           }
-          stopInstance(source, instance.id(), force);
+          stopInstance(source, instance.id(), protectedLobby);
         });
   }
 
@@ -373,8 +369,13 @@ public final class InstanceLifecycleCommandHandler {
     }
     if (arguments.length == 3
         && "stop".equals(operation)
-        && authorizer.canAdminister(source, "stop.force")) {
-      return List.of("--force");
+        && authorizer.canAdminister(source, "stop")) {
+      ManagedInstance target = instanceAccess.find(arguments[1]);
+      if (target != null
+          && (!lobbyProvider.isLobby(target.id())
+              || authorizer.canAdminister(source, "stop.force"))) {
+        return List.of(VSLSCommandContract.FORCE, VSLSCommandContract.ADDITIVE_FORCE);
+      }
     }
     if (arguments.length == 3
         && "kill".equals(operation)
@@ -612,7 +613,8 @@ public final class InstanceLifecycleCommandHandler {
   }
 
   private static boolean isForceModifier(String argument) {
-    return "force".equalsIgnoreCase(argument) || "--force".equalsIgnoreCase(argument);
+    return VSLSCommandContract.FORCE.equalsIgnoreCase(argument)
+        || VSLSCommandContract.ADDITIVE_FORCE.equalsIgnoreCase(argument);
   }
 
   private void stopInstance(CommandSource source, String instanceId, boolean forcedProtectedStop) {

@@ -14,6 +14,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandInstanceAccess;
 import net.slimelabs.slslite.command.CommandMessages;
+import net.slimelabs.slslite.command.VSLSCommandContract;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.instance.diagnostics.InstanceLogPage;
@@ -232,6 +233,11 @@ final class InstanceInspectionHandler {
         && authorizer.canAdminister(source, "logs")) {
       return List.of("1");
     }
+    if (arguments.length == 3
+        && "status".equals(operation)
+        && authorizer.canAdminister(source, "status")) {
+      return List.of(VSLSCommandContract.REMOTE_STATUS);
+    }
     if (arguments.length == 4
         && "logs".equals(operation)
         && authorizer.canAdminister(source, "logs")) {
@@ -244,12 +250,27 @@ final class InstanceInspectionHandler {
     if (!requireAdmin(source, permission, "inspect managed instances")) {
       return;
     }
-    if (arguments.length != 2) {
-      source.sendMessage(CommandMessages.usage("/sls " + permission, "server"));
+    boolean remote =
+        "status".equals(permission)
+            && arguments.length == 3
+            && VSLSCommandContract.REMOTE_STATUS.equalsIgnoreCase(arguments[2]);
+    if (arguments.length != 2 && !remote) {
+      source.sendMessage(
+          CommandMessages.usage(
+              "/sls " + permission,
+              "status".equals(permission) ? "server | server remote" : "server"));
       return;
     }
     ManagedInstance instance = instanceAccess.resolve(source, arguments[1]);
     if (instance == null) {
+      return;
+    }
+    if (remote) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Remote status is unavailable in local mode; "
+                  + "the supervised local process state is authoritative.",
+              NamedTextColor.GRAY));
       return;
     }
     if ("status".equals(permission)) {
