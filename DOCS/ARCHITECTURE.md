@@ -95,10 +95,17 @@ The initial inventory found 35 classes in `instance`, with storage,
 configuration editing, lifecycle state, reconciliation, and diagnostics mixed
 beside orchestration. The root package is now reduced to five production
 classes: the public controller/orchestration facade, its managed-instance
-facade, and the two shared operation exceptions. The remaining large pressure
-points are `SLSCommand`, `InstanceDirectoryPreparer`, and `InstanceManager`;
-they should be decomposed after cohesive leaf classes move, not while package
-movement and behavioral rewrites are mixed in one pass.
+facade, and the two shared operation exceptions. `SLSCommand` now dispatches
+to focused command-family handlers. The remaining large pressure points are
+`InstanceDirectoryPreparer` and `InstanceManager`; they should be decomposed
+only along tested ownership boundaries, not during unrelated behavioral
+rewrites.
+
+`InstanceDirectoryPreparer` owns storage transactions and selected-strategy
+layer orchestration. `BlueprintContentResolver` separately owns normalization,
+containment, overlap detection, symlink rejection, and resolution of untrusted
+blueprint volume/copy declarations. Low-level copy execution remains the next
+reviewable boundary.
 
 `InstanceManager` now delegates metadata persistence and persistent-instance
 compatibility to `InstanceMetadataService`, lifecycle timing presentation to
