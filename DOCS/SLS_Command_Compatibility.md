@@ -105,7 +105,10 @@ sender-rule drift, create-modifier omissions, force spelling drift, and loss of
 the intentional `node`, `pause`, or `resume` compatibility responses. Runtime
 tests exercise public and granular permissions, built-in administrators,
 console/player restrictions, other-player access, force permissions, invalid
-usage, and hidden suggestions.
+usage, and hidden suggestions. `OperatorDocumentationContractTest` additionally
+fails the build when command roots, permission nodes, modifiers, the pinned
+release/commit, or canonical host-configuration keys and defaults drift from
+their operator documentation.
 
 ## Compatibility Rules
 

@@ -13,6 +13,45 @@ administrative commands. A permission provider may grant:
 - `sls.command.<operation>.others` for targeting other players.
 - force nodes such as `sls.command.stop.force` and `sls.command.kill.force`.
 
+### Permission Reference
+
+The versioned command contract and build-time documentation checks keep this
+complete permission inventory synchronized with the runtime:
+
+| Permission | Grants |
+| --- | --- |
+| `sls.command.admin` | Every administrative command, force operation, and local administrator-management action. |
+| `sls.command.blueprint` | Inspect one blueprint. |
+| `sls.command.blueprints` | Browse blueprint registries. |
+| `sls.command.console` | Send child-console commands and manage console follow. |
+| `sls.command.create` | Provision a fresh instance. |
+| `sls.command.debug` | Toggle the player-only bounded debug stream. |
+| `sls.command.delete` | Delete ordinary managed instances. |
+| `sls.command.dequeue` | Administratively dequeue targets. |
+| `sls.command.dequeue.others` | Dequeue other players or selector groups. |
+| `sls.command.info` | Inspect one managed instance. |
+| `sls.command.install` | Inspect software installation state and logs. |
+| `sls.command.join` | Use administrative join forms. |
+| `sls.command.join.others` | Send other players or selector groups through matchmaking. |
+| `sls.command.join-test` | Probe a registered backend with bounded status negotiation. |
+| `sls.command.kill` | Immediately terminate ordinary managed instances. |
+| `sls.command.kill.force` | Include the protected managed lobby in a forced kill. |
+| `sls.command.logs` | Read bounded retained child output. |
+| `sls.command.node` | Receive the explicit local-mode node compatibility response. |
+| `sls.command.pause` | Receive the explicit unavailable pause response. |
+| `sls.command.reload` | Reload blueprint/software catalogs or inspect restart-only config behavior. |
+| `sls.command.reset` | Reset ordinary persistent instances. |
+| `sls.command.reset.force` | Reset the protected managed lobby. |
+| `sls.command.restart` | Restart ordinary persistent instances. |
+| `sls.command.restart.force` | Restart the protected managed lobby. |
+| `sls.command.resume` | Receive the explicit unavailable resume response. |
+| `sls.command.start` | Start a managed instance without joining it. |
+| `sls.command.stats` | Inspect managed process metrics. |
+| `sls.command.status` | Inspect managed lifecycle status. |
+| `sls.command.stop` | Gracefully stop ordinary managed instances. |
+| `sls.command.stop.force` | Stop the protected managed lobby. |
+| `sls.command.system` | Inspect host resources and capabilities. |
+
 ## Public Commands
 
 | Command | Purpose |

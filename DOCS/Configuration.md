@@ -17,7 +17,7 @@ and unknown keys include a nearest-key suggestion when one is unambiguous.
 | Key | Default | Valid values and behavior |
 | --- | --- | --- |
 | `resources.total_memory_mib` | `4096` | Positive MiB admission budget for managed children. Excludes Velocity and does not measure the panel limit. |
-| `resources.max_managed_processes` | port count | Positive process count, no greater than the managed port count. SLS-Limbo consumes one slot. |
+| `resources.max_managed_processes` | `101` (port count) | Positive process count, no greater than the managed port count. When omitted, defaults to the configured port count. SLS-Limbo consumes one slot. |
 | `network.ports.start` | `25570` | Integer `1024..65535`; first managed loopback port. |
 | `network.ports.end` | `25670` | Integer from `start..65535`; last managed loopback port. |
 | `matchmaking.queue_timeout_seconds` | `180` | Positive queue lifetime in seconds. |

@@ -261,7 +261,7 @@ data, leaking resources, or trapping players in unexplained states.
       unavailable and identify the safe local alternative.
 - [x] Design and implement an operator join-test command that performs bounded protocol-level
       probes without pretending a synthetic connection is a real player.
-- [ ] Maintain one generated or test-verified source for command, permission,
+- [x] Maintain one generated or test-verified source for command, permission,
       configuration, and compatibility documentation.
 
 ### 3.6 Configuration, Software, and Data
