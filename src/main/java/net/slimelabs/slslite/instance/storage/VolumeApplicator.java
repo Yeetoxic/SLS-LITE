@@ -46,19 +46,61 @@ final class VolumeApplicator {
 
   void apply(Path destination, List<ResolvedVolume> volumes, BooleanSupplier cancellationRequested)
       throws IOException, InstancePreparationException {
+    List<ResolvedVolume> privateVolumes = new ArrayList<>();
+    for (ResolvedVolume volume : volumes) {
+      if (volume.volume().mode() == BlueprintVolume.Mode.RW) {
+        applySharedWritable(volume, cancellationRequested);
+      } else {
+        privateVolumes.add(volume);
+      }
+    }
     if (strategy == StorageStrategy.BTRFS) {
-      applyBtrfs(destination, volumes, cancellationRequested);
+      applyBtrfs(destination, privateVolumes, cancellationRequested);
       return;
     }
     if (strategy == StorageStrategy.SNAPSHOT_HOOK) {
-      applySnapshotHook(destination, volumes, cancellationRequested);
+      applySnapshotHook(destination, privateVolumes, cancellationRequested);
       return;
     }
     if (strategy == StorageStrategy.OVERLAY || strategy == StorageStrategy.FUSE_OVERLAY) {
-      applyOverlay(destination, volumes, cancellationRequested);
+      applyOverlay(destination, privateVolumes, cancellationRequested);
       return;
     }
-    applyPortable(volumes, cancellationRequested);
+    applyPortable(privateVolumes, cancellationRequested);
+  }
+
+  private static void applySharedWritable(
+      ResolvedVolume volume, BooleanSupplier cancellationRequested)
+      throws IOException, InstancePreparationException {
+    checkCancelled(cancellationRequested);
+    if (Files.exists(volume.target(), LinkOption.NOFOLLOW_LINKS)) {
+      throw collision(volume);
+    }
+    Files.createDirectories(volume.target().getParent());
+    try {
+      Files.createSymbolicLink(volume.target(), volume.source());
+    } catch (UnsupportedOperationException | SecurityException exception) {
+      throw new InstancePreparationException(
+          "Shared writable volume '"
+              + volume.volume().name()
+              + "' requires directory symbolic-link support on this host",
+          exception);
+    } catch (IOException exception) {
+      throw new InstancePreparationException(
+          "Unable to create shared writable volume '"
+              + volume.volume().name()
+              + "' at "
+              + volume.volume().target()
+              + ": "
+              + exception.getMessage(),
+          exception);
+    }
+    if (!Files.isSymbolicLink(volume.target())
+        || !Files.isSameFile(volume.target(), volume.source())) {
+      Files.deleteIfExists(volume.target());
+      throw new InstancePreparationException(
+          "Shared writable volume link verification failed: " + volume.volume().name());
+    }
   }
 
   private void applyOverlay(

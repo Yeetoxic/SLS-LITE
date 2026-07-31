@@ -67,6 +67,8 @@ final class VSLSCommandContractTest {
             "reset.server",
             "install.info",
             "install.logs",
+            "install.warmup",
+            "install.cleanup",
             "admin.claim",
             "admin.code",
             "admin.add",
@@ -139,9 +141,9 @@ final class VSLSCommandContractTest {
   void selectorsModifiersAndCompletionsRemainExplicit() {
     VSLSCommandContract.Branch create = branch("create");
     assertEquals(
-        16,
+        17,
         create.modifiers().size(),
-        "five local and eleven daemon-only create modifiers must remain covered");
+        "six local and eleven daemon-only create modifiers must remain covered");
     assertTrue(create.modifiers().containsAll(VSLSCommandContract.LOCAL_CREATE_MODIFIERS));
     assertTrue(create.modifiers().containsAll(VSLSCommandContract.DAEMON_CREATE_MODIFIERS));
 

@@ -36,7 +36,7 @@ final class InstanceMetadataStoreTest {
             createdAt,
             42L,
             processStartedAt,
-            new InstanceLaunchOverrides(2048, true, "fixture", 10, false));
+            new InstanceLaunchOverrides(2048, true, "fixture", 10, 8, false));
 
     store.write(instance, expected);
 

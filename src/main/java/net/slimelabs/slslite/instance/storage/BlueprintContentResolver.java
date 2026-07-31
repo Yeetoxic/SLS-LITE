@@ -37,15 +37,6 @@ final class BlueprintContentResolver {
         Files.exists(instancesRoot) ? instancesRoot.toRealPath() : instancesRoot;
     List<ResolvedVolume> resolved = new ArrayList<>();
     for (BlueprintVolume volume : volumes) {
-      if (volume.mode() == BlueprintVolume.Mode.RW) {
-        throw new InstancePreparationException(
-            "Volume '"
-                + volume.name()
-                + "' uses mode rw. SLS-LITE "
-                + "cannot safely emulate a shared writable host mount; "
-                + "use cow or manage this server outside SLS-LITE");
-      }
-
       Path source = resolveVolumeSource(volume, realContentRoot);
       Path target = resolveVolumeTarget(volume, destination);
       if (source.startsWith(normalizedInstancesRoot)) {

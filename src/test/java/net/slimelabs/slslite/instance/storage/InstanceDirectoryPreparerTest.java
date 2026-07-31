@@ -185,24 +185,28 @@ class InstanceDirectoryPreparerTest {
   }
 
   @Test
-  void rejectsRwVolumeWithoutLeavingPartialInstance() throws Exception {
+  void exposesExplicitRwVolumeAsVerifiedSharedDirectoryLink() throws Exception {
     Path source = createSource();
-    createVolumeSource("data/shared");
+    Path shared = createVolumeSource("data/shared");
+    Files.writeString(shared.resolve("shared.txt"), "source");
     Path instances = temporaryDirectory.resolve("instances");
     InstanceDirectoryPreparer preparer =
         new InstanceDirectoryPreparer(instances, temporaryDirectory);
+    assumeDirectorySymlinksSupported(temporaryDirectory);
 
-    InstancePreparationException exception =
-        assertThrows(
-            InstancePreparationException.class,
-            () ->
-                preparer.prepare(
-                    "game.x82odk",
-                    source,
-                    List.of(volume("data/shared", "/data", BlueprintVolume.Mode.RW))));
+    Path prepared =
+        preparer.prepare(
+            "game.x82odk",
+            source,
+            List.of(volume("data/shared", "/data", BlueprintVolume.Mode.RW)));
 
-    assertTrue(exception.getMessage().contains("shared writable host mount"));
-    assertFalse(Files.exists(instances.resolve("game.x82odk")));
+    Path mounted = prepared.resolve("data");
+    assertTrue(Files.isSymbolicLink(mounted));
+    Files.writeString(mounted.resolve("shared.txt"), "instance");
+    assertEquals("instance", Files.readString(shared.resolve("shared.txt")));
+    preparer.delete("game.x82odk");
+    assertTrue(Files.isDirectory(shared));
+    assertFalse(Files.exists(prepared));
   }
 
   @Test
@@ -712,6 +716,18 @@ class InstanceDirectoryPreparerTest {
         Assumptions.abort("Symbolic links and junctions are unavailable: " + output.trim());
       }
       Assumptions.abort("Symbolic links are unavailable: " + symlinkFailure.getMessage());
+    }
+  }
+
+  private static void assumeDirectorySymlinksSupported(Path root) throws Exception {
+    Path target = Files.createDirectories(root.resolve("symlink-capability-target"));
+    Path link = root.resolve("symlink-capability-link");
+    try {
+      Files.createSymbolicLink(link, target);
+    } catch (UnsupportedOperationException | IOException exception) {
+      Assumptions.abort("Directory symbolic links are unavailable: " + exception.getMessage());
+    } finally {
+      Files.deleteIfExists(link);
     }
   }
 

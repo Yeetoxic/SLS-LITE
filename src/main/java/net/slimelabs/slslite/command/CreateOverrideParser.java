@@ -43,6 +43,7 @@ public final class CreateOverrideParser {
         bool(values, "save"),
         values.get("seed"),
         integer(values, "view-distance"),
+        integer(values, "simulation-distance"),
         bool(values, "enable-command-block"));
   }
 
@@ -54,6 +55,9 @@ public final class CreateOverrideParser {
     String value = values.get(name);
     if (value == null) {
       return null;
+    }
+    if (!value.matches("[0-9]+")) {
+      throw new IllegalArgumentException("--" + name + " must be an unsigned base-10 integer");
     }
     try {
       return Integer.valueOf(value);

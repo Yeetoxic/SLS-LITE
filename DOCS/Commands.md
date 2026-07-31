@@ -1,6 +1,6 @@
 # Commands And Permissions
 
-<!-- sls-command-contract-sha256:a634b400e18244de9df0a226fd607884d0abd7c708d596d580a97def12eb9dd8 -->
+<!-- sls-command-contract-sha256:b0ed1a91e576bc415f5d5f77d95689e4faa3a664f34b096052142cfc7415f4e3 -->
 
 SLS-LITE uses `/sls` and mirrors the pinned vSLS command tree where the local
 operation exists. Composite instance IDs use `<blueprint>.<short-id>`. For
@@ -105,6 +105,8 @@ name a player and cannot use player-only selectors.
 | `/sls reload [all\|blueprints\|software\|config]` | `reload` | Atomically reload definition catalogs. `config` explains that host-wide settings require a Velocity restart. |
 | `/sls install info` | `install` | Show software installation state. |
 | `/sls install logs <software> <version>` | `install` | Show recent provider-install output. |
+| `/sls install warmup <software> <version>` | `install` | Resolve, download, verify, and atomically publish a reusable provider cache without starting an instance. |
+| `/sls install cleanup <minimum-age-hours> [--confirm]` | `install` | Dry-run verified automatic-cache cleanup by default. `--confirm` removes only old unreferenced entries while protecting loaded definitions, active/persistent instances, and current installs. |
 | `/sls system` | `system` | Host resources, filesystem/process capabilities, native COW probes, and selected local strategy. |
 
 `/sls stats` without a server resolves to `this` and therefore requires a
@@ -126,6 +128,7 @@ Create accepts this confined subset of vSLS `--name=value` overrides:
 --save=<true|false>
 --seed=<server.properties level-seed>
 --view-distance=<2-32>
+--simulation-distance=<2-32; Minecraft 1.18+>
 --enable-command-block=<true|false>
 ```
 

@@ -27,9 +27,13 @@ For each historical entry:
 Do not point a volume at an old live writable server directory. Preserve the
 old installation as a read-only migration source until the new network passes.
 
-Historical command names such as `shutdown` and `config` are not the current
-documented forms. Use modern `/sls stop`, `/sls reload`, and blueprint
-inspection commands.
+Historical top-level command names `shutdown` and `config` are deliberately not
+retained as aliases: `shutdown` is ambiguous with proxy shutdown and bypasses
+the explicit target/evacuation language of `/sls stop`, while `config` suggests
+a live host mutation that SLS-LITE does not perform. Use modern `/sls stop`,
+`/sls reload`, and blueprint inspection commands. The only retained `config`
+token is the explicit `/sls reload config` response explaining that host-wide
+settings require a Velocity restart.
 
 ## From Modern SLS
 

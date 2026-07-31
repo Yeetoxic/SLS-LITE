@@ -93,19 +93,16 @@ class BlueprintContentResolverTest {
   }
 
   @Test
-  void rejectsSharedWritableVolumeMode() throws Exception {
+  void resolvesContainedSharedWritableVolumeMode() throws Exception {
     Files.createDirectories(contentRoot.resolve("shared"));
 
-    InstancePreparationException failure =
-        assertThrows(
-            InstancePreparationException.class,
-            () ->
-                resolver.resolveVolumes(
-                    List.of(
-                        new BlueprintVolume(
-                            "shared", "shared", "/shared", BlueprintVolume.Mode.RW)),
-                    destination));
+    var resolved =
+        resolver.resolveVolumes(
+            List.of(new BlueprintVolume("shared", "shared", "/shared", BlueprintVolume.Mode.RW)),
+            destination);
 
-    assertTrue(failure.getMessage().contains("uses mode rw"));
+    assertEquals(BlueprintVolume.Mode.RW, resolved.getFirst().volume().mode());
+    assertEquals(contentRoot.resolve("shared").toRealPath(), resolved.getFirst().source());
+    assertEquals(destination.resolve("shared"), resolved.getFirst().target());
   }
 }

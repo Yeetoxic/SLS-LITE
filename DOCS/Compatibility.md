@@ -17,7 +17,7 @@ scope approval were completed on 2026-07-29.
 | --- | --- | --- |
 | Dynamic registries | Supported | `blueprint.type` defines the registry. |
 | Blueprint identity and limits | Supported | Modern names for ID, name, type, software, version, memory, players, and instances. |
-| `state.volumes` | Adapted for local mode | Transactional `cow` merge and private-snapshot `ro`; `rw` loads but cannot launch without unsafe shared writable mounts. |
+| `state.volumes` | Adapted for local mode | Transactional `cow` merge, private-snapshot `ro`, and explicit persistent single-instance `rw` through a verified shared directory link. |
 | Blueprint annotations | Adapted | Unknown annotation trees and nulls are preserved; local lifecycle keys plus vSLS lifecycle, capacity, `gameType`, and bounded `on-join` keys are interpreted. |
 | Structured config patches | Partial | `server.properties`, contained nested YAML maps, and atomic text line-prefix patches are supported; JSON, XML, INI, and arbitrary properties targets are rejected. |
 | Software definitions | Adapted | Local profiles and constrained modern SLS definitions with shell-free Java invocation. |

@@ -179,6 +179,7 @@ public final class InstanceMetadataStore {
     set(values, "override_save", overrides.save());
     set(values, "override_seed", overrides.seed());
     set(values, "override_view_distance", overrides.viewDistance());
+    set(values, "override_simulation_distance", overrides.simulationDistance());
     set(values, "override_enable_command_block", overrides.enableCommandBlock());
   }
 
@@ -188,6 +189,7 @@ public final class InstanceMetadataStore {
         optionalBoolean(values, "override_save"),
         values.getProperty("override_seed"),
         optionalInteger(values, "override_view_distance"),
+        optionalInteger(values, "override_simulation_distance"),
         optionalBoolean(values, "override_enable_command_block"));
   }
 

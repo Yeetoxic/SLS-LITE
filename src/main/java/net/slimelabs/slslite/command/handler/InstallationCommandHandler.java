@@ -1,6 +1,7 @@
 package net.slimelabs.slslite.command.handler;
 
 import com.velocitypowered.api.command.CommandSource;
+import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -10,8 +11,13 @@ import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandMessages;
+import net.slimelabs.slslite.install.InstallationKey;
 import net.slimelabs.slslite.install.InstallationSnapshot;
+import net.slimelabs.slslite.install.SoftwareCacheCleanupReport;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
+import net.slimelabs.slslite.instance.InstanceOperationException;
+import net.slimelabs.slslite.instance.ServerController;
+import net.slimelabs.slslite.software.SoftwareProfile;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
 
 /**
@@ -23,12 +29,14 @@ public final class InstallationCommandHandler {
   private final SoftwareProfileRepository softwareProfiles;
   private final InstallationStatusSource installations;
   private final CommandAuthorizer authorizer;
+  private final ServerController instances;
 
   public InstallationCommandHandler(
       BlueprintRepository blueprints,
       SoftwareProfileRepository softwareProfiles,
       SoftwareInstallationService installations,
-      CommandAuthorizer authorizer) {
+      CommandAuthorizer authorizer,
+      ServerController instances) {
     this(
         blueprints,
         softwareProfiles,
@@ -44,8 +52,33 @@ public final class InstallationCommandHandler {
               public InstallationSnapshot snapshot(String softwareId, String version) {
                 return installations.snapshot(softwareId, version);
               }
+
+              @Override
+              public SoftwareCacheCleanupReport cleanup(
+                  Duration minimumAge,
+                  boolean dryRun,
+                  boolean confirmed,
+                  Set<InstallationKey> protectedKeys)
+                  throws Exception {
+                return installations.cleanupCache(minimumAge, dryRun, confirmed, protectedKeys);
+              }
+
+              @Override
+              public java.util.concurrent.CompletableFuture<java.nio.file.Path> warmup(
+                  SoftwareProfile profile, String version) {
+                return installations.ensureInstalled(profile, version);
+              }
             },
-        authorizer);
+        authorizer,
+        instances);
+  }
+
+  public InstallationCommandHandler(
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository softwareProfiles,
+      SoftwareInstallationService installations,
+      CommandAuthorizer authorizer) {
+    this(blueprints, softwareProfiles, installations, authorizer, null);
   }
 
   InstallationCommandHandler(
@@ -53,10 +86,20 @@ public final class InstallationCommandHandler {
       SoftwareProfileRepository softwareProfiles,
       InstallationStatusSource installations,
       CommandAuthorizer authorizer) {
+    this(blueprints, softwareProfiles, installations, authorizer, null);
+  }
+
+  InstallationCommandHandler(
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository softwareProfiles,
+      InstallationStatusSource installations,
+      CommandAuthorizer authorizer,
+      ServerController instances) {
     this.blueprints = blueprints;
     this.softwareProfiles = softwareProfiles;
     this.installations = installations;
     this.authorizer = authorizer;
+    this.instances = instances;
   }
 
   public void execute(CommandSource source, String[] arguments) {
@@ -83,7 +126,22 @@ public final class InstallationCommandHandler {
       sendLogs(source, arguments[2], arguments[3]);
       return;
     }
-    source.sendMessage(CommandMessages.usage("/sls install", "info", "logs <software> <version>"));
+    if ((arguments.length == 3 || arguments.length == 4)
+        && "cleanup".equalsIgnoreCase(arguments[1])) {
+      cleanup(source, arguments);
+      return;
+    }
+    if (arguments.length == 4 && "warmup".equalsIgnoreCase(arguments[1])) {
+      warmup(source, arguments[2], arguments[3]);
+      return;
+    }
+    source.sendMessage(
+        CommandMessages.usage(
+            "/sls install",
+            "info",
+            "logs <software> <version>",
+            "warmup <software> <version>",
+            "cleanup <minimum-age-hours> [--confirm]"));
   }
 
   public List<String> suggestions(CommandSource source, String[] arguments) {
@@ -91,15 +149,131 @@ public final class InstallationCommandHandler {
       return List.of();
     }
     if (arguments.length == 2) {
-      return List.of("info", "logs");
+      return List.of("info", "logs", "warmup", "cleanup");
     }
-    if (arguments.length == 3 && "logs".equalsIgnoreCase(arguments[1])) {
+    if (arguments.length == 3
+        && ("logs".equalsIgnoreCase(arguments[1]) || "warmup".equalsIgnoreCase(arguments[1]))) {
       return softwareIds();
     }
-    if (arguments.length == 4 && "logs".equalsIgnoreCase(arguments[1])) {
+    if (arguments.length == 4
+        && ("logs".equalsIgnoreCase(arguments[1]) || "warmup".equalsIgnoreCase(arguments[1]))) {
       return versions(arguments[2]);
     }
+    if (arguments.length == 4 && "cleanup".equalsIgnoreCase(arguments[1])) {
+      return List.of("--confirm");
+    }
     return List.of();
+  }
+
+  private void warmup(CommandSource source, String softwareId, String version) {
+    SoftwareProfile profile = softwareProfiles.get(softwareId).orElse(null);
+    if (profile == null) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Unknown software profile " + softwareId + ".", NamedTextColor.RED));
+      return;
+    }
+    source.sendMessage(
+        CommandMessages.message(
+            "Warming verified software cache " + softwareId + ":" + version + "...",
+            NamedTextColor.YELLOW));
+    installations
+        .warmup(profile, version)
+        .whenComplete(
+            (path, failure) -> {
+              if (failure == null) {
+                source.sendMessage(
+                    CommandMessages.message(
+                        "Software cache ready: " + softwareId + ":" + version + ".",
+                        NamedTextColor.GREEN));
+              } else {
+                source.sendMessage(
+                    CommandMessages.message(
+                        "Software warmup failed: " + rootMessage(failure), NamedTextColor.RED));
+              }
+            });
+  }
+
+  private static String rootMessage(Throwable failure) {
+    Throwable current = failure;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+    return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
+  }
+
+  private void cleanup(CommandSource source, String[] arguments) {
+    if (instances == null) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Software cache cleanup is unavailable without instance ownership data.",
+              NamedTextColor.RED));
+      return;
+    }
+    long hours;
+    try {
+      if (!arguments[2].matches("[0-9]+")) {
+        throw new NumberFormatException();
+      }
+      hours = Long.parseLong(arguments[2]);
+    } catch (NumberFormatException exception) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Minimum age must be a whole number of hours.", NamedTextColor.RED));
+      return;
+    }
+    boolean confirmed = arguments.length == 4 && "--confirm".equalsIgnoreCase(arguments[3]);
+    if (arguments.length == 4 && !confirmed) {
+      source.sendMessage(
+          CommandMessages.usage("/sls install", "cleanup <minimum-age-hours> [--confirm]"));
+      return;
+    }
+    Set<InstallationKey> protectedKeys = new java.util.HashSet<>();
+    blueprints.getAll().stream()
+        .map(blueprint -> new InstallationKey(blueprint.software(), blueprint.version()))
+        .forEach(protectedKeys::add);
+    try {
+      protectedKeys.addAll(instances.protectedSoftwareVersions());
+      SoftwareCacheCleanupReport report =
+          installations.cleanup(
+              Duration.ofHours(hours), !confirmed, confirmed, Set.copyOf(protectedKeys));
+      source.sendMessage(
+          CommandMessages.message(
+              (report.dryRun() ? "Software cleanup dry run" : "Software cleanup complete")
+                  + ": "
+                  + report.eligible().size()
+                  + " eligible, "
+                  + report.removed().size()
+                  + " removed, "
+                  + report.protectedCount()
+                  + " protected, "
+                  + report.tooNewCount()
+                  + " too new.",
+              report.removed().isEmpty() ? NamedTextColor.YELLOW : NamedTextColor.GREEN));
+      if (report.dryRun() && !report.eligible().isEmpty()) {
+        source.sendMessage(
+            CommandMessages.message(
+                "Review the candidates, then repeat with --confirm to delete them.",
+                NamedTextColor.GRAY));
+      }
+      report
+          .eligible()
+          .forEach(
+              entry ->
+                  source.sendMessage(
+                      CommandMessages.message(
+                          (report.dryRun() ? "Would remove " : "Removed ") + entry.key(),
+                          NamedTextColor.GRAY)));
+    } catch (InstanceOperationException exception) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Unable to determine protected software: " + exception.getMessage(),
+              NamedTextColor.RED));
+    } catch (Exception exception) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Software cleanup failed: " + exception.getMessage(), NamedTextColor.RED));
+    }
   }
 
   private void sendInfo(CommandSource source) {
@@ -180,5 +354,17 @@ public final class InstallationCommandHandler {
     List<InstallationSnapshot> snapshots();
 
     InstallationSnapshot snapshot(String softwareId, String version);
+
+    default SoftwareCacheCleanupReport cleanup(
+        Duration minimumAge, boolean dryRun, boolean confirmed, Set<InstallationKey> protectedKeys)
+        throws Exception {
+      throw new UnsupportedOperationException("Software cleanup is unavailable");
+    }
+
+    default java.util.concurrent.CompletableFuture<java.nio.file.Path> warmup(
+        SoftwareProfile profile, String version) {
+      return java.util.concurrent.CompletableFuture.failedFuture(
+          new UnsupportedOperationException("Software warmup is unavailable"));
+    }
   }
 }

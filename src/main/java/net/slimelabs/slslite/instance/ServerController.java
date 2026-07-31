@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import net.slimelabs.slslite.install.InstallationKey;
 import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 
 public interface ServerController {
@@ -28,6 +29,17 @@ public interface ServerController {
 
   default Collection<String> persistentInstanceIds(String blueprintId) {
     return List.of();
+  }
+
+  default Collection<InstallationKey> protectedSoftwareVersions()
+      throws InstanceOperationException {
+    return getAll().stream()
+        .map(
+            instance ->
+                new InstallationKey(
+                    instance.blueprint().software(), instance.blueprint().version()))
+        .distinct()
+        .toList();
   }
 
   default void sendCommand(String instanceId, String command) throws InstanceOperationException {

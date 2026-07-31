@@ -46,8 +46,9 @@ save: false
 #
 # mode: cow creates a private mutable instance view using the best safe selected
 # COW strategy, with transactional portable copy as the universal fallback.
-# mode: ro creates a private source-protecting snapshot. Shared writable rw
-# volumes are intentionally rejected during preparation.
+# mode: ro creates a private source-protecting snapshot. Explicit rw shares
+# persistent writable state and requires trusted plugins plus host directory-link
+# support. Keep max_instances: 1 unless the software safely coordinates access.
 # state:
 #   volumes:
 #     - name: world
@@ -68,3 +69,6 @@ annotations:
     # idle-shutdown-seconds: 180
     # Set false to disable empty-server shutdown for this blueprint.
     stop-when-empty: true
+    # Optional bounded overrides for unusually slow startup or shutdown.
+    # startup-timeout-seconds: 180
+    # stop-timeout-seconds: 30

@@ -141,7 +141,11 @@ and shutdown behavior.
 The first start or join request for missing provider-backed software starts an
 installation. Requests for the same software and version share one operation.
 Downloads use a temporary sibling directory and are published only after
-verification. Existing incomplete directories are preserved and reported.
+verification. An existing automatic-install directory that fails verification
+is preserved in a sibling `.VERSION.incomplete-*` quarantine while a verified
+replacement is installed. A failed replacement restores the quarantined
+directory to its original path; a successful replacement retains it for
+operator inspection. Cache cleanup ignores these unverified quarantines.
 Failed staging directories are removed.
 
 Provider-backed caches include an SLS-LITE metadata file. On every proxy
@@ -152,6 +156,8 @@ remain under operator control and only require the configured JAR.
 ```text
 /sls install info
 /sls install logs <software> <version>
+/sls install warmup <software> <version>
+/sls install cleanup <minimum-age-hours> [--confirm]
 ```
 
 The in-memory log retains 200 lines per installation; the command displays the
@@ -159,6 +165,19 @@ latest ten to avoid chat spam. At most 100 completed installation records are
 retained. A later start or join request retries a failed installation. Provider
 access requires outbound HTTPS; manual profiles remain available when a host
 blocks it.
+
+Cache cleanup scans only provider caches carrying valid SLS-LITE installation
+metadata. Its default invocation is a dry run and requires a minimum age of at
+least one hour. Deletion additionally requires the exact `--confirm` modifier.
+Versions referenced by loaded blueprints, active or persistent instances, or
+an installation currently in progress are protected. Manual directories,
+unrecognized metadata, symlinks, and paths outside the software root are never
+cleanup candidates.
+
+Warmup uses the same EULA gate, exact provider/channel resolution, staging
+directory, size/digest verification, cancellation, and atomic publication as a
+normal first start. It never starts the downloaded server and never publishes
+an incomplete template.
 
 ## Upstream Terms
 

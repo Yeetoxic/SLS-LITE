@@ -266,33 +266,33 @@ data, leaking resources, or trapping players in unexplained states.
 
 ### 3.6 Configuration, Software, and Data
 
-- [ ] Decide whether a blueprint-level base template adds behavior beyond modern
+- [x] Decide whether a blueprint-level base template adds behavior beyond modern
       `state.volumes`; implement it or document the supported replacement.
-- [ ] Add safe version-aware view-distance and simulation-distance policies.
-- [ ] Complete the retained startup-patch contract: properties/YAML behavior,
+- [x] Add safe version-aware view-distance and simulation-distance policies.
+- [x] Complete the retained startup-patch contract: properties/YAML behavior,
       runtime placeholders, merge precedence, per-start overrides, and
       instance-confined targets. Add JSON/TOML only when an approved blueprint
       requires them.
-- [ ] Define and test every accepted memory input form and rejection boundary;
+- [x] Define and test every accepted memory input form and rejection boundary;
       remove obsolete parsing expectations if memory remains a validated numeric
       MiB field.
-- [ ] Finish retained per-blueprint lifecycle controls: do-not-stop-when-empty,
+- [x] Finish retained per-blueprint lifecycle controls: do-not-stop-when-empty,
       empty-stop delay, maximum concurrent instances, and startup/stop timeout
       overrides.
-- [ ] Finish modern volume intentions: best-safe COW, immutable read-only data,
+- [x] Finish modern volume intentions: best-safe COW, immutable read-only data,
       and explicitly shared persistent read-write data with clear safety rules.
-- [ ] Reload host-wide configuration without corrupting active state, or retain
+- [x] Reload host-wide configuration without corrupting active state, or retain
       and document restart-required keys explicitly.
-- [ ] Provide detailed atomic software/blueprint reload diagnostics.
-- [ ] Preserve migration fixtures for historical registry YAML and decide
+- [x] Provide detailed atomic software/blueprint reload diagnostics.
+- [x] Preserve migration fixtures for historical registry YAML and decide
       whether historical `shutdown`/`config` commands remain documented aliases;
       cover `minigames.yml`, `adventureMaps.yml`, and `archive.yml`.
-- [ ] Add an operator software-cache cleanup command with dry run, minimum age,
+- [x] Add an operator software-cache cleanup command with dry run, minimum age,
       explicit confirmation, and protection for loaded, active, persistent, and
       installing versions.
-- [ ] Add optional software warmup only if it can stop before publishing a
+- [x] Add optional software warmup only if it can stop before publishing a
       verified reusable template.
-- [ ] Exercise Paper/vanilla installation, exact versions/channels, Java
+- [x] Exercise Paper/vanilla installation, exact versions/channels, Java
       selection, EULA gating, manual software, cache reuse, failed downloads,
       retry, concurrency, cancellation, and incomplete-cache recovery.
 

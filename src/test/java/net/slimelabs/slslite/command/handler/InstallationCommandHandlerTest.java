@@ -66,7 +66,7 @@ class InstallationCommandHandlerTest {
         List.of(),
         handler.suggestions(source(Set.of(), new ArrayList<>()), new String[] {"install", ""}));
     assertEquals(
-        List.of("info", "logs"),
+        List.of("info", "logs", "warmup", "cleanup"),
         handler.suggestions(
             source(Set.of(CommandPermissions.ADMIN), new ArrayList<>()),
             new String[] {"install", ""}));

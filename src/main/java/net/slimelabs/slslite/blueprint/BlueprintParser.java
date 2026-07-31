@@ -38,6 +38,7 @@ final class BlueprintParser {
       Map<String, Object> state = optionalMap(root, "state", path);
       Map<String, Object> annotations = optionalMap(root, "annotations", path);
       VSLSBlueprintAnnotations.validate(annotations);
+      BlueprintProcessTimeouts.fromAnnotations(annotations);
       if (state.containsKey("mounts")) {
         throw error(
             path,

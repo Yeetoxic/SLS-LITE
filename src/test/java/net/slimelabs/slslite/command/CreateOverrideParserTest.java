@@ -21,6 +21,7 @@ final class CreateOverrideParserTest {
               "--save=true",
               "--seed=fixture-seed",
               "--view-distance=10",
+              "--simulation-distance=8",
               "--enable-command-block=false"
             });
 
@@ -28,6 +29,7 @@ final class CreateOverrideParserTest {
     assertEquals(true, overrides.save());
     assertEquals("fixture-seed", overrides.seed());
     assertEquals(10, overrides.viewDistance());
+    assertEquals(8, overrides.simulationDistance());
     assertEquals(false, overrides.enableCommandBlock());
   }
 
@@ -40,8 +42,19 @@ final class CreateOverrideParserTest {
     assertRejected("--unknown=fixture", "Unknown create override");
     assertRejected("memory=1024", "--name=value");
     assertRejected("--memory=one", "integer");
+    assertRejected("--memory=2G", "base-10 integer");
+    assertRejected("--memory=+1024", "base-10 integer");
+    assertRejected("--memory=0", "positive MiB");
     assertRejected("--save=maybe", "true or false");
     assertRejected("--view-distance=64", "between 2 and 32");
+    assertRejected("--simulation-distance=1", "between 2 and 32");
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            CreateOverrideParser.parse(
+                new String[] {
+                  "create", "minigame", "arena", "--view-distance=6", "--simulation-distance=8"
+                }));
     assertThrows(
         IllegalArgumentException.class,
         () ->
@@ -52,7 +65,7 @@ final class CreateOverrideParserTest {
   @Test
   void pinnedCreateModifierInventoryIsExhaustiveAndDisjoint() {
     assertEquals(
-        16,
+        17,
         java.util.stream.Stream.concat(
                 VSLSCommandContract.LOCAL_CREATE_MODIFIERS.stream(),
                 VSLSCommandContract.DAEMON_CREATE_MODIFIERS.stream())

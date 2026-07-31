@@ -261,7 +261,8 @@ lobby succeeded. The run verified:
 - `server.properties` patches, including command blocks and MOTD;
 - vSLS lifecycle, matchmaking, and one-shot `on-join` behavior;
 - graceful manual and idle shutdown with ephemeral directory cleanup;
-- atomic rejection of host mounts and launch-time rejection of shared `rw`
+- atomic rejection of undeclared host mounts and persistent single-instance
+  enforcement for explicit shared `rw`
   volumes without leaked instances or processes.
 
 Wildfire software resolution took 1.159 seconds, private world preparation took

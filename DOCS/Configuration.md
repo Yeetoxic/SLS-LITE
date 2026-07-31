@@ -5,6 +5,10 @@ SLS-LITE generates `plugins/sls-lite/config.yml`. The bundled, commented
 default.
 Unknown structural keys are rejected. Host configuration changes require a
 Velocity restart; `/sls reload` reloads blueprints and software profiles only.
+This restart boundary applies to every `config.yml` key because each one owns
+or sizes a long-lived service, executor, listener, security decision, storage
+adapter, or recovery controller. `/sls reload config` performs no partial
+mutation and names the restart requirement.
 
 The generated file is arranged in stable operator-facing sections and retains
 comments for units, defaults, security implications, and restart behavior.
@@ -97,5 +101,8 @@ diagnosis where possible.
 
 Reload candidates are parsed and cross-validated before replacing the active
 catalog. Running instances keep the definitions with which they were created.
+Successful commands report added, updated, and removed IDs separately for
+blueprints and software. A failure publishes none of either candidate, and its
+diagnostic identifies the source definition/path where validation failed.
 Host configuration, storage strategy, output policy, forwarding, lobby mode,
 ports, memory, and security require a Velocity restart.

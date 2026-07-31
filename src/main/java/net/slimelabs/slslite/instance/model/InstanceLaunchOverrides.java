@@ -15,10 +15,11 @@ public record InstanceLaunchOverrides(
     Boolean save,
     String seed,
     Integer viewDistance,
+    Integer simulationDistance,
     Boolean enableCommandBlock) {
 
   public static final InstanceLaunchOverrides NONE =
-      new InstanceLaunchOverrides(null, null, null, null, null);
+      new InstanceLaunchOverrides(null, null, null, null, null, null);
 
   public InstanceLaunchOverrides {
     if (memoryLimitMiB != null && memoryLimitMiB <= 0) {
@@ -37,6 +38,13 @@ public record InstanceLaunchOverrides(
     if (viewDistance != null && (viewDistance < 2 || viewDistance > 32)) {
       throw new IllegalArgumentException("view-distance override must be between 2 and 32");
     }
+    if (simulationDistance != null && (simulationDistance < 2 || simulationDistance > 32)) {
+      throw new IllegalArgumentException("simulation-distance override must be between 2 and 32");
+    }
+    if (viewDistance != null && simulationDistance != null && simulationDistance > viewDistance) {
+      throw new IllegalArgumentException(
+          "simulation-distance override must not exceed view-distance");
+    }
   }
 
   public boolean isEmpty() {
@@ -44,6 +52,7 @@ public record InstanceLaunchOverrides(
         && save == null
         && seed == null
         && viewDistance == null
+        && simulationDistance == null
         && enableCommandBlock == null;
   }
 
@@ -54,6 +63,7 @@ public record InstanceLaunchOverrides(
     Map<String, String> properties = new LinkedHashMap<>(blueprint.serverProperties());
     put(properties, "level-seed", seed);
     put(properties, "view-distance", viewDistance);
+    put(properties, "simulation-distance", simulationDistance);
     put(properties, "enable-command-block", enableCommandBlock);
     return new Blueprint(
         blueprint.id(),

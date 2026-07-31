@@ -41,11 +41,15 @@ class DefinitionReloaderTest {
     writeProfile(repositories.profilesPath(), "replacement");
     writeBlueprint(repositories.blueprintsPath(), "replacement");
 
-    DefinitionReloader.reload(
-        repositories.config(), repositories.blueprints(), repositories.profiles(), true, true);
+    DefinitionReloadReport report =
+        DefinitionReloader.reload(
+            repositories.config(), repositories.blueprints(), repositories.profiles(), true, true);
 
     assertEquals("replacement", repositories.blueprints().get("test").orElseThrow().software());
     assertEquals("replacement", repositories.profiles().getAll().iterator().next().id());
+    assertEquals(java.util.List.of("test"), report.blueprints().updated());
+    assertEquals(java.util.List.of("replacement"), report.software().added());
+    assertEquals(java.util.List.of("paper"), report.software().removed());
   }
 
   @Test

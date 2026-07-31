@@ -120,7 +120,7 @@ public final class SLSCommand implements SimpleCommand {
             blueprints, instances, lobbyProvider, authorizer, instanceAccess, logger);
     this.installationHandler =
         new InstallationCommandHandler(
-            blueprints, softwareProfiles, installationService, authorizer);
+            blueprints, softwareProfiles, installationService, authorizer, instances);
     this.inspectionHandler =
         new InspectionCommandHandler(
             blueprints,
@@ -508,24 +508,33 @@ public final class SLSCommand implements SimpleCommand {
       return;
     }
     try {
-      DefinitionReloader.reload(
-          activeConfig,
-          blueprints,
-          softwareProfiles,
-          "all".equals(mode) || "blueprints".equals(mode),
-          "all".equals(mode) || "software".equals(mode));
+      net.slimelabs.slslite.config.DefinitionReloadReport report =
+          DefinitionReloader.reload(
+              activeConfig,
+              blueprints,
+              softwareProfiles,
+              "all".equals(mode) || "blueprints".equals(mode),
+              "all".equals(mode) || "software".equals(mode));
       source.sendMessage(
           CommandMessages.message(
               "Reloaded "
                   + mode
-                  + ": "
-                  + blueprints.getTypes().size()
-                  + " registries, "
-                  + blueprints.getAll().size()
-                  + " blueprints, "
-                  + softwareProfiles.getAll().size()
-                  + " software profiles.",
+                  + " atomically: blueprints "
+                  + report.blueprints().summary()
+                  + "; software "
+                  + report.software().summary()
+                  + ".",
               NamedTextColor.GREEN));
+      logger.info(
+          "Definition reload {} committed: blueprint added={} updated={} removed={}; "
+              + "software added={} updated={} removed={}",
+          mode,
+          report.blueprints().added(),
+          report.blueprints().updated(),
+          report.blueprints().removed(),
+          report.software().added(),
+          report.software().updated(),
+          report.software().removed());
       source.sendMessage(
           CommandMessages.message(
               "Host config changes require a Velocity restart.", NamedTextColor.GRAY));

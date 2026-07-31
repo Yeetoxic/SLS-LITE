@@ -117,10 +117,19 @@ its instance copy, but the configured source directory is never mounted or
 modified. This preserves source protection and provider portability, but it is
 not a byte-for-byte equivalent of a read-only container bind mount.
 
-`rw` requires shared writable host state. SLS-LITE parses the definition, then
-rejects instance preparation with an actionable error before creating a
-partial instance. Use `cow`, or operate that backend outside SLS-LITE, when
-shared mutable state is required.
+`rw` is an explicit opt-in to shared writable host state. Preparation creates
+and verifies a directory symbolic link at the declared instance target. The
+source outlives ephemeral instances, and every concurrent instance using the
+volume writes to the same directory. Use `max_instances: 1` unless the server
+software and plugins are specifically designed for concurrent shared-file
+access. Hosts without directory-link support reject preparation
+transactionally.
+
+The source is intentionally mutable: changes from the child are immediately
+visible in the configured source and survive instance reset/deletion. Use it
+only for trusted server software/plugins and data specifically designed for
+single-writer sharing. SLS-LITE does not snapshot, roll back, or back up `rw`
+content. Configuration patches may not target paths through the link.
 
 ## Paths
 
@@ -156,7 +165,8 @@ the previous instance directory.
 ## Current Limits
 
 - `cow` and local-snapshot `ro` use complete directory copies.
-- `rw` definitions are understood but cannot be launched in local mode.
+- `rw` requires a persistent, single-instance blueprint and host directory
+  symbolic-link support.
 - Volume sources must already exist before the blueprint is started.
 - Operators must budget disk space for a complete copy per instance.
 - Do not modify a source directory while an instance is being prepared.

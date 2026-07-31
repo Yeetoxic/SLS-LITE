@@ -76,6 +76,21 @@ SLS-LITE prefers a ready instance with capacity. It creates another instance
 only when needed and allowed by `max_instances`, resource admission, process
 slots, and available ports. Queued joins reserve player capacity.
 
+### Base Template Decision
+
+SLS-LITE does not add a second blueprint-level `base_template` field. The
+selected software directory is already the instance base. Modern
+`state.volumes` then supplies clean directory trees with private `cow` or
+source-protecting `ro` semantics, while `state.copy` overlays individual
+operator assets. Together these cover the useful local behavior of a separate
+template without introducing another source tree, precedence rule, ownership
+model, or reset path.
+
+Use a manually prepared `server.path` only when the entire software base is
+operator-managed. Use `state.volumes` for clean worlds or directory trees and
+`state.copy` for plugins, icons, packs, and other files. Persistent restart
+reuses the owned instance; reset reconstructs it from those declared sources.
+
 ## Persistence
 
 `save: false` creates an ephemeral instance. Its private directory is removed
@@ -131,6 +146,55 @@ writes it atomically. Target traversal, symbolic links, non-map YAML roots, and
 unsupported value types are rejected. JSON, TOML, and arbitrary properties
 targets remain unsupported.
 
+`view-distance` and `simulation-distance` are validated as integer values from
+`2` through `32`. When both are set, simulation distance may not exceed view
+distance. A recognized Minecraft version older than `1.18` rejects
+`simulation-distance`; provider-specific version schemes that cannot be mapped
+reliably are range-checked without guessing a Minecraft release. Per-create
+`--view-distance` and `--simulation-distance` overrides follow the same rules
+and persist across restart/reset.
+
+String values in properties, nested YAML patches, and text-file replacement
+outputs may use these runtime placeholders:
+
+| Placeholder | Value |
+| --- | --- |
+| `{instance_id}` | Allocated composite instance ID. |
+| `{blueprint_id}` | Loaded blueprint ID. |
+| `{version}` | Exact configured software/Minecraft version. |
+| `{port}` | Allocated loopback backend port. |
+| `{max_players}` | Effective per-instance player limit. |
+| `{memory_mib}` | Effective managed-memory reservation in MiB. |
+
+Unknown lowercase runtime placeholders reject preparation rather than leaking
+an unresolved token into a child configuration. Patch keys and text matching
+prefixes are literal and are never expanded.
+
+Startup patch precedence is deterministic:
+
+1. Existing files from the prepared software/volume/copy template provide the
+   base document.
+2. Software-profile `server.properties` defaults override that base.
+3. Blueprint properties override profile defaults; nested blueprint YAML maps
+   recursively merge, and text patches replace matching complete lines.
+4. Validated per-create overrides modify the effective blueprint properties.
+5. SLS-LITE-owned network, forwarding, port, online-mode, and capacity values
+   win last.
+
+Every target is resolved below the prepared instance root. Traversal,
+symbolic-link paths, wrong file types, ambiguous prefixes, and oversized input
+are rejected. Properties, YAML, and text writes use sibling temporary files
+and atomic replacement when the filesystem supports it. JSON/TOML parsers are
+not added because no approved retained blueprint requires them.
+
+### Memory Input Contract
+
+`server.limits.memory_limit` is a YAML integer measured in MiB. It must be
+positive and fit Java's signed 32-bit integer range. Quoted values, decimals,
+units such as `2G` or `2048MiB`, zero, negatives, booleans, and expressions are
+rejected. The create-time `--memory=<MiB>` form likewise accepts only a
+positive base-10 integer; it does not parse unit suffixes.
+
 ### Text File Patches
 
 Modern SLS `parser: file` performs line-prefix replacement:
@@ -160,9 +224,10 @@ when the input contained at least one line.
 
 SLS-LITE accepts modern SLS `state.volumes` entries using `cow`, `ro`, or `rw`.
 The portable `cow` implementation copies and merges sources into each isolated
-instance. `ro` becomes a source-protecting private snapshot; `rw` parses but is
-rejected when an instance is prepared because shared writable mounts cannot be
-provided safely in portable local mode.
+instance. `ro` becomes a source-protecting private snapshot. Explicit `rw`
+creates a verified directory link to shared host data. That source persists
+independently of `save`; concurrent instances share it, so `max_instances: 1`
+is recommended unless the software safely coordinates concurrent access.
 
 Mapping and shorthand forms are accepted:
 
@@ -245,6 +310,8 @@ SLS-LITE reads these values under `annotations.sls-lite`:
 | `keep-alive` | boolean | `true` excludes the blueprint from idle cleanup. |
 | `stop-when-empty` | boolean | `false` is also treated as keep-alive. |
 | `idle-shutdown-seconds` | non-negative integer | Overrides the host idle delay; `0` disables it for this blueprint. |
+| `startup-timeout-seconds` | integer `1-3600` | Overrides the software profile readiness deadline for this blueprint. |
+| `stop-timeout-seconds` | integer `1-600` | Overrides the software profile graceful-stop deadline for this blueprint. |
 
 Persistent instances and the active managed lobby are excluded from ordinary
 idle cleanup regardless of annotation.

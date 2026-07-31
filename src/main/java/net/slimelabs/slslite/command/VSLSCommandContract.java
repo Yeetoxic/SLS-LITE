@@ -15,7 +15,13 @@ public final class VSLSCommandContract {
   static final String COMMIT = "8e8b1e3cf7d2157887764c16f11b8901f8241121";
 
   public static final List<String> LOCAL_CREATE_MODIFIERS =
-      List.of("--save=", "--memory=", "--seed=", "--view-distance=", "--enable-command-block=");
+      List.of(
+          "--save=",
+          "--memory=",
+          "--seed=",
+          "--view-distance=",
+          "--simulation-distance=",
+          "--enable-command-block=");
 
   public static final List<String> DAEMON_CREATE_MODIFIERS =
       List.of(
@@ -322,6 +328,30 @@ public final class VSLSCommandContract {
               Completion.INSTALL_MODE,
               Completion.SOFTWARE,
               Completion.SOFTWARE_VERSION),
+          branch(
+              "install.warmup",
+              "install warmup <software> <version>",
+              Origin.ADDITIVE,
+              Availability.SUPPORTED,
+              Access.ADMIN,
+              Sender.ANY,
+              List.of("sls.command.install"),
+              List.of("warmup"),
+              List.of(),
+              Completion.INSTALL_MODE,
+              Completion.SOFTWARE,
+              Completion.SOFTWARE_VERSION),
+          branch(
+              "install.cleanup",
+              "install cleanup <minimum-age-hours> [--confirm]",
+              Origin.ADDITIVE,
+              Availability.SUPPORTED,
+              Access.ADMIN,
+              Sender.ANY,
+              List.of("sls.command.install"),
+              List.of("cleanup"),
+              List.of("--confirm"),
+              Completion.INSTALL_MODE),
           branch(
               "admin.claim",
               "admin claim <code>",

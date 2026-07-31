@@ -10,6 +10,7 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -66,7 +67,8 @@ class SoftwareInstallationServiceTest {
   }
 
   @Test
-  void rejectsProviderCacheWhoseJarChangedAfterInstallation() throws Exception {
+  void replacesProviderCacheWhoseJarChangedAfterInstallation() throws Exception {
+    AtomicInteger installs = new AtomicInteger();
     SoftwareInstallationProvider provider =
         new SoftwareInstallationProvider() {
           @Override
@@ -82,7 +84,7 @@ class SoftwareInstallationServiceTest {
               java.util.function.Consumer<String> log)
               throws Exception {
             Path jar = stagingDirectory.resolve("server.jar");
-            Files.writeString(jar, "verified");
+            Files.writeString(jar, "verified-" + installs.incrementAndGet());
             return artifact(jar);
           }
         };
@@ -94,13 +96,23 @@ class SoftwareInstallationServiceTest {
     Files.writeString(installed.resolve("server.jar"), "changed");
 
     try (SoftwareInstallationService service = service(List.of(provider))) {
-      assertThrows(Exception.class, () -> service.ensureInstalled(profile, "1.0").join());
-      assertEquals(InstallationState.FAILED, service.snapshot("fixture", "1.0").state());
+      Path replacement = service.ensureInstalled(profile, "1.0").join();
+
+      assertEquals("verified-2", read(replacement.resolve("server.jar")));
+      assertEquals(InstallationState.READY, service.snapshot("fixture", "1.0").state());
+      try (var siblings = Files.list(replacement.getParent())) {
+        Path quarantine =
+            siblings
+                .filter(path -> path.getFileName().toString().startsWith(".1.0.incomplete-"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("changed", read(quarantine.resolve("server.jar")));
+      }
     }
   }
 
   @Test
-  void rehashesCachedJarWhenSizeAndTimestampAreUnchanged() throws Exception {
+  void rehashesAndReplacesCachedJarWhenSizeAndTimestampAreUnchanged() throws Exception {
     SoftwareProfile profile = profile(SoftwareSource.PAPER);
     SoftwareInstallationProvider provider =
         new SoftwareInstallationProvider() {
@@ -128,7 +140,76 @@ class SoftwareInstallationServiceTest {
       Files.writeString(jar, "tampered");
       Files.setLastModifiedTime(jar, timestamp);
 
-      assertThrows(Exception.class, () -> service.ensureInstalled(profile, "1.0").join());
+      assertEquals(installed, service.ensureInstalled(profile, "1.0").join());
+      assertEquals("original", read(jar));
+    }
+  }
+
+  @Test
+  void retriesFailedProviderInstallation() {
+    AtomicInteger installs = new AtomicInteger();
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile profile,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log)
+              throws Exception {
+            if (installs.incrementAndGet() == 1) {
+              throw new java.io.IOException("simulated download failure");
+            }
+            Path jar = stagingDirectory.resolve("server.jar");
+            Files.writeString(jar, "retry");
+            return artifact(jar);
+          }
+        };
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      assertThrows(
+          Exception.class,
+          () -> service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0").join());
+
+      Path installed = service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0").join();
+
+      assertEquals("retry", read(installed.resolve("server.jar")));
+      assertEquals(2, installs.get());
+    }
+  }
+
+  @Test
+  void restoresIncompleteCacheWhenReplacementFails() throws Exception {
+    Path target = temporaryDirectory.resolve("software/fixture/1.0");
+    Files.createDirectories(target);
+    Files.writeString(target.resolve("partial.txt"), "preserve me");
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile profile,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log)
+              throws Exception {
+            throw new java.io.IOException("replacement failed");
+          }
+        };
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      assertThrows(
+          Exception.class,
+          () -> service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0").join());
+
+      assertEquals("preserve me", read(target.resolve("partial.txt")));
     }
   }
 
@@ -170,6 +251,63 @@ class SoftwareInstallationServiceTest {
     assertThrows(
         Exception.class,
         () -> service.ensureInstalled(profile(SoftwareSource.PAPER), "2.0").join());
+  }
+
+  @Test
+  void cacheCleanupIsDryRunByDefaultAndProtectsReferencedVersions() throws Exception {
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile profile,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log)
+              throws Exception {
+            Path jar = stagingDirectory.resolve("server.jar");
+            Files.writeString(jar, version);
+            return artifact(jar);
+          }
+        };
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      Path removable = service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0").join();
+      Path protectedPath = service.ensureInstalled(profile(SoftwareSource.PAPER), "2.0").join();
+      FileTime old = FileTime.from(java.time.Instant.now().minus(Duration.ofDays(2)));
+      Files.setLastModifiedTime(removable.resolve(".sls-install.properties"), old);
+      Files.setLastModifiedTime(protectedPath.resolve(".sls-install.properties"), old);
+      InstallationKey protectedKey = new InstallationKey("fixture", "2.0");
+
+      SoftwareCacheCleanupReport dryRun =
+          service.cleanupCache(Duration.ofHours(24), true, false, Set.of(protectedKey));
+
+      assertEquals(1, dryRun.eligible().size());
+      assertEquals(1, dryRun.protectedCount());
+      assertEquals(true, Files.isDirectory(removable));
+
+      SoftwareCacheCleanupReport committed =
+          service.cleanupCache(Duration.ofHours(24), false, true, Set.of(protectedKey));
+
+      assertEquals(1, committed.removed().size());
+      assertEquals(false, Files.exists(removable));
+      assertEquals(true, Files.isDirectory(protectedPath));
+    }
+  }
+
+  @Test
+  void cacheCleanupRejectsUnsafeAgeAndUnconfirmedDeletion() {
+    try (SoftwareInstallationService service = service(List.of())) {
+      assertThrows(
+          SoftwareInstallationException.class,
+          () -> service.cleanupCache(Duration.ZERO, true, false, Set.of()));
+      assertThrows(
+          SoftwareInstallationException.class,
+          () -> service.cleanupCache(Duration.ofHours(1), false, false, Set.of()));
+    }
   }
 
   @Test
@@ -234,6 +372,63 @@ class SoftwareInstallationServiceTest {
       assertThrows(
           Exception.class,
           () -> service.ensureInstalled(profile(SoftwareSource.MANUAL), "1.0").join());
+    }
+  }
+
+  @Test
+  void reusesPreparedManualSoftwareWithoutProviderMetadata() throws Exception {
+    Path target = temporaryDirectory.resolve("software/fixture/1.0");
+    Files.createDirectories(target);
+    Files.writeString(target.resolve("server.jar"), "operator supplied");
+
+    try (SoftwareInstallationService service = service(List.of())) {
+      assertEquals(target, service.ensureInstalled(profile(SoftwareSource.MANUAL), "1.0").join());
+    }
+  }
+
+  @Test
+  void blocksProviderInstallationUntilEulaIsAccepted() {
+    AtomicInteger installs = new AtomicInteger();
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile profile,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log) {
+            installs.incrementAndGet();
+            throw new AssertionError("provider must not run before EULA acceptance");
+          }
+        };
+    SoftwareProfile accepted = profile(SoftwareSource.PAPER);
+    SoftwareProfile notAccepted =
+        new SoftwareProfile(
+            accepted.id(),
+            accepted.runtime(),
+            accepted.configurator(),
+            accepted.source(),
+            accepted.channel(),
+            false,
+            accepted.javaExecutable(),
+            accepted.javaExecutables(),
+            accepted.baseDirectory(),
+            accepted.serverJar(),
+            accepted.jvmArguments(),
+            accepted.serverArguments(),
+            accepted.readinessPattern(),
+            accepted.startupTimeoutSeconds(),
+            accepted.stopCommand(),
+            accepted.stopTimeoutSeconds());
+
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      assertThrows(Exception.class, () -> service.ensureInstalled(notAccepted, "1.0").join());
+      assertEquals(0, installs.get());
     }
   }
 

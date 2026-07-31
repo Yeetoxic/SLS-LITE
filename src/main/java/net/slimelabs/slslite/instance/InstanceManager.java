@@ -11,6 +11,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -26,6 +27,7 @@ import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
+import net.slimelabs.slslite.install.InstallationKey;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.instance.configuration.InstanceLaunchConfigurator;
 import net.slimelabs.slslite.instance.diagnostics.FailedStartDiagnostics;
@@ -252,6 +254,35 @@ public final class InstanceManager implements ServerController {
   @Override
   public Collection<String> persistentInstanceIds(String blueprintId) {
     return metadata.persistentInstanceIds(blueprintId);
+  }
+
+  @Override
+  public Collection<InstallationKey> protectedSoftwareVersions() throws InstanceOperationException {
+    java.util.Set<InstallationKey> protectedVersions = new java.util.HashSet<>();
+    synchronized (this) {
+      instances
+          .values()
+          .forEach(
+              instance ->
+                  protectedVersions.add(
+                      new InstallationKey(
+                          instance.blueprint().software(), instance.blueprint().version())));
+    }
+    for (String instanceId : persistentInstanceIds()) {
+      InstanceMetadata persistent = metadata.readPersistent(instanceId);
+      if (persistent.definitionIdentity() != null) {
+        protectedVersions.add(
+            new InstallationKey(
+                persistent.definitionIdentity().softwareId(),
+                persistent.definitionIdentity().softwareVersion()));
+      } else {
+        Blueprint blueprint = blueprints.get(persistent.blueprintId()).orElse(null);
+        if (blueprint != null) {
+          protectedVersions.add(new InstallationKey(blueprint.software(), blueprint.version()));
+        }
+      }
+    }
+    return Set.copyOf(protectedVersions);
   }
 
   @Override

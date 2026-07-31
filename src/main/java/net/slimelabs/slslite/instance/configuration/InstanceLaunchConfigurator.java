@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintProcessTimeouts;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.instance.InstancePreparationException;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
@@ -37,13 +38,37 @@ public final class InstanceLaunchConfigurator {
       throws IOException, InstancePreparationException, ProcessSpecificationException {
     Map<String, String> configuredProperties = new LinkedHashMap<>(profile.serverProperties());
     configuredProperties.putAll(blueprint.serverProperties());
-    TextFileConfigEditor.apply(instanceDirectory, blueprint.textFileConfigs());
+    Map<String, String> placeholders =
+        Map.of(
+            "instance_id", instanceId,
+            "blueprint_id", blueprint.id(),
+            "version", blueprint.version(),
+            "port", Integer.toString(port),
+            "max_players", Integer.toString(blueprint.maxPlayers()),
+            "memory_mib", Integer.toString(blueprint.memoryLimitMiB()));
+    configuredProperties = RuntimeConfigPlaceholders.strings(configuredProperties, placeholders);
+    Map<String, Map<String, Object>> yamlConfigs =
+        RuntimeConfigPlaceholders.yaml(blueprint.yamlConfigs(), placeholders);
+    Map<String, Map<String, String>> textConfigs =
+        RuntimeConfigPlaceholders.text(blueprint.textFileConfigs(), placeholders);
+    ServerDistancePolicy.validate(blueprint.version(), configuredProperties);
+    TextFileConfigEditor.apply(instanceDirectory, textConfigs);
     ServerPropertiesEditor.applyManagedNetworkSettings(
         instanceDirectory, port, blueprint.maxPlayers(), configuredProperties);
-    YamlConfigEditor.apply(instanceDirectory, blueprint.yamlConfigs());
+    YamlConfigEditor.apply(instanceDirectory, yamlConfigs);
     if (profile.configurator() == SoftwareConfigurator.PAPER) {
       PaperForwardingEditor.apply(instanceDirectory, forwarding);
     }
-    return processSpecs.create(profile, blueprint, instanceId, instanceDirectory, port);
+    ProcessSpec processSpec =
+        processSpecs.create(profile, blueprint, instanceId, instanceDirectory, port);
+    BlueprintProcessTimeouts timeouts = BlueprintProcessTimeouts.from(blueprint);
+    return new ProcessSpec(
+        processSpec.command(),
+        processSpec.workingDirectory(),
+        processSpec.readinessPattern(),
+        timeouts.startupTimeout().orElse(processSpec.startupTimeout()),
+        processSpec.stopCommand(),
+        timeouts.stopTimeout().orElse(processSpec.stopTimeout()),
+        processSpec.environment());
   }
 }

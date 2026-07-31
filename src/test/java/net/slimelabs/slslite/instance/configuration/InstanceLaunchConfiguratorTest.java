@@ -9,6 +9,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -41,9 +42,13 @@ class InstanceLaunchConfiguratorTest {
     Files.writeString(instance.resolve("bukkit.yml"), "settings:\n  allow-end: true\n");
     Blueprint blueprint =
         blueprint(
-            Map.of("motd", "blueprint"),
-            Map.of("bukkit.yml", Map.of("settings", Map.of("allow-end", false))),
-            Map.of("custom.conf", Map.of("feature=", "feature=new")));
+            Map.of("motd", "blueprint-{instance_id}-{port}"),
+            Map.of(
+                "bukkit.yml",
+                Map.of(
+                    "settings",
+                    Map.of("allow-end", false, "instance-name", "{blueprint_id}-{version}"))),
+            Map.of("custom.conf", Map.of("feature=", "feature={memory_mib}")));
     InstanceLaunchConfigurator configurator = configurator();
 
     ProcessSpec spec =
@@ -51,13 +56,15 @@ class InstanceLaunchConfiguratorTest {
             profile(SoftwareConfigurator.PAPER), blueprint, "game.abc123", instance, 25571);
 
     Properties properties = properties(instance.resolve("server.properties"));
-    assertEquals("blueprint", properties.getProperty("motd"));
+    assertEquals("blueprint-game.abc123-25571", properties.getProperty("motd"));
     assertEquals("hard", properties.getProperty("difficulty"));
     assertEquals("25571", properties.getProperty("server-port"));
     assertEquals("42", properties.getProperty("max-players"));
     assertEquals("false", properties.getProperty("online-mode"));
-    assertEquals("feature=new\nuntouched=yes\n", Files.readString(instance.resolve("custom.conf")));
-    assertEquals(false, map(yaml(instance.resolve("bukkit.yml")).get("settings")).get("allow-end"));
+    assertEquals("feature=512\nuntouched=yes\n", Files.readString(instance.resolve("custom.conf")));
+    Map<String, Object> settings = map(yaml(instance.resolve("bukkit.yml")).get("settings"));
+    assertEquals(false, settings.get("allow-end"));
+    assertEquals("game-1.21.11", settings.get("instance-name"));
     Map<String, Object> velocity =
         map(map(yaml(instance.resolve("config/paper-global.yml")).get("proxies")).get("velocity"));
     assertEquals(false, velocity.get("enabled"));
@@ -83,6 +90,61 @@ class InstanceLaunchConfiguratorTest {
     assertFalse(Files.exists(instance.resolve("spigot.yml")));
     assertFalse(Files.exists(instance.resolve("config/paper-global.yml")));
     assertTrue(Files.isRegularFile(instance.resolve("server.properties")));
+  }
+
+  @Test
+  void rejectsUnknownRuntimeConfigurationPlaceholder() throws Exception {
+    Path instance = temporaryDirectory.resolve("instances/game.abc123");
+    Files.createDirectories(instance);
+
+    net.slimelabs.slslite.instance.InstancePreparationException failure =
+        org.junit.jupiter.api.Assertions.assertThrows(
+            net.slimelabs.slslite.instance.InstancePreparationException.class,
+            () ->
+                configurator()
+                    .configure(
+                        profile(SoftwareConfigurator.GENERIC),
+                        blueprint(Map.of("motd", "{unknown_value}"), Map.of(), Map.of()),
+                        "game.abc123",
+                        instance,
+                        25571));
+
+    assertTrue(failure.getMessage().contains("{unknown_value}"));
+  }
+
+  @Test
+  void appliesPerBlueprintStartupAndStopTimeouts() throws Exception {
+    Path instance = temporaryDirectory.resolve("instances/game.abc123");
+    Files.createDirectories(instance);
+    Blueprint base = blueprint(Map.of(), Map.of(), Map.of());
+    Blueprint configured =
+        new Blueprint(
+            base.id(),
+            base.name(),
+            base.type(),
+            base.software(),
+            base.version(),
+            base.image(),
+            base.softwarePath(),
+            base.memoryLimitMiB(),
+            base.maxPlayers(),
+            base.maxInstances(),
+            base.save(),
+            base.serverProperties(),
+            base.yamlConfigs(),
+            base.textFileConfigs(),
+            Map.of("sls-lite", Map.of("startup-timeout-seconds", 240, "stop-timeout-seconds", 45)),
+            base.volumes(),
+            base.copies(),
+            base.environment());
+
+    ProcessSpec spec =
+        configurator()
+            .configure(
+                profile(SoftwareConfigurator.GENERIC), configured, "game.abc123", instance, 25571);
+
+    assertEquals(Duration.ofSeconds(240), spec.startupTimeout());
+    assertEquals(Duration.ofSeconds(45), spec.stopTimeout());
   }
 
   private InstanceLaunchConfigurator configurator() {

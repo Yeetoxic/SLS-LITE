@@ -232,7 +232,7 @@ class InstanceManagerTest {
   void createOverridesSurviveManagerRecreationRestartAndReset() throws Exception {
     TestContext context = createContext(false, true);
     InstanceLaunchOverrides overrides =
-        new InstanceLaunchOverrides(384, true, "persistent-seed", 10, false);
+        new InstanceLaunchOverrides(384, true, "persistent-seed", 10, 8, false);
     ManagedInstance original = manager.create("fixture", overrides);
     original.readyFuture().get(10, TimeUnit.SECONDS);
 
@@ -261,6 +261,7 @@ class InstanceManagerTest {
     assertFalse(Files.exists(reset.directory().resolve("operator-data")));
     assertTrue(properties.contains("level-seed=persistent-seed"));
     assertTrue(properties.contains("view-distance=10"));
+    assertTrue(properties.contains("simulation-distance=8"));
     assertTrue(properties.contains("enable-command-block=false"));
   }
 

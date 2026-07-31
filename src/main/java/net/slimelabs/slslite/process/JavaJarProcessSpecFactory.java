@@ -23,6 +23,10 @@ public final class JavaJarProcessSpecFactory {
     this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
   }
 
+  public Path dataDirectory() {
+    return dataDirectory;
+  }
+
   public Path resolveBaseDirectory(SoftwareProfile profile, String version)
       throws ProcessSpecificationException {
     validateVersion(version);
