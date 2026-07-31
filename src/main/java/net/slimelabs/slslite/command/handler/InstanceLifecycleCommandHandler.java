@@ -23,7 +23,7 @@ import net.slimelabs.slslite.lobby.LobbyProvider;
 import org.slf4j.Logger;
 
 /**
- * Owns create, start, stop, restart, and reset execution and completion behavior.
+ * Owns create, start, stop, kill, delete, restart, and reset execution and completion behavior.
  */
 public final class InstanceLifecycleCommandHandler {
 
@@ -274,6 +274,47 @@ public final class InstanceLifecycleCommandHandler {
             (result, deleteFailure) -> reportDelete(source, targetId, result, deleteFailure));
   }
 
+  public void kill(CommandSource source, String[] arguments) {
+    if (!requireAdmin(source, "kill", "force-terminate managed servers")) {
+      return;
+    }
+    if (arguments.length < 1
+        || arguments.length > 3
+        || arguments.length == 3 && !isForceModifier(arguments[2])) {
+      source.sendMessage(CommandMessages.usage("/sls kill", "server", "all", "server force"));
+      return;
+    }
+    boolean forceCleanup = arguments.length == 3;
+    String requested = arguments.length == 1 ? "this" : arguments[1];
+    if ("all".equalsIgnoreCase(requested)) {
+      killAll(source, forceCleanup);
+      return;
+    }
+
+    ManagedInstance instance = instanceAccess.resolve(source, requested);
+    if (instance == null) {
+      return;
+    }
+    boolean protectedLobby = lobbyProvider.isLobby(instance.id());
+    if (protectedLobby && !forceCleanup) {
+      source.sendMessage(
+          CommandMessages.message(
+              "The active lobby is protected. Use /sls kill "
+                  + instance.id()
+                  + " force to terminate it intentionally.",
+              NamedTextColor.RED));
+      return;
+    }
+    if (protectedLobby
+        && !requireAdmin(source, "kill.force", "force-terminate protected managed lobby servers")) {
+      return;
+    }
+
+    reportKillStart(source, instance.id(), protectedLobby);
+    killTarget(instance.id(), protectedLobby, forceCleanup)
+        .whenComplete((exitCode, failure) -> reportKill(source, instance.id(), exitCode, failure));
+  }
+
   public void restart(CommandSource source, String[] arguments) {
     cyclePersistent(source, arguments, false);
   }
@@ -296,6 +337,10 @@ public final class InstanceLifecycleCommandHandler {
         case "delete" ->
             authorizer.canAdminister(source, operation)
                 ? withPrefix("all", withPrefix("this", instanceAccess.persistentIds()))
+                : List.of();
+        case "kill" ->
+            authorizer.canAdminister(source, operation)
+                ? withPrefix("all", withPrefix("this", instanceAccess.activeIds()))
                 : List.of();
         case "stop" ->
             authorizer.canAdminister(source, "stop")
@@ -330,6 +375,11 @@ public final class InstanceLifecycleCommandHandler {
         && "stop".equals(operation)
         && authorizer.canAdminister(source, "stop.force")) {
       return List.of("--force");
+    }
+    if (arguments.length == 3
+        && "kill".equals(operation)
+        && authorizer.canAdminister(source, "kill")) {
+      return List.of("force", "--force");
     }
     if (arguments.length == 3
         && ("restart".equals(operation) || "reset".equals(operation))
@@ -429,6 +479,140 @@ public final class InstanceLifecycleCommandHandler {
                             ? "."
                             : ", " + protectedIds.size() + " protected lobby skipped."),
                     failures[0] == 0 ? NamedTextColor.GREEN : NamedTextColor.YELLOW)));
+  }
+
+  private void killAll(CommandSource source, boolean forceCleanup) {
+    List<String> activeIds = instanceAccess.activeIds();
+    List<String> protectedIds = activeIds.stream().filter(lobbyProvider::isLobby).toList();
+    List<String> ordinaryIds = activeIds.stream().filter(id -> !lobbyProvider.isLobby(id)).toList();
+    List<String> targets = new ArrayList<>(ordinaryIds);
+    if (forceCleanup
+        && !protectedIds.isEmpty()
+        && !requireAdmin(source, "kill.force", "force-terminate protected managed lobby servers")) {
+      return;
+    }
+    if (forceCleanup) {
+      targets.addAll(protectedIds);
+    }
+    if (targets.isEmpty()) {
+      source.sendMessage(
+          CommandMessages.message(
+              protectedIds.isEmpty()
+                  ? "No servers are running."
+                  : "There are no killable servers; the managed lobby is protected.",
+              protectedIds.isEmpty() ? NamedTextColor.RED : NamedTextColor.YELLOW));
+      return;
+    }
+
+    logger.warn(
+        "Kill-all command accepted from {} for {} server(s); " + "{} protected lobby server(s) {}",
+        commandSourceName(source),
+        targets.size(),
+        protectedIds.size(),
+        forceCleanup ? "included" : "skipped");
+    source.sendMessage(CommandMessages.message("Killing all servers.", NamedTextColor.GRAY));
+    int[] completed = {0};
+    int[] failures = {0};
+    CompletableFuture<Void> sequence = CompletableFuture.completedFuture(null);
+    for (String instanceId : targets) {
+      sequence =
+          sequence.thenCompose(
+              ignored -> {
+                boolean protectedLobby = lobbyProvider.isLobby(instanceId);
+                reportKillStart(source, instanceId, protectedLobby);
+                return killTarget(instanceId, protectedLobby, forceCleanup)
+                    .handle(
+                        (exitCode, failure) -> {
+                          reportKill(source, instanceId, exitCode, failure);
+                          if (failure == null) {
+                            completed[0]++;
+                          } else {
+                            failures[0]++;
+                          }
+                          return null;
+                        });
+              });
+    }
+    sequence.thenRun(
+        () ->
+            source.sendMessage(
+                CommandMessages.message(
+                    "Kill-all complete: "
+                        + completed[0]
+                        + " terminated, "
+                        + failures[0]
+                        + " failed"
+                        + (!forceCleanup && !protectedIds.isEmpty()
+                            ? ", " + protectedIds.size() + " protected lobby skipped."
+                            : "."),
+                    failures[0] == 0 ? NamedTextColor.GREEN : NamedTextColor.YELLOW)));
+  }
+
+  private void reportKillStart(CommandSource source, String instanceId, boolean protectedLobby) {
+    logger.warn(
+        "Kill command accepted from {} for {}{}",
+        commandSourceName(source),
+        instanceId,
+        protectedLobby ? " (forced protected lobby)" : "");
+    source.sendMessage(
+        CommandMessages.message(
+            protectedLobby
+                ? "Moving players to SLS-Limbo before force-terminating " + instanceId + "..."
+                : "Moving players to the lobby before force-terminating " + instanceId + "...",
+            NamedTextColor.YELLOW));
+  }
+
+  private CompletableFuture<Integer> killTarget(
+      String instanceId, boolean protectedLobby, boolean forceCleanup) {
+    if (!protectedLobby) {
+      return lobbyProvider
+          .evacuate(instanceId)
+          .thenCompose(ignored -> invokeKill(instanceId, forceCleanup));
+    }
+    if (!lobbyProvider.beginIntentionalStop(instanceId)) {
+      return CompletableFuture.failedFuture(
+          new IllegalStateException("The active lobby is already stopping or changed"));
+    }
+    return lobbyProvider
+        .evacuateForIntentionalStop(instanceId)
+        .handle(
+            (ignored, failure) -> {
+              if (failure != null) {
+                lobbyProvider.cancelIntentionalStop(instanceId);
+                throw new java.util.concurrent.CompletionException(rootCause(failure));
+              }
+              if (!lobbyProvider.prepareIntentionalStop(instanceId)) {
+                lobbyProvider.cancelIntentionalStop(instanceId);
+                throw new java.util.concurrent.CompletionException(
+                    new IllegalStateException("The active lobby changed during evacuation"));
+              }
+              return null;
+            })
+        .thenCompose(ignored -> invokeKill(instanceId, forceCleanup));
+  }
+
+  private CompletableFuture<Integer> invokeKill(String instanceId, boolean forceCleanup) {
+    try {
+      return instances.kill(instanceId, forceCleanup);
+    } catch (InstanceOperationException exception) {
+      return CompletableFuture.failedFuture(exception);
+    }
+  }
+
+  private static void reportKill(
+      CommandSource source, String instanceId, Integer exitCode, Throwable failure) {
+    if (failure != null) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Failed to kill server " + instanceId + ": " + rootMessage(failure),
+              NamedTextColor.RED));
+      return;
+    }
+    source.sendMessage(CommandMessages.message("Killed " + instanceId, NamedTextColor.GRAY));
+  }
+
+  private static boolean isForceModifier(String argument) {
+    return "force".equalsIgnoreCase(argument) || "--force".equalsIgnoreCase(argument);
   }
 
   private void stopInstance(CommandSource source, String instanceId, boolean forcedProtectedStop) {

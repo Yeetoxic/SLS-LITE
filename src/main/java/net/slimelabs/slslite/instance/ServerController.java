@@ -36,6 +36,15 @@ public interface ServerController {
 
   CompletableFuture<Integer> stop(String instanceId) throws InstanceOperationException;
 
+  default CompletableFuture<Integer> kill(String instanceId) throws InstanceOperationException {
+    throw new InstanceOperationException("Force termination is unavailable for " + instanceId);
+  }
+
+  default CompletableFuture<Integer> kill(String instanceId, boolean unregisterOnFailure)
+      throws InstanceOperationException {
+    return kill(instanceId);
+  }
+
   default CompletableFuture<ManagedInstance> restart(String instanceId)
       throws InstanceOperationException {
     throw new InstanceOperationException("Persistent restart is unavailable for " + instanceId);

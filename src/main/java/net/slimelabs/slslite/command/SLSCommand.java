@@ -7,6 +7,7 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -74,6 +75,7 @@ public final class SLSCommand implements SimpleCommand {
   private final InstallationCommandHandler installationHandler;
   private final InspectionCommandHandler inspectionHandler;
   private final PlayerRoutingCommandHandler playerRoutingHandler;
+  private final DebugPlayerRegistry debugPlayers;
   private final Logger logger;
 
   public SLSCommand(
@@ -155,6 +157,7 @@ public final class SLSCommand implements SimpleCommand {
     this.playerRoutingHandler =
         new PlayerRoutingCommandHandler(
             proxy, blueprints, joinService, authorizer, instanceAccess, logger);
+    this.debugPlayers = new DebugPlayerRegistry();
     this.logger = logger;
   }
 
@@ -166,7 +169,11 @@ public final class SLSCommand implements SimpleCommand {
       return;
     }
 
-    switch (arguments[0].toLowerCase(Locale.ROOT)) {
+    String operation = arguments[0].toLowerCase(Locale.ROOT);
+    debugPlayers.publish(
+        "DEBUG",
+        "Command /sls " + operation + " requested by " + commandSourceName(invocation.source()));
+    switch (operation) {
       case "admin" -> adminHandler.execute(invocation.source(), arguments);
       case "blueprint" -> inspectionHandler.blueprint(invocation.source(), arguments);
       case "blueprints" -> inspectionHandler.blueprints(invocation.source(), arguments);
@@ -174,10 +181,12 @@ public final class SLSCommand implements SimpleCommand {
       case "create" -> lifecycleHandler.create(invocation.source(), arguments);
       case "dequeue" -> playerRoutingHandler.dequeue(invocation.source(), arguments);
       case "delete" -> lifecycleHandler.delete(invocation.source(), arguments);
+      case "debug" -> debug(invocation.source(), arguments);
       case "find" -> playerRoutingHandler.find(invocation.source(), arguments);
       case "info" -> inspectionHandler.info(invocation.source(), arguments);
       case "install" -> installationHandler.execute(invocation.source(), arguments);
       case "join" -> playerRoutingHandler.join(invocation.source(), arguments);
+      case "kill" -> lifecycleHandler.kill(invocation.source(), arguments);
       case "list" -> inspectionHandler.list(invocation.source());
       case "logs" -> inspectionHandler.logs(invocation.source(), arguments);
       case "registries" -> inspectionHandler.registries(invocation.source());
@@ -190,8 +199,7 @@ public final class SLSCommand implements SimpleCommand {
       case "stop" -> lifecycleHandler.stop(invocation.source(), arguments);
       case "system" -> inspectionHandler.system(invocation.source(), arguments);
       case "version" -> sendVersion(invocation.source());
-      case "debug", "kill", "pause", "resume" ->
-          unavailable(invocation.source(), arguments[0], false);
+      case "pause", "resume" -> unavailable(invocation.source(), arguments[0], false);
       case "node" -> unavailable(invocation.source(), arguments[0], true);
       default -> sendRootHelp(invocation.source());
     }
@@ -228,7 +236,7 @@ public final class SLSCommand implements SimpleCommand {
             authorizer.canAdminister(source, "reload")
                 ? completed(List.of("all", "blueprints", "software"))
                 : completed(List.of());
-        case "create", "delete", "start", "reset", "restart" ->
+        case "create", "delete", "kill", "start", "reset", "restart" ->
             completed(lifecycleHandler.suggestions(source, operation, arguments));
         case "info", "stats", "status" ->
             completed(inspectionHandler.suggestions(source, operation, arguments));
@@ -264,6 +272,11 @@ public final class SLSCommand implements SimpleCommand {
       return completed(lifecycleHandler.suggestions(source, operation, arguments));
     }
     if (arguments.length == 3
+        && "kill".equals(operation)
+        && authorizer.canAdminister(source, "kill")) {
+      return completed(lifecycleHandler.suggestions(source, operation, arguments));
+    }
+    if (arguments.length == 3
         && ("restart".equals(operation) || "reset".equals(operation))
         && authorizer.canAdminister(source, operation + ".force")) {
       return completed(lifecycleHandler.suggestions(source, operation, arguments));
@@ -291,6 +304,35 @@ public final class SLSCommand implements SimpleCommand {
       source.sendMessage(
           CommandMessages.usage("/sls", VSLSCommandContract.PUBLIC_ROOT.toArray(String[]::new)));
     }
+  }
+
+  private void debug(CommandSource source, String[] arguments) {
+    if (!requireAdmin(source, "debug", "toggle SLS debug messages")) {
+      return;
+    }
+    if (arguments.length != 1) {
+      source.sendMessage(CommandMessages.usage("/sls", "debug"));
+      return;
+    }
+    if (!(source instanceof Player player)) {
+      source.sendMessage(
+          CommandMessages.message("This command can only be run by a player.", NamedTextColor.RED));
+      return;
+    }
+
+    boolean enabled = debugPlayers.toggle(player);
+    logger.info("Debug mode {} for {}", enabled ? "enabled" : "disabled", player.getUsername());
+    source.sendMessage(
+        CommandMessages.message(
+            enabled ? "Debug mode enabled." : "Debug mode disabled.", NamedTextColor.GRAY));
+  }
+
+  public void disconnectDebugPlayer(UUID playerId) {
+    debugPlayers.remove(playerId);
+  }
+
+  public void close() {
+    debugPlayers.clear();
   }
 
   private void console(CommandSource source, String[] arguments) {

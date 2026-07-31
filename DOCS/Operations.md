@@ -44,6 +44,26 @@ Ordinary stop:
 Stopping during installation or preparation cancels that instance's wait
 without cancelling a shared download required by another instance.
 
+## Force Termination
+
+`/sls kill` is an explicit emergency operation. SLS-LITE evacuates players,
+removes the backend from routing, calls the operating system's forcible process
+termination directly, and then uses the same process-exit cleanup boundary as a
+normal stop. It does not send the software stop command or wait for its graceful
+timeout, so unsaved child-process data may be lost.
+
+Persistent instance storage is preserved. Verified ephemeral storage, ports,
+memory admission, logs, mounts, and registrations are released only by normal
+terminal cleanup. The pinned vSLS `force` modifier requests backend
+unregistration when the termination request itself fails; SLS-LITE never uses
+that modifier to pretend a possibly live process has released its other
+resources.
+
+Ordinary `kill all` targets are handled sequentially and the managed lobby is
+skipped. Including the lobby requires `force` and `sls.command.kill.force`;
+ordinary targets are processed first, then players are diverted to SLS-Limbo
+before the lobby process is terminated.
+
 ## Idle Cleanup
 
 Empty, ready, ephemeral instances stop after
@@ -81,7 +101,8 @@ is not silently deleted.
 A managed primary lobby and SLS-Limbo each have independent bounded recovery
 budgets with exponential backoff. A healthy period resets the used budget.
 
-Protected lobby stop/restart/reset requires its matching `--force` permission.
+Protected lobby stop/restart/reset and kill requires its matching force
+permission.
 Players are evacuated to SLS-Limbo before the process changes. Restart/reset
 restores routing only after the lobby is ready and returns tracked players from
 SLS-Limbo.
@@ -108,6 +129,13 @@ Use:
 Each managed instance retains 1,000 recent lines in memory for `/sls logs`.
 Temporary file output stops at its configured hard cap. Files are not rotated.
 Proxy mirroring is disabled by default to prevent child-console spam.
+
+Authorized players may toggle `/sls debug` to receive bounded command-dispatch
+context in chat. Each line includes only the `/sls` operation, sender, severity,
+and a timestamp hover. Arguments and raw child output are excluded so console
+commands, credentials, host paths, and high-volume logs are not mirrored into
+chat. The opt-in state is not persisted and is cleared on disconnect or proxy
+shutdown.
 
 The proxy console records bounded state changes: accepted operations,
 installation state, preparation, process start, readiness, player connection,

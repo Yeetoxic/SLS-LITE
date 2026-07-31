@@ -83,6 +83,7 @@ public final class SLSLite {
   private AdministratorStore administrators;
   private AdminClaimService adminClaims;
   private SoftwareInstallationService installationService;
+  private SLSCommand slsCommand;
 
   @Inject
   public SLSLite(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -231,26 +232,24 @@ public final class SLSLite {
     }
 
     CommandMeta commandMeta = proxy.getCommandManager().metaBuilder("sls").plugin(this).build();
-    proxy
-        .getCommandManager()
-        .register(
-            commandMeta,
-            new SLSCommand(
-                proxy,
-                blueprints,
-                softwareProfiles,
-                resourceBudget,
-                processSupervisor,
-                instanceManager,
-                joinService,
-                lobbyProvider,
-                configuration.get().managedOutput(),
-                configuration.get(),
-                hostCapabilities,
-                administrators,
-                adminClaims,
-                installationService,
-                logger));
+    slsCommand =
+        new SLSCommand(
+            proxy,
+            blueprints,
+            softwareProfiles,
+            resourceBudget,
+            processSupervisor,
+            instanceManager,
+            joinService,
+            lobbyProvider,
+            configuration.get().managedOutput(),
+            configuration.get(),
+            hostCapabilities,
+            administrators,
+            adminClaims,
+            installationService,
+            logger);
+    proxy.getCommandManager().register(commandMeta, slsCommand);
     issueInitialAdministratorCode();
     lobbyProvider.addPrimaryReadyListener(
         server ->
@@ -371,6 +370,9 @@ public final class SLSLite {
 
   @Subscribe
   public void onDisconnect(DisconnectEvent event) {
+    if (slsCommand != null) {
+      slsCommand.disconnectDebugPlayer(event.getPlayer().getUniqueId());
+    }
     if (limboHandoff != null) {
       limboHandoff.disconnect(event.getPlayer().getUniqueId());
     }
@@ -384,6 +386,9 @@ public final class SLSLite {
 
   @Subscribe
   public void onProxyShutdown(ProxyShutdownEvent event) {
+    if (slsCommand != null) {
+      slsCommand.close();
+    }
     if (idleReaper != null) {
       idleReaper.close();
     }

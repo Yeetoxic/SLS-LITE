@@ -224,7 +224,7 @@ data, leaking resources, or trapping players in unexplained states.
 
 ### 3.5 Commands, Permissions, and Operator Workflows
 
-- [ ] Complete locally useful vSLS commands while keeping unsafe portable
+- [x] Complete locally useful vSLS commands while keeping unsafe portable
       pause/resume emulation out of scope:
   - [x] `create`, including only supported safe local overrides:
     - [x] Provision and start the pinned bare `<type> <id>` form with dedicated
@@ -233,10 +233,12 @@ data, leaking resources, or trapping players in unexplained states.
           reset before accepting any `--name=value` flags.
   - [x] `delete`, with persistent ownership, sequential protected-lobby-safe
         `all` behavior, transactional cleanup, and crash reconciliation.
-  - [ ] `kill`, with explicit force semantics and evacuation.
+  - [x] `kill`, with explicit force semantics, evacuation, protected-lobby
+        handling, sequential `all`, and owned terminal cleanup.
   - [x] `blueprint`, with dedicated permission, visible details, and hidden
         permission-aware ID completion.
-  - [ ] `debug`, preserving its pinned sender and permission behavior.
+  - [x] `debug`, preserving its pinned player-only sender, permission, toggle,
+        feedback, and bounded sanitized diagnostic behavior.
 - [ ] Finish retained modifier behavior, including force semantics, and enumerate
       every intentionally unavailable daemon-backed modifier.
 - [ ] Finish output, permission, selector, sender, usage-error, and
@@ -250,7 +252,7 @@ data, leaking resources, or trapping players in unexplained states.
 - [ ] Add persistent delete and explicit force-kill with evacuation, ownership,
       transactionality, cleanup, and audit diagnostics:
   - [x] Persistent delete.
-  - [ ] Explicit force-kill.
+  - [x] Explicit force-kill.
 - [ ] Add bounded `/sls console` response capture and opt-in nonblocking live
       console follow.
 - [x] Add create-time overrides for memory, save mode, seed, view distance, and

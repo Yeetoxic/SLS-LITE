@@ -198,6 +198,26 @@ public final class SupervisedProcess {
     }
   }
 
+  public synchronized CompletableFuture<Integer> kill() {
+    if (process == null || !process.isAlive()) {
+      return exit;
+    }
+    InstanceState state = lifecycle.state();
+    if (state == InstanceState.STARTING) {
+      cancel(startupDeadline);
+      ready.completeExceptionally(
+          new CancellationException("Instance was force-terminated: " + instanceId));
+      lifecycle.transitionTo(InstanceState.STOPPING);
+    } else if (state == InstanceState.READY || state == InstanceState.FAILED) {
+      lifecycle.transitionTo(InstanceState.STOPPING);
+    } else if (state != InstanceState.STOPPING) {
+      throw new IllegalStateException("Cannot kill instance " + instanceId + " while " + state);
+    }
+    cancel(stopDeadline);
+    process.destroyForcibly();
+    return exit;
+  }
+
   private void readOutput() {
     try (BufferedReader reader =
         new BufferedReader(

@@ -233,6 +233,28 @@ threshold. Queue, transfer, and first-player timings require a real player
 connection and remain covered deterministically in the Maven suite until the
 interactive sampling pass.
 
+The Stage 3.5 force-kill gate passed on 2026-07-31 with JAR SHA-256
+`987556DDC0564801751CF1E35C84F2B276B84C82106AC40BAC7861140EBC1AFD`.
+On the normal unprivileged Pterodactyl/Velocity fixture,
+`kill <persistent-id> force` evacuated first, exited immediately with code 137,
+reported the pinned gray `Killed <id>` result, retained the instance directory,
+and wrote `state=STOPPED`. The disposable directory was then removed through
+the normal transactional delete command. A separate ephemeral server passed
+unforced `kill all`: its process and directory were removed, the managed lobby
+was reported as protected and skipped, and Velocity, NanoLimbo, and the lobby
+JVM remained healthy.
+
+The Stage 3.5 debug-command gate passed on 2026-07-31 with JAR SHA-256
+`363098E8498319EF742F7E9E18FFCDACC2F9D84A1563FA80AE074DD33EFA7514`.
+The console received the pinned player-only rejection. A disposable
+Minecraft-protocol 1.18.2 client then connected through Velocity with a
+temporary `sls.command.debug` LuckPerms grant and received both exact gray
+`Debug mode enabled.` and `Debug mode disabled.` responses. The permission was
+removed immediately after the run. The reusable
+`tools/protocol-smoke/command-smoke.js` helper sends only explicitly supplied
+test commands, uses offline authentication, and is not packaged with the
+plugin.
+
 ### Representative Storage and Resource Samples
 
 The repeated 2026-07-30 portable-copy pass used unchanged fixture worlds and

@@ -11,7 +11,7 @@ administrative commands. A permission provider may grant:
 - `sls.command.admin` for all administrative operations.
 - `sls.command.<operation>` for one operation.
 - `sls.command.<operation>.others` for targeting other players.
-- force nodes such as `sls.command.stop.force`.
+- force nodes such as `sls.command.stop.force` and `sls.command.kill.force`.
 
 ## Public Commands
 
@@ -42,6 +42,7 @@ name a player and cannot use player-only selectors.
 | `/sls blueprint <id>` | `blueprint` | Show one blueprint's registry, software, limits, persistence, active instances, volumes, copies, and environment-variable names. |
 | `/sls blueprints [registry]` | `blueprints` | List blueprint details; rows suggest join commands. |
 | `/sls create <registry> <blueprint> [flags...]` | `create` | Provision and start a fresh managed instance. Supported local overrides are persisted across restart and reset. |
+| `/sls debug` | `debug` | Player-only toggle for bounded SLS-LITE command-dispatch diagnostics in chat. |
 | `/sls start <registry> <blueprint>` | `start` | Start a managed instance without joining it. The additive `/sls start <blueprint>` form also works for a globally unique ID. |
 | `/sls info <server\|this>` | `info` | Detailed instance information. |
 | `/sls status <server\|this>` | `status` | Lifecycle state. |
@@ -50,6 +51,8 @@ name a player and cannot use player-only selectors.
 | `/sls logs <server\|this> [page] [lines]` | `logs` | Read retained child output; up to 100 lines per page. |
 | `/sls delete <server\|this>` | `delete` | Evacuate an active server, stop it cleanly, and transactionally remove its owned instance storage. |
 | `/sls delete all` | `delete` | Sequentially delete every ordinary managed instance with per-server results. The managed lobby is always skipped. |
+| `/sls kill [server\|this] [force]` | `kill` | Evacuate players, immediately terminate the process without a graceful save, and perform normal owned-resource cleanup. A player may omit the target to select their current server. |
+| `/sls kill all [force]` | `kill` | Sequentially force-terminate active ordinary servers before any explicitly forced managed lobby. |
 | `/sls stop <server\|this>` | `stop` | Evacuate and gracefully stop an instance. |
 | `/sls restart <server\|this>` | `restart` | Restart a persistent instance with the same data. |
 | `/sls reset <server\|this>` | `reset` | Rebuild a persistent instance from current sources. |
@@ -79,10 +82,18 @@ proxy restart, `/sls restart`, and `/sls reset`. Distributed placement,
 container, CPU, swap, disk, thread, image, and software/version overrides are
 intentionally unavailable in local mode.
 
+Debug mode follows the pinned vSLS player-only toggle and gray enabled/disabled
+feedback. While enabled, the player receives timestamp-hovered SLS-LITE debug
+lines containing the invoked `/sls` operation and sender. Command arguments,
+child-console content, host paths, credentials, and other unbounded details are
+not copied into debug chat. The subscription is memory-only and is removed on
+disable, disconnect, or proxy shutdown.
+
 ## Force Operations
 
 ```text
 /sls join player <player> --force
+/sls kill <server|all> force
 /sls stop <protected-lobby> --force
 /sls restart <protected-lobby> --force
 /sls reset <protected-lobby> --force
@@ -90,6 +101,13 @@ intentionally unavailable in local mode.
 
 - Force join requires administrative `join` access and bypasses capacity for a
   direct player-to-player instance join.
+- Kill always means immediate process termination. Its pinned upstream `force`
+  modifier requests Velocity unregistration even if the termination request
+  itself fails; it never releases process, port, memory, or storage ownership
+  while the operating-system process may still be alive. `--force` is accepted
+  as a SLS-LITE alias.
+- Killing the protected managed lobby additionally requires
+  `sls.command.kill.force`. Without it, `kill all` skips the lobby.
 - Protected-lobby stop requires `sls.command.stop.force`.
 - Protected-lobby restart requires `sls.command.restart.force`.
 - Protected-lobby reset requires `sls.command.reset.force`.
@@ -103,7 +121,7 @@ and write an operator audit message. A failed evacuation cancels the operation.
 The pinned vSLS root includes commands that are not locally implemented yet:
 
 ```text
-debug kill pause resume
+pause resume
 ```
 
 They return a styled `not available in this SLS-LITE build yet` response.

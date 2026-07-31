@@ -176,6 +176,44 @@ class ProcessSupervisorTest {
   }
 
   @Test
+  void forceStopTerminatesImmediatelyWithoutGracefulStopDeadline() throws Exception {
+    supervisor = new ProcessSupervisor(1);
+    InstanceLifecycle lifecycle = preparingLifecycle("test-explicit-force");
+    SupervisedProcess process =
+        supervisor.start(
+            "test-explicit-force",
+            spec("ignore-stop", Duration.ofSeconds(5), Duration.ofSeconds(30)),
+            lifecycle,
+            line -> {});
+    process.readyFuture().get(5, TimeUnit.SECONDS);
+
+    long started = System.nanoTime();
+    process.kill();
+    int exitCode = process.exitFuture().get(5, TimeUnit.SECONDS);
+
+    assertTrue(exitCode != 0);
+    assertTrue(System.nanoTime() - started < TimeUnit.SECONDS.toNanos(5));
+    assertEquals(InstanceState.STOPPED, process.state());
+  }
+
+  @Test
+  void explicitKillCancelsReadinessWhileProcessIsStarting() throws Exception {
+    supervisor = new ProcessSupervisor(1);
+    SupervisedProcess process =
+        supervisor.start(
+            "test-kill-starting",
+            spec("silent", Duration.ofSeconds(30), Duration.ofSeconds(30)),
+            preparingLifecycle("test-kill-starting"),
+            line -> {});
+
+    int exitCode = process.kill().get(5, TimeUnit.SECONDS);
+
+    assertTrue(exitCode != 0);
+    assertThrows(CancellationException.class, process.readyFuture()::join);
+    assertEquals(InstanceState.STOPPED, process.state());
+  }
+
+  @Test
   void rejectsDuplicateActiveInstanceId() throws Exception {
     supervisor = new ProcessSupervisor(2);
     SupervisedProcess first =

@@ -121,6 +121,111 @@ class SLSCommandForcedStopTest {
   }
 
   @Test
+  void killEvacuatesOrdinaryInstanceBeforeImmediateTermination() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby("other-lobby.abc123");
+    SLSCommand command = command(controller, lobby);
+    List<Component> messages = new ArrayList<>();
+
+    command.execute(invocation(source(Set.of("sls.command.kill"), messages), "kill", INSTANCE_ID));
+
+    assertEquals(1, lobby.normalEvacuations);
+    assertEquals(1, controller.kills);
+    assertTrue(plainText(messages.getLast()).contains("Killed " + INSTANCE_ID));
+  }
+
+  @Test
+  void protectedLobbyKillRequiresDistinctForcePermission() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+    SLSCommand command = command(controller, lobby);
+
+    command.execute(
+        invocation(source(Set.of("sls.command.kill"), new ArrayList<>()), "kill", INSTANCE_ID));
+    command.execute(
+        invocation(
+            source(Set.of("sls.command.kill"), new ArrayList<>()), "kill", INSTANCE_ID, "--force"));
+
+    assertEquals(0, lobby.evacuations);
+    assertEquals(0, controller.kills);
+  }
+
+  @Test
+  void forcedLobbyKillEvacuatesToLimboAndSuppressesRecovery() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+    SLSCommand command = command(controller, lobby);
+
+    command.execute(
+        invocation(
+            source(Set.of("sls.command.kill", "sls.command.kill.force"), new ArrayList<>()),
+            "kill",
+            INSTANCE_ID,
+            "force"));
+
+    assertEquals(1, lobby.begins);
+    assertEquals(1, lobby.evacuations);
+    assertTrue(lobby.prepared);
+    assertEquals(1, controller.kills);
+    assertTrue(controller.forcedKillCleanup);
+  }
+
+  @Test
+  void upstreamForceModifierRequestsUnregistrationFallbackForOrdinaryServer() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby("other-lobby.abc123");
+    SLSCommand command = command(controller, lobby);
+
+    command.execute(
+        invocation(
+            source(Set.of("sls.command.kill"), new ArrayList<>()), "kill", INSTANCE_ID, "force"));
+
+    assertEquals(1, controller.kills);
+    assertTrue(controller.forcedKillCleanup);
+  }
+
+  @Test
+  void killAllCompletesOrdinaryTargets() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby("other-lobby.abc123");
+    SLSCommand command = command(controller, lobby);
+    List<Component> messages = new ArrayList<>();
+    CommandSource source = source(Set.of("sls.command.kill"), messages);
+
+    command.execute(invocation(source, "kill", "all"));
+
+    assertEquals(1, controller.kills);
+    assertTrue(plainText(messages.getLast()).contains("1 terminated, 0 failed"));
+    assertTrue(
+        command
+            .suggestAsync(invocation(source, "kill", ""))
+            .join()
+            .containsAll(List.of("all", "this")));
+  }
+
+  @Test
+  void killAllProtectsLobbyUnlessForcePermissionIsPresent() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+    SLSCommand command = command(controller, lobby);
+    List<Component> messages = new ArrayList<>();
+
+    command.execute(invocation(source(Set.of("sls.command.kill"), messages), "kill", "all"));
+    command.execute(
+        invocation(source(Set.of("sls.command.kill"), messages), "kill", "all", "force"));
+
+    assertEquals(0, controller.kills);
+    assertTrue(
+        messages.stream()
+            .map(SLSCommandForcedStopTest::plainText)
+            .anyMatch(message -> message.contains("protected")));
+    assertTrue(
+        messages.stream()
+            .map(SLSCommandForcedStopTest::plainText)
+            .anyMatch(message -> message.contains("permission")));
+  }
+
+  @Test
   void forceModifierRequiresDistinctPermission() {
     TrackingController controller = new TrackingController(instance);
     TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
@@ -449,6 +554,8 @@ class SLSCommandForcedStopTest {
   private static final class TrackingController implements ServerController {
     private final ManagedInstance instance;
     private int stops;
+    private int kills;
+    private boolean forcedKillCleanup;
     private int deletes;
 
     private TrackingController(ManagedInstance instance) {
@@ -477,6 +584,18 @@ class SLSCommandForcedStopTest {
     public CompletableFuture<Integer> stop(String instanceId) {
       stops++;
       return CompletableFuture.completedFuture(0);
+    }
+
+    @Override
+    public CompletableFuture<Integer> kill(String instanceId) {
+      kills++;
+      return CompletableFuture.completedFuture(137);
+    }
+
+    @Override
+    public CompletableFuture<Integer> kill(String instanceId, boolean unregisterOnFailure) {
+      forcedKillCleanup = unregisterOnFailure;
+      return kill(instanceId);
     }
 
     @Override

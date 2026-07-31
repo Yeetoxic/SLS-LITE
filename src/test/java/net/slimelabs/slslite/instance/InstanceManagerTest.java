@@ -114,6 +114,37 @@ class InstanceManagerTest {
   }
 
   @Test
+  void forceKillReleasesAdmissionsAndPreservesPersistentStorage() throws Exception {
+    TestContext context = createContext(true, true);
+    ManagedInstance instance = manager.start("fixture");
+    instance.readyFuture().get(10, TimeUnit.SECONDS);
+
+    int exitCode = manager.kill(instance.id()).get(10, TimeUnit.SECONDS);
+    awaitCleanup();
+
+    assertTrue(exitCode != 0);
+    assertTrue(Files.isDirectory(instance.directory()));
+    assertTrue(context.backends().registrations.isEmpty());
+    assertTrue(context.ports().reservations().isEmpty());
+    assertEquals(0, context.budget().reservedMemoryMiB());
+    assertTrue(manager.getAll().isEmpty());
+  }
+
+  @Test
+  void forceKillDuringStartupReleasesAllAdmissions() throws Exception {
+    TestContext context = createContext(false, true);
+    ManagedInstance instance = manager.start("fixture");
+
+    manager.kill(instance.id()).get(10, TimeUnit.SECONDS);
+    awaitCleanup();
+
+    assertTrue(context.backends().registrations.isEmpty());
+    assertTrue(context.ports().reservations().isEmpty());
+    assertEquals(0, context.budget().reservedMemoryMiB());
+    assertFalse(Files.exists(instance.directory()));
+  }
+
+  @Test
   void deletesActivePersistentInstanceAfterItsCleanShutdown() throws Exception {
     TestContext context = createContext(true, true);
     ManagedInstance instance = manager.start("fixture");

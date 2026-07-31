@@ -309,6 +309,55 @@ public final class InstanceManager implements ServerController {
   }
 
   @Override
+  public CompletableFuture<Integer> kill(String instanceId) throws InstanceOperationException {
+    return kill(instanceId, false);
+  }
+
+  @Override
+  public CompletableFuture<Integer> kill(String instanceId, boolean unregisterOnFailure)
+      throws InstanceOperationException {
+    ManagedInstance instance = get(instanceId);
+    synchronized (instance) {
+      instance.timings().begin(InstancePhaseTimings.Phase.SHUTDOWN);
+      logger.warn(
+          "Instance force termination requested: {} (state {})", instanceId, instance.state());
+      if (instance.state() == InstanceState.PREPARING) {
+        instance.requestStop();
+        instance.lifecycle().transitionTo(InstanceState.STOPPING);
+        metadata.writeBestEffort(instance, InstanceState.STOPPING, null);
+        instance
+            .readyFuture()
+            .completeExceptionally(
+                new CancellationException("Instance startup was force-cancelled: " + instanceId));
+        return instance.stoppedFuture();
+      }
+
+      SupervisedProcess process = instance.process();
+      if (process == null) {
+        throw new InstanceOperationException("Instance has no active process: " + instanceId);
+      }
+      try {
+        if (instance.state() == InstanceState.STARTING) {
+          instance.requestStop();
+          instance
+              .readyFuture()
+              .completeExceptionally(
+                  new CancellationException("Instance startup was force-cancelled: " + instanceId));
+        }
+        metadata.writeBestEffort(instance, InstanceState.STOPPING, process);
+        process.kill();
+        unregister(instance);
+        return instance.stoppedFuture();
+      } catch (RuntimeException exception) {
+        if (unregisterOnFailure) {
+          unregister(instance);
+        }
+        throw new InstanceOperationException(exception.getMessage(), exception);
+      }
+    }
+  }
+
+  @Override
   public CompletableFuture<ManagedInstance> restart(String instanceId)
       throws InstanceOperationException {
     return cyclePersistent(instanceId, false);
