@@ -170,7 +170,7 @@ final class InstanceReconcilerTest {
                 LoggerFactory.getLogger(InstanceReconcilerTest.class))
             .reconcile();
 
-    assertEquals(1, report.recoveredResetTransactions());
+    assertEquals(1, report.recoveredStorageTransactions());
     assertEquals("original", Files.readString(root.resolve(id).resolve("world.dat")));
     assertFalse(Files.exists(backup));
   }
@@ -193,9 +193,28 @@ final class InstanceReconcilerTest {
                 LoggerFactory.getLogger(InstanceReconcilerTest.class))
             .reconcile();
 
-    assertEquals(1, report.recoveredResetTransactions());
+    assertEquals(1, report.recoveredStorageTransactions());
     assertEquals("replacement", Files.readString(root.resolve(id).resolve("world.dat")));
     assertFalse(Files.exists(backup));
+  }
+
+  @Test
+  void removesCommittedDeleteTombstoneAtStartup() throws Exception {
+    Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+    String id = "survival.abc123";
+    String nonce = "12345678-1234-1234-1234-123456789abc";
+    Path tombstone = directory(root, "." + id + ".delete-" + nonce);
+    Files.writeString(tombstone.resolve("world.dat"), "already deleted");
+
+    InstanceReconciliationReport report =
+        new InstanceReconciler(
+                new InstanceDirectoryPreparer(root),
+                LoggerFactory.getLogger(InstanceReconcilerTest.class))
+            .reconcile();
+
+    assertEquals(1, report.recoveredStorageTransactions());
+    assertFalse(Files.exists(tombstone));
+    assertFalse(Files.exists(root.resolve(id)));
   }
 
   private static Path directory(Path root, String name) throws Exception {

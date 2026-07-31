@@ -34,6 +34,7 @@ import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
 import net.slimelabs.slslite.instance.metadata.InstanceMetadataService;
 import net.slimelabs.slslite.instance.model.InstanceDefinitionIdentity;
 import net.slimelabs.slslite.instance.model.InstanceIdGenerator;
+import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 import net.slimelabs.slslite.instance.model.InstanceMetadata;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
@@ -73,6 +74,7 @@ public final class InstanceManager implements ServerController {
   private final ThreadPoolExecutor operationExecutor;
   private final Map<String, ManagedInstance> instances = new java.util.HashMap<>();
   private final Set<String> pendingRestarts = new HashSet<>();
+  private final Set<String> pendingDeletes = new HashSet<>();
 
   private boolean closed;
 
@@ -147,9 +149,20 @@ public final class InstanceManager implements ServerController {
 
   @Override
   public ManagedInstance start(String blueprintId) throws InstanceOperationException {
+    return create(blueprintId, InstanceLaunchOverrides.NONE);
+  }
+
+  @Override
+  public ManagedInstance create(String blueprintId, InstanceLaunchOverrides overrides)
+      throws InstanceOperationException {
     ResolvedDefinition definition =
         resolveDefinition(blueprintId, "Unknown blueprint: " + blueprintId);
-    Blueprint blueprint = definition.blueprint();
+    Blueprint blueprint;
+    try {
+      blueprint = overrides.applyTo(definition.blueprint());
+    } catch (IllegalArgumentException exception) {
+      throw new InstanceOperationException(exception.getMessage(), exception);
+    }
     SoftwareProfile profile = definition.softwareProfile();
     InstanceDefinitionIdentity definitionIdentity =
         InstanceDefinitionIdentity.from(blueprint, profile);
@@ -178,7 +191,14 @@ public final class InstanceManager implements ServerController {
       Path directory = directoryPreparer.root().resolve(instanceId);
       ManagedInstance instance =
           new ManagedInstance(
-              instanceId, blueprint, definitionIdentity, port, directory, lifecycle, Instant.now());
+              instanceId,
+              blueprint,
+              definitionIdentity,
+              overrides,
+              port,
+              directory,
+              lifecycle,
+              Instant.now());
       instances.put(instanceId, instance);
       logger.info(
           "Instance start accepted: {} from {}/{} ({} {}, {} MiB, port {})",
@@ -300,6 +320,54 @@ public final class InstanceManager implements ServerController {
     return cyclePersistent(instanceId, true);
   }
 
+  @Override
+  public CompletableFuture<InstanceDeletionResult> delete(String instanceId)
+      throws InstanceOperationException {
+    ManagedInstance active;
+    synchronized (this) {
+      if (closed) {
+        throw new InstanceOperationException("Instance manager is shutting down");
+      }
+      if (!InstanceIdGenerator.isValid(instanceId)) {
+        throw new InstanceOperationException("Invalid instance ID: " + instanceId);
+      }
+      if (pendingRestarts.contains(instanceId) || !pendingDeletes.add(instanceId)) {
+        throw new InstanceOperationException(
+            "Instance restart, reset, or delete is already in progress: " + instanceId);
+      }
+      active = instances.get(instanceId);
+      try {
+        if (active == null) {
+          metadata.readPersistent(instanceId);
+        } else {
+          metadata.snapshot(active);
+        }
+      } catch (InstanceOperationException exception) {
+        pendingDeletes.remove(instanceId);
+        throw exception;
+      }
+    }
+
+    CompletableFuture<Integer> stopped;
+    try {
+      stopped = active == null ? CompletableFuture.completedFuture(0) : stop(instanceId);
+    } catch (InstanceOperationException exception) {
+      synchronized (this) {
+        pendingDeletes.remove(instanceId);
+      }
+      throw exception;
+    }
+
+    return stopped
+        .thenCompose(ignored -> submitDelete(instanceId))
+        .whenComplete(
+            (ignored, failure) -> {
+              synchronized (this) {
+                pendingDeletes.remove(instanceId);
+              }
+            });
+  }
+
   private CompletableFuture<ManagedInstance> cyclePersistent(String instanceId, boolean reset)
       throws InstanceOperationException {
     ManagedInstance active;
@@ -311,7 +379,7 @@ public final class InstanceManager implements ServerController {
       if (!InstanceIdGenerator.isValid(instanceId)) {
         throw new InstanceOperationException("Invalid instance ID: " + instanceId);
       }
-      if (!pendingRestarts.add(instanceId)) {
+      if (pendingDeletes.contains(instanceId) || !pendingRestarts.add(instanceId)) {
         throw new InstanceOperationException(
             "Instance restart or reset is already in progress: " + instanceId);
       }
@@ -361,6 +429,36 @@ public final class InstanceManager implements ServerController {
             });
   }
 
+  private CompletableFuture<InstanceDeletionResult> submitDelete(String instanceId) {
+    CompletableFuture<InstanceDeletionResult> deletion = new CompletableFuture<>();
+    try {
+      operationExecutor.execute(
+          () -> {
+            try {
+              Path directory = directoryPreparer.root().resolve(instanceId);
+              if (!Files.exists(directory)) {
+                logger.info("Instance delete completed: {} (storage already removed)", instanceId);
+                deletion.complete(new InstanceDeletionResult(instanceId, true));
+                return;
+              }
+              metadata.readPersistent(instanceId);
+              boolean cleaned = directoryPreparer.deletePersistent(instanceId);
+              logger.info(
+                  "Instance delete committed: {} (tombstone cleanup {})",
+                  instanceId,
+                  cleaned ? "complete" : "deferred");
+              deletion.complete(new InstanceDeletionResult(instanceId, cleaned));
+            } catch (InstanceOperationException | InstancePreparationException exception) {
+              deletion.completeExceptionally(exception);
+            }
+          });
+    } catch (RuntimeException exception) {
+      deletion.completeExceptionally(
+          new InstanceOperationException("Instance deletion queue is full", exception));
+    }
+    return deletion;
+  }
+
   private void resetPersistent(String instanceId) throws InstanceOperationException {
     InstanceMetadata metadata = this.metadata.readPersistent(instanceId);
     this.metadata.requireRestartable(metadata, false);
@@ -371,7 +469,7 @@ public final class InstanceManager implements ServerController {
                 + instanceId
                 + " references missing blueprint "
                 + metadata.blueprintId());
-    Blueprint blueprint = definition.blueprint();
+    Blueprint blueprint = metadata.launchOverrides().applyTo(definition.blueprint());
     SoftwareProfile profile = definition.softwareProfile();
     try {
       Path baseDirectory =
@@ -772,7 +870,7 @@ public final class InstanceManager implements ServerController {
                 + instanceId
                 + " references missing blueprint "
                 + metadata.blueprintId());
-    Blueprint blueprint = definition.blueprint();
+    Blueprint blueprint = metadata.launchOverrides().applyTo(definition.blueprint());
     SoftwareProfile profile = definition.softwareProfile();
     this.metadata.requireRestartable(metadata, false);
     metadata = requireCompatibleDefinition(metadata, definition);
@@ -807,6 +905,7 @@ public final class InstanceManager implements ServerController {
               instanceId,
               blueprint,
               definitionIdentity,
+              metadata.launchOverrides(),
               port,
               directoryPreparer.root().resolve(instanceId),
               lifecycle,
@@ -839,16 +938,17 @@ public final class InstanceManager implements ServerController {
 
   private InstanceMetadata requireCompatibleDefinition(
       InstanceMetadata metadata, ResolvedDefinition definition) throws InstanceOperationException {
+    Blueprint effective = metadata.launchOverrides().applyTo(definition.blueprint());
     InstanceDefinitionIdentity current =
-        InstanceDefinitionIdentity.from(definition.blueprint(), definition.softwareProfile());
-    return this.metadata.requireCompatibleDefinition(
-        metadata, current, definition.blueprint().save());
+        InstanceDefinitionIdentity.from(effective, definition.softwareProfile());
+    return this.metadata.requireCompatibleDefinition(metadata, current, effective.save());
   }
 
   private String uniqueInstanceId(String blueprintId) throws InstanceOperationException {
     for (int attempt = 0; attempt < ID_ATTEMPTS; attempt++) {
       String candidate = idGenerator.generate(blueprintId);
       if (!instances.containsKey(candidate)
+          && !pendingDeletes.contains(candidate)
           && !Files.exists(directoryPreparer.root().resolve(candidate))) {
         return candidate;
       }

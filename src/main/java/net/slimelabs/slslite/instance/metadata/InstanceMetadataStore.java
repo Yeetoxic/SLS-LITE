@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Properties;
 import net.slimelabs.slslite.instance.model.InstanceDefinitionIdentity;
+import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 import net.slimelabs.slslite.instance.model.InstanceMetadata;
 import net.slimelabs.slslite.instance.model.InstanceState;
 
@@ -23,7 +24,8 @@ public final class InstanceMetadataStore {
   private static final String TEMP_FILE_NAME = FILE_NAME + ".tmp";
   private static final String LEGACY_SCHEMA_VERSION = "1";
   private static final String PREVIOUS_SCHEMA_VERSION = "2";
-  private static final String SCHEMA_VERSION = "3";
+  private static final String DEFINITION_SCHEMA_VERSION = "3";
+  private static final String SCHEMA_VERSION = "4";
 
   private final Path instancesRoot;
 
@@ -67,6 +69,7 @@ public final class InstanceMetadataStore {
       values.setProperty("software_version", metadata.definitionIdentity().softwareVersion());
       values.setProperty("definition_fingerprint", metadata.definitionIdentity().fingerprint());
     }
+    writeOverrides(values, metadata.launchOverrides());
     values.setProperty("persistent", Boolean.toString(metadata.persistent()));
     values.setProperty("state", metadata.state().name());
     values.setProperty("created_at", metadata.createdAt().toString());
@@ -111,13 +114,14 @@ public final class InstanceMetadataStore {
       String schema = require(values, "schema", source);
       if (!LEGACY_SCHEMA_VERSION.equals(schema)
           && !PREVIOUS_SCHEMA_VERSION.equals(schema)
+          && !DEFINITION_SCHEMA_VERSION.equals(schema)
           && !SCHEMA_VERSION.equals(schema)) {
         throw invalid(source, "unsupported schema " + schema);
       }
       String instanceId = require(values, "instance_id", source);
       String blueprintId = require(values, "blueprint_id", source);
       InstanceDefinitionIdentity identity =
-          SCHEMA_VERSION.equals(schema)
+          DEFINITION_SCHEMA_VERSION.equals(schema) || SCHEMA_VERSION.equals(schema)
               ? new InstanceDefinitionIdentity(
                   require(values, "software_id", source),
                   require(values, "software_version", source),
@@ -138,6 +142,8 @@ public final class InstanceMetadataStore {
       Long processId = processIdText == null ? null : Long.parseLong(processIdText);
       Instant processStartedAt =
           processStartedText == null ? null : Instant.parse(processStartedText);
+      InstanceLaunchOverrides overrides =
+          SCHEMA_VERSION.equals(schema) ? readOverrides(values) : InstanceLaunchOverrides.NONE;
       return new InstanceMetadata(
           instanceId,
           blueprintId,
@@ -146,10 +152,50 @@ public final class InstanceMetadataStore {
           state,
           createdAt,
           processId,
-          processStartedAt);
+          processStartedAt,
+          overrides);
     } catch (IllegalArgumentException | DateTimeException exception) {
       throw invalid(source, exception.getMessage(), exception);
     }
+  }
+
+  private static void writeOverrides(Properties values, InstanceLaunchOverrides overrides) {
+    set(values, "override_memory_mib", overrides.memoryLimitMiB());
+    set(values, "override_save", overrides.save());
+    set(values, "override_seed", overrides.seed());
+    set(values, "override_view_distance", overrides.viewDistance());
+    set(values, "override_enable_command_block", overrides.enableCommandBlock());
+  }
+
+  private static InstanceLaunchOverrides readOverrides(Properties values) {
+    return new InstanceLaunchOverrides(
+        optionalInteger(values, "override_memory_mib"),
+        optionalBoolean(values, "override_save"),
+        values.getProperty("override_seed"),
+        optionalInteger(values, "override_view_distance"),
+        optionalBoolean(values, "override_enable_command_block"));
+  }
+
+  private static void set(Properties values, String key, Object value) {
+    if (value != null) {
+      values.setProperty(key, String.valueOf(value));
+    }
+  }
+
+  private static Integer optionalInteger(Properties values, String key) {
+    String value = values.getProperty(key);
+    return value == null ? null : Integer.valueOf(value);
+  }
+
+  private static Boolean optionalBoolean(Properties values, String key) {
+    String value = values.getProperty(key);
+    if (value == null) {
+      return null;
+    }
+    if (!"true".equals(value) && !"false".equals(value)) {
+      throw new IllegalArgumentException(key + " must be true or false");
+    }
+    return Boolean.valueOf(value);
   }
 
   private static String require(Properties values, String key, Path source) throws IOException {

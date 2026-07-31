@@ -224,9 +224,19 @@ data, leaking resources, or trapping players in unexplained states.
 
 ### 3.5 Commands, Permissions, and Operator Workflows
 
-- [ ] Complete locally useful vSLS commands: `create`, `delete`, `kill`,
-      `blueprint`, and `debug`. Keep unsafe portable pause/resume emulation out
-      of scope.
+- [ ] Complete locally useful vSLS commands while keeping unsafe portable
+      pause/resume emulation out of scope:
+  - [x] `create`, including only supported safe local overrides:
+    - [x] Provision and start the pinned bare `<type> <id>` form with dedicated
+          permission, usage, diagnostics, and hidden permission-aware completion.
+    - [x] Persist and apply the approved safe override subset across restart and
+          reset before accepting any `--name=value` flags.
+  - [x] `delete`, with persistent ownership, sequential protected-lobby-safe
+        `all` behavior, transactional cleanup, and crash reconciliation.
+  - [ ] `kill`, with explicit force semantics and evacuation.
+  - [x] `blueprint`, with dedicated permission, visible details, and hidden
+        permission-aware ID completion.
+  - [ ] `debug`, preserving its pinned sender and permission behavior.
 - [ ] Finish retained modifier behavior, including force semantics, and enumerate
       every intentionally unavailable daemon-backed modifier.
 - [ ] Finish output, permission, selector, sender, usage-error, and
@@ -238,10 +248,12 @@ data, leaking resources, or trapping players in unexplained states.
 - [ ] Add registry-aware create/start/list/administrative forms only where the
       pinned vSLS contract exposes them.
 - [ ] Add persistent delete and explicit force-kill with evacuation, ownership,
-      transactionality, cleanup, and audit diagnostics.
+      transactionality, cleanup, and audit diagnostics:
+  - [x] Persistent delete.
+  - [ ] Explicit force-kill.
 - [ ] Add bounded `/sls console` response capture and opt-in nonblocking live
       console follow.
-- [ ] Add create-time overrides for memory, save mode, seed, view distance, and
+- [x] Add create-time overrides for memory, save mode, seed, view distance, and
       selected safe configuration fields.
 - [ ] Ensure distributed-only commands consistently explain why they are
       unavailable and identify the safe local alternative.

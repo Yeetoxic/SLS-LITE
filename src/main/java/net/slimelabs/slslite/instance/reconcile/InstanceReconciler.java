@@ -43,7 +43,7 @@ public final class InstanceReconciler {
                     .isPresent());
     if (recoveredTransactions > 0) {
       logger.warn(
-          "Recovered {} interrupted persistent reset transaction(s)", recoveredTransactions);
+          "Recovered {} interrupted persistent storage transaction(s)", recoveredTransactions);
     }
     List<Path> directories;
     try (var entries = Files.list(directoryPreparer.root())) {
@@ -55,7 +55,7 @@ public final class InstanceReconciler {
     }
 
     MutableReport report = new MutableReport();
-    report.recoveredResetTransactions = recoveredTransactions;
+    report.recoveredStorageTransactions = recoveredTransactions;
     for (Path directory : directories) {
       reconcile(directory, report);
     }
@@ -196,7 +196,7 @@ public final class InstanceReconciler {
 
   private static final class MutableReport {
 
-    private int recoveredResetTransactions;
+    private int recoveredStorageTransactions;
     private int removedEphemeral;
     private int preservedPersistent;
     private int preservedRunning;
@@ -205,7 +205,7 @@ public final class InstanceReconciler {
 
     private InstanceReconciliationReport snapshot() {
       return new InstanceReconciliationReport(
-          recoveredResetTransactions,
+          recoveredStorageTransactions,
           removedEphemeral,
           preservedPersistent,
           preservedRunning,

@@ -65,7 +65,7 @@ is running. Back up persistent content before `/sls reset`.
 
 On startup SLS-LITE:
 
-- resolves interrupted reset transactions;
+- resolves interrupted reset and delete transactions;
 - validates owned instance metadata;
 - removes confirmed stale ephemeral directories;
 - preserves persistent directories;

@@ -88,7 +88,8 @@ public final class InstanceMetadataService {
         instance.state(),
         instance.createdAt(),
         instance.processId().isPresent() ? instance.processId().getAsLong() : null,
-        instance.processStartedAt().orElse(null));
+        instance.processStartedAt().orElse(null),
+        instance.launchOverrides());
   }
 
   public void requireRestartable(InstanceMetadata metadata, boolean active)
@@ -157,7 +158,8 @@ public final class InstanceMetadataService {
             state,
             instance.createdAt(),
             processId,
-            processStartedAt);
+            processStartedAt,
+            instance.launchOverrides());
     try {
       store.write(instance.directory(), metadata);
     } catch (IOException exception) {

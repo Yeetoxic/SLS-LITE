@@ -27,6 +27,7 @@ import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.instance.diagnostics.InstanceOutput;
 import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
 import net.slimelabs.slslite.instance.metadata.InstanceMetadataStore;
+import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 import net.slimelabs.slslite.instance.model.InstanceMetadata;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
@@ -113,6 +114,49 @@ class InstanceManagerTest {
   }
 
   @Test
+  void deletesActivePersistentInstanceAfterItsCleanShutdown() throws Exception {
+    TestContext context = createContext(true, true);
+    ManagedInstance instance = manager.start("fixture");
+    instance.readyFuture().get(10, TimeUnit.SECONDS);
+
+    InstanceDeletionResult deleted = manager.delete(instance.id()).get(10, TimeUnit.SECONDS);
+
+    assertEquals(instance.id(), deleted.instanceId());
+    assertTrue(deleted.tombstoneCleaned());
+    assertFalse(Files.exists(instance.directory()));
+    assertTrue(context.backends().registrations.isEmpty());
+    assertEquals(0, context.budget().reservedMemoryMiB());
+  }
+
+  @Test
+  void deletesStoppedPersistentInstanceOwnedByMetadata() throws Exception {
+    createContext(true, true);
+    ManagedInstance instance = manager.start("fixture");
+    instance.readyFuture().get(10, TimeUnit.SECONDS);
+    manager.stop(instance.id()).get(10, TimeUnit.SECONDS);
+    awaitCleanup();
+
+    InstanceDeletionResult deleted = manager.delete(instance.id()).get(10, TimeUnit.SECONDS);
+
+    assertTrue(deleted.tombstoneCleaned());
+    assertFalse(Files.exists(instance.directory()));
+    assertTrue(manager.persistentInstanceIds().isEmpty());
+  }
+
+  @Test
+  void rejectsDeletingAnUnownedDirectory() throws Exception {
+    createContext(true, true);
+    Path unowned =
+        Files.createDirectories(temporaryDirectory.resolve("instances").resolve("unowned.abc123"));
+
+    InstanceOperationException exception =
+        assertThrows(InstanceOperationException.class, () -> manager.delete("unowned.abc123"));
+
+    assertTrue(exception.getMessage().contains("No persistent SLS-LITE instance exists"));
+    assertTrue(Files.isDirectory(unowned));
+  }
+
+  @Test
   void restartsPersistentInstanceWithSameIdAndDirectory() throws Exception {
     createContext(true, true);
     Path template = temporaryDirectory.resolve("software/paper/fixture/template-version");
@@ -151,6 +195,42 @@ class InstanceManagerTest {
     assertEquals(original.id(), recovered.id());
     assertEquals(original.createdAt(), recovered.createdAt());
     assertEquals(InstanceState.READY, recovered.state());
+  }
+
+  @Test
+  void createOverridesSurviveManagerRecreationRestartAndReset() throws Exception {
+    TestContext context = createContext(false, true);
+    InstanceLaunchOverrides overrides =
+        new InstanceLaunchOverrides(384, true, "persistent-seed", 10, false);
+    ManagedInstance original = manager.create("fixture", overrides);
+    original.readyFuture().get(10, TimeUnit.SECONDS);
+
+    assertEquals(384, original.blueprint().memoryLimitMiB());
+    assertTrue(original.blueprint().save());
+    assertEquals(384, context.budget().reservedMemoryMiB());
+    assertTrue(
+        Files.readString(original.directory().resolve("server.properties"))
+            .contains("level-seed=persistent-seed"));
+    manager.stop(original.id()).get(10, TimeUnit.SECONDS);
+    awaitCleanup();
+    manager.shutdown(Duration.ofSeconds(3));
+
+    context = createContext(false, true);
+    ManagedInstance restarted = manager.restart(original.id()).get(10, TimeUnit.SECONDS);
+    restarted.readyFuture().get(10, TimeUnit.SECONDS);
+    assertEquals(overrides, restarted.launchOverrides());
+    assertEquals(384, restarted.blueprint().memoryLimitMiB());
+    assertEquals(384, context.budget().reservedMemoryMiB());
+    Files.writeString(restarted.directory().resolve("operator-data"), "reset removes this");
+
+    ManagedInstance reset = manager.reset(restarted.id()).get(10, TimeUnit.SECONDS);
+    reset.readyFuture().get(10, TimeUnit.SECONDS);
+    String properties = Files.readString(reset.directory().resolve("server.properties"));
+    assertEquals(overrides, reset.launchOverrides());
+    assertFalse(Files.exists(reset.directory().resolve("operator-data")));
+    assertTrue(properties.contains("level-seed=persistent-seed"));
+    assertTrue(properties.contains("view-distance=10"));
+    assertTrue(properties.contains("enable-command-block=false"));
   }
 
   @Test
@@ -226,7 +306,7 @@ class InstanceManagerTest {
     try (var input = Files.newInputStream(metadataPath)) {
       migrated.load(input);
     }
-    assertEquals("3", migrated.getProperty("schema"));
+    assertEquals("4", migrated.getProperty("schema"));
     assertTrue(migrated.containsKey("definition_fingerprint"));
   }
 

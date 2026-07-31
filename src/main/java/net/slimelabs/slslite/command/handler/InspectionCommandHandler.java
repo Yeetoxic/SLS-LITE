@@ -70,6 +70,10 @@ public final class InspectionCommandHandler {
     catalog.blueprints(source, arguments);
   }
 
+  public void blueprint(CommandSource source, String[] arguments) {
+    catalog.blueprint(source, arguments);
+  }
+
   public void list(CommandSource source) {
     instance.list(source);
   }
@@ -91,8 +95,9 @@ public final class InspectionCommandHandler {
   }
 
   public List<String> suggestions(CommandSource source, String operation, String[] arguments) {
-    if ("blueprints".equals(operation) && arguments.length == 2) {
-      return catalog.suggestions(source);
+    if (("blueprint".equals(operation) || "blueprints".equals(operation))
+        && arguments.length == 2) {
+      return catalog.suggestions(source, operation);
     }
     return instance.suggestions(source, operation, arguments);
   }

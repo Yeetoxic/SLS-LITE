@@ -168,9 +168,12 @@ public final class SLSCommand implements SimpleCommand {
 
     switch (arguments[0].toLowerCase(Locale.ROOT)) {
       case "admin" -> adminHandler.execute(invocation.source(), arguments);
+      case "blueprint" -> inspectionHandler.blueprint(invocation.source(), arguments);
       case "blueprints" -> inspectionHandler.blueprints(invocation.source(), arguments);
       case "console" -> console(invocation.source(), arguments);
+      case "create" -> lifecycleHandler.create(invocation.source(), arguments);
       case "dequeue" -> playerRoutingHandler.dequeue(invocation.source(), arguments);
+      case "delete" -> lifecycleHandler.delete(invocation.source(), arguments);
       case "find" -> playerRoutingHandler.find(invocation.source(), arguments);
       case "info" -> inspectionHandler.info(invocation.source(), arguments);
       case "install" -> installationHandler.execute(invocation.source(), arguments);
@@ -187,7 +190,7 @@ public final class SLSCommand implements SimpleCommand {
       case "stop" -> lifecycleHandler.stop(invocation.source(), arguments);
       case "system" -> inspectionHandler.system(invocation.source(), arguments);
       case "version" -> sendVersion(invocation.source());
-      case "blueprint", "create", "debug", "delete", "kill", "pause", "resume" ->
+      case "debug", "kill", "pause", "resume" ->
           unavailable(invocation.source(), arguments[0], false);
       case "node" -> unavailable(invocation.source(), arguments[0], true);
       default -> sendRootHelp(invocation.source());
@@ -210,6 +213,7 @@ public final class SLSCommand implements SimpleCommand {
     if (arguments.length == 2) {
       return switch (operation) {
         case "admin" -> completed(adminHandler.suggestions(source, arguments));
+        case "blueprint" -> completed(inspectionHandler.suggestions(source, operation, arguments));
         case "blueprints" -> completed(inspectionHandler.suggestions(source, operation, arguments));
         case "console" ->
             authorizer.canAdminister(source, operation)
@@ -224,7 +228,7 @@ public final class SLSCommand implements SimpleCommand {
             authorizer.canAdminister(source, "reload")
                 ? completed(List.of("all", "blueprints", "software"))
                 : completed(List.of());
-        case "start", "reset", "restart" ->
+        case "create", "delete", "start", "reset", "restart" ->
             completed(lifecycleHandler.suggestions(source, operation, arguments));
         case "info", "stats", "status" ->
             completed(inspectionHandler.suggestions(source, operation, arguments));
@@ -236,8 +240,13 @@ public final class SLSCommand implements SimpleCommand {
       return completed(playerRoutingHandler.suggestions(source, operation, arguments));
     }
     if (arguments.length == 3
-        && "start".equals(operation)
-        && authorizer.canAdminister(source, "start")) {
+        && ("create".equals(operation) || "start".equals(operation))
+        && authorizer.canAdminister(source, operation)) {
+      return completed(lifecycleHandler.suggestions(source, operation, arguments));
+    }
+    if (arguments.length >= 4
+        && "create".equals(operation)
+        && authorizer.canAdminister(source, operation)) {
       return completed(lifecycleHandler.suggestions(source, operation, arguments));
     }
     if (arguments.length == 3 && "install".equals(operation)) {

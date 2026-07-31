@@ -1,7 +1,7 @@
 package net.slimelabs.slslite.instance.reconcile;
 
 public record InstanceReconciliationReport(
-    int recoveredResetTransactions,
+    int recoveredStorageTransactions,
     int removedEphemeral,
     int preservedPersistent,
     int preservedRunning,

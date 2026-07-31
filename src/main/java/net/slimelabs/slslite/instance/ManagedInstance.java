@@ -15,6 +15,7 @@ import net.slimelabs.slslite.instance.diagnostics.ProcessResourceMetrics;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
 import net.slimelabs.slslite.instance.model.InstanceDefinitionIdentity;
+import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.process.SupervisedProcess;
 
@@ -23,6 +24,7 @@ public final class ManagedInstance {
   private final String id;
   private final Blueprint blueprint;
   private final InstanceDefinitionIdentity definitionIdentity;
+  private final InstanceLaunchOverrides launchOverrides;
   private final int port;
   private final Path directory;
   private final InstanceLifecycle lifecycle;
@@ -51,9 +53,30 @@ public final class ManagedInstance {
       Path directory,
       InstanceLifecycle lifecycle,
       Instant createdAt) {
+    this(
+        id,
+        blueprint,
+        definitionIdentity,
+        InstanceLaunchOverrides.NONE,
+        port,
+        directory,
+        lifecycle,
+        createdAt);
+  }
+
+  ManagedInstance(
+      String id,
+      Blueprint blueprint,
+      InstanceDefinitionIdentity definitionIdentity,
+      InstanceLaunchOverrides launchOverrides,
+      int port,
+      Path directory,
+      InstanceLifecycle lifecycle,
+      Instant createdAt) {
     this.id = id;
     this.blueprint = blueprint;
     this.definitionIdentity = definitionIdentity;
+    this.launchOverrides = java.util.Objects.requireNonNull(launchOverrides, "launchOverrides");
     this.port = port;
     this.directory = directory;
     this.output = new InstanceOutput(directory);
@@ -81,6 +104,10 @@ public final class ManagedInstance {
 
   public InstanceDefinitionIdentity definitionIdentity() {
     return definitionIdentity;
+  }
+
+  public InstanceLaunchOverrides launchOverrides() {
+    return launchOverrides;
   }
 
   public int port() {

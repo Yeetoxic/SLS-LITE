@@ -56,7 +56,7 @@ performs an explicit reset. Reset uses a sibling staging directory and retains
 the old directory as rollback state until the replacement commits.
 
 At proxy startup, reconciliation runs before new instances are admitted. It
-recovers interrupted reset transactions, validates ownership and process
+recovers interrupted reset/delete transactions, validates ownership and process
 identity, preserves known persistent data, and removes stale ephemeral data
 only when SLS-LITE ownership is proven. Unknown directories are preserved.
 

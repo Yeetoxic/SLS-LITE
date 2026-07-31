@@ -39,13 +39,17 @@ name a player and cannot use player-only selectors.
 | `/sls admin remove <player>` | `admin` | Remove one by last known name. |
 | `/sls admin list` | `admin` | List built-in administrators. |
 | `/sls admin code` | console only | Issue a short-lived one-time claim code. |
+| `/sls blueprint <id>` | `blueprint` | Show one blueprint's registry, software, limits, persistence, active instances, volumes, copies, and environment-variable names. |
 | `/sls blueprints [registry]` | `blueprints` | List blueprint details; rows suggest join commands. |
+| `/sls create <registry> <blueprint> [flags...]` | `create` | Provision and start a fresh managed instance. Supported local overrides are persisted across restart and reset. |
 | `/sls start <registry> <blueprint>` | `start` | Start a managed instance without joining it. The additive `/sls start <blueprint>` form also works for a globally unique ID. |
 | `/sls info <server\|this>` | `info` | Detailed instance information. |
 | `/sls status <server\|this>` | `status` | Lifecycle state. |
 | `/sls stats [server\|this]` | `stats` | Uptime, CPU time, configured/current memory, Linux process I/O where measurable, and log retention. |
 | `/sls console <server\|this> <command...>` | `console` | Write one command to the child process input. |
 | `/sls logs <server\|this> [page] [lines]` | `logs` | Read retained child output; up to 100 lines per page. |
+| `/sls delete <server\|this>` | `delete` | Evacuate an active server, stop it cleanly, and transactionally remove its owned instance storage. |
+| `/sls delete all` | `delete` | Sequentially delete every ordinary managed instance with per-server results. The managed lobby is always skipped. |
 | `/sls stop <server\|this>` | `stop` | Evacuate and gracefully stop an instance. |
 | `/sls restart <server\|this>` | `restart` | Restart a persistent instance with the same data. |
 | `/sls reset <server\|this>` | `reset` | Rebuild a persistent instance from current sources. |
@@ -57,6 +61,23 @@ name a player and cannot use player-only selectors.
 
 `/sls stats` without a server resolves to `this` and therefore requires a
 player currently connected to a managed backend.
+
+Create accepts this confined subset of vSLS `--name=value` overrides:
+
+```text
+--memory=<positive MiB>
+--save=<true|false>
+--seed=<server.properties level-seed>
+--view-distance=<2-32>
+--enable-command-block=<true|false>
+```
+
+Duplicate, malformed, empty, or out-of-range values are rejected before any
+instance resources are allocated. The effective definition is recorded in
+instance metadata, so persistent instances retain the same overrides through
+proxy restart, `/sls restart`, and `/sls reset`. Distributed placement,
+container, CPU, swap, disk, thread, image, and software/version overrides are
+intentionally unavailable in local mode.
 
 ## Force Operations
 
@@ -82,7 +103,7 @@ and write an operator audit message. A failed evacuation cancels the operation.
 The pinned vSLS root includes commands that are not locally implemented yet:
 
 ```text
-blueprint create debug delete kill pause resume
+debug kill pause resume
 ```
 
 They return a styled `not available in this SLS-LITE build yet` response.

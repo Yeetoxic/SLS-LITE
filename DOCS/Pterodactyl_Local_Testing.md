@@ -106,6 +106,7 @@ are documented in [SLS_Limbo.md](SLS_Limbo.md).
 Switch to managed mode, connect to `127.0.0.1:25565`, and verify:
 
 ```text
+/sls blueprint lobby
 /sls blueprints minigame
 /sls start minigame biome_run
 /sls list

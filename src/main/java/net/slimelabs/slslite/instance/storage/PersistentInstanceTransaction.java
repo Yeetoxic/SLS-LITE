@@ -29,6 +29,8 @@ final class PersistentInstanceTransaction {
       Pattern.compile("^\\.(.+)\\.backup-([0-9a-f-]{36})$");
   private static final Pattern STAGING_DIRECTORY =
       Pattern.compile("^\\.(.+)\\.reset-([0-9a-f-]{36})$");
+  private static final Pattern DELETE_DIRECTORY =
+      Pattern.compile("^\\.(.+)\\.delete-([0-9a-f-]{36})$");
 
   private final Path instancesRoot;
   private final PreparedStorageLifecycle storageLifecycle;
@@ -96,6 +98,31 @@ final class PersistentInstanceTransaction {
     }
   }
 
+  boolean delete(String instanceId, Path destination) throws InstancePreparationException {
+    String nonce = nonceSupplier.get().toString();
+    Path tombstone = transactionDirectory(instanceId, "delete", nonce);
+    boolean committed = false;
+    try {
+      storageLifecycle.suspend(destination);
+      moveDirectory(destination, tombstone);
+      committed = true;
+      storageLifecycle.delete(tombstone);
+      return true;
+    } catch (Exception exception) {
+      if (committed) {
+        LOGGER.warn(
+            "Persistent delete for {} committed, but tombstone cleanup failed; "
+                + "{} will be retried during the next startup: {}",
+            instanceId,
+            tombstone,
+            exception.getMessage());
+        return false;
+      }
+      throw new InstancePreparationException(
+          "Unable to delete persistent instance " + destination, exception);
+    }
+  }
+
   int recover(DirectoryCommitVerifier verifier) throws IOException {
     java.util.Objects.requireNonNull(verifier, "verifier");
     Files.createDirectories(instancesRoot);
@@ -107,6 +134,14 @@ final class PersistentInstanceTransaction {
 
     int recovered = 0;
     Set<Path> handledStaging = new HashSet<>();
+    for (Path tombstone : directories) {
+      Matcher match = DELETE_DIRECTORY.matcher(tombstone.getFileName().toString());
+      if (!match.matches() || !InstanceIdGenerator.isValid(match.group(1))) {
+        continue;
+      }
+      storageLifecycle.delete(tombstone);
+      recovered++;
+    }
     for (Path backup : directories) {
       Matcher match = BACKUP_DIRECTORY.matcher(backup.getFileName().toString());
       if (!match.matches() || !InstanceIdGenerator.isValid(match.group(1))) {

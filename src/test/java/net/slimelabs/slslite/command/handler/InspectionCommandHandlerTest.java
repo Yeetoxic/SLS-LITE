@@ -9,9 +9,11 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandInstanceAccess;
@@ -26,6 +28,7 @@ class InspectionCommandHandlerTest {
 
   @TempDir Path temporaryDirectory;
 
+  private BlueprintRepository blueprints;
   private InspectionCommandHandler handler;
 
   @BeforeEach
@@ -34,10 +37,11 @@ class InspectionCommandHandlerTest {
         new AdministratorStore(temporaryDirectory.resolve("security"));
     administrators.initialize();
     ServerController instances = controller();
+    blueprints = new BlueprintRepository(temporaryDirectory.resolve("blueprints"));
     CommandInstanceAccess access = new CommandInstanceAccess(proxy(), instances);
     handler =
         new InspectionCommandHandler(
-            new BlueprintRepository(temporaryDirectory.resolve("blueprints")),
+            blueprints,
             null,
             null,
             instances,
@@ -48,6 +52,62 @@ class InspectionCommandHandlerTest {
             null,
             new CommandAuthorizer(administrators),
             access);
+  }
+
+  @Test
+  void singularBlueprintUsesDedicatedPermissionAndPrintsDetails() {
+    installBlueprint();
+    List<Component> denied = new ArrayList<>();
+    handler.blueprint(
+        source(Set.of("sls.command.blueprints"), denied), new String[] {"blueprint", "arena"});
+    assertTrue(plainText(denied.getFirst()).contains("do not have permission"));
+
+    List<Component> usage = new ArrayList<>();
+    handler.blueprint(source(Set.of("sls.command.blueprint"), usage), new String[] {"blueprint"});
+    assertTrue(plainText(usage.getFirst()).contains("Usage: /sls blueprint <id>"));
+
+    List<Component> missing = new ArrayList<>();
+    handler.blueprint(
+        source(Set.of("sls.command.blueprint"), missing), new String[] {"blueprint", "missing"});
+    assertTrue(plainText(missing.getFirst()).contains("Blueprint not found: missing"));
+
+    List<Component> details = new ArrayList<>();
+    handler.blueprint(
+        source(Set.of("sls.command.blueprint"), details), new String[] {"blueprint", "arena"});
+    assertEquals(2, details.size());
+    assertTrue(plainText(details.getFirst()).contains("Blueprint minigame/arena"));
+    assertTrue(plainText(details.get(1)).contains("Software: paper-auto 1.21.5"));
+    assertTrue(plainText(details.get(1)).contains("Persistence: ephemeral"));
+  }
+
+  @Test
+  void singularBlueprintSuggestionsArePermissionFiltered() {
+    installBlueprint();
+    assertEquals(
+        List.of(),
+        handler.suggestions(
+            source(Set.of(), new ArrayList<>()), "blueprint", new String[] {"blueprint", ""}));
+    assertEquals(
+        List.of(),
+        handler.suggestions(
+            source(Set.of("sls.command.blueprints"), new ArrayList<>()),
+            "blueprint",
+            new String[] {"blueprint", ""}));
+    assertEquals(
+        List.of("arena"),
+        handler.suggestions(
+            source(Set.of("sls.command.blueprint"), new ArrayList<>()),
+            "blueprint",
+            new String[] {"blueprint", ""}));
+  }
+
+  private void installBlueprint() {
+    blueprints.install(
+        new BlueprintRepository.Snapshot(
+            Map.of(
+                "arena",
+                new Blueprint(
+                    "arena", "Arena", "minigame", "paper-auto", "1.21.5", 1024, false, Map.of()))));
   }
 
   @Test

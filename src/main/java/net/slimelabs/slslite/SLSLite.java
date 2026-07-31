@@ -159,11 +159,11 @@ public final class SLSLite {
       InstanceReconciliationReport reconciliation =
           new InstanceReconciler(directoryPreparer, logger).reconcile();
       logger.info(
-          "Instance reconciliation recovered {} reset transaction(s) "
+          "Instance reconciliation recovered {} storage transaction(s) "
               + "and inspected {} directorie(s): "
               + "{} stale ephemeral removed, {} persistent preserved, "
               + "{} running preserved, {} unknown preserved, {} failure(s)",
-          reconciliation.recoveredResetTransactions(),
+          reconciliation.recoveredStorageTransactions(),
           reconciliation.inspected(),
           reconciliation.removedEphemeral(),
           reconciliation.preservedPersistent(),

@@ -3,6 +3,7 @@ package net.slimelabs.slslite.command;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -18,11 +19,11 @@ import org.junit.jupiter.api.Test;
 class CommandMessagesTest {
 
   @Test
-  void prefixMatchesTheVSLSChatIdentity() {
+  void prefixRetainsTheVSLSVisualIdentityWithoutTheRedundantProjectHover() {
     Component prefix = CommandMessages.prefix();
 
     assertEquals("[SLS] ", plainText(prefix));
-    assertNotNull(prefix.hoverEvent());
+    assertNull(prefix.hoverEvent());
   }
 
   @Test
@@ -94,6 +95,10 @@ class CommandMessagesTest {
     assertTrue(text.contains("Software: paper-auto 1.11.2"));
     assertTrue(text.contains("Capacity: 8 players per instance"));
     assertTrue(text.contains("world: worlds/minigames/blastoff -> /world [cow]"));
+
+    String directDetails = plainText(CommandMessages.blueprintDetails(blueprint, List.of()));
+    assertTrue(directDetails.contains("Blueprint: minigame/blastoff"));
+    assertFalse(directDetails.contains("Click to prepare or join"));
   }
 
   private static String plainText(Component component) {

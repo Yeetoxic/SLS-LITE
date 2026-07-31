@@ -302,6 +302,15 @@ public final class InstanceDirectoryPreparer {
     }
   }
 
+  public boolean deletePersistent(String instanceId) throws InstancePreparationException {
+    Path destination = destination(instanceId);
+    if (!Files.isDirectory(destination, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+      throw new InstancePreparationException(
+          "Persistent instance directory does not exist: " + destination);
+    }
+    return replacementTransaction.delete(instanceId, destination);
+  }
+
   public void resume(String instanceId) throws InstancePreparationException {
     Path destination = destination(instanceId);
     try {

@@ -21,7 +21,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.instance.InstanceDeletionResult;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ManagedInstanceTestFactory;
@@ -66,6 +68,56 @@ class SLSCommandForcedStopTest {
 
     assertEquals(0, lobby.evacuations);
     assertEquals(0, controller.stops);
+  }
+
+  @Test
+  void deleteEvacuatesAnOrdinaryActiveInstanceBeforeDeletion() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby("other-lobby.abc123");
+    SLSCommand command = command(controller, lobby);
+    List<Component> messages = new ArrayList<>();
+
+    command.execute(
+        invocation(source(Set.of("sls.command.delete"), messages), "delete", INSTANCE_ID));
+
+    assertEquals(1, lobby.normalEvacuations);
+    assertEquals(1, controller.deletes);
+    assertTrue(plainText(messages.getLast()).contains("Deleted server " + INSTANCE_ID));
+  }
+
+  @Test
+  void deleteRefusesTheProtectedManagedLobby() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby(INSTANCE_ID);
+    SLSCommand command = command(controller, lobby);
+    List<Component> messages = new ArrayList<>();
+
+    command.execute(
+        invocation(source(Set.of("sls.command.delete"), messages), "delete", INSTANCE_ID));
+
+    assertEquals(0, lobby.normalEvacuations);
+    assertEquals(0, controller.deletes);
+    assertTrue(plainText(messages.getLast()).contains("protected"));
+  }
+
+  @Test
+  void deleteAllProcessesOrdinaryInstancesAndReportsSummary() {
+    TrackingController controller = new TrackingController(instance);
+    TrackingLobby lobby = new TrackingLobby("other-lobby.abc123");
+    SLSCommand command = command(controller, lobby);
+    List<Component> messages = new ArrayList<>();
+    CommandSource source = source(Set.of("sls.command.delete"), messages);
+
+    command.execute(invocation(source, "delete", "all"));
+
+    assertEquals(1, lobby.normalEvacuations);
+    assertEquals(1, controller.deletes);
+    assertTrue(plainText(messages.getLast()).contains("1 deleted, 0 failed"));
+    assertTrue(
+        command
+            .suggestAsync(invocation(source, "delete", ""))
+            .join()
+            .containsAll(List.of("all", "this")));
   }
 
   @Test
@@ -381,9 +433,23 @@ class SLSCommandForcedStopTest {
     return null;
   }
 
+  private static String plainText(Component component) {
+    StringBuilder text = new StringBuilder();
+    appendPlainText(component, text);
+    return text.toString();
+  }
+
+  private static void appendPlainText(Component component, StringBuilder output) {
+    if (component instanceof TextComponent textComponent) {
+      output.append(textComponent.content());
+    }
+    component.children().forEach(child -> appendPlainText(child, output));
+  }
+
   private static final class TrackingController implements ServerController {
     private final ManagedInstance instance;
     private int stops;
+    private int deletes;
 
     private TrackingController(ManagedInstance instance) {
       this.instance = instance;
@@ -414,6 +480,12 @@ class SLSCommandForcedStopTest {
     }
 
     @Override
+    public CompletableFuture<InstanceDeletionResult> delete(String instanceId) {
+      deletes++;
+      return CompletableFuture.completedFuture(new InstanceDeletionResult(instanceId, true));
+    }
+
+    @Override
     public void shutdown(Duration timeout) {}
   }
 
@@ -421,6 +493,7 @@ class SLSCommandForcedStopTest {
     private final String lobbyId;
     private CompletableFuture<Void> evacuation = CompletableFuture.completedFuture(null);
     private int evacuations;
+    private int normalEvacuations;
     private int begins;
     private int cancellations;
     private int cycles;
@@ -457,6 +530,7 @@ class SLSCommandForcedStopTest {
 
     @Override
     public CompletableFuture<Void> evacuate(String serverName) {
+      normalEvacuations++;
       return CompletableFuture.completedFuture(null);
     }
 

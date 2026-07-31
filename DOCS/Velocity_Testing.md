@@ -53,7 +53,7 @@ Start the Velocity allocation and connect to `127.0.0.1:25565`.
 
 1. Confirm the historical managed lobby reaches `READY` and receives the first
    connection.
-2. Run `/sls registries`, `/sls blueprints lobby`,
+2. Run `/sls registries`, `/sls blueprint lobby`, `/sls blueprints lobby`,
    `/sls blueprints minigame`, and `/sls blueprints adventure`.
 3. Run `/sls info`, `/sls system`, and `/sls list`.
 4. Join `minigame/biome_run`, then return to `lobby/lobby`.

@@ -26,6 +26,7 @@ class PersistentInstanceTransactionTest {
   private Path destination;
   private Path staging;
   private Path backup;
+  private Path tombstone;
   private FakeMountAdapter mounts;
   private PersistentInstanceTransaction transaction;
 
@@ -36,6 +37,7 @@ class PersistentInstanceTransactionTest {
     destination = instancesRoot.resolve(INSTANCE_ID);
     staging = instancesRoot.resolve("." + INSTANCE_ID + ".reset-" + NONCE);
     backup = instancesRoot.resolve("." + INSTANCE_ID + ".backup-" + NONCE);
+    tombstone = instancesRoot.resolve("." + INSTANCE_ID + ".delete-" + NONCE);
     Files.createDirectories(destination);
     Files.createDirectories(contentRoot);
     Files.writeString(destination.resolve("world.dat"), "original");
@@ -144,6 +146,28 @@ class PersistentInstanceTransactionTest {
     assertEquals(1, recovered);
     assertFalse(Files.exists(staging));
     assertTrue(Files.isDirectory(unknown));
+  }
+
+  @Test
+  void deleteAtomicallyRemovesTheOwnedDirectory() throws Exception {
+    assertTrue(transaction.delete(INSTANCE_ID, destination));
+
+    assertFalse(Files.exists(destination));
+    assertFalse(Files.exists(tombstone));
+  }
+
+  @Test
+  void committedDeleteLeavesRecoverableTombstoneWhenCleanupFails() throws Exception {
+    mounts.mountPoints.add(tombstone.resolve("world"));
+
+    assertFalse(transaction.delete(INSTANCE_ID, destination));
+
+    assertFalse(Files.exists(destination));
+    assertTrue(Files.isDirectory(tombstone));
+    mounts.mountPoints.clear();
+
+    assertEquals(1, transaction.recover((directory, instanceId) -> false));
+    assertFalse(Files.exists(tombstone));
   }
 
   private static final class FakeMountAdapter implements OverlayFsLayerManager.MountAdapter {

@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import net.slimelabs.slslite.instance.model.InstanceDefinitionIdentity;
+import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 import net.slimelabs.slslite.instance.model.InstanceMetadata;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import org.junit.jupiter.api.Test;
@@ -34,14 +35,15 @@ final class InstanceMetadataStoreTest {
             InstanceState.STARTING,
             createdAt,
             42L,
-            processStartedAt);
+            processStartedAt,
+            new InstanceLaunchOverrides(2048, true, "fixture", 10, false));
 
     store.write(instance, expected);
 
     assertEquals(expected, store.read(instance).orElseThrow());
     assertFalse(Files.exists(instance.resolve(InstanceMetadataStore.FILE_NAME + ".tmp")));
     assertEquals(
-        "3",
+        "4",
         readProperties(instance.resolve(InstanceMetadataStore.FILE_NAME)).getProperty("schema"));
   }
 

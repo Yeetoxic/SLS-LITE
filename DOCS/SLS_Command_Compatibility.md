@@ -26,16 +26,16 @@ upstream umbrella behavior.
 | --- | --- | --- | --- |
 | `info [server]` | Details: `sls.command.admin` | Adapted | Summary and local instance details include players, lifecycle, process, resource, queue, log, and directory information. |
 | `list` | Public | Adapted | vSLS layout, status colors, counts, and hover information matched. |
-| `create <type> <id> [flags...]` | Admin | Planned | Add safe local equivalents for supported override flags. |
+| `create <type> <id> [flags...]` | Admin | Adapted | Provisions and starts a fresh local instance with dedicated permission and completion behavior. `--memory`, `--save`, `--seed`, `--view-distance`, and `--enable-command-block` are validated and persisted across restart/reset. Daemon placement, container-resource, image, and software/version overrides are unavailable in local mode. |
 | `start <type> <id>` | Admin | Adapted | Starts local ephemeral or persistent instances within blueprint and host limits. |
 | `join <type> <id> [target]` | Self public; others admin | Adapted | Capacity-aware allocation is supported; admin `/sls join player <player> --force` can bypass a full target instance. |
 | `find <player>` | Public | Supported | vSLS messages, hover details, and action-bar feedback matched. |
 | `system` | Admin | Adapted | Reports local runtime, JVM memory, managed memory allocation, supervised process usage and limit, CPU threads, Java, OS, lobby state, output policy, and startup capability probes. |
 | `node <id> [drained [value]]` | Admin | Local-mode response planned | Node administration is distributed-only. |
 | `console <server> <command>` | Admin | Adapted | Safe local process input is supported; add bounded in-game output capture. |
-| `blueprint <id>` | Admin | Planned | Pretty-print one blueprint; keep `blueprints` as an additive alias. |
+| `blueprint <id>` | Admin | Supported | Pretty-prints one globally unique blueprint ID with its local launch/storage details. The additive `blueprints [registry]` form remains available for catalog browsing. |
 | `debug` | Public, player-only upstream | Compatibility response | Not implemented; currently visible to administrators as an explicit unavailable command. |
-| `delete <server\|all>` | Admin | Planned | Define safe persistent and ephemeral deletion behavior. |
+| `delete <server\|all>` | Admin | Adapted | Exact IDs and the additive `this` selector evacuate active players, stop cleanly, verify SLS-LITE metadata ownership, atomically rename storage to a delete tombstone, and remove it with mount/snapshot-aware cleanup. Interrupted cleanup is retried during startup reconciliation. `all` processes ordinary instances sequentially with per-server results and always skips the protected managed lobby. |
 | `logs <server> [page] [lines]` | Admin | Adapted | vSLS pagination is backed by a bounded 1,000-line local process-output buffer. |
 | `reload [all\|config\|blueprints\|software]` | Admin | Adapted | Blueprint/software candidates are cross-validated and installed as one immutable catalog revision. Add upstream `config` mode only when host-wide services can be rebuilt safely; until then `config.yml` requires a Velocity restart. |
 | `stop <server\|all> [force]` | Admin | Adapted | Local servers stop gracefully after evacuation. `/sls stop <server> --force` bypasses managed-lobby protection, requires `sls.command.stop.force` or the umbrella admin permission, diverts new arrivals and evacuates connected players to SLS-Limbo, restores primary routing if evacuation fails, suppresses recovery after a successful drain, and writes an audit log. Add `all` and the upstream non-dashed alias only after their exact behavior is confirmed. |
@@ -54,7 +54,9 @@ upstream umbrella behavior.
 
 The implemented command output follows the pinned vSLS component structure:
 
-- Blue gradient `[SLS]` prefix with project hover information.
+- Blue gradient `[SLS]` prefix. SLS-LITE intentionally omits vSLS's repeated
+  project/author hover from this prefix; command-specific player, server, and
+  blueprint hovers remain available where they convey operational details.
 - Dark-aqua labels, gray values, gold/yellow composite instance IDs, and
   lifecycle-aware status colors.
 - vSLS usage grammar: `Usage: /sls <option | option>`.
@@ -86,6 +88,8 @@ falling through as an unknown command.
 
 SLS-LITE granular lifecycle permissions are additive:
 
+- `sls.command.create` permits fresh local provisioning and the supported,
+  instance-confined override subset.
 - `sls.command.stop` permits normal graceful stops.
 - `sls.command.stop.force` permits the protected managed-lobby override.
 - `sls.command.restart` and `sls.command.reset` permit ordinary persistent

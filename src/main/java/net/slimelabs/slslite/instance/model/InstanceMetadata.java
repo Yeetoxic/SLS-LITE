@@ -11,7 +11,8 @@ public record InstanceMetadata(
     InstanceState state,
     Instant createdAt,
     Long processId,
-    Instant processStartedAt) {
+    Instant processStartedAt,
+    InstanceLaunchOverrides launchOverrides) {
 
   public InstanceMetadata {
     if (!InstanceIdGenerator.isValid(instanceId)) {
@@ -22,6 +23,7 @@ public record InstanceMetadata(
     }
     Objects.requireNonNull(state, "state");
     Objects.requireNonNull(createdAt, "createdAt");
+    Objects.requireNonNull(launchOverrides, "launchOverrides");
     if (processId == null && processStartedAt != null) {
       throw new IllegalArgumentException("processStartedAt requires processId");
     }
@@ -33,12 +35,42 @@ public record InstanceMetadata(
   public InstanceMetadata(
       String instanceId,
       String blueprintId,
+      InstanceDefinitionIdentity definitionIdentity,
       boolean persistent,
       InstanceState state,
       Instant createdAt,
       Long processId,
       Instant processStartedAt) {
-    this(instanceId, blueprintId, null, persistent, state, createdAt, processId, processStartedAt);
+    this(
+        instanceId,
+        blueprintId,
+        definitionIdentity,
+        persistent,
+        state,
+        createdAt,
+        processId,
+        processStartedAt,
+        InstanceLaunchOverrides.NONE);
+  }
+
+  public InstanceMetadata(
+      String instanceId,
+      String blueprintId,
+      boolean persistent,
+      InstanceState state,
+      Instant createdAt,
+      Long processId,
+      Instant processStartedAt) {
+    this(
+        instanceId,
+        blueprintId,
+        null,
+        persistent,
+        state,
+        createdAt,
+        processId,
+        processStartedAt,
+        InstanceLaunchOverrides.NONE);
   }
 
   public InstanceMetadata withDefinitionIdentity(InstanceDefinitionIdentity nextIdentity) {
@@ -50,7 +82,8 @@ public record InstanceMetadata(
         state,
         createdAt,
         processId,
-        processStartedAt);
+        processStartedAt,
+        launchOverrides);
   }
 
   public InstanceMetadata withState(InstanceState nextState) {
@@ -62,7 +95,8 @@ public record InstanceMetadata(
         nextState,
         createdAt,
         processId,
-        processStartedAt);
+        processStartedAt,
+        launchOverrides);
   }
 
   public InstanceMetadata withProcess(
@@ -75,11 +109,20 @@ public record InstanceMetadata(
         nextState,
         createdAt,
         nextProcessId,
-        nextProcessStartedAt);
+        nextProcessStartedAt,
+        launchOverrides);
   }
 
   public InstanceMetadata withoutProcess(InstanceState nextState) {
     return new InstanceMetadata(
-        instanceId, blueprintId, definitionIdentity, persistent, nextState, createdAt, null, null);
+        instanceId,
+        blueprintId,
+        definitionIdentity,
+        persistent,
+        nextState,
+        createdAt,
+        null,
+        null,
+        launchOverrides);
   }
 }

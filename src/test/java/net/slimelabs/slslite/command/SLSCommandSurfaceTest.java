@@ -10,11 +10,17 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityStatus;
+import net.slimelabs.slslite.instance.ServerController;
+import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 import net.slimelabs.slslite.security.AdministratorStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,14 +37,22 @@ final class SLSCommandSurfaceTest {
   void setUp() throws Exception {
     AdministratorStore administrators = new AdministratorStore(temporaryDirectory);
     administrators.initialize();
+    BlueprintRepository blueprints =
+        new BlueprintRepository(temporaryDirectory.resolve("blueprints"));
+    blueprints.install(
+        new BlueprintRepository.Snapshot(
+            Map.of(
+                "arena",
+                new Blueprint(
+                    "arena", "Arena", "minigame", "paper-auto", "1.21.5", 1024, false, Map.of()))));
     command =
         new SLSCommand(
             null,
+            blueprints,
             null,
             null,
             null,
-            null,
-            null,
+            controller(),
             null,
             null,
             null,
@@ -47,6 +61,77 @@ final class SLSCommandSurfaceTest {
             administrators,
             null,
             LoggerFactory.getLogger(SLSCommandSurfaceTest.class));
+  }
+
+  @Test
+  void singularBlueprintDispatchAndCompletionUseThePinnedRoot() {
+    List<Component> messages = new ArrayList<>();
+    CommandSource permitted = source(Set.of("sls.command.blueprint"), messages);
+
+    command.execute(invocation(permitted, "blueprint", "arena"));
+
+    assertEquals(2, messages.size());
+    assertTrue(plainText(messages.getFirst()).contains("Blueprint minigame/arena"));
+    assertEquals(
+        List.of("arena"), command.suggestAsync(invocation(permitted, "blueprint", "")).join());
+  }
+
+  @Test
+  void createUsesItsDedicatedPermissionAndPinnedTypeIdShape() {
+    List<Component> messages = new ArrayList<>();
+    AtomicReference<String> startedBlueprint = new AtomicReference<>();
+    command = command(controllerThatRecordsCreate(startedBlueprint, new AtomicReference<>()));
+    CommandSource permitted = source(Set.of("sls.command.create"), messages);
+
+    command.execute(invocation(permitted, "create", "minigame", "arena"));
+
+    assertEquals("arena", startedBlueprint.get());
+    assertTrue(plainText(messages.getFirst()).contains("fixture create reached controller"));
+    assertEquals(
+        List.of("minigame"), command.suggestAsync(invocation(permitted, "create", "")).join());
+    assertEquals(
+        List.of("arena"),
+        command.suggestAsync(invocation(permitted, "create", "minigame", "")).join());
+  }
+
+  @Test
+  void createRejectsShorthandAndPassesSafeOverridesToTheController() {
+    List<Component> shorthandMessages = new ArrayList<>();
+    List<Component> createMessages = new ArrayList<>();
+    AtomicReference<String> createdBlueprint = new AtomicReference<>();
+    AtomicReference<InstanceLaunchOverrides> capturedOverrides = new AtomicReference<>();
+    command = command(controllerThatRecordsCreate(createdBlueprint, capturedOverrides));
+    CommandSource permitted = source(Set.of("sls.command.create"), shorthandMessages);
+
+    command.execute(invocation(permitted, "create", "arena"));
+    command.execute(
+        invocation(
+            source(Set.of("sls.command.create"), createMessages),
+            "create",
+            "minigame",
+            "arena",
+            "--memory=2048",
+            "--save=true"));
+
+    assertTrue(plainText(shorthandMessages.getFirst()).contains("/sls create <type | blueprint>"));
+    assertEquals("arena", createdBlueprint.get());
+    assertEquals(2048, capturedOverrides.get().memoryLimitMiB());
+    assertEquals(true, capturedOverrides.get().save());
+    assertTrue(plainText(createMessages.getFirst()).contains("fixture create reached controller"));
+    assertTrue(
+        command
+            .suggestAsync(invocation(permitted, "create", "minigame", "arena", ""))
+            .join()
+            .contains("--memory="));
+  }
+
+  @Test
+  void createCompletionIsHiddenWithoutCreatePermission() {
+    CommandSource unpermitted = source(Set.of(), new ArrayList<>());
+
+    assertEquals(List.of(), command.suggestAsync(invocation(unpermitted, "create", "")).join());
+    assertEquals(
+        List.of(), command.suggestAsync(invocation(unpermitted, "create", "minigame", "")).join());
   }
 
   @Test
@@ -144,6 +229,78 @@ final class SLSCommandSurfaceTest {
                   }
                   default -> defaultValue(method.getReturnType());
                 });
+  }
+
+  private static ServerController controller() {
+    return (ServerController)
+        Proxy.newProxyInstance(
+            ServerController.class.getClassLoader(),
+            new Class<?>[] {ServerController.class},
+            (ignored, method, arguments) ->
+                switch (method.getName()) {
+                  case "getAll", "persistentInstanceIds" -> List.of();
+                  default -> defaultValue(method.getReturnType());
+                });
+  }
+
+  private SLSCommand command(ServerController controller) {
+    try {
+      AdministratorStore administrators = new AdministratorStore(temporaryDirectory);
+      administrators.initialize();
+      BlueprintRepository blueprints =
+          new BlueprintRepository(temporaryDirectory.resolve("command-blueprints"));
+      blueprints.install(
+          new BlueprintRepository.Snapshot(
+              Map.of(
+                  "arena",
+                  new Blueprint(
+                      "arena",
+                      "Arena",
+                      "minigame",
+                      "paper-auto",
+                      "1.21.5",
+                      1024,
+                      false,
+                      Map.of()))));
+      return new SLSCommand(
+          null,
+          blueprints,
+          null,
+          null,
+          null,
+          controller,
+          null,
+          null,
+          null,
+          null,
+          null,
+          administrators,
+          null,
+          LoggerFactory.getLogger(SLSCommandSurfaceTest.class));
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private static ServerController controllerThatRecordsCreate(
+      AtomicReference<String> startedBlueprint,
+      AtomicReference<InstanceLaunchOverrides> capturedOverrides) {
+    return (ServerController)
+        Proxy.newProxyInstance(
+            ServerController.class.getClassLoader(),
+            new Class<?>[] {ServerController.class},
+            (ignored, method, arguments) -> {
+              if ("create".equals(method.getName())) {
+                startedBlueprint.set((String) arguments[0]);
+                capturedOverrides.set((InstanceLaunchOverrides) arguments[1]);
+                throw new net.slimelabs.slslite.instance.InstanceOperationException(
+                    "fixture create reached controller");
+              }
+              return switch (method.getName()) {
+                case "getAll", "persistentInstanceIds" -> List.of();
+                default -> defaultValue(method.getReturnType());
+              };
+            });
   }
 
   private static String plainText(Component component) {

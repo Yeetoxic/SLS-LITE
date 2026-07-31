@@ -4,10 +4,19 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 
 public interface ServerController {
 
   ManagedInstance start(String blueprintId) throws InstanceOperationException;
+
+  default ManagedInstance create(String blueprintId, InstanceLaunchOverrides overrides)
+      throws InstanceOperationException {
+    if (overrides.isEmpty()) {
+      return start(blueprintId);
+    }
+    throw new InstanceOperationException("Create-time overrides are unavailable");
+  }
 
   Collection<ManagedInstance> getAll();
 
@@ -35,6 +44,11 @@ public interface ServerController {
   default CompletableFuture<ManagedInstance> reset(String instanceId)
       throws InstanceOperationException {
     throw new InstanceOperationException("Persistent reset is unavailable for " + instanceId);
+  }
+
+  default CompletableFuture<InstanceDeletionResult> delete(String instanceId)
+      throws InstanceOperationException {
+    throw new InstanceOperationException("Instance deletion is unavailable for " + instanceId);
   }
 
   void shutdown(Duration timeout);

@@ -11,7 +11,6 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import net.slimelabs.slslite.BuildInfo;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintCopy;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
@@ -27,16 +26,11 @@ public final class CommandMessages {
   private CommandMessages() {}
 
   public static Component prefix() {
-    Component tooltip =
-        Component.text("Server Launch System", NamedTextColor.RED)
-            .appendNewline()
-            .append(Component.text("By " + BuildInfo.AUTHORS, SLS_LIGHT_BLUE));
     return Component.text("[", NamedTextColor.DARK_GRAY)
         .append(Component.text("S", SLS_BLUE))
         .append(Component.text("L", TextColor.color(58, 132, 255)))
         .append(Component.text("S", SLS_LIGHT_BLUE))
-        .append(Component.text("] ", NamedTextColor.DARK_GRAY))
-        .hoverEvent(HoverEvent.showText(tooltip));
+        .append(Component.text("] ", NamedTextColor.DARK_GRAY));
   }
 
   public static Component message(String text, TextColor color) {
@@ -109,6 +103,31 @@ public final class CommandMessages {
   }
 
   public static Component blueprint(
+      Blueprint blueprint, Collection<ManagedInstance> activeInstances) {
+    Component details =
+        blueprintDetails(blueprint, activeInstances)
+            .appendNewline()
+            .append(
+                Component.text("Click to prepare or join this blueprint", NamedTextColor.YELLOW));
+    Component interactiveName =
+        Component.text(blueprint.type() + " " + blueprint.id(), NamedTextColor.GOLD)
+            .hoverEvent(HoverEvent.showText(details))
+            .clickEvent(
+                ClickEvent.suggestCommand("/sls join " + blueprint.type() + " " + blueprint.id()));
+    Component summary =
+        Component.text(
+            " ("
+                + blueprint.software()
+                + " "
+                + blueprint.version()
+                + ", "
+                + blueprint.memoryLimitMiB()
+                + " MiB)",
+            NamedTextColor.GRAY);
+    return Component.text().append(interactiveName).append(summary).build();
+  }
+
+  public static Component blueprintDetails(
       Blueprint blueprint, Collection<ManagedInstance> activeInstances) {
     List<ManagedInstance> active =
         activeInstances.stream()
@@ -195,26 +214,7 @@ public final class CommandMessages {
       }
       tooltip.appendNewline().append(labelValue("Environment:", summary));
     }
-    tooltip
-        .appendNewline()
-        .append(Component.text("Click to prepare or join this blueprint", NamedTextColor.YELLOW));
-
-    Component interactiveName =
-        Component.text(blueprint.type() + " " + blueprint.id(), NamedTextColor.GOLD)
-            .hoverEvent(HoverEvent.showText(tooltip.build()))
-            .clickEvent(
-                ClickEvent.suggestCommand("/sls join " + blueprint.type() + " " + blueprint.id()));
-    Component summary =
-        Component.text(
-            " ("
-                + blueprint.software()
-                + " "
-                + blueprint.version()
-                + ", "
-                + blueprint.memoryLimitMiB()
-                + " MiB)",
-            NamedTextColor.GRAY);
-    return Component.text().append(interactiveName).append(summary).build();
+    return tooltip.build();
   }
 
   public static Component listHeader() {
