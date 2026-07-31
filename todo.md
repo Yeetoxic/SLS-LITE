@@ -205,7 +205,7 @@ data, leaking resources, or trapping players in unexplained states.
       they reduce demonstrated complexity or duplication.
 - [x] Clarify ownership for configuration, blueprints, installation, instances,
       matchmaking, lobbies, Velocity integration, and presentation.
-- [ ] Remove dead compatibility code/resources only after tests or migration
+- [x] Remove dead compatibility code/resources only after tests or migration
       documentation prove they are obsolete.
 - [ ] Document lifecycle invariants, concurrency boundaries, resource
       accounting, path security, and non-obvious compatibility adaptations.

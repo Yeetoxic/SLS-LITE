@@ -199,6 +199,19 @@ transaction facade; content resolution, copying, volume materialization,
 prepared lifecycle, and persistent replacement are already delegated to
 focused collaborators.
 
+Bundled production resources are limited to the generated operator defaults,
+plugin metadata, and the checksum-pinned SLS-Limbo runtime. Historical
+`Data_Versions` and `Protocol_Versions` tables are not part of the runtime
+contract: protocol support is inspected from the pinned NanoLimbo JAR and
+backend synchronization uses ViaVersion's API. Compatibility fixtures remain
+under test resources, never the production artifact.
+
+Compatibility readers are retained when they protect operator state or produce
+an intentional migration response. This includes schema-1/schema-2 instance
+metadata adoption, the deprecated `lobby.emergency` configuration alias, and
+the pinned vSLS blueprint and command vocabulary. Their tests and migration
+documentation define the removal boundary.
+
 ## Important Invariants
 
 - No command shell is used for managed server launch.

@@ -86,6 +86,11 @@ change and use reset only when replacing the managed copy is intended.
 Configurations using deprecated `lobby.emergency` remain accepted, but should
 be renamed to `lobby.limbo`. Do not define both keys.
 
+Early development JARs included root-level `Data_Versions` and
+`Protocol_Versions` text tables. They were never operator configuration or
+runtime sidecars and are not migrated. Current protocol support comes from the
+checksum-pinned SLS-Limbo runtime and the installed ViaVersion integration.
+
 ## Acceptance
 
 A migration is complete only after:
