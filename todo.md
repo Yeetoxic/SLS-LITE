@@ -259,7 +259,7 @@ data, leaking resources, or trapping players in unexplained states.
       selected safe configuration fields.
 - [x] Ensure distributed-only commands consistently explain why they are
       unavailable and identify the safe local alternative.
-- [ ] Design an operator join-test command that performs bounded protocol-level
+- [x] Design and implement an operator join-test command that performs bounded protocol-level
       probes without pretending a synthetic connection is a real player.
 - [ ] Maintain one generated or test-verified source for command, permission,
       configuration, and compatibility documentation.

@@ -31,6 +31,7 @@ final class VSLSCommandContractTest {
             "join.type",
             "join.player",
             "join.player.force",
+            "join-test.server",
             "find.player",
             "system",
             "node",

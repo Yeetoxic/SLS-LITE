@@ -20,6 +20,11 @@ UUIDs are retained internally so name changes do not remove access. Existing
 Velocity permission providers remain additive and `sls.command.admin` keeps its
 upstream umbrella behavior.
 
+The additive `/sls join-test <server|this>` operator command performs a bounded
+status negotiation against a ready registered backend. It reports latency and
+the advertised Minecraft protocol but explicitly does not claim to test login,
+forwarding, permissions, or a real player transfer.
+
 ## Compatibility Status
 
 | vSLS command | Permission | SLS-LITE status | Remaining compatibility work |

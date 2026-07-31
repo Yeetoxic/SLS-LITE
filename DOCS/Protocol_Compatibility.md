@@ -4,6 +4,11 @@ This matrix records complete SLS-Limbo login tests. A protocol is not considered
 compatible merely because Velocity starts, a status ping succeeds, or a library
 claims to understand its packet IDs.
 
+`/sls join-test <server|this>` intentionally performs only that narrower status
+ping. Use it to diagnose backend reachability and advertised protocol, never as
+evidence for a row in this compatibility matrix. Matrix promotion still
+requires a real client login and transfer through Velocity.
+
 ## Current Test Stack
 
 | Component | Version |

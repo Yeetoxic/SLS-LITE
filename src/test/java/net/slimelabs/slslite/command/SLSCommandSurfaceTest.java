@@ -304,6 +304,22 @@ final class SLSCommandSurfaceTest {
   }
 
   @Test
+  void joinTestCompletionIsPermissionFiltered() {
+    assertEquals(
+        List.of("this"),
+        command
+            .suggestAsync(
+                invocation(
+                    source(Set.of("sls.command.join-test"), new ArrayList<>()), "join-test", ""))
+            .join());
+    assertEquals(
+        List.of(),
+        command
+            .suggestAsync(invocation(source(Set.of(), new ArrayList<>()), "join-test", ""))
+            .join());
+  }
+
+  @Test
   void capabilityLinesIncludeDetailForConsoleSendersAndBoundLongValues() {
     String detail = "x".repeat(300);
 

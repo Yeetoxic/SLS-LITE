@@ -5,6 +5,7 @@ import com.velocitypowered.api.command.SimpleCommand;
 import com.velocitypowered.api.proxy.ConsoleCommandSource;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
+import com.velocitypowered.api.proxy.server.RegisteredServer;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -40,6 +41,7 @@ import org.slf4j.Logger;
 public final class SLSCommand implements SimpleCommand {
 
   private final BlueprintRepository blueprints;
+  private final ProxyServer proxy;
   private final SoftwareProfileRepository softwareProfiles;
   private final ServerController instances;
   private final SLSConfig activeConfig;
@@ -52,6 +54,7 @@ public final class SLSCommand implements SimpleCommand {
   private final PlayerRoutingCommandHandler playerRoutingHandler;
   private final DebugPlayerRegistry debugPlayers;
   private final ConsoleOutputSessions consoleOutput;
+  private final OperatorJoinProbeService joinProbes;
   private final Logger logger;
 
   public SLSCommand(
@@ -103,6 +106,7 @@ public final class SLSCommand implements SimpleCommand {
       AdminClaimService adminClaims,
       SoftwareInstallationService installationService,
       Logger logger) {
+    this.proxy = proxy;
     this.blueprints = blueprints;
     this.softwareProfiles = softwareProfiles;
     this.instances = instances;
@@ -135,6 +139,7 @@ public final class SLSCommand implements SimpleCommand {
             proxy, blueprints, joinService, authorizer, instanceAccess, logger);
     this.debugPlayers = new DebugPlayerRegistry();
     this.consoleOutput = new ConsoleOutputSessions();
+    this.joinProbes = new OperatorJoinProbeService();
     this.logger = logger;
   }
 
@@ -163,6 +168,7 @@ public final class SLSCommand implements SimpleCommand {
       case "info" -> inspectionHandler.info(invocation.source(), arguments);
       case "install" -> installationHandler.execute(invocation.source(), arguments);
       case "join" -> playerRoutingHandler.join(invocation.source(), arguments);
+      case "join-test" -> joinTest(invocation.source(), arguments);
       case "kill" -> lifecycleHandler.kill(invocation.source(), arguments);
       case "list" -> list(invocation.source(), arguments);
       case "logs" -> inspectionHandler.logs(invocation.source(), arguments);
@@ -207,6 +213,10 @@ public final class SLSCommand implements SimpleCommand {
         case "logs" -> completed(inspectionHandler.suggestions(source, operation, arguments));
         case "find", "join" ->
             completed(playerRoutingHandler.suggestions(source, operation, arguments));
+        case "join-test" ->
+            authorizer.canAdminister(source, operation)
+                ? completed(withPrefix("this", instanceIds()))
+                : completed(List.of());
         case "install" -> completed(installationHandler.suggestions(source, arguments));
         case "dequeue" -> completed(playerRoutingHandler.suggestions(source, operation, arguments));
         case "reload" ->
@@ -332,6 +342,74 @@ public final class SLSCommand implements SimpleCommand {
   public void close() {
     debugPlayers.clear();
     consoleOutput.close();
+    joinProbes.close();
+  }
+
+  private void joinTest(CommandSource source, String[] arguments) {
+    if (!requireAdmin(source, "join-test", "run managed backend join tests")) {
+      return;
+    }
+    if (arguments.length != 2) {
+      source.sendMessage(CommandMessages.usage("/sls join-test", "server"));
+      return;
+    }
+    ManagedInstance instance = resolveInstance(source, arguments[1]);
+    if (instance == null) {
+      return;
+    }
+    RegisteredServer registered =
+        proxy == null ? null : proxy.getServer(instance.id()).orElse(null);
+    if (registered == null) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Join test cannot run because "
+                  + instance.id()
+                  + " is not registered as a ready Velocity backend.",
+              NamedTextColor.RED));
+      return;
+    }
+
+    source.sendMessage(
+        CommandMessages.message(
+            "Running a bounded status probe against " + instance.id() + "...",
+            NamedTextColor.GRAY));
+    joinProbes
+        .probe(instance.id(), registered)
+        .thenAccept(result -> sendJoinTestResult(source, instance.id(), result));
+  }
+
+  private static void sendJoinTestResult(
+      CommandSource source, String instanceId, OperatorJoinProbeService.Result result) {
+    if (source instanceof Player player && !player.isActive()) {
+      return;
+    }
+    switch (result.status()) {
+      case SUCCESS ->
+          source.sendMessage(
+              CommandMessages.message(
+                  "Join test passed for "
+                      + instanceId
+                      + " in "
+                      + result.elapsedMillis()
+                      + " ms: backend reported "
+                      + result.versionName()
+                      + " (protocol "
+                      + result.protocol()
+                      + ").",
+                  NamedTextColor.GREEN));
+      case FAILED ->
+          source.sendMessage(
+              CommandMessages.message(
+                  "Join test failed for " + instanceId + ": " + result.detail(),
+                  NamedTextColor.RED));
+      case REJECTED ->
+          source.sendMessage(CommandMessages.message(result.detail(), NamedTextColor.YELLOW));
+    }
+    source.sendMessage(
+        CommandMessages.message(
+            "This verifies backend reachability and Minecraft status negotiation only; "
+                + "it does not verify player login, forwarding, permissions, or transfer.",
+            NamedTextColor.GRAY));
   }
 
   private void console(CommandSource source, String[] arguments) {

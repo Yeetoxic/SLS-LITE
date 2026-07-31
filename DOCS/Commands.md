@@ -43,6 +43,7 @@ name a player and cannot use player-only selectors.
 | `/sls blueprints [registry]` | `blueprints` | List blueprint details; rows suggest join commands. |
 | `/sls create <registry> <blueprint> [flags...]` | `create` | Provision and start a fresh managed instance. Supported local overrides are persisted across restart and reset. |
 | `/sls debug` | `debug` | Player-only toggle for bounded SLS-LITE command-dispatch diagnostics in chat. |
+| `/sls join-test <server\|this>` | `join-test` | Run a bounded Minecraft status negotiation against a ready registered backend. This is a reachability diagnostic, not a synthetic player login. |
 | `/sls start <registry> <blueprint>` | `start` | Start a managed instance without joining it. The additive `/sls start <blueprint>` form also works for a globally unique ID. |
 | `/sls info <server\|this>` | `info` | Detailed instance information. |
 | `/sls status [server\|this] [remote]` | `status` | Lifecycle state. Players may omit the target for their current server. `remote` is retained as an explicit local-mode boundary response because no daemon exists. |
@@ -67,6 +68,15 @@ name a player and cannot use player-only selectors.
 
 `/sls stats` without a server resolves to `this` and therefore requires a
 player currently connected to a managed backend.
+
+`/sls join-test` is an additive operator diagnostic. It runs asynchronously
+with a two-second timeout, permits at most four concurrent probes globally, and
+deduplicates probes for the same backend. A successful result reports elapsed
+time plus the backend's Minecraft version and protocol number. It proves only
+that Velocity can reach the registered backend and complete Minecraft status
+negotiation. It does not consume a player slot or verify authentication,
+player-information forwarding, permissions, configuration-channel behavior,
+login, or transfer. Those still require a real client test.
 
 Create accepts this confined subset of vSLS `--name=value` overrides:
 
