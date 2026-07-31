@@ -91,7 +91,12 @@ public final class SLSConfigRepository {
             Map<String, Object> root = YamlValues.asMap(yaml.load(input), "root", configPath);
             Map<String, Object> resources = YamlValues.optionalMap(root, "resources", configPath);
             Map<String, Object> network = YamlValues.optionalMap(root, "network", configPath);
-            Map<String, Object> ports = YamlValues.optionalMap(network, "ports", configPath);
+            Map<String, Object> ports = YamlValues.optionalMap(
+                    network,
+                    "ports",
+                    "network",
+                    configPath
+            );
             Map<String, Object> matchmaking =
                     YamlValues.optionalMap(root, "matchmaking", configPath);
             Map<String, Object> lifecycle =
@@ -104,7 +109,12 @@ public final class SLSConfigRepository {
                     YamlValues.optionalMap(root, "security", configPath);
             Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
             Map<String, Object> lobbyRecovery =
-                    YamlValues.optionalMap(lobby, "recovery", configPath);
+                    YamlValues.optionalMap(
+                            lobby,
+                            "recovery",
+                            "lobby",
+                            configPath
+                    );
             if (lobby.containsKey("limbo") && lobby.containsKey("emergency")) {
                 throw YamlValues.error(
                         configPath,
@@ -113,19 +123,35 @@ public final class SLSConfigRepository {
                 );
             }
             Map<String, Object> limbo = lobby.containsKey("limbo")
-                    ? YamlValues.optionalMap(lobby, "limbo", configPath)
-                    : YamlValues.optionalMap(lobby, "emergency", configPath);
+                    ? YamlValues.optionalMap(
+                            lobby,
+                            "limbo",
+                            "lobby",
+                            configPath
+                    )
+                    : YamlValues.optionalMap(
+                            lobby,
+                            "emergency",
+                            "lobby",
+                            configPath
+                    );
             String limboSection = lobby.containsKey("limbo")
                     ? "lobby.limbo"
                     : "lobby.emergency";
             Map<String, Object> limboRecovery =
-                    YamlValues.optionalMap(limbo, "recovery", configPath);
+                    YamlValues.optionalMap(
+                            limbo,
+                            "recovery",
+                            limboSection,
+                            configPath
+                    );
             Map<String, Object> storage =
                     YamlValues.optionalMap(root, "storage", configPath);
             Map<String, Object> snapshotHook =
                     YamlValues.optionalMap(
                             storage,
                             "snapshot_hook",
+                            "storage",
                             configPath
                     );
             Map<String, Object> paths = YamlValues.optionalMap(root, "paths", configPath);

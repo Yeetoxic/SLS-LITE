@@ -119,6 +119,24 @@ class SLSConfigRepositoryTest {
     }
 
     @Test
+    void reportsTheFullPathForMalformedNestedSections() throws Exception {
+        writeConfig("""
+                lobby:
+                  limbo:
+                    recovery: invalid
+                """);
+        SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+        ConfigurationException exception = assertThrows(
+                ConfigurationException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("lobby.limbo.recovery"));
+        assertTrue(exception.getMessage().contains("must be an object"));
+    }
+
+    @Test
     void rejectsUnknownLobbyMode() throws Exception {
         writeConfig("""
                 lobby:

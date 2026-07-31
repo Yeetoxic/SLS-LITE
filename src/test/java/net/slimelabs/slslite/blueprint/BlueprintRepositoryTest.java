@@ -829,6 +829,30 @@ class BlueprintRepositoryTest {
     }
 
     @Test
+    void reportsTheFullPathForMalformedLimitsSection() throws Exception {
+        write("malformed-limits.yml", """
+                blueprint:
+                  id: malformed-limits
+                  name: Malformed Limits
+                  type: test
+                server:
+                  software: paper
+                  version: "1.21.11"
+                  limits: invalid
+                """);
+        BlueprintRepository repository =
+                new BlueprintRepository(temporaryDirectory);
+
+        BlueprintException exception = assertThrows(
+                BlueprintException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("server.limits"));
+        assertTrue(exception.getMessage().contains("must be an object"));
+    }
+
+    @Test
     void preservesNullValuesInArbitraryAnnotations() throws Exception {
         write("annotations.yml", """
                 blueprint:

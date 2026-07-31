@@ -34,7 +34,12 @@ final class BlueprintParser {
             Map<String, Object> root = asMap(document, "root", path);
             Map<String, Object> metadata = requiredMap(root, "blueprint", path);
             Map<String, Object> server = requiredMap(root, "server", path);
-            Map<String, Object> limits = optionalMap(server, "limits", path);
+            Map<String, Object> limits = optionalMap(
+                    server,
+                    "limits",
+                    "server",
+                    path
+            );
             ParsedConfigs parsedConfigs = parseConfigs(server, path);
             Map<String, Object> state = optionalMap(root, "state", path);
             Map<String, Object> annotations = optionalMap(root, "annotations", path);
@@ -149,10 +154,20 @@ final class BlueprintParser {
             String key,
             Path path
     ) throws BlueprintException {
+        return optionalMap(parent, key, "", path);
+    }
+
+    private static Map<String, Object> optionalMap(
+            Map<String, Object> parent,
+            String key,
+            String section,
+            Path path
+    ) throws BlueprintException {
         if (!parent.containsKey(key)) {
             return Map.of();
         }
-        return asMap(parent.get(key), key, path);
+        String qualified = section.isBlank() ? key : section + "." + key;
+        return asMap(parent.get(key), qualified, path);
     }
 
     private static Map<String, Object> asMap(Object value, String key, Path path)

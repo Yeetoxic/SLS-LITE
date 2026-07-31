@@ -242,6 +242,29 @@ class SoftwareProfileRepositoryTest {
         assertTrue(exception.getMessage().contains("readiness.timeout_seconds"));
     }
 
+    @Test
+    void reportsAllowedValuesForInvalidProfileEnums() throws Exception {
+        write("invalid-source.yml", """
+                software:
+                  id: invalid-source
+                  source: mystery
+                  base_directory: software/invalid/{version}
+                  server_jar: server.jar
+                """);
+        SoftwareProfileRepository repository =
+                new SoftwareProfileRepository(temporaryDirectory);
+
+        ConfigurationException exception = assertThrows(
+                ConfigurationException.class,
+                repository::reload
+        );
+
+        assertTrue(exception.getMessage().contains("software.source"));
+        assertTrue(exception.getMessage().contains("'manual'"));
+        assertTrue(exception.getMessage().contains("'paper'"));
+        assertTrue(exception.getMessage().contains("'vanilla'"));
+    }
+
     private void write(String name, String content) throws Exception {
         Path target = temporaryDirectory.resolve(name);
         Files.createDirectories(target.getParent());

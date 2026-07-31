@@ -6,6 +6,12 @@ default.
 Unknown structural keys are rejected. Host configuration changes require a
 Velocity restart; `/sls reload` reloads blueprints and software profiles only.
 
+The generated file is arranged in stable operator-facing sections and retains
+comments for units, defaults, security implications, and restart behavior.
+Section order is for readability; YAML key order does not change behavior.
+Validation errors identify the source file and the complete known YAML path,
+and unknown keys include a nearest-key suggestion when one is unambiguous.
+
 ## Reference
 
 | Key | Default | Valid values and behavior |

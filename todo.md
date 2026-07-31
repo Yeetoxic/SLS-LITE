@@ -211,7 +211,7 @@ data, leaking resources, or trapping players in unexplained states.
       accounting, path security, and non-obvious compatibility adaptations.
 - [x] Organize bundled defaults, templates, examples, protocol data, tests, and
       third-party resources without changing generated operator paths or keys.
-- [ ] Normalize operator-edited YAML layout, ordering, comments, examples, and
+- [x] Normalize operator-edited YAML layout, ordering, comments, examples, and
       validation diagnostics.
 - [ ] Publish a contributor architecture guide covering normal modification
       points for commands, blueprints, installers, lifecycle, storage, lobbies,

@@ -303,3 +303,8 @@ Blueprint parsing does not require volume source directories to exist. This
 allows definitions to be reviewed and reloaded before optional world content
 is installed. Starting an affected blueprint still fails with an actionable
 content error if its required source is absent.
+
+The bundled blueprint template is the canonical editable example. Exact
+software versions are quoted, optional policy overrides remain commented until
+selected, and its volume/copy/environment examples use the same confined paths
+and private-storage semantics enforced by the parser.

@@ -1,13 +1,17 @@
-# Default profile for a manually prepared Paper installation.
+# Canonical Paper profile. Automatic installation remains disabled until the
+# operator explicitly accepts the Minecraft EULA below.
 
 software:
   id: paper
+  # Optional display name; defaults to id when omitted.
+  name: Paper
   runtime: java-jar
   configurator: paper
   source: paper
   # stable (default), beta, or alpha. The blueprint version remains exact.
   channel: stable
-  # Set true only after reviewing and accepting https://aka.ms/MinecraftEULA
+  # Set true only after reviewing and accepting https://aka.ms/MinecraftEULA.
+  # A verified manually populated cache can still be used while this is false.
   accept_eula: false
   base_directory: software/paper/{version}
   server_jar: paper.jar

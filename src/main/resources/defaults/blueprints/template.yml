@@ -1,13 +1,22 @@
-# SLS-LITE blueprint using modern SLS terminology.
+# Canonical SLS-LITE blueprint using modern SLS terminology.
+#
+# Copy this file, choose a unique blueprint.id, and keep exact software versions
+# quoted so YAML cannot reinterpret them as numbers.
 
 blueprint:
+  # Lowercase letters, numbers, underscores, and hyphens; maximum 64 characters.
   id: template
+  # Human-readable name shown in commands and player messages.
   name: Template Server
+  # Registry/category used by /sls join <type> <id>.
   type: game
 
 server:
+  # Must match a loaded software profile.
   software: paper
+  # Exact version understood by that profile.
   version: "26.1"
+
   # Optional modern SLS-compatible server.properties overrides.
   configs:
     server.properties:
@@ -21,29 +30,41 @@ server:
         # resource-pack-sha1: "0123456789abcdef0123456789abcdef01234567"
         # require-resource-pack: false
   limits:
-    # Positive integer. Player slots available on each running instance.
+    # Positive integer. Player slots available on each instance.
     max_players: 20
-    # Positive integer. Maximum simultaneous instances of this blueprint.
+    # Positive integer. Maximum simultaneous instances for this blueprint.
     max_instances: 1
-    # Positive integer MiB reservation for each running instance.
+    # Positive integer MiB admission reservation for each instance.
     memory_limit: 2048
 
+# false creates an ephemeral instance; true preserves owned instance data and
+# requires explicit reset when the blueprint/software definition changes.
 save: false
 
-# Modern SLS state volume shape. Uncomment after placing the source directory
-# under the SLS-LITE plugin data directory. SLS-LITE currently supports only
-# mode: cow and creates a private portable copy for every new instance.
+# Sources are relative to plugins/sls-lite. Targets are confined below the
+# prepared instance. Uncomment only the entries you actually provide.
+#
+# mode: cow creates a private mutable instance view using the best safe selected
+# COW strategy, with transactional portable copy as the universal fallback.
+# mode: ro creates a private source-protecting snapshot. Shared writable rw
+# volumes are intentionally rejected during preparation.
 # state:
 #   volumes:
 #     - name: world
 #       source: worlds/example
 #       target: /world
 #       mode: cow
+#   copy:
+#     - source: files/plugins/example.jar
+#       target: plugins/example.jar
+#   env:
+#     FEATURE_FLAG: "true"
 
 annotations:
   sls-lite:
     # Prevent automatic empty-server shutdown for priority services.
     keep-alive: false
     # Optional per-blueprint override; omit to use config.yml.
-    idle-shutdown-seconds: 180
+    # idle-shutdown-seconds: 180
+    # Set false to disable empty-server shutdown for this blueprint.
     stop-when-empty: true

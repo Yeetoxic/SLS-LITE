@@ -1,12 +1,15 @@
-# Optional vanilla profile. Vanilla does not support Velocity modern forwarding.
+# Canonical optional vanilla profile. Vanilla does not support Velocity modern
+# forwarding.
 
 software:
   id: vanilla
+  name: Vanilla
   runtime: java-jar
   configurator: vanilla
   source: vanilla
   channel: stable
-  # Set true only after reviewing and accepting https://aka.ms/MinecraftEULA
+  # Set true only after reviewing and accepting https://aka.ms/MinecraftEULA.
+  # A verified manually populated cache can still be used while this is false.
   accept_eula: false
   base_directory: software/vanilla/{version}
   server_jar: server.jar

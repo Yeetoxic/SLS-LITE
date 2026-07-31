@@ -154,7 +154,12 @@ public final class SoftwareProfileRepository {
                     launch, "java", "java", path
             );
             Map<Integer, String> javaExecutables = javaExecutables(
-                    YamlValues.optionalMap(launch, "java_versions", path),
+                    YamlValues.optionalMap(
+                            launch,
+                            "java_versions",
+                            "launch",
+                            path
+                    ),
                     path
             );
             SoftwareRuntime runtime = enumValue(
@@ -287,9 +292,16 @@ public final class SoftwareProfileRepository {
                     value.replace('-', '_').toUpperCase(Locale.ROOT)
             );
         } catch (IllegalArgumentException exception) {
+            String allowed = java.util.Arrays.stream(type.getEnumConstants())
+                    .map(constant -> constant.name()
+                            .toLowerCase(Locale.ROOT)
+                            .replace('_', '-'))
+                    .map(constant -> "'" + constant + "'")
+                    .collect(java.util.stream.Collectors.joining(", "));
             throw YamlValues.error(
                     path,
-                    key + " has unsupported value '" + value + "'"
+                    key + " has unsupported value '" + value
+                            + "'; expected one of " + allowed
             );
         }
     }

@@ -4,8 +4,9 @@
 # matters: use spaces, not tabs. Sizes use MiB/KiB and durations use seconds.
 
 resources:
-  # Positive integer. Shared admission budget, in MiB, for all managed Paper
-  # processes. This excludes Velocity and is not a measurement of the hosting
+  # Positive integer. Shared admission budget, in MiB, for all managed child
+  # processes, including SLS-Limbo. This excludes Velocity and is not a
+  # measurement of the hosting
   # panel's real memory limit. A start is rejected when its blueprint memory
   # limit would make the total reservations exceed this value.
   total_memory_mib: 4096

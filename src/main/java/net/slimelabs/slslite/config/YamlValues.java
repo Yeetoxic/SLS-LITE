@@ -33,10 +33,20 @@ public final class YamlValues {
             String key,
             Path path
     ) throws ConfigurationException {
+        return optionalMap(parent, key, "", path);
+    }
+
+    public static Map<String, Object> optionalMap(
+            Map<String, Object> parent,
+            String key,
+            String section,
+            Path path
+    ) throws ConfigurationException {
         if (!parent.containsKey(key)) {
             return Map.of();
         }
-        return asMap(parent.get(key), key, path);
+        String qualified = section.isBlank() ? key : section + "." + key;
+        return asMap(parent.get(key), qualified, path);
     }
 
     public static String requiredString(Map<String, Object> values, String key, Path path)
