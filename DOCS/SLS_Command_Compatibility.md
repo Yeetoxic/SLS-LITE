@@ -73,6 +73,35 @@ pinned release and commit. Commands advertised by the upstream root tree but
 not implemented in SLS-LITE return a styled compatibility response instead of
 falling through as an unknown command.
 
+Those responses also name the safe local workflow. `/sls node` directs
+operators to `/sls system` and local lifecycle commands because no daemon/node
+control plane exists. Pause explains that portable process suspension is
+unsafe and recommends leaving the instance running or stopping a persistent
+instance; resume directs operators to restart a stopped persistent instance.
+
+## Versioned Branch Registry
+
+`VSLSCommandContract.BRANCHES` is the machine-readable inventory for the whole
+implemented command tree. Each semantic argument branch records:
+
+- its stable ID and displayed syntax;
+- whether it is pinned upstream or additive in SLS-LITE;
+- whether it is supported, locally adapted, or an explicit unavailable
+  response;
+- its public, administrative, self/other, bootstrap, or built-in access model;
+- player-only, console-only, or unrestricted sender rules;
+- every relevant granular permission node, literal selector, modifier, and
+  argument-completion source.
+
+The registry also owns the runtime's public and permission-filtered root
+completion lists. `VSLSCommandContractTest` rejects duplicate branches,
+unregistered runtime roots, missing administrative permission declarations,
+sender-rule drift, create-modifier omissions, force spelling drift, and loss of
+the intentional `node`, `pause`, or `resume` compatibility responses. Runtime
+tests exercise public and granular permissions, built-in administrators,
+console/player restrictions, other-player access, force permissions, invalid
+usage, and hidden suggestions.
+
 ## Compatibility Rules
 
 1. Keep the `/sls` root and upstream top-level names stable.

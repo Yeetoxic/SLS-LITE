@@ -141,9 +141,12 @@ The pinned vSLS root includes commands that are not locally implemented yet:
 pause resume
 ```
 
-They return a styled `not available in this SLS-LITE build yet` response.
-`/sls node` is distributed-only and returns `not available in local mode`.
-These placeholders preserve command familiarity without pretending a local
+They return a styled explanation that portable process suspension has no safe
+implementation. Pause recommends leaving the instance running or stopping a
+persistent instance; resume recommends `/sls restart <server>` for a stopped
+persistent instance. `/sls node` explains that local mode has no daemon/node
+control plane and points to `/sls system` plus local lifecycle commands. These
+placeholders preserve command familiarity without pretending a local
 equivalent exists.
 
 The detailed pinned upstream comparison is maintained in

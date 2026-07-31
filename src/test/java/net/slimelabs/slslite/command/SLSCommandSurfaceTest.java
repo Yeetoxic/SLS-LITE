@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.command.SimpleCommand;
+import com.velocitypowered.api.proxy.ConsoleCommandSource;
+import com.velocitypowered.api.proxy.Player;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -12,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
@@ -163,6 +166,24 @@ final class SLSCommandSurfaceTest {
   }
 
   @Test
+  void builtInAdministratorAndConsoleReceiveAdministrativeRootSuggestions() throws Exception {
+    UUID playerId = UUID.randomUUID();
+    AdministratorStore administrators =
+        new AdministratorStore(temporaryDirectory.resolve("built-in-administrators"));
+    administrators.initialize();
+    administrators.add(playerId, "BuiltIn");
+    command = command(controller(), administrators);
+
+    List<String> builtInSuggestions =
+        command.suggestAsync(invocation(player(playerId, new ArrayList<>()), "")).join();
+    List<String> consoleSuggestions =
+        command.suggestAsync(invocation(console(new ArrayList<>()), "")).join();
+
+    assertTrue(builtInSuggestions.containsAll(VSLSCommandContract.ADMIN_SUGGESTIONS));
+    assertTrue(consoleSuggestions.containsAll(VSLSCommandContract.ADMIN_SUGGESTIONS));
+  }
+
+  @Test
   void emptyAndUnknownExecutionReturnTheSamePublicUsageSurface() {
     List<Component> emptyMessages = new ArrayList<>();
     List<Component> unknownMessages = new ArrayList<>();
@@ -210,6 +231,24 @@ final class SLSCommandSurfaceTest {
 
     assertEquals(1, messages.size());
     assertTrue(plainText(messages.getFirst()).contains("not available in local mode"));
+    assertTrue(plainText(messages.getFirst()).contains("/sls system"));
+    assertTrue(plainText(messages.getFirst()).contains("no daemon/node control plane"));
+  }
+
+  @Test
+  void unavailableProcessSuspensionCommandsNameSafePersistentAlternatives() {
+    List<Component> pauseMessages = new ArrayList<>();
+    List<Component> resumeMessages = new ArrayList<>();
+
+    command.execute(
+        invocation(source(Set.of("sls.command.pause"), pauseMessages), "pause", "server.abcdef"));
+    command.execute(
+        invocation(
+            source(Set.of("sls.command.resume"), resumeMessages), "resume", "server.abcdef"));
+
+    assertTrue(plainText(pauseMessages.getFirst()).contains("/sls stop"));
+    assertTrue(plainText(pauseMessages.getFirst()).contains("persistent instance"));
+    assertTrue(plainText(resumeMessages.getFirst()).contains("/sls restart <server>"));
   }
 
   @Test
@@ -304,6 +343,14 @@ final class SLSCommandSurfaceTest {
     try {
       AdministratorStore administrators = new AdministratorStore(temporaryDirectory);
       administrators.initialize();
+      return command(controller, administrators);
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private SLSCommand command(ServerController controller, AdministratorStore administrators) {
+    try {
       BlueprintRepository blueprints =
           new BlueprintRepository(temporaryDirectory.resolve("command-blueprints"));
       blueprints.install(
@@ -337,6 +384,40 @@ final class SLSCommandSurfaceTest {
     } catch (Exception exception) {
       throw new IllegalStateException(exception);
     }
+  }
+
+  private static Player player(UUID playerId, List<Component> messages) {
+    return (Player)
+        Proxy.newProxyInstance(
+            Player.class.getClassLoader(),
+            new Class<?>[] {Player.class},
+            (proxy, method, arguments) ->
+                switch (method.getName()) {
+                  case "getUniqueId" -> playerId;
+                  case "getUsername" -> "BuiltIn";
+                  case "hasPermission" -> false;
+                  case "sendMessage" -> {
+                    messages.add((Component) arguments[0]);
+                    yield null;
+                  }
+                  default -> defaultValue(method.getReturnType());
+                });
+  }
+
+  private static ConsoleCommandSource console(List<Component> messages) {
+    return (ConsoleCommandSource)
+        Proxy.newProxyInstance(
+            ConsoleCommandSource.class.getClassLoader(),
+            new Class<?>[] {ConsoleCommandSource.class},
+            (proxy, method, arguments) ->
+                switch (method.getName()) {
+                  case "hasPermission" -> false;
+                  case "sendMessage" -> {
+                    messages.add((Component) arguments[0]);
+                    yield null;
+                  }
+                  default -> defaultValue(method.getReturnType());
+                });
   }
 
   private static ServerController controllerThatRecordsCreate(

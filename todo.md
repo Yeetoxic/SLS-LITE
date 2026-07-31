@@ -243,13 +243,13 @@ data, leaking resources, or trapping players in unexplained states.
       every intentionally unavailable daemon-backed modifier.
 - [x] Finish output, permission, selector, sender, usage-error, and
       tab-completion parity for every supported branch.
-- [ ] Extend the versioned command contract across every argument branch,
+- [x] Extend the versioned command contract across every argument branch,
       permission node, sender restriction, selector, modifier, and completion.
-- [ ] Verify public, granular-provider, built-in-administrator, console, player,
+- [x] Verify public, granular-provider, built-in-administrator, console, player,
       other-player, force, invalid-usage, and hidden-suggestion cases.
-- [ ] Add registry-aware create/start/list/administrative forms only where the
+- [x] Add registry-aware create/start/list/administrative forms only where the
       pinned vSLS contract exposes them.
-- [ ] Add persistent delete and explicit force-kill with evacuation, ownership,
+- [x] Add persistent delete and explicit force-kill with evacuation, ownership,
       transactionality, cleanup, and audit diagnostics:
   - [x] Persistent delete.
   - [x] Explicit force-kill.
@@ -257,7 +257,7 @@ data, leaking resources, or trapping players in unexplained states.
       console follow.
 - [x] Add create-time overrides for memory, save mode, seed, view distance, and
       selected safe configuration fields.
-- [ ] Ensure distributed-only commands consistently explain why they are
+- [x] Ensure distributed-only commands consistently explain why they are
       unavailable and identify the safe local alternative.
 - [ ] Design an operator join-test command that performs bounded protocol-level
       probes without pretending a synthetic connection is a real player.

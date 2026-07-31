@@ -39,31 +39,6 @@ import org.slf4j.Logger;
 
 public final class SLSCommand implements SimpleCommand {
 
-  private static final List<String> PUBLIC_COMMANDS =
-      List.of("admin", "dequeue", "find", "info", "join", "list", "registries", "version");
-  private static final List<String> ADMIN_COMMANDS =
-      List.of(
-          "blueprint",
-          "blueprints",
-          "console",
-          "create",
-          "debug",
-          "delete",
-          "install",
-          "kill",
-          "logs",
-          "node",
-          "pause",
-          "reload",
-          "reset",
-          "restart",
-          "resume",
-          "start",
-          "stats",
-          "status",
-          "stop",
-          "system");
-
   private final BlueprintRepository blueprints;
   private final SoftwareProfileRepository softwareProfiles;
   private final ServerController instances;
@@ -210,8 +185,8 @@ public final class SLSCommand implements SimpleCommand {
     String[] arguments = invocation.arguments();
     CommandSource source = invocation.source();
     if (arguments.length <= 1) {
-      List<String> suggestions = new java.util.ArrayList<>(PUBLIC_COMMANDS);
-      ADMIN_COMMANDS.stream()
+      List<String> suggestions = new java.util.ArrayList<>(VSLSCommandContract.PUBLIC_SUGGESTIONS);
+      VSLSCommandContract.ADMIN_SUGGESTIONS.stream()
           .filter(command -> authorizer.canAdminister(source, command))
           .forEach(suggestions::add);
       return completed(suggestions);
@@ -483,10 +458,22 @@ public final class SLSCommand implements SimpleCommand {
     if (!requireAdmin(source, command, "use /sls " + command)) {
       return;
     }
-    String explanation =
-        distributedOnly
-            ? " is not available in local mode."
-            : " is not available in this SLS-LITE build yet.";
+    String explanation;
+    if (distributedOnly) {
+      explanation =
+          " is not available in local mode because SLS-LITE has no daemon/node control plane. "
+              + "Use /sls system for this host and local lifecycle commands for its instances.";
+    } else if ("pause".equalsIgnoreCase(command)) {
+      explanation =
+          " is not available in this SLS-LITE build because process suspension has no safe "
+              + "portable implementation. Leave the instance running, or use /sls stop for "
+              + "a persistent instance.";
+    } else {
+      explanation =
+          " is not available in this SLS-LITE build because process suspension has no safe "
+              + "portable implementation. Use /sls restart <server> to recover a stopped "
+              + "persistent instance.";
+    }
     source.sendMessage(
         CommandMessages.prefix()
             .append(Component.text("/sls " + command, NamedTextColor.GOLD))
