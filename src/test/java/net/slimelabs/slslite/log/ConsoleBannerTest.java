@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import net.slimelabs.slslite.BuildInfo;
 import org.junit.jupiter.api.Test;
 
 class ConsoleBannerTest {
@@ -19,22 +20,28 @@ class ConsoleBannerTest {
     String logo = String.join("\n", ConsoleBanner.logo());
 
     assertTrue(logo.contains("___"));
-    assertTrue(logo.contains("_____"));
+    assertTrue(logo.contains("|___/"));
   }
 
   @Test
-  void startupBannerContainsAnsiBrandingAndLegalNotice() {
+  void startupBannerContainsCompactAnsiBrandingAndLicenseReference() {
     String banner = String.join("\n", ConsoleBanner.startupBanner());
     String plainBanner = banner.replaceAll("\\u001B\\[[;\\d]*m", "");
 
     assertTrue(banner.contains("\u001B[32m"));
-    assertTrue(banner.contains("\u001B[92m"));
+    assertTrue(banner.contains("\u001B[31m"));
+    assertTrue(banner.contains("\u001B[33m"));
+    assertTrue(banner.contains("\u001B[35m"));
     assertTrue(banner.contains("\u001B[94m"));
-    assertTrue(banner.contains("\u001B[95m"));
+    assertFalse(banner.contains("\u001B[95m"));
+    assertFalse(banner.contains("\u001B[97m"));
+    assertTrue(plainBanner.contains("Server Launch System"));
+    assertFalse(plainBanner.contains("Standalone Server Launch System"));
     assertTrue(plainBanner.contains("Website: https://slimelabs.net"));
     assertTrue(plainBanner.contains("GNU AGPL v3.0"));
-    assertTrue(plainBanner.contains("WITHOUT ANY WARRANTY"));
-    assertTrue(plainBanner.contains("MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE"));
+    assertTrue(plainBanner.contains(BuildInfo.LICENSE_URL));
+    assertTrue(plainBanner.contains("warranty terms"));
+    assertTrue(ConsoleBanner.startupBanner().size() <= 15);
   }
 
   @Test

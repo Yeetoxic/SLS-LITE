@@ -10,20 +10,14 @@ public final class ConsoleBanner {
   private static final String RESET = "\u001B[0m";
   private static final String DARK_GREEN = "\u001B[32m";
   private static final String GREEN = "\u001B[92m";
-  private static final String YELLOW = "\u001B[93m";
+  private static final String YELLOW = "\u001B[33m";
   private static final String BLUE = "\u001B[94m";
-  private static final String MAGENTA = "\u001B[95m";
-  private static final String CYAN = "\u001B[96m";
-  private static final String WHITE = "\u001B[97m";
+  private static final String MAGENTA = "\u001B[35m";
   private static final String GRAY = "\u001B[90m";
   private static final String RED = "\u001B[31m";
 
   private static final List<String> LOGO =
-      List.of(
-          "  ___ _    ___       _    ___ _____ ___ ",
-          " / __| |  / __| ___ | |  |_ _|_   _| __|",
-          " \\__ \\ |__\\__ \\|___|| |__ | |  | | | _| ",
-          " |___/____|___/     |____|___| |_| |___|");
+      List.of("  ___ _    ___ ", " / __| |  / __|", " \\__ \\ |__\\__ \\", " |___/____|___/");
 
   private ConsoleBanner() {}
 
@@ -42,16 +36,19 @@ public final class ConsoleBanner {
   static List<String> startupBanner() {
     List<String> lines = new ArrayList<>();
     lines.add("");
-    LOGO.stream().map(line -> paint(DARK_GREEN, line)).forEach(lines::add);
+    lines.add(paint(DARK_GREEN, LOGO.get(0)));
     lines.add(
-        paint(RED, " SLS-LITE")
+        paint(DARK_GREEN, LOGO.get(1))
+            + "  "
+            + paint(RED, "SLS-LITE")
             + " "
-            + paint(YELLOW, "v" + BuildInfo.VERSION)
-            + " "
-            + paint(CYAN, "| Standalone Server Launch System"));
+            + paint(YELLOW, "v" + BuildInfo.VERSION));
+    lines.add(paint(DARK_GREEN, LOGO.get(2)) + "  " + paint(GRAY, "Server Launch System"));
     lines.add(
-        paint(BLUE, " Copyright © 2020 - 2026 ")
-            + paint(MAGENTA, "Protoxon, Yeetoxic & Contributors"));
+        paint(DARK_GREEN, LOGO.get(3))
+            + "  "
+            + paint(BLUE, "Copyright © 2020–2026 ")
+            + paint(MAGENTA, BuildInfo.AUTHORS));
     lines.add("");
     lines.add(linkLine(" Website:", BuildInfo.WEBSITE_URL));
     lines.add(linkLine(" Source: ", BuildInfo.SOURCE_URL));
@@ -61,13 +58,8 @@ public final class ConsoleBanner {
         paint(BLUE, " This software is made available under the terms of the ")
             + paint(MAGENTA, "GNU AGPL v3.0")
             + paint(BLUE, "."));
-    lines.add(paint(BLUE, " You may redistribute and modify it under the terms of that license."));
-    lines.add(paint(BLUE, " This program is distributed in the hope that it will be useful,"));
-    lines.add(
-        paint(BLUE, " but ")
-            + paint(MAGENTA, "WITHOUT ANY WARRANTY")
-            + paint(BLUE, "; without even the implied warranty of"));
-    lines.add(paint(BLUE, " MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."));
+    lines.add(paint(BLUE, " You may redistribute and modify it under that license; source and"));
+    lines.add(paint(BLUE, " warranty terms are provided in the linked LICENSE file."));
     lines.add("");
     return List.copyOf(lines);
   }
@@ -78,14 +70,13 @@ public final class ConsoleBanner {
         paint(GREEN, " SLS-LITE")
             + " "
             + paint(YELLOW, "v" + BuildInfo.VERSION)
-            + paint(BLUE, " is shutting down."),
-        paint(BLUE, " Thank you for using ") + paint(GREEN, "SLS-LITE") + paint(BLUE, "."),
-        linkLine(" Source: ", BuildInfo.SOURCE_URL),
+            + paint(GRAY, " stopped — thanks for using SLS-LITE."),
+        linkLine(" Source  ", BuildInfo.SOURCE_URL),
         "");
   }
 
   private static String linkLine(String label, String url) {
-    return paint(BLUE, label) + " " + paint(WHITE, url);
+    return paint(BLUE, label) + " " + RESET + url + RESET;
   }
 
   private static String paint(String color, String text) {
