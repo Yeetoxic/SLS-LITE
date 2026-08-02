@@ -5,8 +5,10 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import net.slimelabs.slslite.io.ConfinedFiles;
 
 final class TemporaryInstanceLog implements AutoCloseable {
 
@@ -24,14 +26,18 @@ final class TemporaryInstanceLog implements AutoCloseable {
 
   TemporaryInstanceLog(Path instanceDirectory, int maximumKiB) throws IOException {
     Path path = instanceDirectory.resolve(RELATIVE_PATH);
-    Files.createDirectories(path.getParent());
+    ConfinedFiles.ensureDirectory(path.getParent());
+    if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+      ConfinedFiles.requireRegularFile(path);
+    }
     output =
         new BufferedOutputStream(
             Files.newOutputStream(
                 path,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE));
+                StandardOpenOption.WRITE,
+                LinkOption.NOFOLLOW_LINKS));
     maximumBytes = maximumKiB * 1024L;
   }
 

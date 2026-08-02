@@ -73,6 +73,30 @@ managed_output:
   # rotated archives. This value is still validated when file output is false.
   temporary_file_max_kib: 4096
 
+# SLS-LITE's own lifecycle/probe detail stream. This is independent from
+# managed child output above.
+detailed_logging:
+  # off, normal, or detailed. Detailed keeps probe, timing, reconciliation,
+  # storage, and lifecycle evidence in logs/sls-lite-detail.log.
+  level: detailed
+
+  # Default false. Mirrors detailed records into the Velocity console without
+  # suppressing concise milestones, warnings, failures, or command responses.
+  mirror_to_proxy_console: false
+
+  # Each file is capped and rotated. retained_files includes the active file.
+  max_file_kib: 8192
+  retained_files: 5
+
+  # Bounded asynchronous queue. Full queues drop detail records rather than
+  # blocking Velocity or lifecycle threads and emit logarithmically bounded
+  # warnings.
+  queue_capacity: 4096
+
+  # Replace known host/data roots and absolute path-shaped values. Secret and
+  # credential patterns are always redacted regardless of this option.
+  redact_paths: true
+
 forwarding:
   # Player-information forwarding mode. Valid values:
   #   none   - disable Velocity forwarding in managed Paper servers. Suitable

@@ -15,6 +15,9 @@ import net.slimelabs.slslite.instance.metadata.InstanceMetadataStore;
 import net.slimelabs.slslite.instance.model.InstanceMetadata;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
+import net.slimelabs.slslite.io.ConfinedFiles;
+import net.slimelabs.slslite.log.DiagnosticRedactor;
+import net.slimelabs.slslite.log.SLSDetailLog;
 import org.slf4j.Logger;
 
 public final class InstanceReconciler {
@@ -24,15 +27,29 @@ public final class InstanceReconciler {
   private final InstanceDirectoryPreparer directoryPreparer;
   private final InstanceMetadataStore metadataStore;
   private final Logger logger;
+  private final SLSDetailLog detailLog;
+  private final String correlationId;
+  private final DiagnosticRedactor redactor;
 
   public InstanceReconciler(InstanceDirectoryPreparer directoryPreparer, Logger logger) {
+    this(directoryPreparer, logger, SLSDetailLog.disabled(), "startup");
+  }
+
+  public InstanceReconciler(
+      InstanceDirectoryPreparer directoryPreparer,
+      Logger logger,
+      SLSDetailLog detailLog,
+      String correlationId) {
     this.directoryPreparer = directoryPreparer;
     this.metadataStore = new InstanceMetadataStore(directoryPreparer.root());
     this.logger = logger;
+    this.detailLog = java.util.Objects.requireNonNull(detailLog, "detailLog");
+    this.correlationId = java.util.Objects.requireNonNull(correlationId, "correlationId");
+    this.redactor = new DiagnosticRedactor(directoryPreparer.root(), null, true);
   }
 
   public InstanceReconciliationReport reconcile() throws IOException {
-    Files.createDirectories(directoryPreparer.root());
+    ConfinedFiles.ensureDirectory(directoryPreparer.root());
     int recoveredTransactions =
         directoryPreparer.recoverInterruptedReplacements(
             (directory, instanceId) ->
@@ -70,14 +87,15 @@ public final class InstanceReconciler {
       report.preservedUnknown++;
       logger.warn(
           "Preserving instance directory with unreadable metadata {}: {}",
-          directory,
-          exception.getMessage());
+          directory.getFileName(),
+          redactor.redact(exception.getMessage()));
       return;
     }
     if (loaded.isEmpty()) {
       report.preservedUnknown++;
       logger.warn(
-          "Preserving unrecognized instance directory without SLS-LITE metadata: {}", directory);
+          "Preserving unrecognized instance directory without SLS-LITE metadata: {}",
+          directory.getFileName());
       return;
     }
 
@@ -86,7 +104,7 @@ public final class InstanceReconciler {
       report.preservedUnknown++;
       logger.warn(
           "Preserving instance directory {} because metadata identifies it as {}",
-          directory,
+          directory.getFileName(),
           metadata.instanceId());
       return;
     }
@@ -100,8 +118,9 @@ public final class InstanceReconciler {
       } catch (Exception exception) {
         report.failures++;
         logger.error(
-            "Unable to stop orphaned managed process for instance " + metadata.instanceId(),
-            exception);
+            "Unable to stop orphaned managed process for {}: {}",
+            metadata.instanceId(),
+            redactor.redact(exception.getMessage()));
         return;
       }
     } else if (hasAmbiguousLiveProcess(metadata)) {
@@ -116,13 +135,18 @@ public final class InstanceReconciler {
         directoryPreparer.suspend(metadata.instanceId());
         metadataStore.write(directory, metadata.withoutProcess(InstanceState.STOPPED));
         report.preservedPersistent++;
-        logger.info(
+        detailLog.normal(
+            correlationId,
+            "reconciliation",
             "Preserving persistent instance {} from blueprint {}",
             metadata.instanceId(),
             metadata.blueprintId());
       } catch (IOException | InstancePreparationException exception) {
         report.failures++;
-        logger.error("Unable to normalize persistent instance " + metadata.instanceId(), exception);
+        logger.error(
+            "Unable to normalize persistent instance {}: {}",
+            metadata.instanceId(),
+            redactor.redact(exception.getMessage()));
       }
       return;
     }
@@ -138,10 +162,17 @@ public final class InstanceReconciler {
     try {
       directoryPreparer.delete(metadata.instanceId());
       report.removedEphemeral++;
-      logger.info("Removed stale ephemeral instance {}", metadata.instanceId());
+      detailLog.normal(
+          correlationId,
+          "reconciliation",
+          "Removed stale ephemeral instance {}",
+          metadata.instanceId());
     } catch (InstancePreparationException exception) {
       report.failures++;
-      logger.error("Unable to remove stale ephemeral instance " + metadata.instanceId(), exception);
+      logger.error(
+          "Unable to remove stale ephemeral instance {}: {}",
+          metadata.instanceId(),
+          redactor.redact(exception.getMessage()));
     }
   }
 

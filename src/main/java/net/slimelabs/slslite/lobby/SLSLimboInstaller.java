@@ -2,10 +2,9 @@ package net.slimelabs.slslite.lobby;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -13,6 +12,8 @@ import java.util.Map;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ForwardingMode;
 import net.slimelabs.slslite.config.SLSLimboConfig;
+import net.slimelabs.slslite.io.BoundedFileReader;
+import net.slimelabs.slslite.io.ConfinedFiles;
 
 public final class SLSLimboInstaller {
 
@@ -23,6 +24,9 @@ public final class SLSLimboInstaller {
 
   private static final String RESOURCE = "/limbo/nanolimbo-" + NANOLIMBO_VERSION + ".jar";
   private static final String RUNTIME_FILE = "nanolimbo-" + NANOLIMBO_VERSION + ".jar";
+  private static final int MAX_RUNTIME_BYTES = 32 * 1024 * 1024;
+  private static final int MAX_SECRET_BYTES = 64 * 1024;
+  private static final int MAX_SETTINGS_BYTES = 64 * 1024;
 
   private final Path runtimeDirectory;
 
@@ -32,9 +36,11 @@ public final class SLSLimboInstaller {
 
   public SLSLimboInstallation install(int port, ForwardingConfig forwarding, int advertisedProtocol)
       throws IOException {
-    Files.createDirectories(runtimeDirectory);
+    ConfinedFiles.ensureDirectory(runtimeDirectory);
     Path runtime = runtimeDirectory.resolve(RUNTIME_FILE);
-    if (!Files.isRegularFile(runtime) || !RUNTIME_SHA256.equalsIgnoreCase(sha256(runtime))) {
+    if (!Files.isRegularFile(runtime, LinkOption.NOFOLLOW_LINKS)
+        || Files.isSymbolicLink(runtime)
+        || !RUNTIME_SHA256.equalsIgnoreCase(sha256(runtime))) {
       extractRuntime(runtime);
     }
     if (!RUNTIME_SHA256.equalsIgnoreCase(sha256(runtime))) {
@@ -59,38 +65,35 @@ public final class SLSLimboInstaller {
     String forwardingType = forwarding.mode() == ForwardingMode.MODERN ? "MODERN" : "NONE";
     String forwardingSecret = "<UNUSED>";
     if (forwarding.mode() == ForwardingMode.MODERN) {
-      if (!Files.isRegularFile(forwarding.secretFile())) {
+      if (!Files.isRegularFile(forwarding.secretFile(), LinkOption.NOFOLLOW_LINKS)
+          || Files.isSymbolicLink(forwarding.secretFile())) {
         throw new IOException(
             "Velocity forwarding secret does not exist: " + forwarding.secretFile());
       }
-      Files.copy(
-          forwarding.secretFile(),
-          runtimeDirectory.resolve("forwarding.secret"),
-          StandardCopyOption.REPLACE_EXISTING);
+      try (InputStream secret =
+          BoundedFileReader.openNoFollow(forwarding.secretFile(), MAX_SECRET_BYTES)) {
+        ConfinedFiles.atomicCopy(runtimeDirectory, "forwarding.secret", secret, MAX_SECRET_BYTES);
+      }
       forwardingSecret = "@forwarding.secret";
     }
-    Files.writeString(
-        runtimeDirectory.resolve("settings.yml"),
-        settings(port, forwardingType, forwardingSecret, advertisedProtocol));
+    ConfinedFiles.atomicWrite(
+        runtimeDirectory,
+        "settings.yml",
+        settings(port, forwardingType, forwardingSecret, advertisedProtocol)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8),
+        MAX_SETTINGS_BYTES);
     return new SLSLimboInstallation(runtimeDirectory, runtime);
   }
 
   private void extractRuntime(Path destination) throws IOException {
-    Path temporary = runtimeDirectory.resolve(RUNTIME_FILE + ".tmp");
     try (InputStream input = getClass().getResourceAsStream(RESOURCE)) {
       if (input == null) {
         throw new IOException("Bundled SLS-Limbo resource is missing");
       }
-      Files.copy(input, temporary, StandardCopyOption.REPLACE_EXISTING);
-    }
-    try {
-      Files.move(
-          temporary,
-          destination,
-          StandardCopyOption.ATOMIC_MOVE,
-          StandardCopyOption.REPLACE_EXISTING);
-    } catch (AtomicMoveNotSupportedException ignored) {
-      Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
+      if (!destination.equals(runtimeDirectory.resolve(RUNTIME_FILE))) {
+        throw new IOException("SLS-Limbo runtime target changed unexpectedly");
+      }
+      ConfinedFiles.atomicCopy(runtimeDirectory, RUNTIME_FILE, input, MAX_RUNTIME_BYTES);
     }
   }
 
@@ -160,7 +163,7 @@ public final class SLSLimboInstaller {
   private static String sha256(Path path) throws IOException {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      try (InputStream input = Files.newInputStream(path)) {
+      try (InputStream input = BoundedFileReader.openNoFollow(path, MAX_RUNTIME_BYTES)) {
         byte[] buffer = new byte[8192];
         int read;
         while ((read = input.read(buffer)) != -1) {

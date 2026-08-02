@@ -23,6 +23,7 @@ import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityStatus;
 import net.slimelabs.slslite.instance.ServerController;
+import net.slimelabs.slslite.instance.lifecycle.MaintenanceStatus;
 import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 import net.slimelabs.slslite.security.AdministratorStore;
 import org.junit.jupiter.api.BeforeEach;
@@ -163,6 +164,27 @@ final class SLSCommandSurfaceTest {
             expectedRoots.add(
                 entry.substring(0, entry.indexOf(' ') < 0 ? entry.length() : entry.indexOf(' '))));
     assertTrue(suggestions.containsAll(expectedRoots));
+  }
+
+  @Test
+  void maintenanceCommandChangesCreationAdmissionAndReportsStatus() {
+    List<Component> messages = new ArrayList<>();
+    AtomicReference<MaintenanceStatus> status =
+        new AtomicReference<>(MaintenanceStatus.accepting());
+    command = command(maintenanceController(status));
+    CommandSource permitted = source(Set.of("sls.command.maintenance"), messages);
+
+    command.execute(invocation(permitted, "maintenance", "on", "planned", "upgrade"));
+    command.execute(invocation(permitted, "maintenance", "status"));
+    command.execute(invocation(permitted, "maintenance", "off"));
+
+    assertEquals(false, status.get().enabled());
+    assertTrue(plainText(messages.get(0)).contains("planned upgrade"));
+    assertTrue(plainText(messages.get(1)).contains("enabled"));
+    assertTrue(plainText(messages.get(2)).contains("disabled"));
+    assertEquals(
+        List.of("on", "off", "status"),
+        command.suggestAsync(invocation(permitted, "maintenance", "")).join());
   }
 
   @Test
@@ -475,6 +497,27 @@ final class SLSCommandSurfaceTest {
                 default -> defaultValue(method.getReturnType());
               };
             });
+  }
+
+  private static ServerController maintenanceController(
+      AtomicReference<MaintenanceStatus> current) {
+    return (ServerController)
+        Proxy.newProxyInstance(
+            ServerController.class.getClassLoader(),
+            new Class<?>[] {ServerController.class},
+            (ignored, method, arguments) ->
+                switch (method.getName()) {
+                  case "getAll", "persistentInstanceIds" -> List.of();
+                  case "maintenanceStatus" -> current.get();
+                  case "setMaintenance" -> {
+                    MaintenanceStatus next =
+                        new MaintenanceStatus(
+                            (Boolean) arguments[0], java.time.Instant.now(), (String) arguments[1]);
+                    current.set(next);
+                    yield next;
+                  }
+                  default -> defaultValue(method.getReturnType());
+                });
   }
 
   private static String plainText(Component component) {

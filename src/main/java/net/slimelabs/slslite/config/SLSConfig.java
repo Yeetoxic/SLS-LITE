@@ -15,7 +15,39 @@ public record SLSConfig(
     SLSLimboConfig limbo,
     LobbyConfig lobby,
     StorageConfig storage,
+    DetailedLoggingConfig detailedLogging,
     Path instancesDirectory) {
+
+  public SLSConfig(
+      int totalMemoryMiB,
+      int maxManagedProcesses,
+      int portRangeStart,
+      int portRangeEnd,
+      int queueTimeoutSeconds,
+      int idleShutdownSeconds,
+      ManagedOutputConfig managedOutput,
+      ForwardingConfig forwarding,
+      SecurityConfig security,
+      SLSLimboConfig limbo,
+      LobbyConfig lobby,
+      StorageConfig storage,
+      Path instancesDirectory) {
+    this(
+        totalMemoryMiB,
+        maxManagedProcesses,
+        portRangeStart,
+        portRangeEnd,
+        queueTimeoutSeconds,
+        idleShutdownSeconds,
+        managedOutput,
+        forwarding,
+        security,
+        limbo,
+        lobby,
+        storage,
+        DetailedLoggingConfig.defaults(),
+        instancesDirectory);
+  }
 
   public SLSConfig(
       int totalMemoryMiB,
@@ -43,6 +75,7 @@ public record SLSConfig(
         limbo,
         lobby,
         new StorageConfig(StorageStrategy.AUTO),
+        DetailedLoggingConfig.defaults(),
         instancesDirectory);
   }
 
@@ -87,6 +120,9 @@ public record SLSConfig(
     }
     if (storage == null) {
       throw new IllegalArgumentException("storage configuration is required");
+    }
+    if (detailedLogging == null) {
+      throw new IllegalArgumentException("detailed logging configuration is required");
     }
     instancesDirectory = instancesDirectory.toAbsolutePath().normalize();
   }

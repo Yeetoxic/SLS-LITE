@@ -1,15 +1,12 @@
 package net.slimelabs.slslite.instance.metadata;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.util.Optional;
@@ -18,12 +15,13 @@ import net.slimelabs.slslite.instance.model.InstanceDefinitionIdentity;
 import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 import net.slimelabs.slslite.instance.model.InstanceMetadata;
 import net.slimelabs.slslite.instance.model.InstanceState;
+import net.slimelabs.slslite.io.BoundedFileReader;
+import net.slimelabs.slslite.io.ConfinedFiles;
 
 public final class InstanceMetadataStore {
 
   public static final String FILE_NAME = ".sls-lite-instance.properties";
   static final long MAX_METADATA_BYTES = 64 * 1024;
-  private static final String TEMP_FILE_NAME = FILE_NAME + ".tmp";
   private static final String LEGACY_SCHEMA_VERSION = "1";
   private static final String PREVIOUS_SCHEMA_VERSION = "2";
   private static final String DEFINITION_SCHEMA_VERSION = "3";
@@ -51,12 +49,9 @@ public final class InstanceMetadataStore {
     }
 
     byte[] encoded;
-    try (InputStream input = Files.newInputStream(metadataPath)) {
-      encoded = input.readNBytes((int) MAX_METADATA_BYTES + 1);
-    }
-    if (encoded.length > MAX_METADATA_BYTES) {
-      throw new IOException(
-          "Instance metadata exceeds " + MAX_METADATA_BYTES + " bytes: " + metadataPath);
+    try (InputStream input =
+        BoundedFileReader.openNoFollow(metadataPath, Math.toIntExact(MAX_METADATA_BYTES))) {
+      encoded = input.readAllBytes();
     }
     Properties values = new Properties();
     try (InputStream input = new ByteArrayInputStream(encoded)) {
@@ -69,6 +64,9 @@ public final class InstanceMetadataStore {
     Path directory = requireDirectChild(instanceDirectory);
     if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
       throw new IOException("Instance directory does not exist: " + directory);
+    }
+    if (Files.isSymbolicLink(directory)) {
+      throw new IOException("Instance directory must not be a symbolic link: " + directory);
     }
     if (!directory.getFileName().toString().equals(metadata.instanceId())) {
       throw new IOException("Instance metadata ID does not match directory: " + directory);
@@ -95,25 +93,12 @@ public final class InstanceMetadataStore {
       }
     }
 
-    Path temporary = directory.resolve(TEMP_FILE_NAME);
-    Path destination = directory.resolve(FILE_NAME);
-    try (OutputStream output =
-        Files.newOutputStream(
-            temporary,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE)) {
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    try (output) {
       values.store(output, "Managed by SLS-LITE");
     }
-    try {
-      Files.move(
-          temporary,
-          destination,
-          StandardCopyOption.ATOMIC_MOVE,
-          StandardCopyOption.REPLACE_EXISTING);
-    } catch (AtomicMoveNotSupportedException ignored) {
-      Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
-    }
+    ConfinedFiles.atomicWrite(
+        directory, FILE_NAME, output.toByteArray(), Math.toIntExact(MAX_METADATA_BYTES));
   }
 
   private Path requireDirectChild(Path instanceDirectory) throws IOException {

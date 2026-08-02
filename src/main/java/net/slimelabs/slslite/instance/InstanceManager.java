@@ -30,9 +30,12 @@ import net.slimelabs.slslite.install.InstallationKey;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.instance.configuration.InstanceLaunchConfigurator;
 import net.slimelabs.slslite.instance.diagnostics.FailedStartDiagnostics;
+import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.diagnostics.InstanceTimingReporter;
+import net.slimelabs.slslite.instance.lifecycle.InstanceCrashRecovery;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
+import net.slimelabs.slslite.instance.lifecycle.MaintenanceStatus;
 import net.slimelabs.slslite.instance.metadata.InstanceMetadataService;
 import net.slimelabs.slslite.instance.model.InstanceDefinitionIdentity;
 import net.slimelabs.slslite.instance.model.InstanceIdGenerator;
@@ -40,6 +43,8 @@ import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 import net.slimelabs.slslite.instance.model.InstanceMetadata;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
+import net.slimelabs.slslite.log.DiagnosticRedactor;
+import net.slimelabs.slslite.log.SLSDetailLog;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.network.PortAllocationException;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
@@ -68,17 +73,21 @@ public final class InstanceManager implements ServerController {
   private final ProcessSupervisor processSupervisor;
   private final BackendRegistry backendRegistry;
   private final FailedStartDiagnostics failedStartDiagnostics;
+  private final DiagnosticRedactor diagnosticRedactor;
   private final InstanceTimingReporter timingReporter;
   private final Logger logger;
+  private final SLSDetailLog detailLog;
   private final InstanceIdGenerator idGenerator;
   private final ThreadPoolExecutor operationExecutor;
   private final PersistentInstanceOperations persistentOperations;
   private final InstancePreparationPipeline preparationPipeline;
   private final InstanceSoftwareProtectionInventory softwareProtection;
+  private final InstanceCrashRecovery crashRecovery;
   private final ExecutorService finalizationExecutor;
   private final Map<String, ManagedInstance> instances = new java.util.HashMap<>();
 
   private volatile boolean closed;
+  private volatile MaintenanceStatus maintenance = MaintenanceStatus.accepting();
 
   public InstanceManager(
       BlueprintRepository blueprints,
@@ -120,6 +129,36 @@ public final class InstanceManager implements ServerController {
       BackendRegistry backendRegistry,
       SoftwareInstallationService installationService,
       Logger logger) {
+    this(
+        blueprints,
+        softwareProfiles,
+        resourceBudget,
+        outputConfig,
+        forwardingConfig,
+        portAllocator,
+        directoryPreparer,
+        processSpecFactory,
+        processSupervisor,
+        backendRegistry,
+        installationService,
+        SLSDetailLog.disabled(),
+        logger);
+  }
+
+  public InstanceManager(
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository softwareProfiles,
+      ResourceBudget resourceBudget,
+      ManagedOutputConfig outputConfig,
+      ForwardingConfig forwardingConfig,
+      LoopbackPortAllocator portAllocator,
+      InstanceDirectoryPreparer directoryPreparer,
+      JavaJarProcessSpecFactory processSpecFactory,
+      ProcessSupervisor processSupervisor,
+      BackendRegistry backendRegistry,
+      SoftwareInstallationService installationService,
+      SLSDetailLog detailLog,
+      Logger logger) {
     this.blueprints = blueprints;
     this.softwareProfiles = softwareProfiles;
     this.resourceBudget = resourceBudget;
@@ -132,11 +171,17 @@ public final class InstanceManager implements ServerController {
     this.launchConfigurator = new InstanceLaunchConfigurator(forwardingConfig, processSpecFactory);
     this.processSupervisor = processSupervisor;
     this.backendRegistry = backendRegistry;
+    this.diagnosticRedactor =
+        new DiagnosticRedactor(
+            processSpecFactory.dataDirectory(), forwardingConfig.secretFile().getParent(), true);
     this.failedStartDiagnostics =
         new FailedStartDiagnostics(
-            directoryPreparer.root().resolveSibling("diagnostics").resolve("failed-starts"));
+            processSpecFactory.dataDirectory(),
+            processSpecFactory.dataDirectory().resolve("diagnostics").resolve("failed-starts"),
+            diagnosticRedactor);
     this.logger = logger;
-    this.timingReporter = new InstanceTimingReporter(logger);
+    this.detailLog = java.util.Objects.requireNonNull(detailLog, "detailLog");
+    this.timingReporter = new InstanceTimingReporter(logger, detailLog);
     this.idGenerator = new InstanceIdGenerator();
     this.operationExecutor =
         new ThreadPoolExecutor(
@@ -160,8 +205,10 @@ public final class InstanceManager implements ServerController {
             launchConfigurator,
             processSupervisor,
             timingReporter,
-            logger);
+            logger,
+            detailLog);
     this.softwareProtection = new InstanceSoftwareProtectionInventory(metadata, blueprints);
+    this.crashRecovery = new InstanceCrashRecovery(this::startPersistentForRecovery, logger);
     this.finalizationExecutor =
         Executors.newFixedThreadPool(2, threadFactory("sls-lite-instance-finalization-"));
   }
@@ -192,6 +239,9 @@ public final class InstanceManager implements ServerController {
       if (closed) {
         throw new InstanceOperationException("Instance manager is shutting down");
       }
+      if (maintenance.enabled()) {
+        throw new InstanceOperationException(maintenanceMessage(maintenance));
+      }
       enforceInstanceLimit(blueprint, null);
       instanceId = uniqueInstanceId(blueprint.id());
       if (!resourceBudget.tryReserve(instanceId, blueprint.memoryLimitMiB())) {
@@ -220,7 +270,8 @@ public final class InstanceManager implements ServerController {
               Instant.now());
       instances.put(instanceId, instance);
       logger.info(
-          "Instance start accepted: {} from {}/{} ({} {}, {} MiB, port {})",
+          "Instance start accepted [{}]: {} from {}/{} ({} {}, {} MiB, port {})",
+          instance.correlationId(),
           instanceId,
           blueprint.type(),
           blueprint.id(),
@@ -245,6 +296,34 @@ public final class InstanceManager implements ServerController {
   @Override
   public synchronized Collection<ManagedInstance> getAll() {
     return instances.values().stream().sorted(Comparator.comparing(ManagedInstance::id)).toList();
+  }
+
+  @Override
+  public MaintenanceStatus maintenanceStatus() {
+    return maintenance;
+  }
+
+  @Override
+  public synchronized MaintenanceStatus setMaintenance(boolean enabled, String reason)
+      throws InstanceOperationException {
+    if (closed) {
+      throw new InstanceOperationException("Instance manager is shutting down");
+    }
+    MaintenanceStatus current = maintenance;
+    String normalized = reason == null ? "" : reason.strip();
+    if (current.enabled() == enabled && current.reason().equals(normalized)) {
+      return current;
+    }
+    try {
+      maintenance = new MaintenanceStatus(enabled, Instant.now(), normalized);
+    } catch (IllegalArgumentException exception) {
+      throw new InstanceOperationException(exception.getMessage(), exception);
+    }
+    logger.info(
+        "Instance creation admission changed: {}{}",
+        enabled ? "maintenance/draining" : "accepting",
+        normalized.isBlank() ? "" : " (" + normalized + ")");
+    return maintenance;
   }
 
   @Override
@@ -296,10 +375,11 @@ public final class InstanceManager implements ServerController {
   public CompletableFuture<Integer> stop(String instanceId) throws InstanceOperationException {
     ManagedInstance instance = get(instanceId);
     synchronized (instance) {
+      instance.requestStop();
+      crashRecovery.cancelRecovery(instanceId);
       instance.timings().begin(InstancePhaseTimings.Phase.SHUTDOWN);
       logger.info("Instance stop requested: {} (state {})", instanceId, instance.state());
       if (instance.state() == InstanceState.PREPARING) {
-        instance.requestStop();
         instance.lifecycle().transitionTo(InstanceState.STOPPING);
         metadata.writeBestEffort(instance, InstanceState.STOPPING, null);
         instance
@@ -318,7 +398,6 @@ public final class InstanceManager implements ServerController {
       unregister(instance);
       try {
         if (instance.state() == InstanceState.STARTING) {
-          instance.requestStop();
           metadata.writeBestEffort(instance, InstanceState.STOPPING, process);
           instance
               .readyFuture()
@@ -346,11 +425,12 @@ public final class InstanceManager implements ServerController {
       throws InstanceOperationException {
     ManagedInstance instance = get(instanceId);
     synchronized (instance) {
+      instance.requestStop();
+      crashRecovery.cancelRecovery(instanceId);
       instance.timings().begin(InstancePhaseTimings.Phase.SHUTDOWN);
       logger.warn(
           "Instance force termination requested: {} (state {})", instanceId, instance.state());
       if (instance.state() == InstanceState.PREPARING) {
-        instance.requestStop();
         instance.lifecycle().transitionTo(InstanceState.STOPPING);
         metadata.writeBestEffort(instance, InstanceState.STOPPING, null);
         instance
@@ -366,7 +446,6 @@ public final class InstanceManager implements ServerController {
       }
       try {
         if (instance.state() == InstanceState.STARTING) {
-          instance.requestStop();
           instance
               .readyFuture()
               .completeExceptionally(
@@ -414,6 +493,8 @@ public final class InstanceManager implements ServerController {
       closed = true;
       snapshot = List.copyOf(instances.values());
     }
+
+    crashRecovery.close(remaining(deadline));
 
     snapshot.forEach(instance -> instance.timings().begin(InstancePhaseTimings.Phase.SHUTDOWN));
     for (ManagedInstance instance : snapshot) {
@@ -484,6 +565,7 @@ public final class InstanceManager implements ServerController {
 
   private void finalizeExitedInstance(
       ManagedInstance instance, InstancePhaseTimings timings, Integer exitCode, Throwable failure) {
+    boolean unexpected = !closed && !instance.stopRequested();
     boolean failedBeforeReadiness = instance.state() == InstanceState.FAILED;
     if (failure == null) {
       logger.info(
@@ -496,7 +578,7 @@ public final class InstanceManager implements ServerController {
           "Instance process failed: {} (state {}): {}",
           instance.id(),
           instance.state(),
-          rootMessage(failure));
+          safeRootMessage(failure));
     }
     if (failedBeforeReadiness) {
       Throwable diagnosticFailure =
@@ -504,10 +586,11 @@ public final class InstanceManager implements ServerController {
               ? new ProcessStartException(
                   "Managed process exited with code " + exitCode + " before readiness")
               : failure;
-      recordFailedStart(instance, "process-exit", diagnosticFailure);
+      recordFailedStart(instance, FailurePhase.STARTUP, diagnosticFailure);
     }
     timings.finish(InstancePhaseTimings.Phase.SHUTDOWN);
     cleanup(instance);
+    crashRecovery.exited(instance, unexpected);
     if (failure == null) {
       instance.stoppedFuture().complete(exitCode);
     } else {
@@ -521,7 +604,8 @@ public final class InstanceManager implements ServerController {
     synchronized (instance) {
       if (instance.state() != InstanceState.READY || !isActive(instance)) {
         timings.finish(InstancePhaseTimings.Phase.REGISTRATION);
-        timingReporter.logProvisioning(instance.id(), instance.timings(), "registration-cancelled");
+        timingReporter.logProvisioning(
+            instance.correlationId(), instance.id(), instance.timings(), "registration-cancelled");
         instance
             .readyFuture()
             .completeExceptionally(
@@ -537,18 +621,25 @@ public final class InstanceManager implements ServerController {
         instance.registered(true);
         timings.finish(InstancePhaseTimings.Phase.REGISTRATION);
         timings.provisioned();
-        timingReporter.logProvisioning(instance.id(), instance.timings(), "ready");
+        timingReporter.logProvisioning(
+            instance.correlationId(), instance.id(), instance.timings(), "ready");
         instance.readyFuture().complete(instance);
-        logger.info("Instance {} is ready on loopback port {}", instance.id(), instance.port());
+        crashRecovery.ready(instance);
+        logger.info(
+            "Instance ready [{}]: {} on loopback port {}",
+            instance.correlationId(),
+            instance.id(),
+            instance.port());
       } catch (InstancePreparationException | RuntimeException exception) {
         timings.finish(InstancePhaseTimings.Phase.REGISTRATION);
-        timingReporter.logProvisioning(instance.id(), instance.timings(), "registration-failed");
+        timingReporter.logProvisioning(
+            instance.correlationId(), instance.id(), instance.timings(), "registration-failed");
         instance.readyFuture().completeExceptionally(exception);
-        recordFailedStart(instance, "registration", exception);
+        recordFailedStart(instance, FailurePhase.REGISTRATION, exception);
         logger.warn(
             "Instance registration failed: {}: {}. Last output: {}",
             instance.id(),
-            rootMessage(exception),
+            safeRootMessage(exception),
             lastOutput(instance));
         SupervisedProcess process = instance.process();
         if (process != null) {
@@ -559,7 +650,7 @@ public final class InstanceManager implements ServerController {
     }
   }
 
-  void failPreparation(ManagedInstance instance, Exception exception) {
+  void failPreparation(ManagedInstance instance, FailurePhase phase, Exception exception) {
     SupervisedProcess process;
     synchronized (instance) {
       if (instance.state() == InstanceState.STOPPING && instance.stopRequested()) {
@@ -572,15 +663,28 @@ public final class InstanceManager implements ServerController {
       instance.readyFuture().completeExceptionally(exception);
       process = instance.process();
     }
-    recordFailedStart(instance, "preparation", exception);
-    timingReporter.logProvisioning(instance.id(), instance.timings(), "preparation-failed");
-    logger.error("Unable to start managed instance " + instance.id(), exception);
+    recordFailedStart(instance, phase, exception);
+    timingReporter.logProvisioning(
+        instance.correlationId(), instance.id(), instance.timings(), "preparation-failed");
+    logger.error(
+        "Unable to start managed instance {} during {}: {}",
+        instance.id(),
+        phase.id(),
+        safeRootMessage(exception));
+    detailLog.normal(
+        instance.correlationId(),
+        "failure",
+        "phase={} instance={} failure={}",
+        phase.id(),
+        instance.id(),
+        safeRootMessage(exception));
     if (process != null) {
       instance.timings().begin(InstancePhaseTimings.Phase.SHUTDOWN);
       process.forceStop();
       return;
     }
     cleanup(instance);
+    crashRecovery.exited(instance, true);
   }
 
   void finishCancelledPreparation(ManagedInstance instance) {
@@ -588,7 +692,8 @@ public final class InstanceManager implements ServerController {
       instance.lifecycle().transitionTo(InstanceState.STOPPED);
     }
     instance.timings().finish(InstancePhaseTimings.Phase.SHUTDOWN);
-    timingReporter.logProvisioning(instance.id(), instance.timings(), "cancelled");
+    timingReporter.logProvisioning(
+        instance.correlationId(), instance.id(), instance.timings(), "cancelled");
     cleanup(instance);
     instance.stoppedFuture().complete(0);
     logger.info("Cancelled instance startup for {}", instance.id());
@@ -612,20 +717,39 @@ public final class InstanceManager implements ServerController {
                   logger.warn(
                       "Unable to close temporary console log for {}: {}",
                       instance.id(),
-                      failure.getMessage()));
+                      diagnosticRedactor.redact(failure.getMessage())));
       portAllocator.release(instance.port());
       resourceBudget.release(instance.id());
       try {
         directoryPreparer.suspend(instance.id());
       } catch (InstancePreparationException exception) {
-        logger.error("Unable to suspend instance storage " + instance.directory(), exception);
+        logger.error(
+            "Unable to suspend storage for {} during cleanup: {}",
+            instance.id(),
+            safeRootMessage(exception));
+        detailLog.normal(
+            instance.correlationId(),
+            "failure",
+            "phase={} instance={} operation=suspend failure={}",
+            FailurePhase.CLEANUP.id(),
+            instance.id(),
+            safeRootMessage(exception));
       }
       if (!instance.blueprint().save()) {
         try {
           directoryPreparer.delete(instance.id());
         } catch (InstancePreparationException exception) {
           logger.error(
-              "Unable to delete ephemeral instance directory " + instance.directory(), exception);
+              "Unable to delete ephemeral instance {} during cleanup: {}",
+              instance.id(),
+              safeRootMessage(exception));
+          detailLog.normal(
+              instance.correlationId(),
+              "failure",
+              "phase={} instance={} operation=delete failure={}",
+              FailurePhase.CLEANUP.id(),
+              instance.id(),
+              safeRootMessage(exception));
         }
       } else {
         metadata.writeBestEffort(instance, instance.state(), null);
@@ -640,8 +764,10 @@ public final class InstanceManager implements ServerController {
         instances.remove(instance.id(), instance);
       }
       timings.finish(InstancePhaseTimings.Phase.CLEANUP);
-      timingReporter.logProvisioning(instance.id(), instance.timings(), instance.state().name());
-      timingReporter.logTermination(instance.id(), instance.timings(), instance.state().name());
+      timingReporter.logProvisioning(
+          instance.correlationId(), instance.id(), instance.timings(), instance.state().name());
+      timingReporter.logTermination(
+          instance.correlationId(), instance.id(), instance.timings(), instance.state().name());
     }
   }
 
@@ -661,18 +787,19 @@ public final class InstanceManager implements ServerController {
     return lines.isEmpty() ? "no managed process output" : String.join(" | ", lines);
   }
 
-  void recordFailedStart(ManagedInstance instance, String phase, Throwable failure) {
+  void recordFailedStart(ManagedInstance instance, FailurePhase phase, Throwable failure) {
     if (!instance.markFailedStartDiagnosticsRecorded()) {
       return;
     }
     try {
       Path report = failedStartDiagnostics.record(instance, phase, failure);
-      logger.warn("Retained failed-start diagnostics for {} at {}", instance.id(), report);
+      logger.warn(
+          "Retained failed-start diagnostics for {} as {}", instance.id(), report.getFileName());
     } catch (IOException exception) {
       logger.warn(
           "Unable to retain failed-start diagnostics for {}: {}",
           instance.id(),
-          exception.getMessage());
+          diagnosticRedactor.redact(exception.getMessage()));
     }
   }
 
@@ -689,7 +816,21 @@ public final class InstanceManager implements ServerController {
     return cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
   }
 
+  private String safeRootMessage(Throwable throwable) {
+    return diagnosticRedactor.redact(rootMessage(throwable));
+  }
+
   ManagedInstance startPersistent(String instanceId) throws InstanceOperationException {
+    return startPersistent(instanceId, true);
+  }
+
+  private ManagedInstance startPersistentForRecovery(String instanceId)
+      throws InstanceOperationException {
+    return startPersistent(instanceId, false);
+  }
+
+  private ManagedInstance startPersistent(String instanceId, boolean allowPendingOperation)
+      throws InstanceOperationException {
     InstanceMetadata metadata = this.metadata.readPersistent(instanceId);
     ResolvedDefinition definition =
         resolveDefinition(
@@ -713,6 +854,10 @@ public final class InstanceManager implements ServerController {
       }
       if (instances.containsKey(instanceId)) {
         throw new InstanceOperationException("Instance is already active: " + instanceId);
+      }
+      if (!allowPendingOperation && persistentOperations.hasPendingOperation(instanceId)) {
+        throw new InstanceOperationException(
+            "Instance has an administrative lifecycle operation in progress: " + instanceId);
       }
       enforceInstanceLimit(blueprint, instanceId);
       if (!resourceBudget.tryReserve(instanceId, blueprint.memoryLimitMiB())) {
@@ -862,5 +1007,12 @@ public final class InstanceManager implements ServerController {
       throw new InstanceOperationException("Console command exceeds the 4096 character limit");
     }
     return normalized;
+  }
+
+  private static String maintenanceMessage(MaintenanceStatus status) {
+    return status.reason().isBlank()
+        ? "New instance creation is disabled while SLS-LITE is in maintenance mode"
+        : "New instance creation is disabled while SLS-LITE is in maintenance mode: "
+            + status.reason();
   }
 }

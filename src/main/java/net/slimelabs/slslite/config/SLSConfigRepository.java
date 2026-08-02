@@ -7,6 +7,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Map;
 import net.slimelabs.slslite.io.BoundedFileReader;
+import net.slimelabs.slslite.io.ConfinedFiles;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
@@ -24,6 +25,12 @@ public final class SLSConfigRepository {
   private static final boolean DEFAULT_MIRROR_MANAGED_OUTPUT = false;
   private static final boolean DEFAULT_WRITE_TEMPORARY_LOG = true;
   private static final int DEFAULT_TEMPORARY_LOG_MAX_KIB = 4096;
+  private static final String DEFAULT_DETAIL_LOG_LEVEL = "detailed";
+  private static final boolean DEFAULT_DETAIL_CONSOLE_MIRROR = false;
+  private static final int DEFAULT_DETAIL_LOG_MAX_KIB = 8192;
+  private static final int DEFAULT_DETAIL_LOG_RETAINED_FILES = 5;
+  private static final int DEFAULT_DETAIL_LOG_QUEUE_CAPACITY = 4096;
+  private static final boolean DEFAULT_DETAIL_LOG_REDACT_PATHS = true;
   private static final String DEFAULT_FORWARDING_MODE = "none";
   private static final boolean DEFAULT_FORWARDING_ONLINE_MODE = true;
   private static final String DEFAULT_FORWARDING_SECRET_FILE = "forwarding.secret";
@@ -64,10 +71,10 @@ public final class SLSConfigRepository {
   }
 
   public void initialize() throws IOException, ConfigurationException {
-    Files.createDirectories(dataDirectory);
+    ConfinedFiles.ensureDirectory(dataDirectory);
     installDefaultWhenMissing();
     reload();
-    Files.createDirectories(get().instancesDirectory());
+    ConfinedFiles.ensureDirectory(get().instancesDirectory());
   }
 
   public synchronized void reload() throws ConfigurationException {
@@ -85,9 +92,12 @@ public final class SLSConfigRepository {
   private SLSConfig read() throws ConfigurationException {
     LoaderOptions options = new LoaderOptions();
     options.setAllowDuplicateKeys(false);
+    options.setCodePointLimit(MAX_CONFIG_BYTES);
+    options.setMaxAliasesForCollections(50);
+    options.setNestingDepthLimit(50);
     Yaml yaml = new Yaml(new SafeConstructor(options));
 
-    try (InputStream input = BoundedFileReader.open(configPath, MAX_CONFIG_BYTES)) {
+    try (InputStream input = BoundedFileReader.openNoFollow(configPath, MAX_CONFIG_BYTES)) {
       Map<String, Object> root = YamlValues.asMap(yaml.load(input), "root", configPath);
       Map<String, Object> resources = YamlValues.optionalMap(root, "resources", configPath);
       Map<String, Object> network = YamlValues.optionalMap(root, "network", configPath);
@@ -96,6 +106,8 @@ public final class SLSConfigRepository {
       Map<String, Object> lifecycle = YamlValues.optionalMap(root, "lifecycle", configPath);
       Map<String, Object> managedOutput =
           YamlValues.optionalMap(root, "managed_output", configPath);
+      Map<String, Object> detailedLogging =
+          YamlValues.optionalMap(root, "detailed_logging", configPath);
       Map<String, Object> forwarding = YamlValues.optionalMap(root, "forwarding", configPath);
       Map<String, Object> security = YamlValues.optionalMap(root, "security", configPath);
       Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
@@ -127,6 +139,7 @@ public final class SLSConfigRepository {
           "matchmaking",
           "lifecycle",
           "managed_output",
+          "detailed_logging",
           "forwarding",
           "security",
           "lobby",
@@ -145,6 +158,16 @@ public final class SLSConfigRepository {
           "mirror_to_proxy_console",
           "write_temporary_file",
           "temporary_file_max_kib");
+      YamlValues.requireOnlyKeys(
+          detailedLogging,
+          "detailed_logging",
+          configPath,
+          "level",
+          "mirror_to_proxy_console",
+          "max_file_kib",
+          "retained_files",
+          "queue_capacity",
+          "redact_paths");
       YamlValues.requireOnlyKeys(
           forwarding, "forwarding", configPath, "mode", "online_mode", "secret_file");
       YamlValues.requireOnlyKeys(
@@ -218,6 +241,26 @@ public final class SLSConfigRepository {
       int temporaryLogMaxKiB =
           YamlValues.optionalPositiveInt(
               managedOutput, "temporary_file_max_kib", DEFAULT_TEMPORARY_LOG_MAX_KIB, configPath);
+      String detailLogLevel =
+          YamlValues.optionalString(detailedLogging, "level", DEFAULT_DETAIL_LOG_LEVEL, configPath);
+      boolean detailConsoleMirror =
+          YamlValues.optionalBoolean(
+              detailedLogging,
+              "mirror_to_proxy_console",
+              DEFAULT_DETAIL_CONSOLE_MIRROR,
+              configPath);
+      int detailLogMaxKiB =
+          YamlValues.optionalPositiveInt(
+              detailedLogging, "max_file_kib", DEFAULT_DETAIL_LOG_MAX_KIB, configPath);
+      int detailLogRetainedFiles =
+          YamlValues.optionalPositiveInt(
+              detailedLogging, "retained_files", DEFAULT_DETAIL_LOG_RETAINED_FILES, configPath);
+      int detailLogQueueCapacity =
+          YamlValues.optionalPositiveInt(
+              detailedLogging, "queue_capacity", DEFAULT_DETAIL_LOG_QUEUE_CAPACITY, configPath);
+      boolean detailLogRedactPaths =
+          YamlValues.optionalBoolean(
+              detailedLogging, "redact_paths", DEFAULT_DETAIL_LOG_REDACT_PATHS, configPath);
       String forwardingMode =
           YamlValues.optionalString(forwarding, "mode", DEFAULT_FORWARDING_MODE, configPath);
       boolean forwardingOnlineMode =
@@ -342,6 +385,13 @@ public final class SLSConfigRepository {
                     : resolveManagedPath(
                         snapshotHookExecutable, "storage.snapshot_hook.executable"),
                 snapshotHookTimeoutSeconds),
+            new DetailedLoggingConfig(
+                DetailLogLevel.parse(detailLogLevel),
+                detailConsoleMirror,
+                detailLogMaxKiB,
+                detailLogRetainedFiles,
+                detailLogQueueCapacity,
+                detailLogRedactPaths),
             instancesDirectory);
       } catch (IllegalArgumentException exception) {
         throw YamlValues.error(configPath, exception.getMessage());
@@ -385,7 +435,9 @@ public final class SLSConfigRepository {
   }
 
   private void installDefaultWhenMissing() throws IOException {
-    if (Files.exists(configPath)) {
+    ConfinedFiles.ensureDirectory(dataDirectory);
+    if (Files.exists(configPath, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+      ConfinedFiles.requireRegularFile(configPath);
       return;
     }
 
@@ -394,7 +446,7 @@ public final class SLSConfigRepository {
       if (source == null) {
         throw new IOException("Bundled host default is missing: " + DEFAULT_CONFIG_RESOURCE);
       }
-      Files.copy(source, configPath);
+      ConfinedFiles.atomicCopy(dataDirectory, "config.yml", source, MAX_CONFIG_BYTES);
     }
   }
 }

@@ -26,7 +26,9 @@ class FailedStartDiagnosticsTest {
     ManagedInstanceTestFactory.appendLog(instance, "first");
     ManagedInstanceTestFactory.appendLog(instance, "last");
 
-    Path report = diagnostics.record(instance, "readiness", new IllegalStateException("not ready"));
+    Path report =
+        diagnostics.record(
+            instance, FailurePhase.READINESS, new IllegalStateException("not ready"));
     String content = Files.readString(report);
 
     assertTrue(content.contains("instance=game.abc123"));
@@ -45,7 +47,7 @@ class FailedStartDiagnosticsTest {
     for (int index = 0; index <= FailedStartDiagnostics.MAX_REPORTS; index++) {
       diagnostics.record(
           instance("game." + String.format("%06d", index)),
-          "preparation",
+          FailurePhase.PREPARATION,
           new IllegalStateException("failure " + index));
       Thread.sleep(2);
     }
@@ -57,6 +59,53 @@ class FailedStartDiagnosticsTest {
       assertFalse(
           retained.stream()
               .anyMatch(path -> path.getFileName().toString().startsWith("game.000000-")));
+    }
+  }
+
+  @Test
+  void redactsSecretsAndPathsAndLeavesNoTemporaryFile() throws Exception {
+    Path root = temporaryDirectory.resolve("failed-starts");
+    FailedStartDiagnostics diagnostics = new FailedStartDiagnostics(root);
+    ManagedInstance instance = instance("game.abc123");
+    ManagedInstanceTestFactory.appendLog(
+        instance,
+        "token=sls_live_do_not_retain path=" + temporaryDirectory.resolve("private/file"));
+
+    Path report =
+        diagnostics.record(
+            instance,
+            FailurePhase.CONFIGURATION,
+            new IllegalStateException("password=visible " + temporaryDirectory.resolve("secret")));
+    String content = Files.readString(report);
+
+    assertFalse(content.contains("do_not_retain"));
+    assertFalse(content.contains("password=visible"));
+    assertFalse(content.contains(temporaryDirectory.toString()));
+    try (var files = Files.list(root)) {
+      assertFalse(files.anyMatch(path -> path.getFileName().toString().endsWith(".tmp")));
+    }
+  }
+
+  @Test
+  void refusesSymlinkedDiagnosticsDirectoryWithoutWritingOutside() throws Exception {
+    Path outside = Files.createDirectories(temporaryDirectory.resolve("outside"));
+    Path root = temporaryDirectory.resolve("failed-starts");
+    try {
+      Files.createSymbolicLink(root, outside);
+    } catch (UnsupportedOperationException | java.io.IOException exception) {
+      return;
+    }
+
+    FailedStartDiagnostics diagnostics = new FailedStartDiagnostics(root);
+    org.junit.jupiter.api.Assertions.assertThrows(
+        java.io.IOException.class,
+        () ->
+            diagnostics.record(
+                instance("game.abc123"),
+                FailurePhase.STARTUP,
+                new IllegalStateException("failed")));
+    try (var files = Files.list(outside)) {
+      assertEquals(0, files.count());
     }
   }
 

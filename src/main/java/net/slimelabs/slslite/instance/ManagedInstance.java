@@ -18,6 +18,7 @@ import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
 import net.slimelabs.slslite.instance.model.InstanceDefinitionIdentity;
 import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 import net.slimelabs.slslite.instance.model.InstanceState;
+import net.slimelabs.slslite.log.CorrelationIds;
 import net.slimelabs.slslite.process.SupervisedProcess;
 
 public final class ManagedInstance {
@@ -34,6 +35,7 @@ public final class ManagedInstance {
   private final CompletableFuture<Integer> stopped = new CompletableFuture<>();
   private final InstanceOutput output;
   private final InstancePhaseTimings timings = new InstancePhaseTimings();
+  private final String correlationId = CorrelationIds.next("instance");
 
   private volatile SupervisedProcess process;
   private volatile boolean registered;
@@ -125,6 +127,10 @@ public final class ManagedInstance {
 
   public Instant createdAt() {
     return createdAt;
+  }
+
+  public String correlationId() {
+    return correlationId;
   }
 
   public CompletableFuture<ManagedInstance> readyFuture() {

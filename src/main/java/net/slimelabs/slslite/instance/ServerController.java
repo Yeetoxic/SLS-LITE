@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.slimelabs.slslite.install.InstallationKey;
+import net.slimelabs.slslite.instance.lifecycle.MaintenanceStatus;
 import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
 
 public interface ServerController {
@@ -20,6 +21,15 @@ public interface ServerController {
   }
 
   Collection<ManagedInstance> getAll();
+
+  default MaintenanceStatus maintenanceStatus() {
+    return MaintenanceStatus.accepting();
+  }
+
+  default MaintenanceStatus setMaintenance(boolean enabled, String reason)
+      throws InstanceOperationException {
+    throw new InstanceOperationException("Maintenance mode is unavailable");
+  }
 
   ManagedInstance get(String instanceId) throws InstanceOperationException;
 

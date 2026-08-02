@@ -65,6 +65,12 @@ class SLSConfigRepositoryTest {
     assertEquals(60, config.lobby().maxBackoffSeconds());
     assertEquals(120, config.lobby().stableAfterSeconds());
     assertEquals(StorageStrategy.AUTO, config.storage().strategy());
+    assertEquals(DetailLogLevel.DETAILED, config.detailedLogging().level());
+    assertEquals(false, config.detailedLogging().mirrorToProxyConsole());
+    assertEquals(8192, config.detailedLogging().maxFileKiB());
+    assertEquals(5, config.detailedLogging().retainedFiles());
+    assertEquals(4096, config.detailedLogging().queueCapacity());
+    assertEquals(true, config.detailedLogging().redactPaths());
     assertEquals(
         temporaryDirectory.resolve("instances").toAbsolutePath().normalize(),
         config.instancesDirectory());
@@ -171,6 +177,36 @@ class SLSConfigRepositoryTest {
     repository.reload();
 
     assertEquals(StorageStrategy.FUSE_OVERLAY, repository.get().storage().strategy());
+  }
+
+  @Test
+  void loadsDetailedLoggingPolicyAndRejectsUnboundedRetention() throws Exception {
+    writeConfig(
+        """
+                detailed_logging:
+                  level: normal
+                  mirror_to_proxy_console: true
+                  max_file_kib: 128
+                  retained_files: 3
+                  queue_capacity: 256
+                  redact_paths: false
+                """);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+    repository.reload();
+
+    assertEquals(DetailLogLevel.NORMAL, repository.get().detailedLogging().level());
+    assertEquals(true, repository.get().detailedLogging().mirrorToProxyConsole());
+    assertEquals(128, repository.get().detailedLogging().maxFileKiB());
+    assertEquals(3, repository.get().detailedLogging().retainedFiles());
+    assertEquals(256, repository.get().detailedLogging().queueCapacity());
+    assertEquals(false, repository.get().detailedLogging().redactPaths());
+
+    writeConfig(
+        """
+                detailed_logging:
+                  retained_files: 33
+                """);
+    assertThrows(ConfigurationException.class, repository::reload);
   }
 
   @Test

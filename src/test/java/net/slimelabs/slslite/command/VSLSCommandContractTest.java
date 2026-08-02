@@ -69,6 +69,7 @@ final class VSLSCommandContractTest {
             "install.logs",
             "install.warmup",
             "install.cleanup",
+            "maintenance",
             "admin.claim",
             "admin.code",
             "admin.add",

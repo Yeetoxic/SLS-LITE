@@ -5,11 +5,13 @@ import java.nio.file.Path;
 import java.util.concurrent.CancellationException;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.instance.configuration.InstanceLaunchConfigurator;
+import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.diagnostics.InstanceTimingReporter;
 import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
 import net.slimelabs.slslite.instance.metadata.InstanceMetadataService;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
+import net.slimelabs.slslite.log.SLSDetailLog;
 import net.slimelabs.slslite.process.ProcessSpec;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.process.SupervisedProcess;
@@ -27,6 +29,7 @@ final class InstancePreparationPipeline {
   private final ProcessSupervisor processSupervisor;
   private final InstanceTimingReporter timingReporter;
   private final Logger logger;
+  private final SLSDetailLog detailLog;
 
   InstancePreparationPipeline(
       InstanceManager manager,
@@ -38,6 +41,30 @@ final class InstancePreparationPipeline {
       ProcessSupervisor processSupervisor,
       InstanceTimingReporter timingReporter,
       Logger logger) {
+    this(
+        manager,
+        softwareDirectories,
+        directories,
+        outputConfig,
+        metadata,
+        launchConfigurator,
+        processSupervisor,
+        timingReporter,
+        logger,
+        SLSDetailLog.disabled());
+  }
+
+  InstancePreparationPipeline(
+      InstanceManager manager,
+      SoftwareBaseDirectoryResolver softwareDirectories,
+      InstanceDirectoryPreparer directories,
+      ManagedOutputConfig outputConfig,
+      InstanceMetadataService metadata,
+      InstanceLaunchConfigurator launchConfigurator,
+      ProcessSupervisor processSupervisor,
+      InstanceTimingReporter timingReporter,
+      Logger logger,
+      SLSDetailLog detailLog) {
     this.manager = manager;
     this.softwareDirectories = softwareDirectories;
     this.directories = directories;
@@ -47,14 +74,18 @@ final class InstancePreparationPipeline {
     this.processSupervisor = processSupervisor;
     this.timingReporter = timingReporter;
     this.logger = logger;
+    this.detailLog = java.util.Objects.requireNonNull(detailLog, "detailLog");
   }
 
   void run(ManagedInstance instance, SoftwareProfile profile, boolean reuseDirectory) {
     InstancePhaseTimings timings = instance.timings();
+    FailurePhase failurePhase = FailurePhase.INSTALLATION;
     timings.finish(InstancePhaseTimings.Phase.DISPATCH_QUEUE);
     instance.preparationStarted();
     try {
-      logger.info(
+      detailLog.detailed(
+          instance.correlationId(),
+          "preparation",
           "Preparing instance {} with {} volume(s) and {} copy entry(s)",
           instance.id(),
           instance.blueprint().volumes().size(),
@@ -67,15 +98,20 @@ final class InstancePreparationPipeline {
               instance.blueprint().softwarePath(),
               instance::stopRequested);
       timings.finish(InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION);
-      logger.info(
+      detailLog.detailed(
+          instance.correlationId(),
+          "preparation",
           "Instance software ready: {} ({} {})",
           instance.id(),
           profile.id(),
           instance.blueprint().version());
       timings.begin(InstancePhaseTimings.Phase.FILE_PREPARATION);
+      failurePhase = FailurePhase.PREPARATION;
       Path prepared = prepareFiles(instance, baseDirectory, reuseDirectory);
       timings.finish(InstancePhaseTimings.Phase.FILE_PREPARATION);
-      logger.info(
+      detailLog.detailed(
+          instance.correlationId(),
+          "preparation",
           "Instance files ready: {} ({} volume(s), {} copy entry(s))",
           instance.id(),
           instance.blueprint().volumes().size(),
@@ -84,12 +120,14 @@ final class InstancePreparationPipeline {
         throw new InstanceOperationException("Prepared instance path changed unexpectedly");
       }
       timings.begin(InstancePhaseTimings.Phase.CONFIGURATION);
+      failurePhase = FailurePhase.CONFIGURATION;
       instance.configureOutput(outputConfig);
       metadata.write(instance, InstanceState.PREPARING, null);
       ProcessSpec spec =
           launchConfigurator.configure(
               profile, instance.blueprint(), instance.id(), prepared, instance.port());
       timings.finish(InstancePhaseTimings.Phase.CONFIGURATION);
+      failurePhase = FailurePhase.STARTUP;
       SupervisedProcess process = startProcess(instance, profile, spec, timings);
       if (process == null) {
         return;
@@ -102,7 +140,7 @@ final class InstancePreparationPipeline {
       metadata.write(instance, InstanceState.STARTING, process);
       watchReadiness(instance, process, timings);
     } catch (Exception exception) {
-      manager.failPreparation(instance, exception);
+      manager.failPreparation(instance, failurePhase, exception);
     } finally {
       instance.preparationFinished();
     }
@@ -146,7 +184,9 @@ final class InstancePreparationPipeline {
       instance.attachProcess(process);
       timings.finish(InstancePhaseTimings.Phase.PROCESS_LAUNCH);
       timings.begin(InstancePhaseTimings.Phase.READINESS);
-      logger.info(
+      detailLog.detailed(
+          instance.correlationId(),
+          "process",
           "Instance process started: {} (PID {}, readiness timeout {} seconds)",
           instance.id(),
           process.processId(),
@@ -190,9 +230,10 @@ final class InstancePreparationPipeline {
                     instance.id(),
                     InstanceManager.rootMessage(cause),
                     InstanceManager.lastOutput(instance));
-                manager.recordFailedStart(instance, "readiness", cause);
+                manager.recordFailedStart(instance, FailurePhase.READINESS, cause);
               }
-              timingReporter.logProvisioning(instance.id(), instance.timings(), "readiness-failed");
+              timingReporter.logProvisioning(
+                  instance.correlationId(), instance.id(), instance.timings(), "readiness-failed");
               instance.readyFuture().completeExceptionally(failure);
             });
   }

@@ -2,6 +2,7 @@ package net.slimelabs.slslite.instance.configuration;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -11,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
+import net.slimelabs.slslite.io.BoundedFileReader;
 
 public final class TextFileConfigEditor {
 
@@ -46,23 +48,29 @@ public final class TextFileConfigEditor {
         && !Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
       throw new IOException("Text config target is not a regular file: " + target);
     }
-    if (Files.exists(target) && Files.size(target) > MAX_FILE_BYTES) {
+    if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) && Files.size(target) > MAX_FILE_BYTES) {
       throw new IOException("Text config target exceeds " + MAX_FILE_BYTES + " bytes: " + target);
     }
 
-    Path temporary = target.resolveSibling(target.getFileName() + ".tmp");
-    if (Files.exists(temporary, LinkOption.NOFOLLOW_LINKS)) {
-      throw new IOException("Text config temporary path already exists: " + temporary);
-    }
+    Path temporary =
+        Files.createTempFile(target.getParent(), "." + target.getFileName() + "-", ".tmp");
     try {
       try (Writer output =
           Files.newBufferedWriter(
               temporary,
               StandardCharsets.UTF_8,
-              StandardOpenOption.CREATE_NEW,
-              StandardOpenOption.WRITE)) {
-        if (Files.exists(target)) {
-          try (BufferedReader input = Files.newBufferedReader(target, StandardCharsets.UTF_8)) {
+              StandardOpenOption.WRITE,
+              StandardOpenOption.TRUNCATE_EXISTING,
+              LinkOption.NOFOLLOW_LINKS)) {
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+          try (BufferedReader input =
+              new BufferedReader(
+                  new InputStreamReader(
+                      BoundedFileReader.openNoFollow(target, Math.toIntExact(MAX_FILE_BYTES)),
+                      StandardCharsets.UTF_8
+                          .newDecoder()
+                          .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                          .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)))) {
             String line;
             while ((line = input.readLine()) != null) {
               boolean replaced = false;

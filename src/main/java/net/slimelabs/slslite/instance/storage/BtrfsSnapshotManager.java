@@ -2,17 +2,16 @@ package net.slimelabs.slslite.instance.storage;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import net.slimelabs.slslite.io.BoundedFileReader;
+import net.slimelabs.slslite.io.ConfinedFiles;
 
 final class BtrfsSnapshotManager {
 
@@ -138,7 +137,8 @@ final class BtrfsSnapshotManager {
       throw new IOException("Btrfs manifest is missing, unsafe, or too large: " + manifest);
     }
     Properties properties = new Properties();
-    try (InputStream input = Files.newInputStream(manifest)) {
+    try (InputStream input =
+        BoundedFileReader.openNoFollow(manifest, Math.toIntExact(MAX_MANIFEST_BYTES))) {
       properties.load(input);
     }
     if (!MANIFEST_VERSION.equals(properties.getProperty("version"))) {
@@ -177,17 +177,12 @@ final class BtrfsSnapshotManager {
       properties.setProperty(
           "subvolume." + index, portableRelative(instance.relativize(targets.get(index))));
     }
-    Path manifest = instance.resolve(MANIFEST_FILE);
-    Path temporary = instance.resolve(MANIFEST_FILE + ".tmp");
-    try (OutputStream output = Files.newOutputStream(temporary)) {
-      properties.store(output, "SLS-LITE Btrfs snapshot manifest");
-    }
-    try {
-      Files.move(
-          temporary, manifest, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-    } catch (AtomicMoveNotSupportedException exception) {
-      Files.move(temporary, manifest, StandardCopyOption.REPLACE_EXISTING);
-    }
+    ConfinedFiles.atomicWriteProperties(
+        instance,
+        MANIFEST_FILE,
+        properties,
+        "SLS-LITE Btrfs snapshot manifest",
+        Math.toIntExact(MAX_MANIFEST_BYTES));
   }
 
   private Path checkedInstance(Path value) throws IOException {

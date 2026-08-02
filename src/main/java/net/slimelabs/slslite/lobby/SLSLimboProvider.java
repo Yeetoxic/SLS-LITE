@@ -20,6 +20,7 @@ import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.SLSLimboConfig;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.model.InstanceState;
+import net.slimelabs.slslite.log.SLSDetailLog;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.ProcessSpec;
 import net.slimelabs.slslite.process.ProcessSupervisor;
@@ -42,6 +43,7 @@ public final class SLSLimboProvider implements LobbyProvider {
   private final ProcessSupervisor processes;
   private final BackendRegistry backends;
   private final Logger logger;
+  private final SLSDetailLog detailLog;
   private final ScheduledExecutorService recoveryScheduler;
   private final LobbyRecoveryPolicy recoveryPolicy;
   private final CompletableFuture<RegisteredServer> ready = new CompletableFuture<>();
@@ -83,6 +85,31 @@ public final class SLSLimboProvider implements LobbyProvider {
         processes,
         backends,
         logger,
+        SLSDetailLog.disabled());
+  }
+
+  public SLSLimboProvider(
+      ProxyServer proxy,
+      SLSLimboConfig config,
+      ForwardingConfig forwarding,
+      Path dataDirectory,
+      ResourceBudget resourceBudget,
+      LoopbackPortAllocator ports,
+      ProcessSupervisor processes,
+      BackendRegistry backends,
+      Logger logger,
+      SLSDetailLog detailLog) {
+    this(
+        proxy,
+        config,
+        forwarding,
+        dataDirectory,
+        resourceBudget,
+        ports,
+        processes,
+        backends,
+        logger,
+        detailLog,
         Executors.newSingleThreadScheduledExecutor(
             runnable -> {
               Thread thread = new Thread(runnable, "sls-lite-limbo-recovery");
@@ -102,6 +129,32 @@ public final class SLSLimboProvider implements LobbyProvider {
       BackendRegistry backends,
       Logger logger,
       ScheduledExecutorService recoveryScheduler) {
+    this(
+        proxy,
+        config,
+        forwarding,
+        dataDirectory,
+        resourceBudget,
+        ports,
+        processes,
+        backends,
+        logger,
+        SLSDetailLog.disabled(),
+        recoveryScheduler);
+  }
+
+  SLSLimboProvider(
+      ProxyServer proxy,
+      SLSLimboConfig config,
+      ForwardingConfig forwarding,
+      Path dataDirectory,
+      ResourceBudget resourceBudget,
+      LoopbackPortAllocator ports,
+      ProcessSupervisor processes,
+      BackendRegistry backends,
+      Logger logger,
+      SLSDetailLog detailLog,
+      ScheduledExecutorService recoveryScheduler) {
     this.proxy = proxy;
     this.config = config;
     this.forwarding = forwarding;
@@ -111,6 +164,7 @@ public final class SLSLimboProvider implements LobbyProvider {
     this.processes = processes;
     this.backends = backends;
     this.logger = logger;
+    this.detailLog = java.util.Objects.requireNonNull(detailLog, "detailLog");
     this.recoveryScheduler = recoveryScheduler;
     this.recoveryPolicy = LobbyRecoveryPolicy.from(config);
   }
@@ -270,7 +324,7 @@ public final class SLSLimboProvider implements LobbyProvider {
               SERVER_NAME,
               processSpec(currentInstallation),
               lifecycle,
-              line -> logger.info("[sls-limbo] {}", line));
+              line -> detailLog.detailed("limbo-" + attemptGeneration, "child-output", "{}", line));
       synchronized (this) {
         if (closed || generation != attemptGeneration) {
           launched.forceStop();

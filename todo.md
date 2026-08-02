@@ -298,22 +298,22 @@ data, leaking resources, or trapping players in unexplained states.
 
 ### 3.7 Lifecycle, Concurrency, and Failure Safety
 
-- [ ] Define and test the lifecycle concurrency matrix for simultaneous start,
+- [x] Define and test the lifecycle concurrency matrix for simultaneous start,
       stop, restart, reset, delete, kill, join, dequeue, cleanup, reload,
       cancellation, lobby recovery, and proxy shutdown.
-- [ ] Make every retained operation idempotent or return a stable conflict
+- [x] Make every retained operation idempotent or return a stable conflict
       result; verify state, port, registration, memory, process, directory, mount,
       and queue ownership after each race.
-- [ ] Add bounded crash-restart policy where useful beyond the managed lobby,
+- [x] Add bounded crash-restart policy where useful beyond the managed lobby,
       with exponential backoff and stable-runtime retry reset.
-- [ ] Add maintenance/drain mode that blocks new creation while allowing active
+- [x] Add maintenance/drain mode that blocks new creation while allowing active
       instances to finish.
-- [ ] Audit all configured and blueprint-controlled paths, IDs, manifests,
+- [x] Audit all configured and blueprint-controlled paths, IDs, manifests,
       software paths, configuration targets, and archive operations for
       confinement, traversal, symlink, overlap, and ambiguous-ownership safety.
-- [ ] Audit user-facing diagnostics for secret/path redaction while retaining
+- [x] Audit user-facing diagnostics for secret/path redaction while retaining
       actionable console evidence.
-- [ ] Replace routine console walls with concise startup, lifecycle, recovery,
+- [x] Replace routine console walls with concise startup, lifecycle, recovery,
       and shutdown summaries. Keep warnings, failures, and operator actions
       visible in the normal Velocity console, while routing detailed capability
       probes, timings, reconciliation decisions, storage lifecycle traces, and
@@ -323,16 +323,16 @@ data, leaking resources, or trapping players in unexplained states.
       default-off configuration option for detailed Velocity-console mirroring,
       independent from detailed file logging; disabling it must never suppress
       concise milestones, warnings, failures, or operator-requested output.
-- [ ] Verify bounded logs, failure reports, temporary-file cleanup, and retention
+- [x] Verify bounded logs, failure reports, temporary-file cleanup, and retention
       under repeated crashes and failed starts.
-- [ ] Standardize structured failure phases for configuration, preparation,
+- [x] Standardize structured failure phases for configuration, preparation,
       installation, startup, readiness, connection, shutdown, and cleanup.
-- [ ] Exercise normal shutdown, startup cancellation, process crashes, readiness
+- [x] Exercise normal shutdown, startup cancellation, process crashes, readiness
       timeout, lobby recovery exhaustion, memory rejection, occupied ports,
       proxy restart, and persistent recovery.
-- [ ] Confirm every failure produces bounded useful console, chat, action-bar,
+- [x] Confirm every failure produces bounded useful console, chat, action-bar,
       command, and temporary-log diagnostics without spam.
-- [ ] Confirm every child, port, Velocity registration, queue, mount, helper
+- [x] Confirm every child, port, Velocity registration, queue, mount, helper
       process, staging directory, and memory reservation is released or safely
       reconciled, with no silent data corruption.
 

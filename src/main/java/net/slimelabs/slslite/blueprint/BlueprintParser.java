@@ -26,9 +26,12 @@ final class BlueprintParser {
   Blueprint parse(Path path) throws BlueprintException {
     LoaderOptions options = new LoaderOptions();
     options.setAllowDuplicateKeys(false);
+    options.setCodePointLimit(MAX_BLUEPRINT_BYTES);
+    options.setMaxAliasesForCollections(50);
+    options.setNestingDepthLimit(50);
     Yaml yaml = new Yaml(new SafeConstructor(options));
 
-    try (InputStream input = BoundedFileReader.open(path, MAX_BLUEPRINT_BYTES)) {
+    try (InputStream input = BoundedFileReader.openNoFollow(path, MAX_BLUEPRINT_BYTES)) {
       Object document = yaml.load(input);
       Map<String, Object> root = asMap(document, "root", path);
       Map<String, Object> metadata = requiredMap(root, "blueprint", path);

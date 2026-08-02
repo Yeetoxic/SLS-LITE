@@ -79,17 +79,14 @@ class TextFileConfigEditorTest {
   }
 
   @Test
-  void preexistingTemporaryPathPreservesOriginalFile() throws Exception {
+  void predictableTemporaryPathCannotBlockOrCaptureAtomicUpdate() throws Exception {
     Files.writeString(temporaryDirectory.resolve("config.txt"), "original");
     Files.writeString(temporaryDirectory.resolve("config.txt.tmp"), "occupied");
 
-    assertThrows(
-        java.io.IOException.class,
-        () ->
-            TextFileConfigEditor.apply(
-                temporaryDirectory, Map.of("config.txt", Map.of("original", "changed"))));
+    TextFileConfigEditor.apply(
+        temporaryDirectory, Map.of("config.txt", Map.of("original", "changed")));
 
-    assertEquals("original", Files.readString(temporaryDirectory.resolve("config.txt")));
+    assertEquals("changed\n", Files.readString(temporaryDirectory.resolve("config.txt")));
     assertEquals("occupied", Files.readString(temporaryDirectory.resolve("config.txt.tmp")));
   }
 

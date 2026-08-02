@@ -10,11 +10,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import net.slimelabs.slslite.io.BoundedFileReader;
 
 final class FuseOverlayFsMountAdapter implements OverlayFsLayerManager.MountAdapter {
 
   private static final long START_TIMEOUT_MILLIS = 5_000;
   private static final long COMMAND_TIMEOUT_SECONDS = 10;
+  private static final int MAX_PROCESS_COMMAND_LINE_BYTES = 64 * 1024;
 
   private final ConcurrentHashMap<Path, Process> processes = new ConcurrentHashMap<>();
 
@@ -169,14 +171,14 @@ final class FuseOverlayFsMountAdapter implements OverlayFsLayerManager.MountAdap
         }
         Path commandLine = entry.resolve("cmdline");
         try {
-          byte[] bytes = Files.readAllBytes(commandLine);
-          if (bytes.length == 0 || bytes.length > 1_048_576) {
+          String command =
+              BoundedFileReader.readStringNoFollow(
+                  commandLine, StandardCharsets.UTF_8, MAX_PROCESS_COMMAND_LINE_BYTES);
+          if (command.isEmpty()) {
             continue;
           }
           processes.add(
-              Arrays.stream(new String(bytes, StandardCharsets.UTF_8).split("\\x00"))
-                  .filter(value -> !value.isEmpty())
-                  .toList());
+              Arrays.stream(command.split("\\x00")).filter(value -> !value.isEmpty()).toList());
         } catch (IOException | RuntimeException ignored) {
           // Processes can exit or be inaccessible while scanning.
         }

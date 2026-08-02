@@ -1,26 +1,24 @@
 package net.slimelabs.slslite.security;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import net.slimelabs.slslite.io.BoundedFileReader;
+import net.slimelabs.slslite.io.ConfinedFiles;
 
 public final class AdministratorStore {
 
   static final long MAX_STORE_BYTES = 1024 * 1024;
   static final String FILE_NAME = "administrators.properties";
-  private static final String TEMP_FILE_NAME = FILE_NAME + ".tmp";
   private static final String SCHEMA_KEY = "schema";
   private static final String SCHEMA_VERSION = "1";
   private static final String ADMIN_PREFIX = "administrator.";
@@ -41,7 +39,7 @@ public final class AdministratorStore {
   }
 
   public synchronized void initialize() throws IOException {
-    Files.createDirectories(dataDirectory);
+    ConfinedFiles.ensureDirectory(dataDirectory);
     if (!Files.exists(storePath, LinkOption.NOFOLLOW_LINKS)) {
       Properties initial = new Properties();
       initial.setProperty(SCHEMA_KEY, SCHEMA_VERSION);
@@ -56,12 +54,9 @@ public final class AdministratorStore {
           "Administrator store exceeds " + MAX_STORE_BYTES + " bytes: " + storePath);
     }
     byte[] encoded;
-    try (InputStream input = Files.newInputStream(storePath)) {
-      encoded = input.readNBytes((int) MAX_STORE_BYTES + 1);
-    }
-    if (encoded.length > MAX_STORE_BYTES) {
-      throw new IOException(
-          "Administrator store exceeds " + MAX_STORE_BYTES + " bytes: " + storePath);
+    try (InputStream input =
+        BoundedFileReader.openNoFollow(storePath, Math.toIntExact(MAX_STORE_BYTES))) {
+      encoded = input.readAllBytes();
     }
     Properties loaded = new Properties();
     try (InputStream input = new ByteArrayInputStream(encoded)) {
@@ -140,26 +135,15 @@ public final class AdministratorStore {
 
   private static void atomicWrite(Path dataDirectory, Path storePath, Properties updated)
       throws IOException {
-    Path temporary = dataDirectory.resolve(TEMP_FILE_NAME);
-    try (OutputStream output =
-        Files.newOutputStream(
-            temporary,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE)) {
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    try (output) {
       updated.store(output, "Managed by SLS-LITE");
     }
-    try {
-      Files.move(
-          temporary,
-          storePath,
-          StandardCopyOption.ATOMIC_MOVE,
-          StandardCopyOption.REPLACE_EXISTING);
-    } catch (AtomicMoveNotSupportedException ignored) {
-      Files.move(temporary, storePath, StandardCopyOption.REPLACE_EXISTING);
-    } finally {
-      Files.deleteIfExists(temporary);
+    if (!dataDirectory.resolve(FILE_NAME).normalize().equals(storePath.normalize())) {
+      throw new IOException("Administrator store target changed unexpectedly");
     }
+    ConfinedFiles.atomicWrite(
+        dataDirectory, FILE_NAME, output.toByteArray(), Math.toIntExact(MAX_STORE_BYTES));
   }
 
   @FunctionalInterface

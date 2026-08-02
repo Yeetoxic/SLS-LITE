@@ -450,8 +450,7 @@ public final class PlayerRoutingCommandHandler {
   }
 
   private static String rootMessage(Throwable throwable) {
-    Throwable current = rootCause(throwable);
-    return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
+    return net.slimelabs.slslite.log.DiagnosticMessages.rootCause(throwable);
   }
 
   private static Throwable rootCause(Throwable throwable) {

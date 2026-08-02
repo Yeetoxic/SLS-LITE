@@ -298,11 +298,7 @@ final class PersistentInstanceCommandHandler {
   }
 
   private static String rootMessage(Throwable throwable) {
-    Throwable current = throwable;
-    while (current.getCause() != null) {
-      current = current.getCause();
-    }
-    return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
+    return net.slimelabs.slslite.log.DiagnosticMessages.rootCause(throwable);
   }
 
   private static String capitalize(String value) {

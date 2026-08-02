@@ -210,11 +210,7 @@ public final class InstallationCommandHandler implements AutoCloseable {
   }
 
   private static String rootMessage(Throwable failure) {
-    Throwable current = failure;
-    while (current.getCause() != null) {
-      current = current.getCause();
-    }
-    return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
+    return net.slimelabs.slslite.log.DiagnosticMessages.rootCause(failure);
   }
 
   private void cleanup(CommandSource source, String[] arguments) {

@@ -5,9 +5,12 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.channels.Channels;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
@@ -168,7 +171,9 @@ public final class VanillaInstallationProvider implements SoftwareInstallationPr
 
   private static String digest(Path path, String algorithm) throws Exception {
     MessageDigest digest = MessageDigest.getInstance(algorithm);
-    try (var input = Files.newInputStream(path)) {
+    try (var channel =
+            Files.newByteChannel(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+        var input = Channels.newInputStream(channel)) {
       byte[] buffer = new byte[8192];
       int read;
       while ((read = input.read(buffer)) >= 0) {
@@ -182,7 +187,12 @@ public final class VanillaInstallationProvider implements SoftwareInstallationPr
       throws Exception {
     long maximum = Math.min(MAX_DOWNLOAD_BYTES, expected);
     long total = 0;
-    try (var output = Files.newOutputStream(destination)) {
+    try (var output =
+        Files.newOutputStream(
+            destination,
+            StandardOpenOption.CREATE_NEW,
+            StandardOpenOption.WRITE,
+            LinkOption.NOFOLLOW_LINKS)) {
       byte[] buffer = new byte[8192];
       int read;
       while ((read = input.read(buffer)) >= 0) {

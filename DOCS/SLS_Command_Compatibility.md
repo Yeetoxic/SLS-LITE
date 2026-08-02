@@ -25,6 +25,12 @@ status negotiation against a ready registered backend. It reports latency and
 the advertised Minecraft protocol but explicitly does not claim to test login,
 forwarding, permissions, or a real player transfer.
 
+The additive `/sls maintenance <on|off|status> [reason]` command controls a
+host-wide creation-admission gate. It is deliberately local rather than an
+emulation of distributed node draining: active instances continue normally,
+ready capacity remains joinable, and only requests that would create a new
+instance are rejected.
+
 ## Compatibility Status
 
 | vSLS command | Permission | SLS-LITE status | Remaining compatibility work |

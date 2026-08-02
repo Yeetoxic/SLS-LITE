@@ -20,6 +20,7 @@ import net.slimelabs.slslite.config.ConfigurationException;
 import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.YamlValues;
 import net.slimelabs.slslite.io.BoundedFileReader;
+import net.slimelabs.slslite.io.ConfinedFiles;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
@@ -52,7 +53,7 @@ public final class SoftwareProfileRepository {
   }
 
   public void initialize() throws IOException, ConfigurationException {
-    Files.createDirectories(directory);
+    ConfinedFiles.ensureDirectory(directory);
     installTemplateWhenEmpty();
     reload();
   }
@@ -98,9 +99,12 @@ public final class SoftwareProfileRepository {
   private SoftwareProfile read(Path path) throws ConfigurationException {
     LoaderOptions options = new LoaderOptions();
     options.setAllowDuplicateKeys(false);
+    options.setCodePointLimit(MAX_PROFILE_BYTES);
+    options.setMaxAliasesForCollections(50);
+    options.setNestingDepthLimit(50);
     Yaml yaml = new Yaml(new SafeConstructor(options));
 
-    try (InputStream input = BoundedFileReader.open(path, MAX_PROFILE_BYTES)) {
+    try (InputStream input = BoundedFileReader.openNoFollow(path, MAX_PROFILE_BYTES)) {
       Map<String, Object> root = YamlValues.asMap(yaml.load(input), "root", path);
       Map<String, Object> software = YamlValues.optionalMap(root, "software", path);
       Map<String, Object> launch = YamlValues.optionalMap(root, "launch", path);
@@ -265,6 +269,7 @@ public final class SoftwareProfileRepository {
   }
 
   private List<Path> profileFiles() throws IOException {
+    ConfinedFiles.ensureDirectory(directory);
     try (Stream<Path> files = Files.walk(directory)) {
       return files
           .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
@@ -285,7 +290,7 @@ public final class SoftwareProfileRepository {
         throw new IOException(
             "Bundled Paper software default is missing: " + DEFAULT_PAPER_RESOURCE);
       }
-      Files.copy(source, directory.resolve("paper.yml"));
+      ConfinedFiles.atomicCopy(directory, "paper.yml", source, MAX_PROFILE_BYTES);
     }
     try (InputStream source =
         getClass().getClassLoader().getResourceAsStream(DEFAULT_VANILLA_RESOURCE)) {
@@ -293,7 +298,7 @@ public final class SoftwareProfileRepository {
         throw new IOException(
             "Bundled vanilla software default is missing: " + DEFAULT_VANILLA_RESOURCE);
       }
-      Files.copy(source, directory.resolve("vanilla.yml"));
+      ConfinedFiles.atomicCopy(directory, "vanilla.yml", source, MAX_PROFILE_BYTES);
     }
   }
 

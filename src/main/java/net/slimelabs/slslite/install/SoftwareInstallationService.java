@@ -2,11 +2,13 @@ package net.slimelabs.slslite.install;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.nio.channels.Channels;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,6 +30,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.slimelabs.slslite.io.BoundedFileReader;
+import net.slimelabs.slslite.io.ConfinedFiles;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSpecificationException;
 import net.slimelabs.slslite.software.SoftwareProfile;
@@ -350,7 +353,11 @@ public final class SoftwareInstallationService implements AutoCloseable {
               + " with "
               + profile.source().name().toLowerCase());
       InstallationArtifact artifact = provider.install(profile, version, staging, record::log);
-      Files.writeString(staging.resolve("eula.txt"), "eula=true" + System.lineSeparator());
+      ConfinedFiles.atomicWrite(
+          staging,
+          "eula.txt",
+          ("eula=true" + System.lineSeparator()).getBytes(java.nio.charset.StandardCharsets.UTF_8),
+          MAX_EULA_BYTES);
       writeInstallMetadata(profile, version, staging, artifact);
       Files.deleteIfExists(staging.resolve(STAGING_METADATA));
       if (!isReady(profile, version, staging)) {
@@ -426,7 +433,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
       return false;
     }
     try {
-      if (!BoundedFileReader.readString(
+      if (!BoundedFileReader.readStringNoFollow(
               eulaPath, java.nio.charset.StandardCharsets.UTF_8, MAX_EULA_BYTES)
           .lines()
           .map(String::trim)
@@ -434,7 +441,8 @@ public final class SoftwareInstallationService implements AutoCloseable {
         return false;
       }
       Properties metadata = new Properties();
-      try (InputStream input = BoundedFileReader.open(metadataPath, MAX_INSTALL_METADATA_BYTES)) {
+      try (InputStream input =
+          BoundedFileReader.openNoFollow(metadataPath, MAX_INSTALL_METADATA_BYTES)) {
         metadata.load(input);
       }
       if (!"1".equals(metadata.getProperty("format"))
@@ -475,9 +483,12 @@ public final class SoftwareInstallationService implements AutoCloseable {
     metadata.setProperty("size", Long.toString(artifact.size()));
     metadata.setProperty("digest", artifact.digestAlgorithm());
     metadata.setProperty("checksum", artifact.checksum());
-    try (OutputStream output = Files.newOutputStream(directory.resolve(INSTALL_METADATA))) {
-      metadata.store(output, "SLS-LITE verified software cache");
-    }
+    ConfinedFiles.atomicWriteProperties(
+        directory,
+        INSTALL_METADATA,
+        metadata,
+        "SLS-LITE verified software cache",
+        MAX_INSTALL_METADATA_BYTES);
   }
 
   private static void writeStagingMetadata(SoftwareProfile profile, String version, Path directory)
@@ -488,9 +499,12 @@ public final class SoftwareInstallationService implements AutoCloseable {
     metadata.setProperty("version", version);
     metadata.setProperty("source", profile.source().name());
     metadata.setProperty("channel", profile.channel().name());
-    try (OutputStream output = Files.newOutputStream(directory.resolve(STAGING_METADATA))) {
-      metadata.store(output, "SLS-LITE software staging ownership");
-    }
+    ConfinedFiles.atomicWriteProperties(
+        directory,
+        STAGING_METADATA,
+        metadata,
+        "SLS-LITE software staging ownership",
+        MAX_INSTALL_METADATA_BYTES);
   }
 
   private Set<Path> protectedDirectories(
@@ -524,7 +538,8 @@ public final class SoftwareInstallationService implements AutoCloseable {
         return null;
       }
       Properties metadata = new Properties();
-      try (InputStream input = BoundedFileReader.open(metadataPath, MAX_INSTALL_METADATA_BYTES)) {
+      try (InputStream input =
+          BoundedFileReader.openNoFollow(metadataPath, MAX_INSTALL_METADATA_BYTES)) {
         metadata.load(input);
       }
       if (!"1".equals(metadata.getProperty("format"))) {
@@ -611,7 +626,9 @@ public final class SoftwareInstallationService implements AutoCloseable {
 
   private static String digest(Path path, String algorithm) throws Exception {
     MessageDigest digest = MessageDigest.getInstance(algorithm);
-    try (InputStream input = Files.newInputStream(path)) {
+    try (var channel =
+            Files.newByteChannel(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+        InputStream input = Channels.newInputStream(channel)) {
       byte[] buffer = new byte[8192];
       int read;
       while ((read = input.read(buffer)) >= 0) {

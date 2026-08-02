@@ -41,6 +41,8 @@ import net.slimelabs.slslite.lobby.LocalLobbyProvider;
 import net.slimelabs.slslite.lobby.SLSLimboHandoffService;
 import net.slimelabs.slslite.lobby.SLSLimboProvider;
 import net.slimelabs.slslite.log.ConsoleBanner;
+import net.slimelabs.slslite.log.CorrelationIds;
+import net.slimelabs.slslite.log.SLSDetailLog;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSupervisor;
@@ -84,6 +86,7 @@ public final class SLSLite {
   private AdminClaimService adminClaims;
   private SoftwareInstallationService installationService;
   private SLSCommand slsCommand;
+  private SLSDetailLog detailLog;
 
   @Inject
   public SLSLite(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -102,10 +105,23 @@ public final class SLSLite {
   @Subscribe
   public void onProxyInitialization(ProxyInitializeEvent event) {
     ProxyRecoveryTiming recoveryTiming = new ProxyRecoveryTiming();
+    String startupCorrelation = CorrelationIds.next("startup");
     ConsoleBanner.logStartup(logger);
 
     try {
       configuration.initialize();
+      detailLog =
+          new SLSDetailLog(
+              dataDirectory,
+              Path.of("").toAbsolutePath().normalize(),
+              configuration.get().detailedLogging(),
+              logger);
+      detailLog.normal(
+          startupCorrelation,
+          "startup",
+          "SLS-LITE startup began; detailed level={} path={}",
+          configuration.get().detailedLogging().level(),
+          detailLog.path());
       administrators = new AdministratorStore(dataDirectory);
       administrators.initialize();
       adminClaims =
@@ -141,7 +157,7 @@ public final class SLSLite {
                   processSpecFactory,
                   configuration.get().totalMemoryMiB(),
                   configuration.get().storage());
-      logHostCapabilities(hostCapabilities);
+      logHostCapabilities(hostCapabilities, startupCorrelation);
       if (hostCapabilities.hasFailures()) {
         throw new IllegalStateException(
             "Required host capability checks failed: " + hostCapabilities.failureSummary());
@@ -158,7 +174,8 @@ public final class SLSLite {
                           new IllegalStateException(
                               "Host storage selection did not produce " + "an active strategy")));
       InstanceReconciliationReport reconciliation =
-          new InstanceReconciler(directoryPreparer, logger).reconcile();
+          new InstanceReconciler(directoryPreparer, logger, detailLog, startupCorrelation)
+              .reconcile();
       logger.info(
           "Instance reconciliation recovered {} storage transaction(s) "
               + "and inspected {} directorie(s): "
@@ -192,6 +209,7 @@ public final class SLSLite {
               processSupervisor,
               new VelocityBackendRegistry(proxy, protocolSynchronizer),
               installationService,
+              detailLog,
               logger);
       joinService =
           new LocalJoinService(
@@ -199,7 +217,8 @@ public final class SLSLite {
               blueprints,
               instanceManager,
               Duration.ofSeconds(configuration.get().queueTimeoutSeconds()),
-              logger);
+              logger,
+              detailLog);
       joinActions = new BlueprintJoinActionService(instanceManager, logger);
       LobbyProvider primaryLobby =
           new LocalLobbyProvider(
@@ -214,7 +233,8 @@ public final class SLSLite {
               portAllocator,
               processSupervisor,
               new VelocityBackendRegistry(proxy, protocolSynchronizer),
-              logger);
+              logger,
+              detailLog);
       lobbyProvider = new FallbackLobbyProvider(proxy, primaryLobby, slsLimbo, logger);
       limboHandoff = new SLSLimboHandoffService(lobbyProvider, logger);
       idleReaper =
@@ -228,6 +248,12 @@ public final class SLSLite {
     } catch (Exception exception) {
       logger.error(
           "SLS-LITE initialization failed; managed server features are disabled", exception);
+      if (detailLog != null) {
+        detailLog.normal(
+            startupCorrelation, "startup", "Initialization failed: {}", exception.getMessage());
+        detailLog.close();
+        detailLog = null;
+      }
       return;
     }
 
@@ -255,16 +281,33 @@ public final class SLSLite {
         server ->
             recoveryTiming
                 .complete("ready", server.getServerInfo().getName())
-                .ifPresent(summary -> logger.info("Proxy restart recovery timing: {}", summary)));
+                .ifPresent(
+                    summary ->
+                        detailLog.detailed(
+                            startupCorrelation, "timing", "Proxy restart recovery: {}", summary)));
     lobbyProvider.start();
     idleReaper.start();
 
-    logger.info(
-        "SLS-LITE initialized with {} blueprint(s), {} software profile(s), "
-            + "and {} MiB managed memory",
-        blueprints.getAll().size(),
-        softwareProfiles.getAll().size(),
-        resourceBudget.totalMemoryMiB());
+    if (configuration.get().detailedLogging().level()
+        == net.slimelabs.slslite.config.DetailLogLevel.OFF) {
+      logger.info(
+          "SLS-LITE initialized [{}]: {} blueprint(s), {} software profile(s), "
+              + "{} MiB managed memory; detailed logging is off",
+          startupCorrelation,
+          blueprints.getAll().size(),
+          softwareProfiles.getAll().size(),
+          resourceBudget.totalMemoryMiB());
+    } else {
+      logger.info(
+          "SLS-LITE initialized [{}]: {} blueprint(s), {} software profile(s), "
+              + "{} MiB managed memory; details in {}",
+          startupCorrelation,
+          blueprints.getAll().size(),
+          softwareProfiles.getAll().size(),
+          resourceBudget.totalMemoryMiB(),
+          detailLog.path());
+    }
+    detailLog.normal(startupCorrelation, "startup", "Initialization completed successfully");
   }
 
   private void issueInitialAdministratorCode() {
@@ -287,18 +330,40 @@ public final class SLSLite {
     }
   }
 
-  private void logHostCapabilities(HostCapabilityReport report) {
+  private void logHostCapabilities(HostCapabilityReport report, String correlationId) {
+    int passed = 0;
+    int informational = 0;
+    int warnings = 0;
+    int failures = 0;
     for (HostCapability capability : report.capabilities()) {
       String message = "Host capability [{}]: {} - {}";
       switch (capability.status()) {
-        case FAILURE ->
-            logger.error(message, capability.status(), capability.name(), capability.detail());
-        case WARNING ->
-            logger.warn(message, capability.status(), capability.name(), capability.detail());
-        case PASS, INFO ->
-            logger.info(message, capability.status(), capability.name(), capability.detail());
+        case FAILURE -> {
+          failures++;
+          logger.error(message, capability.status(), capability.name(), capability.detail());
+        }
+        case WARNING -> {
+          warnings++;
+          logger.warn(message, capability.status(), capability.name(), capability.detail());
+        }
+        case PASS -> passed++;
+        case INFO -> informational++;
       }
+      detailLog.detailed(
+          correlationId,
+          "capability",
+          "status={} name={} detail={}",
+          capability.status(),
+          capability.name(),
+          capability.detail());
     }
+    logger.info(
+        "Host capability summary [{}]: {} passed, {} informational, {} warning(s), {} failure(s)",
+        correlationId,
+        passed,
+        informational,
+        warnings,
+        failures);
   }
 
   @Subscribe
@@ -407,6 +472,10 @@ public final class SLSLite {
     }
     if (installationService != null) {
       installationService.close();
+    }
+    if (detailLog != null) {
+      detailLog.normal("shutdown", "shutdown", "SLS-LITE shutdown completed");
+      detailLog.close();
     }
     ConsoleBanner.logShutdown(logger);
   }

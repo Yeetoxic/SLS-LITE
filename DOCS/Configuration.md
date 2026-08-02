@@ -32,6 +32,12 @@ and unknown keys include a nearest-key suggestion when one is unambiguous.
 | `managed_output.mirror_to_proxy_console` | `false` | Mirror every child output line into the Velocity console. |
 | `managed_output.write_temporary_file` | `true` | Write bounded `logs/sls-lite-console.log` inside each instance. |
 | `managed_output.temporary_file_max_kib` | `4096` | Per-instance hard limit, `1..1048576` KiB. No rotation archives. |
+| `detailed_logging.level` | `detailed` | `off`, `normal`, or `detailed`. Controls SLS-LITE's own bounded detail file independently from child output and concise console messages. |
+| `detailed_logging.mirror_to_proxy_console` | `false` | Mirror detail records to Velocity's console. This never disables milestones, warnings, failures, or command responses. |
+| `detailed_logging.max_file_kib` | `8192` | Active detail-file limit, `64..1048576` KiB. |
+| `detailed_logging.retained_files` | `5` | `1..32`; includes the active file. Older rotations are replaced. |
+| `detailed_logging.queue_capacity` | `4096` | Bounded asynchronous queue, `128..65536`. Overflow drops detail rather than blocking lifecycle threads and emits sparse warnings. |
+| `detailed_logging.redact_paths` | `true` | Redact known roots and absolute path-shaped values. Credential redaction is mandatory regardless of this option. |
 | `forwarding.mode` | `none` | `none` or `modern`. |
 | `forwarding.online_mode` | `true` | Must match Velocity online mode when forwarding is `modern`. |
 | `forwarding.secret_file` | `forwarding.secret` | Non-blank relative path from the Velocity working directory. |
@@ -104,5 +110,5 @@ catalog. Running instances keep the definitions with which they were created.
 Successful commands report added, updated, and removed IDs separately for
 blueprints and software. A failure publishes none of either candidate, and its
 diagnostic identifies the source definition/path where validation failed.
-Host configuration, storage strategy, output policy, forwarding, lobby mode,
+Host configuration, storage strategy, output and detailed-log policy, forwarding, lobby mode,
 ports, memory, and security require a Velocity restart.

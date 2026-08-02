@@ -16,6 +16,7 @@ public final class ConsoleBanner {
   private static final String CYAN = "\u001B[96m";
   private static final String WHITE = "\u001B[97m";
   private static final String GRAY = "\u001B[90m";
+  private static final String RED = "\u001B[31m";
 
   private static final List<String> LOGO =
       List.of(
@@ -43,11 +44,11 @@ public final class ConsoleBanner {
     lines.add("");
     LOGO.stream().map(line -> paint(DARK_GREEN, line)).forEach(lines::add);
     lines.add(
-        paint(GREEN, " SLS-LITE")
+        paint(RED, " SLS-LITE")
             + " "
             + paint(YELLOW, "v" + BuildInfo.VERSION)
             + " "
-            + paint(GRAY, "| Standalone Server Launch System"));
+            + paint(CYAN, "| Standalone Server Launch System"));
     lines.add(
         paint(BLUE, " Copyright © 2020 - 2026 ")
             + paint(MAGENTA, "Protoxon, Yeetoxic & Contributors"));

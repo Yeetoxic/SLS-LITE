@@ -2,6 +2,7 @@ package net.slimelabs.slslite.instance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -128,6 +129,57 @@ class InstanceManagerTest {
     assertTrue(context.ports().reservations().isEmpty());
     assertEquals(0, context.budget().reservedMemoryMiB());
     assertTrue(manager.getAll().isEmpty());
+  }
+
+  @Test
+  void repeatedStopAndConcurrentKillShareOneTerminalCleanup() throws Exception {
+    TestContext context = createContext(false, true);
+    ManagedInstance instance = manager.start("fixture");
+    instance.readyFuture().get(10, TimeUnit.SECONDS);
+
+    var firstStop = manager.stop(instance.id());
+    var repeatedStop = manager.stop(instance.id());
+    var kill = manager.kill(instance.id());
+
+    assertSame(firstStop, repeatedStop);
+    assertSame(firstStop, kill);
+    firstStop.handle((ignored, failure) -> null).get(10, TimeUnit.SECONDS);
+    awaitCleanup();
+
+    assertTrue(context.backends().registrations.isEmpty());
+    assertTrue(context.ports().reservations().isEmpty());
+    assertEquals(0, context.budget().reservedMemoryMiB());
+    assertFalse(Files.exists(instance.directory()));
+  }
+
+  @Test
+  void persistentAdministrativeRacesReturnOneStableConflictAndPreserveOwnership() throws Exception {
+    TestContext context = createContext(true, true);
+    ManagedInstance original = manager.start("fixture");
+    original.readyFuture().get(10, TimeUnit.SECONDS);
+
+    var restart = manager.restart(original.id());
+    InstanceOperationException resetConflict =
+        assertThrows(InstanceOperationException.class, () -> manager.reset(original.id()));
+    InstanceOperationException deleteConflict =
+        assertThrows(InstanceOperationException.class, () -> manager.delete(original.id()));
+
+    assertEquals(resetConflict.getMessage(), deleteConflict.getMessage());
+    assertTrue(resetConflict.getMessage().contains("already in progress"));
+    ManagedInstance replacement = restart.get(10, TimeUnit.SECONDS);
+    replacement.readyFuture().get(10, TimeUnit.SECONDS);
+    assertEquals(original.id(), replacement.id());
+    assertEquals(original.directory(), replacement.directory());
+    assertEquals(1, context.backends().registrations.size());
+    assertEquals(1, context.ports().reservations().size());
+    assertEquals(256, context.budget().reservedMemoryMiB());
+
+    manager.stop(replacement.id()).get(10, TimeUnit.SECONDS);
+    awaitCleanup();
+    assertTrue(context.backends().registrations.isEmpty());
+    assertTrue(context.ports().reservations().isEmpty());
+    assertEquals(0, context.budget().reservedMemoryMiB());
+    assertTrue(Files.isDirectory(original.directory()));
   }
 
   @Test
@@ -501,6 +553,76 @@ class InstanceManagerTest {
     manager.stop(first.id()).get(10, TimeUnit.SECONDS);
   }
 
+  @Test
+  void maintenanceModeBlocksOnlyNewCreationAndIsIdempotent() throws Exception {
+    TestContext context = createContext(false, true);
+    ManagedInstance active = manager.start("fixture");
+    active.readyFuture().get(10, TimeUnit.SECONDS);
+
+    var enabled = manager.setMaintenance(true, "host upgrade");
+    var repeated = manager.setMaintenance(true, "host upgrade");
+
+    assertEquals(enabled, repeated);
+    assertTrue(manager.maintenanceStatus().enabled());
+    InstanceOperationException blocked =
+        assertThrows(InstanceOperationException.class, () -> manager.start("fixture"));
+    assertTrue(blocked.getMessage().contains("host upgrade"));
+    assertEquals(256, context.budget().reservedMemoryMiB());
+    assertEquals(1, context.ports().reservations().size());
+
+    assertEquals(0, manager.stop(active.id()).get(10, TimeUnit.SECONDS));
+    awaitCleanup();
+    assertTrue(manager.getAll().isEmpty());
+
+    manager.setMaintenance(false, "");
+    ManagedInstance accepted = manager.start("fixture");
+    accepted.readyFuture().get(10, TimeUnit.SECONDS);
+    assertEquals(0, manager.stop(accepted.id()).get(10, TimeUnit.SECONDS));
+  }
+
+  @Test
+  void boundedCrashRecoveryRestartsPersistentInstanceAndExhaustsItsBudget() throws Exception {
+    TestContext context = createContext(true, true);
+    enableCrashRecovery(context.blueprints(), 1);
+
+    ManagedInstance original = manager.start("fixture");
+    original.readyFuture().get(10, TimeUnit.SECONDS);
+    manager.sendCommand(original.id(), "crash");
+
+    ManagedInstance recovered = awaitReplacement(original);
+    recovered.readyFuture().get(10, TimeUnit.SECONDS);
+    assertEquals(original.id(), recovered.id());
+    assertEquals(original.directory(), recovered.directory());
+    assertEquals(256, context.budget().reservedMemoryMiB());
+
+    manager.sendCommand(recovered.id(), "crash");
+    recovered.stoppedFuture().handle((ignored, failure) -> null).get(10, TimeUnit.SECONDS);
+    awaitCleanup();
+    Thread.sleep(1_200);
+
+    assertTrue(manager.getAll().isEmpty());
+    assertTrue(context.backends().registrations.isEmpty());
+    assertTrue(context.ports().reservations().isEmpty());
+    assertEquals(0, context.budget().reservedMemoryMiB());
+    assertTrue(Files.isDirectory(original.directory()));
+  }
+
+  @Test
+  void intentionalStopSuppressesConfiguredCrashRecovery() throws Exception {
+    TestContext context = createContext(true, true);
+    enableCrashRecovery(context.blueprints(), 2);
+    ManagedInstance instance = manager.start("fixture");
+    instance.readyFuture().get(10, TimeUnit.SECONDS);
+
+    assertEquals(0, manager.stop(instance.id()).get(10, TimeUnit.SECONDS));
+    awaitCleanup();
+    Thread.sleep(1_200);
+
+    assertTrue(manager.getAll().isEmpty());
+    assertEquals(0, context.budget().reservedMemoryMiB());
+    assertTrue(context.ports().reservations().isEmpty());
+  }
+
   private TestContext createContext(boolean save, boolean includeJar) throws Exception {
     return createContext(save, includeJar, false);
   }
@@ -601,6 +723,49 @@ class InstanceManagerTest {
       Thread.sleep(20);
     }
     assertTrue(manager.getAll().isEmpty());
+  }
+
+  private ManagedInstance awaitReplacement(ManagedInstance original) throws Exception {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (System.nanoTime() < deadline) {
+      ManagedInstance candidate =
+          manager.getAll().stream()
+              .filter(instance -> instance.id().equals(original.id()) && instance != original)
+              .findFirst()
+              .orElse(null);
+      if (candidate != null) {
+        return candidate;
+      }
+      Thread.sleep(20);
+    }
+    throw new AssertionError("Automatic recovery did not start a replacement instance");
+  }
+
+  private void enableCrashRecovery(BlueprintRepository repository, int maximumAttempts)
+      throws Exception {
+    Files.writeString(
+        temporaryDirectory.resolve("blueprints/fixture.yml"),
+        """
+                blueprint:
+                  id: fixture
+                  name: Fixture
+                  type: test
+                server:
+                  software: paper
+                  version: fixture
+                  limits:
+                    memory_limit: 256
+                save: true
+                annotations:
+                  sls-lite:
+                    restart-on-crash: true
+                    restart-max-attempts: %d
+                    restart-initial-backoff-seconds: 1
+                    restart-max-backoff-seconds: 1
+                    restart-stable-after-seconds: 60
+                """
+            .formatted(maximumAttempts));
+    repository.reload();
   }
 
   private static void createFixtureJar(Path target) throws Exception {

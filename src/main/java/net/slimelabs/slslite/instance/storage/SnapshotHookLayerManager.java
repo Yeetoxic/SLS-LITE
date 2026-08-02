@@ -2,16 +2,15 @@ package net.slimelabs.slslite.instance.storage;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
+import net.slimelabs.slslite.io.BoundedFileReader;
+import net.slimelabs.slslite.io.ConfinedFiles;
 
 final class SnapshotHookLayerManager {
 
@@ -161,7 +160,8 @@ final class SnapshotHookLayerManager {
       throw new IOException("Snapshot-hook manifest is unsafe: " + manifest);
     }
     Properties values = new Properties();
-    try (InputStream input = Files.newInputStream(manifest)) {
+    try (InputStream input =
+        BoundedFileReader.openNoFollow(manifest, Math.toIntExact(MAX_MANIFEST_BYTES))) {
       values.load(input);
     }
     if (!MANIFEST_VERSION.equals(values.getProperty("version"))) {
@@ -200,17 +200,12 @@ final class SnapshotHookLayerManager {
       values.setProperty(
           "layer." + index + ".target", portable(instance.relativize(layer.target())));
     }
-    Path manifest = instance.resolve(MANIFEST_FILE);
-    Path temporary = instance.resolve(MANIFEST_FILE + ".tmp");
-    try (OutputStream output = Files.newOutputStream(temporary)) {
-      values.store(output, "SLS-LITE snapshot helper manifest");
-    }
-    try {
-      Files.move(
-          temporary, manifest, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-    } catch (AtomicMoveNotSupportedException exception) {
-      Files.move(temporary, manifest, StandardCopyOption.REPLACE_EXISTING);
-    }
+    ConfinedFiles.atomicWriteProperties(
+        instance,
+        MANIFEST_FILE,
+        values,
+        "SLS-LITE snapshot helper manifest",
+        Math.toIntExact(MAX_MANIFEST_BYTES));
   }
 
   private Path checkedInstance(Path value) throws IOException {

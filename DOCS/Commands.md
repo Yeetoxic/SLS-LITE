@@ -1,6 +1,6 @@
 # Commands And Permissions
 
-<!-- sls-command-contract-sha256:b0ed1a91e576bc415f5d5f77d95689e4faa3a664f34b096052142cfc7415f4e3 -->
+<!-- sls-command-contract-sha256:7e2d50bf0b261b2bf563d63296ce93f08236f82713a486708e975f07c1c9e947 -->
 
 SLS-LITE uses `/sls` and mirrors the pinned vSLS command tree where the local
 operation exists. Composite instance IDs use `<blueprint>.<short-id>`. For
@@ -39,6 +39,7 @@ complete permission inventory synchronized with the runtime:
 | `sls.command.kill` | Immediately terminate ordinary managed instances. |
 | `sls.command.kill.force` | Include the protected managed lobby in a forced kill. |
 | `sls.command.logs` | Read bounded retained child output. |
+| `sls.command.maintenance` | Enable, disable, or inspect new-instance drain mode. |
 | `sls.command.node` | Receive the explicit local-mode node compatibility response. |
 | `sls.command.pause` | Receive the explicit unavailable pause response. |
 | `sls.command.reload` | Reload blueprint/software catalogs or inspect restart-only config behavior. |
@@ -103,6 +104,7 @@ name a player and cannot use player-only selectors.
 | `/sls reset [server\|this]` | `reset` | Rebuild a persistent instance from current sources; players may omit the current target. |
 | `/sls dequeue <player\|all\|local>` | `dequeue`, `dequeue.others`, or admin | Cancel matching queued joins. |
 | `/sls reload [all\|blueprints\|software\|config]` | `reload` | Atomically reload definition catalogs. `config` explains that host-wide settings require a Velocity restart. |
+| `/sls maintenance <on\|off\|status> [reason]` | `maintenance` | Block or restore brand-new instance creation without stopping active instances. Existing capacity, shutdown, cleanup, and persistent identity restarts remain available while draining. The optional bounded reason is shown when creation is rejected. |
 | `/sls install info` | `install` | Show software installation state. |
 | `/sls install logs <software> <version>` | `install` | Show recent provider-install output. |
 | `/sls install warmup <software> <version>` | `install` | Resolve, download, verify, and atomically publish a reusable provider cache without starting an instance. |

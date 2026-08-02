@@ -96,6 +96,10 @@ final class PersistentInstanceOperations {
     return pendingDeletes.contains(instanceId);
   }
 
+  boolean hasPendingOperation(String instanceId) {
+    return pendingDeletes.contains(instanceId) || pendingCycles.contains(instanceId);
+  }
+
   private CompletableFuture<ManagedInstance> cycle(String instanceId, boolean reset)
       throws InstanceOperationException {
     ManagedInstance active;

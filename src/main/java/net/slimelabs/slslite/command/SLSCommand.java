@@ -29,6 +29,7 @@ import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
+import net.slimelabs.slslite.instance.lifecycle.MaintenanceStatus;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.resource.ResourceBudget;
@@ -172,6 +173,7 @@ public final class SLSCommand implements SimpleCommand {
       case "kill" -> lifecycleHandler.kill(invocation.source(), arguments);
       case "list" -> list(invocation.source(), arguments);
       case "logs" -> inspectionHandler.logs(invocation.source(), arguments);
+      case "maintenance" -> maintenance(invocation.source(), arguments);
       case "registries" -> registries(invocation.source(), arguments);
       case "reload" -> reload(invocation.source(), arguments);
       case "reset" -> lifecycleHandler.reset(invocation.source(), arguments);
@@ -218,6 +220,10 @@ public final class SLSCommand implements SimpleCommand {
                 ? completed(withPrefix("this", instanceIds()))
                 : completed(List.of());
         case "install" -> completed(installationHandler.suggestions(source, arguments));
+        case "maintenance" ->
+            authorizer.canAdminister(source, operation)
+                ? completed(List.of("on", "off", "status"))
+                : completed(List.of());
         case "dequeue" -> completed(playerRoutingHandler.suggestions(source, operation, arguments));
         case "reload" ->
             authorizer.canAdminister(source, "reload")
@@ -546,6 +552,54 @@ public final class SLSCommand implements SimpleCommand {
     }
   }
 
+  private void maintenance(CommandSource source, String[] arguments) {
+    if (!requireAdmin(source, "maintenance", "change maintenance mode")) {
+      return;
+    }
+    if (arguments.length < 2) {
+      source.sendMessage(CommandMessages.usage("/sls maintenance", "on [reason]", "off", "status"));
+      return;
+    }
+    String action = arguments[1].toLowerCase(Locale.ROOT);
+    if ("status".equals(action)) {
+      if (arguments.length != 2) {
+        source.sendMessage(CommandMessages.usage("/sls maintenance", "status"));
+        return;
+      }
+      sendMaintenanceStatus(source, instances.maintenanceStatus());
+      return;
+    }
+    if ("off".equals(action) && arguments.length != 2) {
+      source.sendMessage(CommandMessages.usage("/sls maintenance", "off"));
+      return;
+    }
+    if (!"on".equals(action) && !"off".equals(action)) {
+      source.sendMessage(CommandMessages.usage("/sls maintenance", "on [reason]", "off", "status"));
+      return;
+    }
+    String reason =
+        "on".equals(action) && arguments.length > 2
+            ? String.join(" ", java.util.Arrays.copyOfRange(arguments, 2, arguments.length))
+            : "";
+    try {
+      MaintenanceStatus status = instances.setMaintenance("on".equals(action), reason);
+      sendMaintenanceStatus(source, status);
+    } catch (InstanceOperationException exception) {
+      source.sendMessage(CommandMessages.message(exception.getMessage(), NamedTextColor.RED));
+    }
+  }
+
+  private static void sendMaintenanceStatus(CommandSource source, MaintenanceStatus status) {
+    String detail =
+        status.enabled()
+            ? "Maintenance mode is enabled; new instance creation is blocked"
+                + (status.reason().isBlank() ? "." : ": " + status.reason())
+            : "Maintenance mode is disabled; new instance creation is allowed.";
+    source.sendMessage(
+        CommandMessages.message(
+            detail, status.enabled() ? NamedTextColor.YELLOW : NamedTextColor.GREEN));
+  }
+
   private void list(CommandSource source, String[] arguments) {
     if (arguments.length != 1) {
       source.sendMessage(CommandMessages.usage("/sls list"));
@@ -642,8 +696,7 @@ public final class SLSCommand implements SimpleCommand {
   }
 
   private static String rootMessage(Throwable throwable) {
-    Throwable current = rootCause(throwable);
-    return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
+    return net.slimelabs.slslite.log.DiagnosticMessages.rootCause(throwable);
   }
 
   private static Throwable rootCause(Throwable throwable) {

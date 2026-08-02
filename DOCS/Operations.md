@@ -145,11 +145,15 @@ commands, credentials, host paths, and high-volume logs are not mirrored into
 chat. The opt-in state is not persisted and is cleared on disconnect or proxy
 shutdown.
 
-The proxy console records bounded state changes: accepted operations,
-installation state, preparation, process start, readiness, player connection,
-recovery, stop, and failure summaries. Failed starts include a small recent
-child-output excerpt; full retained output remains in `/sls logs` and the
-temporary file.
+The proxy console records concise milestones, warnings, failures, recovery, and
+operator actions. Routine probes, provisioning steps, timings, reconciliation
+decisions, and storage traces go to the bounded rotating
+`plugins/sls-lite/logs/sls-lite-detail.log`. Correlation IDs in console
+summaries locate the associated detail records. `detailed_logging.level`
+controls that file; `detailed_logging.mirror_to_proxy_console` is a separate,
+default-off mirror and never suppresses important console output. Failed starts
+also retain a bounded redacted report and recent child-output excerpt; full
+retained child output remains in `/sls logs` and its configured temporary file.
 
 Each instance also emits one bounded provisioning timing summary. It separates
 operation-executor dispatch, software resolution, file preparation,

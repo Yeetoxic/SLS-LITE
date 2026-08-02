@@ -18,6 +18,9 @@ public final class FixtureProcessMain {
             new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
           String line;
           while ((line = input.readLine()) != null && !"stop".equals(line)) {
+            if ("crash".equals(line)) {
+              System.exit(7);
+            }
             System.out.println("RECEIVED:" + line);
             System.out.flush();
           }

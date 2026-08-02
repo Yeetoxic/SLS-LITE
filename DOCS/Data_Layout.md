@@ -18,6 +18,8 @@ plugins/sls-lite/
 |-- software-profiles/
 |-- runtimes/
 |-- instances/
+|-- logs/
+|   `-- sls-lite-detail.log[.1...]
 |-- sls-limbo/
 `-- administrators.properties
 ```
@@ -45,9 +47,12 @@ and other assets, but any contained non-instance source path is valid.
 
 `software/` is the reusable exact-version cache. `runtimes/` holds optional
 operator-supplied Java installations. `instances/` contains prepared runtime
-copies and is not a source-content directory. Managed temporary logs live
-inside each instance at `logs/sls-lite-console.log`; there is no host-wide log
-archive. `sls-limbo/` is an extracted, reproducible runtime directory.
+copies and is not a source-content directory. Managed child-output logs live
+inside each instance at `logs/sls-lite-console.log`. SLS-LITE's own bounded,
+rotating diagnostic stream lives at `logs/sls-lite-detail.log`; its level,
+size, retention, redaction, and default-off Velocity-console mirroring are
+configured under `detailed_logging`. `sls-limbo/` is an extracted,
+reproducible runtime directory.
 
 Operators should back up blueprints, worlds, software profiles, configuration,
 administrators, and any persistent instances.

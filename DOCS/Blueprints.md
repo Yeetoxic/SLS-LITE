@@ -313,9 +313,21 @@ SLS-LITE reads these values under `annotations.sls-lite`:
 | `idle-shutdown-seconds` | non-negative integer | Overrides the host idle delay; `0` disables it for this blueprint. |
 | `startup-timeout-seconds` | integer `1-3600` | Overrides the software profile readiness deadline for this blueprint. |
 | `stop-timeout-seconds` | integer `1-600` | Overrides the software profile graceful-stop deadline for this blueprint. |
+| `restart-on-crash` | boolean | Opts a persistent non-lobby instance into bounded automatic recovery. Default: `false`. |
+| `restart-max-attempts` | integer `0-100` | Maximum recovery attempts before the instance remains stopped. Default: `3`. |
+| `restart-initial-backoff-seconds` | integer `1-86400` | Delay before the first recovery attempt. Default: `5`. |
+| `restart-max-backoff-seconds` | integer `1-86400` | Cap for exponential recovery backoff; not less than the initial delay. Default: `60`. |
+| `restart-stable-after-seconds` | integer `1-86400` | Ready runtime required before resetting the consumed attempt budget. Default: `120`. |
 
 Persistent instances and the active managed lobby are excluded from ordinary
 idle cleanup regardless of annotation.
+
+Crash recovery requires `save: true`; ephemeral recovery is rejected because
+there is no durable identity to restart safely. Do not enable it on the managed
+lobby, whose independently bounded `lobby.recovery` policy owns routing and
+generation control. Operator stop, kill, restart, reset, delete, maintenance,
+and proxy shutdown never count as crashes. See
+[Lifecycle Concurrency](Lifecycle_Concurrency.md).
 
 SLS-LITE also accepts these established vSLS annotations:
 

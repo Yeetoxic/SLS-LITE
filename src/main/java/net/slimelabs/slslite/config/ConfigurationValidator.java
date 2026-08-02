@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintCrashRecoveryPolicy;
 import net.slimelabs.slslite.blueprint.BlueprintLifecyclePolicy;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.software.SoftwareConfigurator;
@@ -43,11 +44,19 @@ public final class ConfigurationValidator {
         blueprints.stream()
             .collect(Collectors.toUnmodifiableMap(Blueprint::id, Function.identity()));
     for (Blueprint blueprint : blueprints) {
+      BlueprintCrashRecoveryPolicy crashRecovery;
       try {
         BlueprintLifecyclePolicy.from(blueprint, config.idleShutdownSeconds());
+        crashRecovery = BlueprintCrashRecoveryPolicy.from(blueprint);
       } catch (IllegalArgumentException exception) {
         throw new ConfigurationException(
             "Blueprint '" + blueprint.id() + "': " + exception.getMessage());
+      }
+      if (crashRecovery.enabled() && !blueprint.save()) {
+        throw new ConfigurationException(
+            "Blueprint '"
+                + blueprint.id()
+                + "' enables restart-on-crash but is not persistent (save: true)");
       }
       SoftwareProfile profile = profilesById.get(blueprint.software());
       if (profile == null) {
@@ -97,6 +106,12 @@ public final class ConfigurationValidator {
                               + config.lobby().registry()
                               + "/"
                               + config.lobby().server()));
+      if (BlueprintCrashRecoveryPolicy.from(lobbyBlueprint).enabled()) {
+        throw new ConfigurationException(
+            "Managed lobby blueprint '"
+                + lobbyBlueprint.id()
+                + "' must use lobby.recovery instead of restart-on-crash");
+      }
       long requiredMemory = (long) limboMemory + lobbyBlueprint.memoryLimitMiB();
       if (requiredMemory > config.totalMemoryMiB()) {
         throw new ConfigurationException(

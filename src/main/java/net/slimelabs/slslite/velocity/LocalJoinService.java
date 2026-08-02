@@ -30,6 +30,7 @@ import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.instance.lifecycle.IdleAdmissionControl;
 import net.slimelabs.slslite.instance.model.InstanceState;
+import net.slimelabs.slslite.log.SLSDetailLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,13 +70,24 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       ServerController instances,
       Duration queueTimeout,
       Logger logger) {
+    this(proxy, blueprints, instances, queueTimeout, logger, SLSDetailLog.disabled());
+  }
+
+  public LocalJoinService(
+      ProxyServer proxy,
+      BlueprintRepository blueprints,
+      ServerController instances,
+      Duration queueTimeout,
+      Logger logger,
+      SLSDetailLog detailLog) {
     this(
         proxy,
         blueprints,
         instances,
         queueTimeout,
         Executors.newSingleThreadScheduledExecutor(threadFactory()),
-        logger);
+        logger,
+        detailLog);
   }
 
   LocalJoinService(
@@ -85,6 +97,17 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       Duration queueTimeout,
       ScheduledExecutorService scheduler,
       Logger logger) {
+    this(proxy, blueprints, instances, queueTimeout, scheduler, logger, SLSDetailLog.disabled());
+  }
+
+  LocalJoinService(
+      ProxyServer proxy,
+      BlueprintRepository blueprints,
+      ServerController instances,
+      Duration queueTimeout,
+      ScheduledExecutorService scheduler,
+      Logger logger,
+      SLSDetailLog detailLog) {
     if (queueTimeout.isZero() || queueTimeout.isNegative()) {
       throw new IllegalArgumentException("queueTimeout must be positive");
     }
@@ -94,7 +117,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     this.queueTimeout = queueTimeout;
     this.scheduler = scheduler;
     this.actionBar = new TransferActionBar(scheduler);
-    this.timingReporter = new JoinTimingReporter(instances, logger);
+    this.timingReporter = new JoinTimingReporter(instances, logger, detailLog);
   }
 
   public JoinAttempt join(Player player, String registry, String server)

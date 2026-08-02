@@ -71,6 +71,7 @@ only when SLS-LITE ownership is proven. Unknown directories are preserved.
 | `SupervisedProcess` monitor | Process handle, readiness/stop deadlines, input, and terminal completion. | Readiness, timeout, cancellation, stop, and exit callbacks must complete futures once and cancel obsolete deadlines. |
 | `LocalJoinService` monitor | Player queue, queue-owned instances, and draining instances. | A player has at most one queue entry. Network futures run outside the monitor and terminal callbacks remove the same entry before orphan cleanup. |
 | Lobby-provider monitors | Provider status, generation, retry tasks, and stable-window tasks. | Generation tokens make callbacks from superseded attempts no-ops. Primary and limbo recovery budgets remain independent. |
+| `InstanceCrashRecovery` monitor | Per-persistent-ID retry count, retry task, and stable-runtime reset task. | Only opted-in non-lobby persistent instances recover; administrative termination cancels state, and recovery cannot pass a pending restart/reset/delete. |
 | `DefinitionCatalog` atomic reference | Matched blueprint and software maps. | Reload validates candidates first and publishes both maps in one immutable snapshot. Readers never observe a half-reload. |
 | Installation maps/futures | One active installation per normalized target. | Compatible consumers share one future. Cancelling one instance's wait does not cancel the shared installation. |
 

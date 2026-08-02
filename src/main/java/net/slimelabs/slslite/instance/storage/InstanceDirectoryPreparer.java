@@ -14,6 +14,7 @@ import net.slimelabs.slslite.instance.InstancePreparationException;
 import net.slimelabs.slslite.instance.model.InstanceIdGenerator;
 import net.slimelabs.slslite.instance.storage.BlueprintContentResolver.ResolvedCopy;
 import net.slimelabs.slslite.instance.storage.BlueprintContentResolver.ResolvedVolume;
+import net.slimelabs.slslite.io.ConfinedFiles;
 
 public final class InstanceDirectoryPreparer {
 
@@ -274,7 +275,7 @@ public final class InstanceDirectoryPreparer {
       checkCancelled(cancellationRequested);
       List<ResolvedVolume> resolvedVolumes = contentResolver.resolveVolumes(volumes, destination);
       List<ResolvedCopy> resolvedCopies = contentResolver.resolveCopies(copies, destination);
-      Files.createDirectories(instancesRoot);
+      ConfinedFiles.ensureDirectory(instancesRoot);
       copyEngine.copyDirectory(source, destination, cancellationRequested);
       volumeApplicator.apply(destination, resolvedVolumes, cancellationRequested);
       applyCopies(resolvedCopies, cancellationRequested);

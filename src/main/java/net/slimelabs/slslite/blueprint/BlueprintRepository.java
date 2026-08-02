@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.slimelabs.slslite.config.DefinitionCatalog;
+import net.slimelabs.slslite.io.ConfinedFiles;
 
 public final class BlueprintRepository {
 
@@ -29,12 +30,12 @@ public final class BlueprintRepository {
   }
 
   public BlueprintRepository(Path directory, DefinitionCatalog catalog) {
-    this.directory = directory;
+    this.directory = directory.toAbsolutePath().normalize();
     this.catalog = catalog;
   }
 
   public void initialize() throws IOException, BlueprintException {
-    Files.createDirectories(directory);
+    ConfinedFiles.ensureDirectory(directory);
     installTemplateWhenEmpty();
     reload();
   }
@@ -96,6 +97,7 @@ public final class BlueprintRepository {
   }
 
   private List<Path> blueprintFiles() throws IOException {
+    ConfinedFiles.ensureDirectory(directory);
     try (Stream<Path> files = Files.walk(directory)) {
       return files
           .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
@@ -115,7 +117,8 @@ public final class BlueprintRepository {
       if (source == null) {
         throw new IOException("Bundled blueprint default is missing: " + DEFAULT_TEMPLATE_RESOURCE);
       }
-      Files.copy(source, directory.resolve("template.yml"));
+      ConfinedFiles.atomicCopy(
+          directory, "template.yml", source, BlueprintParser.MAX_BLUEPRINT_BYTES);
     }
   }
 
