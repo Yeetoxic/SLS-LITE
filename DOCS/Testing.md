@@ -21,7 +21,8 @@ registration.
 
 Public API coverage includes reflection checks that reject implementation-type
 leaks, deep-immutability checks, lifecycle-observer failure isolation, bounded
-subscriber behavior, ordered event delivery, and API shutdown state. Packaging
+subscriber behavior, globally ordered lifecycle/matchmaking delivery,
+queue/transfer terminal ownership, and API shutdown state. Packaging
 must also produce `target/sls-lite-<version>-api.jar`; inspect it when changing
 the classifier rules to confirm that `api.internal` and all other product
 packages are absent while `META-INF/licenses/LICENSE` is present.

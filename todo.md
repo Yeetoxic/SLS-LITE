@@ -415,23 +415,82 @@ Acceptance: the complete retained product and its expected failure matrix pass
 without unexplained player states, leaked resources, weakened security, source
 mutation, or silent instance corruption.
 
-### 3.10 Documentation Consolidation and Wiki Draft
+### 3.10 Java Extension API Release Gate
+
+- [x] Provide the API foundation: version/capability discovery, readiness,
+      immutable blueprint and instance views, asynchronous local
+      start/stop/delete and matchmaking requests, queue inspection/cancellation,
+      ordered lifecycle subscriptions, and an implementation-free classifier
+      JAR.
+- [x] Add bounded player matchmaking events for accepted queue assignment,
+      transfer start/success/rejection/failure, cancellation, disconnect,
+      timeout, instance failure, backend absence, and shutdown. Preserve global
+      sequence ordering and exactly one terminal owner without exposing Velocity
+      results or internal failures.
+- [x] Add sanitized, exactly-once instance failure events with stable phase,
+      category, blueprint/type, instance, and correlation data; distinguish
+      post-registration runtime crashes from startup/readiness failures.
+- [ ] Expand the bounded event model to cover lobby status/recovery, atomic
+      catalog reload, software installation state,
+      reconciliation, and API shutdown. Give each event stable immutable data,
+      sequence/timestamp semantics, and a capability when support is optional.
+- [ ] Add redacted, bounded diagnostic views for system and lobby status,
+      maintenance, installation state, host capabilities, instance statistics,
+      recent log snapshots, and correlated failure summaries. Do not expose
+      mutable buffers, credentials, filesystem paths, process handles, or
+      implementation exceptions.
+- [ ] Add an extension context/registration handle that owns subscriptions and
+      future callbacks, closes idempotently, and cannot leave work registered
+      after extension or SLS-LITE shutdown.
+- [ ] Define and implement only the narrow pre-release extension hooks justified
+      by a real example: namespaced annotation consumption plus bounded
+      instance-ready and post-transfer actions. Keep matchmaking replacement,
+      lobby providers, installers, storage/COW strategies, and process control
+      as internal SPIs until separately designed and approved.
+- [ ] Build a reviewable example Velocity extension against only the public API
+      artifact. Exercise discovery, readiness, inspection, lifecycle and player
+      events, diagnostics, and extension cleanup without importing an internal
+      package.
+- [ ] Exercise public start, READY, real-player queue/transfer, stop, delete,
+      expected rejection, persistent restart, and proxy-shutdown paths through
+      the example extension on the local Pterodactyl/Velocity fixture.
+- [ ] Add a checked API signature/binary-compatibility baseline in addition to
+      reflection and documentation contract tests; verify immutable values,
+      sanitized failures, callback bounds, ordering, overload, and shutdown
+      races.
+- [ ] Publish complete Javadocs, Maven and Gradle compile-only examples, API and
+      source/Javadoc artifacts, one canonical extension guide, and a tested
+      distribution path through GitHub Releases, a Maven repository, or both.
+- [ ] Perform a focused API security, concurrency, compatibility, and usability
+      review. Resolve every blocker, decide whether the candidate remains API
+      `1.0` or is renumbered before external use, freeze the accepted 1.x
+      contract, and record its checksum and live evidence.
+
+Acceptance: a third-party-style Velocity extension can depend only on the
+published API artifacts, perform the documented safe local integrations, clean
+up all owned work, survive normal failure/shutdown scenarios, and pass the live
+operation matrix. The release candidate makes no claim that internal provider
+SPIs, distributed SLS control, or an authenticated HTTP API are available.
+
+### 3.11 Documentation Consolidation and Wiki Draft
 
 - [ ] Review the complete documentation set as one operator and contributor
-      journey; remove duplication and drift, repair navigation, establish one
-      canonical home for each concept, and make installation, configuration,
-      daily operation, troubleshooting, compatibility, backup/recovery, and
-      development guidance read coherently from start to finish.
+      journey after the Stage 3.10 API contract is frozen; remove duplication
+      and drift, repair navigation, establish one canonical home for each
+      concept, and make installation, configuration, daily operation,
+      troubleshooting, compatibility, backup/recovery, extension development,
+      and contribution guidance read coherently from start to finish.
 - [ ] Create a basic release-candidate GitHub Wiki source set with a home page,
       sidebar/navigation, installation and first-run guide, configuration,
       commands and permissions, storage/COW, lobby and matchmaking, operations,
-      troubleshooting, compatibility, and contributor entry points. Keep wiki
-      source reviewable in the repository and define the publication/update
-      workflow before copying it to GitHub.
+      troubleshooting, compatibility, Java extension development, and
+      contributor entry points. Keep wiki source reviewable in the repository
+      and define the publication/update workflow before copying it to GitHub.
 
 Acceptance: the repository documentation and draft wiki present one consistent
-release-candidate story, link to canonical detail instead of diverging copies,
-and can be published without inventing unsupported behavior.
+release-candidate story after implementation is frozen, link to canonical
+detail instead of diverging copies, and can be published without inventing
+unsupported behavior.
 
 ## Stage 4: Release Candidate
 
@@ -457,10 +516,10 @@ feedback without destabilizing the completed full stack.
         `server.properties` fallback; never upload packs to an external
         conversion service automatically, and evaluate local conversion only as
         an optional adapter/tool.
-  - [x] Include internal lifecycle events and a small versioned public Java API
-        for capability discovery, blueprint/instance inspection,
-        queue/start/stop/delete requests, and subscriptions without exposing
-        implementation classes.
+  - [ ] Complete and freeze the Stage 3.10 Java extension API release gate; the
+        small API foundation is implemented, but the extension promise is not
+        release-ready until its events, diagnostics, ownership, example,
+        distribution, compatibility baseline, and live operation matrix pass.
   - [ ] Classify an authenticated local administration/event API and opt-in
         privacy-safe metrics.
   - [ ] Classify warm instance pools with strict process/memory accounting and

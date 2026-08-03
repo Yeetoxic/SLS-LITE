@@ -28,6 +28,7 @@ import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ForwardingMode;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
+import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.diagnostics.InstanceOutput;
 import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
 import net.slimelabs.slslite.instance.metadata.InstanceMetadataStore;
@@ -497,6 +498,8 @@ class InstanceManagerTest {
   @Test
   void releasesAdmissionsWhenProcessFailsBeforeReadiness() throws Exception {
     TestContext context = createContext(false, false);
+    List<InstanceManager.InstanceFailureTransition> failures = new CopyOnWriteArrayList<>();
+    manager.installFailureObserver(failures::add);
 
     ManagedInstance instance = manager.start("fixture");
 
@@ -505,6 +508,30 @@ class InstanceManagerTest {
     assertEquals(0, context.budget().reservedMemoryMiB());
     assertTrue(context.ports().reservations().isEmpty());
     assertTrue(context.backends().registrations.isEmpty());
+    assertEquals(1, failures.size());
+    assertEquals(instance.id(), failures.getFirst().instanceId());
+    assertTrue(
+        failures.getFirst().phase() == FailurePhase.READINESS
+            || failures.getFirst().phase() == FailurePhase.STARTUP);
+    assertEquals(InstanceManager.FailureCategory.PROCESS, failures.getFirst().category());
+  }
+
+  @Test
+  void reportsReadyProcessCrashOnceAsRuntimeFailure() throws Exception {
+    createContext(true, true);
+    List<InstanceManager.InstanceFailureTransition> failures = new CopyOnWriteArrayList<>();
+    manager.installFailureObserver(failures::add);
+    ManagedInstance instance = manager.start("fixture");
+    instance.readyFuture().get(10, TimeUnit.SECONDS);
+
+    manager.sendCommand(instance.id(), "crash");
+    instance.stoppedFuture().get(10, TimeUnit.SECONDS);
+    awaitCleanup();
+
+    assertEquals(1, failures.size());
+    assertEquals(FailurePhase.RUNTIME, failures.getFirst().phase());
+    assertEquals(InstanceManager.FailureCategory.PROCESS, failures.getFirst().category());
+    assertEquals(instance.correlationId(), failures.getFirst().correlationId());
   }
 
   @Test

@@ -34,7 +34,12 @@ import net.slimelabs.slslite.api.SLSLiteApi;
 import net.slimelabs.slslite.api.SLSLiteApiException;
 import net.slimelabs.slslite.api.StartRequest;
 import net.slimelabs.slslite.api.VolumeView;
+import net.slimelabs.slslite.api.event.InstanceFailureCategory;
+import net.slimelabs.slslite.api.event.InstanceFailureEvent;
+import net.slimelabs.slslite.api.event.InstanceFailurePhase;
 import net.slimelabs.slslite.api.event.InstanceLifecycleEvent;
+import net.slimelabs.slslite.api.event.MatchmakingStatus;
+import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
 import net.slimelabs.slslite.api.event.SLSLiteEvent;
 import net.slimelabs.slslite.api.event.Subscription;
 import net.slimelabs.slslite.blueprint.Blueprint;
@@ -93,6 +98,8 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
     this.instances = java.util.Objects.requireNonNull(instances, "instances");
     this.joins = java.util.Objects.requireNonNull(joins, "joins");
     instances.installLifecycleObserver(this::publish);
+    instances.installFailureObserver(this::publish);
+    joins.installMatchmakingObserver(this::publish);
     status.set(ApiStatus.READY);
     ready.complete(null);
   }
@@ -259,7 +266,7 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
     };
   }
 
-  void publish(InstanceLifecycle.Transition transition) {
+  synchronized void publish(InstanceLifecycle.Transition transition) {
     InstanceLifecycleEvent event =
         new InstanceLifecycleEvent(
             eventSequence.incrementAndGet(),
@@ -267,6 +274,35 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
             transition.instanceId(),
             status(transition.previous()),
             status(transition.current()));
+    submit(event);
+  }
+
+  synchronized void publish(InstanceManager.InstanceFailureTransition transition) {
+    InstanceFailureEvent event =
+        new InstanceFailureEvent(
+            eventSequence.incrementAndGet(),
+            transition.occurredAt(),
+            transition.instanceId(),
+            transition.blueprintId(),
+            transition.blueprintType(),
+            transition.correlationId(),
+            InstanceFailurePhase.valueOf(transition.phase().name()),
+            InstanceFailureCategory.valueOf(transition.category().name()));
+    submit(event);
+  }
+
+  synchronized void publish(LocalJoinService.MatchmakingTransition transition) {
+    PlayerMatchmakingEvent event =
+        new PlayerMatchmakingEvent(
+            eventSequence.incrementAndGet(),
+            transition.occurredAt(),
+            view(transition.ticket()),
+            transition.instanceCreated(),
+            MatchmakingStatus.valueOf(transition.status().name()));
+    submit(event);
+  }
+
+  private void submit(SLSLiteEvent event) {
     try {
       eventExecutor.execute(() -> deliver(event));
     } catch (RejectedExecutionException exception) {

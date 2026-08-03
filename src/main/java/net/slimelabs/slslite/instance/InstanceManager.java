@@ -29,6 +29,7 @@ import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
 import net.slimelabs.slslite.install.InstallationKey;
+import net.slimelabs.slslite.install.SoftwareInstallationException;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.instance.configuration.InstanceLaunchConfigurator;
 import net.slimelabs.slslite.instance.diagnostics.FailedStartDiagnostics;
@@ -86,6 +87,8 @@ public final class InstanceManager implements ServerController {
   private final InstanceSoftwareProtectionInventory softwareProtection;
   private final InstanceCrashRecovery crashRecovery;
   private volatile java.util.function.Consumer<InstanceLifecycle.Transition> lifecycleObserver =
+      ignored -> {};
+  private volatile java.util.function.Consumer<InstanceFailureTransition> failureObserver =
       ignored -> {};
   private final ExecutorService finalizationExecutor;
   private final Map<String, ManagedInstance> instances = new java.util.HashMap<>();
@@ -294,6 +297,7 @@ public final class InstanceManager implements ServerController {
         portAllocator.release(port);
         resourceBudget.release(instanceId);
         lifecycle.transitionTo(InstanceState.FAILED);
+        recordFailedStart(instance, FailurePhase.PREPARATION, exception);
         throw new InstanceOperationException("Instance preparation queue is full", exception);
       }
       return instance;
@@ -313,6 +317,15 @@ public final class InstanceManager implements ServerController {
           "Lifecycle observer must be installed before instances exist");
     }
     lifecycleObserver = java.util.Objects.requireNonNull(observer, "observer");
+  }
+
+  /** Installs the one process-wide failure observer before managed instances are created. */
+  public synchronized void installFailureObserver(
+      java.util.function.Consumer<InstanceFailureTransition> observer) {
+    if (!instances.isEmpty()) {
+      throw new IllegalStateException("Failure observer must be installed before instances exist");
+    }
+    failureObserver = java.util.Objects.requireNonNull(observer, "observer");
   }
 
   @Override
@@ -608,7 +621,8 @@ public final class InstanceManager implements ServerController {
   private void finalizeExitedInstance(
       ManagedInstance instance, InstancePhaseTimings timings, Integer exitCode, Throwable failure) {
     boolean unexpected = !closed && !instance.stopRequested();
-    boolean failedBeforeReadiness = instance.state() == InstanceState.FAILED;
+    boolean failed = instance.state() == InstanceState.FAILED;
+    boolean reachedReadiness = instance.registered();
     if (failure == null) {
       logger.info(
           "Instance process exited: {} with code {} (state {})",
@@ -622,13 +636,16 @@ public final class InstanceManager implements ServerController {
           instance.state(),
           safeRootMessage(failure));
     }
-    if (failedBeforeReadiness) {
+    if (failed) {
       Throwable diagnosticFailure =
           failure == null
               ? new ProcessStartException(
                   "Managed process exited with code " + exitCode + " before readiness")
               : failure;
-      recordFailedStart(instance, FailurePhase.STARTUP, diagnosticFailure);
+      recordFailedStart(
+          instance,
+          reachedReadiness ? FailurePhase.RUNTIME : FailurePhase.STARTUP,
+          diagnosticFailure);
     }
     timings.finish(InstancePhaseTimings.Phase.SHUTDOWN);
     cleanup(instance);
@@ -831,9 +848,10 @@ public final class InstanceManager implements ServerController {
   }
 
   void recordFailedStart(ManagedInstance instance, FailurePhase phase, Throwable failure) {
-    if (!instance.markFailedStartDiagnosticsRecorded()) {
+    if (!instance.markFailureDiagnosticsRecorded()) {
       return;
     }
+    observeFailure(instance, phase, failure);
     try {
       Path report = failedStartDiagnostics.record(instance, phase, failure);
       logger.warn(
@@ -843,6 +861,81 @@ public final class InstanceManager implements ServerController {
           "Unable to retain failed-start diagnostics for {}: {}",
           instance.id(),
           diagnosticRedactor.redact(exception.getMessage()));
+    }
+  }
+
+  private void observeFailure(ManagedInstance instance, FailurePhase phase, Throwable failure) {
+    try {
+      failureObserver.accept(
+          new InstanceFailureTransition(
+              instance.id(),
+              instance.blueprint().id(),
+              instance.blueprint().type(),
+              instance.correlationId(),
+              phase,
+              failureCategory(phase, failure),
+              Instant.now()));
+    } catch (RuntimeException ignored) {
+      // Observability must never interfere with failure handling or retained diagnostics.
+    }
+  }
+
+  private static FailureCategory failureCategory(FailurePhase phase, Throwable failure) {
+    Throwable cause = rootCause(failure);
+    if (cause instanceof CancellationException || cause instanceof InterruptedException) {
+      return FailureCategory.CANCELLED;
+    }
+    if (cause instanceof TimeoutException) {
+      return FailureCategory.TIMEOUT;
+    }
+    if (cause instanceof SoftwareInstallationException || phase == FailurePhase.INSTALLATION) {
+      return FailureCategory.SOFTWARE;
+    }
+    if (cause instanceof ProcessStartException
+        || phase == FailurePhase.STARTUP
+        || phase == FailurePhase.RUNTIME) {
+      return FailureCategory.PROCESS;
+    }
+    return switch (phase) {
+      case CONFIGURATION -> FailureCategory.CONFIGURATION;
+      case PREPARATION, CLEANUP -> FailureCategory.STORAGE;
+      case READINESS -> FailureCategory.READINESS;
+      case REGISTRATION, CONNECTION -> FailureCategory.REGISTRATION;
+      case SHUTDOWN -> FailureCategory.SHUTDOWN;
+      case INSTALLATION -> FailureCategory.SOFTWARE;
+      case STARTUP, RUNTIME -> FailureCategory.PROCESS;
+    };
+  }
+
+  public enum FailureCategory {
+    CANCELLED,
+    TIMEOUT,
+    SOFTWARE,
+    CONFIGURATION,
+    STORAGE,
+    READINESS,
+    REGISTRATION,
+    PROCESS,
+    SHUTDOWN
+  }
+
+  public record InstanceFailureTransition(
+      String instanceId,
+      String blueprintId,
+      String blueprintType,
+      String correlationId,
+      FailurePhase phase,
+      FailureCategory category,
+      Instant occurredAt) {
+
+    public InstanceFailureTransition {
+      java.util.Objects.requireNonNull(instanceId, "instanceId");
+      java.util.Objects.requireNonNull(blueprintId, "blueprintId");
+      java.util.Objects.requireNonNull(blueprintType, "blueprintType");
+      java.util.Objects.requireNonNull(correlationId, "correlationId");
+      java.util.Objects.requireNonNull(phase, "phase");
+      java.util.Objects.requireNonNull(category, "category");
+      java.util.Objects.requireNonNull(occurredAt, "occurredAt");
     }
   }
 
@@ -935,6 +1028,7 @@ public final class InstanceManager implements ServerController {
         portAllocator.release(port);
         resourceBudget.release(instanceId);
         lifecycle.transitionTo(InstanceState.FAILED);
+        recordFailedStart(instance, FailurePhase.PREPARATION, exception);
         throw new InstanceOperationException("Instance preparation queue is full", exception);
       }
     }

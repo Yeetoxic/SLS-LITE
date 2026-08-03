@@ -30,8 +30,9 @@ product: full SLS is not a runtime dependency or operating mode.
 - Bounded in-game logs, temporary log files, lifecycle logging, resource
   admission, forwarding configuration, and host capability checks.
 - Built-in administrator claiming plus standard Velocity permissions.
-- Versioned Java extension API for capability discovery, immutable inspection,
-  asynchronous lifecycle/matchmaking requests, and lifecycle subscriptions.
+- Pre-release Java extension API candidate for capability discovery, immutable
+  inspection, asynchronous lifecycle/matchmaking requests, and lifecycle
+  subscriptions; the 1.x expansion contract freezes after its documented gate.
 
 The exact current scope and intentional limitations are listed in
 [Compatibility](DOCS/Compatibility.md).
@@ -117,6 +118,7 @@ the blueprint's `blueprint.type`.
 - [Migration](DOCS/Migration.md)
 - [Architecture and contributor map](DOCS/ARCHITECTURE.md)
 - [Java extension API](DOCS/Java_API.md)
+- [Java API scope and release gate](DOCS/Java_API_Roadmap.md)
 - [Roadmap](todo.md)
 
 ## Build
@@ -130,6 +132,10 @@ The shaded plugin is written to
 is written to `target/sls-lite-0.1.0-SNAPSHOT-api.jar`. The plugin build embeds
 SLS-LITE's AGPL license, third-party notices, SnakeYAML, and the pinned
 NanoLimbo runtime used by SLS-Limbo.
+
+Only the shaded plugin JAR is installed on Velocity. It already contains the
+public API classes. The smaller `-api.jar` is an SDK/classifier for extension
+projects and must not be installed as another plugin.
 
 ## License
 

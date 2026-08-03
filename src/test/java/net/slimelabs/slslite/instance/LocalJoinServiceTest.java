@@ -46,6 +46,168 @@ class LocalJoinServiceTest {
   @TempDir Path temporaryDirectory;
 
   @Test
+  void emitsOrderedMatchmakingEventsForSuccessfulTransfer() throws Exception {
+    Fixture fixture = fixture(Duration.ofSeconds(5));
+    List<LocalJoinService.MatchmakingTransition> events = new CopyOnWriteArrayList<>();
+    try (LocalJoinService service = fixture.service()) {
+      service.installMatchmakingObserver(events::add);
+      LocalJoinService.JoinAttempt attempt = service.join(fixture.player(), "test", "smoke");
+      ManagedInstance instance = fixture.controller().instance();
+      instance.lifecycle().transitionTo(InstanceState.STARTING);
+      instance.lifecycle().transitionTo(InstanceState.READY);
+
+      instance.readyFuture().complete(instance);
+      attempt.connection().get(1, TimeUnit.SECONDS);
+
+      assertEquals(
+          List.of(
+              LocalJoinService.MatchmakingTransitionStatus.QUEUED,
+              LocalJoinService.MatchmakingTransitionStatus.TRANSFER_STARTED,
+              LocalJoinService.MatchmakingTransitionStatus.TRANSFER_SUCCEEDED),
+          events.stream().map(LocalJoinService.MatchmakingTransition::status).toList());
+      assertTrue(events.stream().allMatch(LocalJoinService.MatchmakingTransition::instanceCreated));
+      assertEquals(attempt.ticket(), events.getFirst().ticket());
+    }
+  }
+
+  @Test
+  void emitsSanitizedTerminalStatusesForCancellationTimeoutAndInstanceFailure() throws Exception {
+    Fixture cancelled = fixture(Duration.ofSeconds(5));
+    List<LocalJoinService.MatchmakingTransitionStatus> cancelledStatuses =
+        new CopyOnWriteArrayList<>();
+    try (LocalJoinService service = cancelled.service()) {
+      service.installMatchmakingObserver(event -> cancelledStatuses.add(event.status()));
+      service.join(cancelled.player(), "test", "smoke");
+      service.dequeue(cancelled.playerId());
+    }
+    assertEquals(
+        List.of(
+            LocalJoinService.MatchmakingTransitionStatus.QUEUED,
+            LocalJoinService.MatchmakingTransitionStatus.CANCELLED),
+        cancelledStatuses);
+
+    Fixture timedOut = fixture(Duration.ofMillis(25));
+    List<LocalJoinService.MatchmakingTransitionStatus> timeoutStatuses =
+        new CopyOnWriteArrayList<>();
+    try (LocalJoinService service = timedOut.service()) {
+      service.installMatchmakingObserver(event -> timeoutStatuses.add(event.status()));
+      LocalJoinService.JoinAttempt attempt = service.join(timedOut.player(), "test", "smoke");
+      assertThrows(ExecutionException.class, () -> attempt.connection().get(1, TimeUnit.SECONDS));
+    }
+    assertEquals(
+        List.of(
+            LocalJoinService.MatchmakingTransitionStatus.QUEUED,
+            LocalJoinService.MatchmakingTransitionStatus.TIMED_OUT),
+        timeoutStatuses);
+
+    Fixture failed = fixture(Duration.ofSeconds(5));
+    List<LocalJoinService.MatchmakingTransitionStatus> failureStatuses =
+        new CopyOnWriteArrayList<>();
+    try (LocalJoinService service = failed.service()) {
+      service.installMatchmakingObserver(event -> failureStatuses.add(event.status()));
+      LocalJoinService.JoinAttempt attempt = service.join(failed.player(), "test", "smoke");
+      failed
+          .controller()
+          .instance()
+          .readyFuture()
+          .completeExceptionally(new IllegalStateException("sensitive internal failure"));
+      assertThrows(ExecutionException.class, () -> attempt.connection().get(1, TimeUnit.SECONDS));
+    }
+    assertEquals(
+        List.of(
+            LocalJoinService.MatchmakingTransitionStatus.QUEUED,
+            LocalJoinService.MatchmakingTransitionStatus.INSTANCE_FAILED),
+        failureStatuses);
+  }
+
+  @Test
+  void observerFailureCannotRollBackAcceptedQueueState() throws Exception {
+    Fixture fixture = fixture(Duration.ofSeconds(5));
+    try (LocalJoinService service = fixture.service()) {
+      service.installMatchmakingObserver(
+          ignored -> {
+            throw new IllegalStateException("bad extension");
+          });
+
+      LocalJoinService.JoinAttempt attempt = service.join(fixture.player(), "test", "smoke");
+
+      assertEquals(attempt.ticket(), service.queued(fixture.playerId()).orElseThrow());
+      assertTrue(service.dequeue(fixture.playerId()).isPresent());
+    }
+  }
+
+  @Test
+  void closeEmitsOneShutdownTerminalForEachQueuedRequest() throws Exception {
+    Fixture fixture = fixture(Duration.ofSeconds(5));
+    List<LocalJoinService.MatchmakingTransitionStatus> statuses = new CopyOnWriteArrayList<>();
+    LocalJoinService service = fixture.service();
+    service.installMatchmakingObserver(event -> statuses.add(event.status()));
+    LocalJoinService.JoinAttempt attempt = service.join(fixture.player(), "test", "smoke");
+
+    service.close();
+    service.close();
+
+    ExecutionException failure =
+        assertThrows(ExecutionException.class, () -> attempt.connection().get(1, TimeUnit.SECONDS));
+    assertInstanceOf(LocalJoinService.QueueCancelledException.class, failure.getCause());
+    assertEquals(
+        List.of(
+            LocalJoinService.MatchmakingTransitionStatus.QUEUED,
+            LocalJoinService.MatchmakingTransitionStatus.SHUTDOWN),
+        statuses);
+  }
+
+  @Test
+  void distinguishesRejectedAndExceptionalTransferTerminals() throws Exception {
+    CompletableFuture<ConnectionRequestBuilder.Result> rejectedConnection =
+        new CompletableFuture<>();
+    Fixture rejected = fixture(Duration.ofSeconds(5), 0, rejectedConnection);
+    List<LocalJoinService.MatchmakingTransitionStatus> rejectedStatuses =
+        new CopyOnWriteArrayList<>();
+    try (LocalJoinService service = rejected.service()) {
+      service.installMatchmakingObserver(event -> rejectedStatuses.add(event.status()));
+      LocalJoinService.JoinAttempt attempt = service.join(rejected.player(), "test", "smoke");
+      ManagedInstance instance = rejected.controller().instance();
+      instance.lifecycle().transitionTo(InstanceState.STARTING);
+      instance.lifecycle().transitionTo(InstanceState.READY);
+      instance.readyFuture().complete(instance);
+      rejectedConnection.complete(
+          connectionResult(
+              registeredServer(), ConnectionRequestBuilder.Status.SERVER_DISCONNECTED));
+      assertEquals(
+          ConnectionRequestBuilder.Status.SERVER_DISCONNECTED,
+          attempt.connection().get(1, TimeUnit.SECONDS).getStatus());
+    }
+    assertEquals(
+        List.of(
+            LocalJoinService.MatchmakingTransitionStatus.QUEUED,
+            LocalJoinService.MatchmakingTransitionStatus.TRANSFER_STARTED,
+            LocalJoinService.MatchmakingTransitionStatus.TRANSFER_REJECTED),
+        rejectedStatuses);
+
+    CompletableFuture<ConnectionRequestBuilder.Result> failedConnection = new CompletableFuture<>();
+    Fixture failed = fixture(Duration.ofSeconds(5), 0, failedConnection);
+    List<LocalJoinService.MatchmakingTransitionStatus> failedStatuses =
+        new CopyOnWriteArrayList<>();
+    try (LocalJoinService service = failed.service()) {
+      service.installMatchmakingObserver(event -> failedStatuses.add(event.status()));
+      LocalJoinService.JoinAttempt attempt = service.join(failed.player(), "test", "smoke");
+      ManagedInstance instance = failed.controller().instance();
+      instance.lifecycle().transitionTo(InstanceState.STARTING);
+      instance.lifecycle().transitionTo(InstanceState.READY);
+      instance.readyFuture().complete(instance);
+      failedConnection.completeExceptionally(new IllegalStateException("private transport cause"));
+      assertThrows(ExecutionException.class, () -> attempt.connection().get(1, TimeUnit.SECONDS));
+    }
+    assertEquals(
+        List.of(
+            LocalJoinService.MatchmakingTransitionStatus.QUEUED,
+            LocalJoinService.MatchmakingTransitionStatus.TRANSFER_STARTED,
+            LocalJoinService.MatchmakingTransitionStatus.TRANSFER_FAILED),
+        failedStatuses);
+  }
+
+  @Test
   void rejectsASecondQueueRequestForTheSamePlayer() throws Exception {
     Fixture fixture = fixture(Duration.ofSeconds(5));
     try (LocalJoinService service = fixture.service()) {
@@ -167,7 +329,9 @@ class LocalJoinServiceTest {
   void dequeueCannotClaimCancellationAfterTransferHasStarted() throws Exception {
     CompletableFuture<ConnectionRequestBuilder.Result> connection = new CompletableFuture<>();
     Fixture fixture = fixture(Duration.ofSeconds(5), 0, connection);
+    List<LocalJoinService.MatchmakingTransitionStatus> statuses = new CopyOnWriteArrayList<>();
     try (LocalJoinService service = fixture.service()) {
+      service.installMatchmakingObserver(event -> statuses.add(event.status()));
       LocalJoinService.JoinAttempt attempt = service.join(fixture.player(), "test", "smoke");
       ManagedInstance instance = fixture.controller().instance();
       instance.lifecycle().transitionTo(InstanceState.STARTING);
@@ -181,6 +345,12 @@ class LocalJoinServiceTest {
       assertEquals(
           ConnectionRequestBuilder.Status.SUCCESS,
           attempt.connection().get(1, TimeUnit.SECONDS).getStatus());
+      assertEquals(
+          List.of(
+              LocalJoinService.MatchmakingTransitionStatus.QUEUED,
+              LocalJoinService.MatchmakingTransitionStatus.TRANSFER_STARTED,
+              LocalJoinService.MatchmakingTransitionStatus.TRANSFER_SUCCEEDED),
+          statuses);
     }
   }
 
@@ -614,13 +784,18 @@ class LocalJoinServiceTest {
 
   private static ConnectionRequestBuilder.Result connectionResult(
       RegisteredServer registeredServer) {
+    return connectionResult(registeredServer, ConnectionRequestBuilder.Status.SUCCESS);
+  }
+
+  private static ConnectionRequestBuilder.Result connectionResult(
+      RegisteredServer registeredServer, ConnectionRequestBuilder.Status status) {
     return (ConnectionRequestBuilder.Result)
         Proxy.newProxyInstance(
             ConnectionRequestBuilder.Result.class.getClassLoader(),
             new Class<?>[] {ConnectionRequestBuilder.Result.class},
             (proxy, method, arguments) ->
                 switch (method.getName()) {
-                  case "getStatus" -> ConnectionRequestBuilder.Status.SUCCESS;
+                  case "getStatus" -> status;
                   case "getReasonComponent" -> Optional.empty();
                   case "getAttemptedConnection" -> registeredServer;
                   default -> defaultValue(method.getReturnType());

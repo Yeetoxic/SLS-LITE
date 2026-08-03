@@ -49,6 +49,8 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   private final Map<UUID, QueueEntry> queue = new HashMap<>();
   private final Set<String> queueOwnedInstances = new java.util.HashSet<>();
   private final Set<String> drainingInstances = new java.util.HashSet<>();
+  private volatile java.util.function.Consumer<MatchmakingTransition> matchmakingObserver =
+      ignored -> {};
   private boolean closed;
 
   public LocalJoinService(
@@ -180,6 +182,15 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         java.util.Objects.requireNonNull(blueprintSelection, "blueprintSelection");
   }
 
+  /** Installs the one process-wide observer before matchmaking accepts a request. */
+  public synchronized void installMatchmakingObserver(
+      java.util.function.Consumer<MatchmakingTransition> observer) {
+    if (!queue.isEmpty()) {
+      throw new IllegalStateException("Matchmaking observer must be installed before queue use");
+    }
+    matchmakingObserver = java.util.Objects.requireNonNull(observer, "observer");
+  }
+
   public JoinAttempt join(Player player, String registry, String server)
       throws InstanceOperationException {
     Blueprint blueprint =
@@ -230,11 +241,12 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
               server,
               instance.id(),
               Instant.now());
-      entry = new QueueEntry(ticket, instance);
+      entry = new QueueEntry(ticket, instance, created);
       queue.put(ticket.playerId(), entry);
       entry.timeout =
           scheduler.schedule(() -> timeout(entry), queueTimeout.toMillis(), TimeUnit.MILLISECONDS);
       actionBar.start(player);
+      publish(entry, MatchmakingTransitionStatus.QUEUED);
     }
 
     entry
@@ -334,10 +346,11 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   }
 
   public Optional<QueueTicket> dequeue(UUID playerId) {
-    return dequeue(playerId, true);
+    return dequeue(playerId, true, MatchmakingTransitionStatus.CANCELLED);
   }
 
-  private Optional<QueueTicket> dequeue(UUID playerId, boolean showFeedback) {
+  private Optional<QueueTicket> dequeue(
+      UUID playerId, boolean showFeedback, MatchmakingTransitionStatus transitionStatus) {
     QueueEntry entry;
     synchronized (this) {
       entry = queue.get(playerId);
@@ -347,7 +360,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       queue.remove(playerId);
       entry.state = QueueState.CANCELLED;
     }
-    cancel(entry, "Matchmaking request was cancelled");
+    cancel(entry, "Matchmaking request was cancelled", transitionStatus);
     proxy
         .getPlayer(playerId)
         .filter(Player::isActive)
@@ -380,7 +393,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   }
 
   public void disconnect(UUID playerId) {
-    dequeue(playerId, false);
+    dequeue(playerId, false, MatchmakingTransitionStatus.DISCONNECTED);
   }
 
   public Optional<RegisteredServer> initialServer() {
@@ -405,7 +418,9 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       queue.clear();
       drainingInstances.clear();
     }
-    entries.forEach(entry -> cancel(entry, "Matchmaking is shutting down"));
+    entries.forEach(
+        entry ->
+            cancel(entry, "Matchmaking is shutting down", MatchmakingTransitionStatus.SHUTDOWN));
     entries.stream().map(entry -> entry.instance).distinct().forEach(this::stopOrphaned);
     actionBar.close();
     scheduler.shutdownNow();
@@ -493,7 +508,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   private void connect(QueueEntry entry, ManagedInstance instance) {
     Player player = proxy.getPlayer(entry.ticket.playerId()).filter(Player::isActive).orElse(null);
     if (player == null) {
-      dequeue(entry.ticket.playerId(), false);
+      dequeue(entry.ticket.playerId(), false, MatchmakingTransitionStatus.DISCONNECTED);
       return;
     }
 
@@ -502,12 +517,14 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       fail(
           entry,
           new IllegalStateException(
-              "Ready instance is not registered with Velocity: " + instance.id()));
+              "Ready instance is not registered with Velocity: " + instance.id()),
+          MatchmakingTransitionStatus.BACKEND_UNAVAILABLE);
       return;
     }
     if (!beginTransfer(entry)) {
       return;
     }
+    publish(entry, MatchmakingTransitionStatus.TRANSFER_STARTED);
     actionBar.joining(player, instance.blueprint().name());
     entry.timings.transferStarted();
     try {
@@ -537,6 +554,13 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     } else {
       stopOrphaned(entry.instance);
     }
+    publish(
+        entry,
+        connected
+            ? MatchmakingTransitionStatus.TRANSFER_SUCCEEDED
+            : failure == null
+                ? MatchmakingTransitionStatus.TRANSFER_REJECTED
+                : MatchmakingTransitionStatus.TRANSFER_FAILED);
     timingReporter.connection(entry.instance.id(), entry.timings, result, failure);
     if (failure == null) {
       entry.completion.complete(result);
@@ -552,11 +576,17 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     actionBar.stop(entry.ticket.playerId());
     timingReporter.complete(entry.instance.id(), entry.timings, "timeout");
     stopOrphaned(entry.instance);
+    publish(entry, MatchmakingTransitionStatus.TIMED_OUT);
     entry.completion.completeExceptionally(
         new TimeoutException("Queue timed out after " + queueTimeout.toSeconds() + " seconds"));
   }
 
   private void fail(QueueEntry entry, Throwable failure) {
+    fail(entry, failure, MatchmakingTransitionStatus.INSTANCE_FAILED);
+  }
+
+  private void fail(
+      QueueEntry entry, Throwable failure, MatchmakingTransitionStatus transitionStatus) {
     if (!remove(entry, QueueState.QUEUED, QueueState.FAILED)) {
       return;
     }
@@ -564,12 +594,15 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     entry.cancelTimeout();
     timingReporter.complete(entry.instance.id(), entry.timings, "failed");
     stopOrphaned(entry.instance);
+    publish(entry, transitionStatus);
     entry.completion.completeExceptionally(failure);
   }
 
-  private void cancel(QueueEntry entry, String message) {
+  private void cancel(
+      QueueEntry entry, String message, MatchmakingTransitionStatus transitionStatus) {
     actionBar.stop(entry.ticket.playerId());
     entry.cancelTimeout();
+    publish(entry, transitionStatus);
     entry.completion.completeExceptionally(new QueueCancelledException(message));
     timingReporter.complete(entry.instance.id(), entry.timings, "cancelled");
   }
@@ -607,6 +640,16 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     }
   }
 
+  private void publish(QueueEntry entry, MatchmakingTransitionStatus transitionStatus) {
+    try {
+      matchmakingObserver.accept(
+          new MatchmakingTransition(
+              entry.ticket, entry.instanceCreated, transitionStatus, Instant.now()));
+    } catch (RuntimeException ignored) {
+      // Extension observability cannot roll back an accepted matchmaking state change.
+    }
+  }
+
   private static ThreadFactory threadFactory() {
     return runnable -> {
       Thread thread = new Thread(runnable, "sls-lite-matchmaking");
@@ -632,18 +675,47 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   public record DirectJoin(
       ManagedInstance instance, CompletableFuture<ConnectionRequestBuilder.Result> connection) {}
 
+  public record MatchmakingTransition(
+      QueueTicket ticket,
+      boolean instanceCreated,
+      MatchmakingTransitionStatus status,
+      Instant occurredAt) {
+
+    public MatchmakingTransition {
+      ticket = java.util.Objects.requireNonNull(ticket, "ticket");
+      status = java.util.Objects.requireNonNull(status, "status");
+      occurredAt = java.util.Objects.requireNonNull(occurredAt, "occurredAt");
+    }
+  }
+
+  public enum MatchmakingTransitionStatus {
+    QUEUED,
+    TRANSFER_STARTED,
+    TRANSFER_SUCCEEDED,
+    TRANSFER_REJECTED,
+    TRANSFER_FAILED,
+    CANCELLED,
+    DISCONNECTED,
+    TIMED_OUT,
+    INSTANCE_FAILED,
+    BACKEND_UNAVAILABLE,
+    SHUTDOWN
+  }
+
   private static final class QueueEntry {
     private final QueueTicket ticket;
     private final ManagedInstance instance;
     private final JoinPhaseTimings timings = new JoinPhaseTimings();
+    private final boolean instanceCreated;
     private final CompletableFuture<ConnectionRequestBuilder.Result> completion =
         new CompletableFuture<>();
     private volatile ScheduledFuture<?> timeout;
     private QueueState state = QueueState.QUEUED;
 
-    private QueueEntry(QueueTicket ticket, ManagedInstance instance) {
+    private QueueEntry(QueueTicket ticket, ManagedInstance instance, boolean instanceCreated) {
       this.ticket = ticket;
       this.instance = instance;
+      this.instanceCreated = instanceCreated;
     }
 
     private void cancelTimeout() {

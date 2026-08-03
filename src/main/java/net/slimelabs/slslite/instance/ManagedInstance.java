@@ -41,7 +41,7 @@ public final class ManagedInstance {
   private volatile boolean registered;
   private volatile boolean stopRequested;
   private volatile boolean preparationRunning;
-  private boolean failedStartDiagnosticsRecorded;
+  private boolean failureDiagnosticsRecorded;
 
   ManagedInstance(
       String id, Blueprint blueprint, int port, Path directory, InstanceLifecycle lifecycle) {
@@ -293,11 +293,11 @@ public final class ManagedInstance {
     preparationRunning = false;
   }
 
-  synchronized boolean markFailedStartDiagnosticsRecorded() {
-    if (failedStartDiagnosticsRecorded) {
+  synchronized boolean markFailureDiagnosticsRecorded() {
+    if (failureDiagnosticsRecorded) {
       return false;
     }
-    failedStartDiagnosticsRecorded = true;
+    failureDiagnosticsRecorded = true;
     return true;
   }
 

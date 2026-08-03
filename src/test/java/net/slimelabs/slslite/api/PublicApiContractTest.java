@@ -15,7 +15,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.slimelabs.slslite.api.event.InstanceFailureCategory;
+import net.slimelabs.slslite.api.event.InstanceFailureEvent;
+import net.slimelabs.slslite.api.event.InstanceFailurePhase;
 import net.slimelabs.slslite.api.event.InstanceLifecycleEvent;
+import net.slimelabs.slslite.api.event.MatchmakingStatus;
+import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
 import net.slimelabs.slslite.api.event.SLSLiteEvent;
 import net.slimelabs.slslite.api.event.Subscription;
 import org.junit.jupiter.api.Test;
@@ -42,7 +47,12 @@ class PublicApiContractTest {
           SLSLiteApi.class,
           SLSLiteApiProvider.class,
           SLSLiteEvent.class,
+          InstanceFailureEvent.class,
+          InstanceFailurePhase.class,
+          InstanceFailureCategory.class,
           InstanceLifecycleEvent.class,
+          PlayerMatchmakingEvent.class,
+          MatchmakingStatus.class,
           Subscription.class);
 
   @Test
@@ -50,6 +60,8 @@ class PublicApiContractTest {
     assertEquals("1.0", ApiVersion.CURRENT.toString());
     assertTrue(Set.of(Capability.values()).contains(Capability.LIFECYCLE_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.PLAYER_QUEUE));
+    assertTrue(Set.of(Capability.values()).contains(Capability.MATCHMAKING_EVENTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.INSTANCE_FAILURE_EVENTS));
   }
 
   @Test

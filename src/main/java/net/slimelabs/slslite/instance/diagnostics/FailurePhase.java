@@ -9,6 +9,7 @@ public enum FailurePhase {
   STARTUP,
   READINESS,
   REGISTRATION,
+  RUNTIME,
   CONNECTION,
   SHUTDOWN,
   CLEANUP;
