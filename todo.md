@@ -365,7 +365,7 @@ data, leaking resources, or trapping players in unexplained states.
       Record every required manual step, default-config correction, unexpected
       file, failed assumption, and avoidable disk cost; then repeat from clean
       state after fixing all release-blocking onboarding defects.
-- [ ] Profile release-candidate performance and overall efficiency under idle,
+- [x] Profile release-candidate performance and overall efficiency under idle,
       startup, queue/transfer, single-instance, multi-instance, recovery, and
       shutdown workloads. Review CPU, heap/RSS, child-process admission, disk
       use and churn, preparation/readiness latency, network overhead, log growth,
@@ -381,7 +381,7 @@ data, leaking resources, or trapping players in unexplained states.
       ignored test fixtures or scripts rather than shipped product defaults,
       then repeat the fresh-install workflow using only the revised defaults
       and published setup instructions.
-- [ ] Investigate the managed-lobby shutdown path that can report both
+- [x] Investigate the managed-lobby shutdown path that can report both
       `Deferring unfinished shutdown cleanup` and `Deferring late exit cleanup`
       during an otherwise successful Panel stop. Determine whether cleanup is
       genuinely late or the warning is a callback-order race, eliminate false
@@ -393,7 +393,7 @@ data, leaking resources, or trapping players in unexplained states.
       procedures, supported compatibility claims, and performance guidance;
       move release evidence that must be retained into a dedicated test or
       release record rather than mixing it into the product documentation.
-- [ ] Add CI for compilation, tests, packaging, dependency checks, and the
+- [x] Add CI for compilation, tests, packaging, dependency checks, and the
       lightweight static rules approved during the organization work.
 - [ ] Run the complete automated suite, exact compatibility-corpus gate, package
       verification, storage harnesses, and documented Pterodactyl workflow.

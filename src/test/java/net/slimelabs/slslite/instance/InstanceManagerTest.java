@@ -7,14 +7,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
+import java.lang.reflect.Proxy;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.Attributes;
@@ -42,6 +45,7 @@ import net.slimelabs.slslite.velocity.BackendRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 class InstanceManagerTest {
@@ -518,6 +522,57 @@ class InstanceManagerTest {
   }
 
   @Test
+  void proxyShutdownAwaitsActiveProcessTerminalCleanup() throws Exception {
+    TestContext context = createContext(true, true);
+    ManagedInstance instance = manager.start("fixture");
+    instance.readyFuture().get(10, TimeUnit.SECONDS);
+
+    manager.shutdown(Duration.ofSeconds(3));
+
+    assertTrue(instance.stoppedFuture().isDone());
+    assertTrue(manager.getAll().isEmpty());
+    assertTrue(context.backends().registrations.isEmpty());
+    assertTrue(context.ports().reservations().isEmpty());
+    assertEquals(0, context.budget().reservedMemoryMiB());
+    InstanceMetadata persisted =
+        new InstanceMetadataStore(instance.directory().getParent())
+            .read(instance.directory())
+            .orElseThrow();
+    assertEquals(InstanceState.STOPPED, persisted.state());
+    assertEquals(null, persisted.processId());
+    manager = null;
+  }
+
+  @Test
+  void shutdownDeadlineOverrunWarnsOnceAndLeavesReconciliationMetadata() throws Exception {
+    List<String> warnings = new CopyOnWriteArrayList<>();
+    Logger logger = capturingLogger(warnings);
+    TestContext context = createContext(true, true, false, logger);
+    Path profile = temporaryDirectory.resolve("profiles/paper.yml");
+    Files.writeString(
+        profile, Files.readString(profile).replace("\"ready-stop\"", "\"ignore-stop\""));
+    context.profiles().reload();
+    ManagedInstance instance = manager.start("fixture");
+    instance.readyFuture().get(10, TimeUnit.SECONDS);
+
+    manager.shutdown(Duration.ZERO);
+    instance.stoppedFuture().handle((ignored, failure) -> null).get(5, TimeUnit.SECONDS);
+
+    assertEquals(
+        1,
+        warnings.stream()
+            .filter(message -> message.contains("Shutdown deadline expired before cleanup"))
+            .count());
+    assertTrue(Files.isDirectory(instance.directory()));
+    InstanceMetadata persisted =
+        new InstanceMetadataStore(instance.directory().getParent())
+            .read(instance.directory())
+            .orElseThrow();
+    assertEquals(InstanceState.STOPPING, persisted.state());
+    assertTrue(persisted.processId() != null);
+  }
+
+  @Test
   void proxyShutdownDuringPreparationDoesNotLaunchAfterSupervisorCloses() throws Exception {
     TestContext context = createContext(false, true, true);
     ManagedInstance instance = manager.start("fixture");
@@ -629,6 +684,12 @@ class InstanceManagerTest {
 
   private TestContext createContext(boolean save, boolean includeJar, boolean includeVolume)
       throws Exception {
+    return createContext(
+        save, includeJar, includeVolume, LoggerFactory.getLogger(InstanceManagerTest.class));
+  }
+
+  private TestContext createContext(
+      boolean save, boolean includeJar, boolean includeVolume, Logger logger) throws Exception {
     Path blueprintsDirectory = Files.createDirectories(temporaryDirectory.resolve("blueprints"));
     Path profilesDirectory = Files.createDirectories(temporaryDirectory.resolve("profiles"));
     Path softwareDirectory =
@@ -713,8 +774,33 @@ class InstanceManagerTest {
             new JavaJarProcessSpecFactory(temporaryDirectory),
             supervisor,
             backends,
-            LoggerFactory.getLogger(InstanceManagerTest.class));
+            logger);
     return new TestContext(budget, ports, backends, blueprints, profiles);
+  }
+
+  private static Logger capturingLogger(List<String> warnings) {
+    return (Logger)
+        Proxy.newProxyInstance(
+            Logger.class.getClassLoader(),
+            new Class<?>[] {Logger.class},
+            (proxy, method, arguments) -> {
+              if (method.getName().equals("warn")
+                  && arguments != null
+                  && arguments.length > 0
+                  && arguments[0] instanceof String message) {
+                warnings.add(message);
+              }
+              if (method.getName().equals("getName")) {
+                return "capturing-instance-manager-test";
+              }
+              if (method.getReturnType() == boolean.class) {
+                return false;
+              }
+              if (method.getReturnType() == int.class) {
+                return 0;
+              }
+              return null;
+            });
   }
 
   private void awaitCleanup() throws Exception {

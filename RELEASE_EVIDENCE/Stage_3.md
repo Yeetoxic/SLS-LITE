@@ -278,3 +278,100 @@ volume `sls-ptero-stage3-default-audit-preclean-20260802`; the same persistent
 `lobby.b5kk8m` and administrator returned ready under the audited artifact.
 The full verification run passed 610 tests with zero failures or errors and
 seven environment-dependent skips.
+
+### Managed-Lobby Shutdown Finalization
+
+The production-style Pterodactyl fixture reproduced both deferred-cleanup
+warnings during one otherwise clean stop of persistent lobby `lobby.b5kk8m`.
+The process supervisor's exit future became observable before its dependent
+storage finalizer was guaranteed to be submitted, allowing proxy shutdown to
+close the finalization executor inside that callback-order window.
+
+Shutdown now waits on each managed instance's terminal cleanup future before
+closing the finalization executor. It persists `STOPPING` state and process
+identity before stopping active children, and genuine deadline overruns emit
+one deduplicated warning while preserving metadata and storage for startup
+reconciliation. Regression coverage verifies both a completed persistent-lobby
+shutdown and a forced zero-deadline overrun.
+
+The corrected artifact completed two subsequent Panel stops with a code-zero
+Paper exit and no deferred-cleanup warning. The shutdown-fix artifact SHA-256
+`8B1DB99F74E86D4E1715C6606C44FB3C2F762623B091AD6EE732AFFE547F23B4`
+was deployed through the Panel workflow; Velocity, SLS-Limbo, and the same
+persistent lobby returned ready. The full verification run passed 612 tests
+with zero failures or errors and seven environment-dependent skips; Spotless
+and SpotBugs passed.
+
+### Release-Candidate Performance And Efficiency
+
+The native-ext4 production-style allocation was measured with Velocity,
+SLS-Limbo, and persistent Paper 26.2 lobby `lobby.b5kk8m` ready. The fixture
+helper initially allowed Velocity to size its heap to 95% of the entire 6 GiB
+container even though managed children share that cgroup. The helper now uses
+an explicit 128/512 MiB Velocity heap and reapplies that bounded startup to
+older reusable fixtures. Operator guidance now requires the proxy heap,
+managed admission budget, and native/RSS headroom to be sized separately.
+
+After that correction, a 32-second idle sample consumed 1.769 CPU-seconds
+across all three JVMs: about 5.53% of one core or 1.38% of the four-vCPU
+allocation. Cgroup memory changed from 1,360,863,232 to 1,365,921,792 bytes.
+Ending RSS was 257,384 KiB Velocity, 132,728 KiB SLS-Limbo, and 1,020,848 KiB
+Paper; summed RSS double-counts shared pages. Thread and descriptor counts
+remained 38/71, 24/16, and 45/130 respectively. The sample transferred 70
+bytes in each network direction, grew neither Velocity nor SLS-LITE logs, and
+performed only 4 KiB of Paper reads and 68 KiB of Paper writes. Cgroup memory
+reported no `high`, `max`, OOM, or OOM-kill event and no memory pressure; idle
+I/O pressure remained zero.
+
+The live SLS-LITE tree occupied 319,916,709 bytes: approximately 243 MiB for
+the retained lobby, 59 MiB for reusable Paper software, 5.2 MiB for SLS-Limbo,
+and 44 KiB for SLS-LITE logs. A bounded-heap Panel restart provisioned the
+persistent lobby in 10.726 seconds and completed primary recovery in 11.158
+seconds. Software resolution, file preparation, configuration, launch, and
+registration together used about 215 ms; Paper readiness dominated at 10.505
+seconds. The preceding clean stop used 661 ms for shutdown and 2.6 ms for
+cleanup. Repeated cached recovery samples ranged from 9.880 to 11.728 seconds;
+the clean-install first run took 26.322 seconds, including provider/software
+work and Paper's longer initial readiness.
+
+The preserved Stage 3.8 native fixture supplied the multi-instance workload
+without changing the online production fixture. Two concurrent ephemeral Paper
+instances became ready in 9.686 and 17.600 seconds; their successful
+matchmaking totals were 11.067 and 20.369 seconds, including 1.381 and 2.768
+seconds for transfer. Cancellation samples completed in 19-238 ms before file
+work and roughly 291-353 ms while portable preparation was active. The two
+ephemeral instances shut down concurrently in about 4.2-4.3 seconds with
+48-51 ms cleanup. Admission remained bounded and both directories were
+removed. These figures establish an empty/one-client release baseline, not a
+claim about loaded player capacity. Storage-strategy preparation, allocation,
+sparse-copy, and cleanup measurements remain recorded in the Stage 3 storage
+matrix above.
+
+### Continuous Integration Gate
+
+The repository now runs `mvn -B --no-transfer-progress clean verify` on a
+GitHub-hosted Temurin 25 runner for every push and pull request. Checkout, Java
+setup, and artifact upload actions are pinned to reviewed commits. The shaded
+plugin is retained for 14 days, and pull requests receive a separately pinned
+GitHub dependency review that rejects moderate-or-higher known
+vulnerabilities.
+
+Maven dependency analysis is bound to `verify` with warnings treated as build
+failures. Direct Adventure, SLF4J, Guice, and JUnit API/engine dependencies now
+replace reliance on undeclared Velocity transitives or the unused JUnit
+aggregator; only the reflectively loaded JUnit engine has a documented unused
+analysis exception. A clean local CI-equivalent run passed 612 tests with zero
+failures or errors and seven environment-dependent skips, found no dependency
+problems, passed Spotless and SpotBugs, and produced Java 21 class-file version
+65 from JDK 25.
+
+Attempting the workflow with JDK 21 correctly exposed that the pinned Velocity
+4.1 API contains Java 25 class files (version 69). Build and getting-started
+documentation now distinguishes the required JDK 25 build/proxy runtime from
+SLS-LITE's Java 21 output bytecode.
+
+The final CI-equivalent artifact SHA-256
+`610C4438D7EE6EC1C114E7501ADAF8EB505C97C743BE2C3E7BDD198A356617DB`
+was deployed through the Panel workflow. Velocity started with its bounded
+512 MiB heap, SLS-Limbo became ready, and persistent lobby `lobby.b5kk8m`
+returned ready without an SLS-LITE warning or failure.

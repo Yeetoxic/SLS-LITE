@@ -5,7 +5,9 @@ local Java processes. Test host capabilities before importing a real network.
 
 ## Host Checklist
 
-- Velocity and SLS-LITE can run on Java 21 or newer.
+- The pinned Velocity generation used by this release runs on Java 25.
+  SLS-LITE's own classes target Java 21 bytecode, but installing an older JDK
+  does not make this Velocity build runnable.
 - Every Minecraft version has a compatible Java executable.
 - Velocity may create child processes and writable directories.
 - Managed servers may bind unused ports on `127.0.0.1`.

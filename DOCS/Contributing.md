@@ -6,7 +6,8 @@ their lifecycle or data risk.
 
 ## Build Environment
 
-- JDK 21 or newer.
+- JDK 25. The pinned Velocity API contains Java 25 class files, while Maven
+  still emits SLS-LITE as Java 21 bytecode through `--release 21`.
 - Maven 3.9 or newer.
 - Current pinned Velocity API dependencies.
 - Docker Desktop, WSL, Node, and Minecraft clients only for their respective

@@ -9,9 +9,12 @@ synthetic Velocity fixture, and the local Pterodactyl historical-world network.
 mvn verify
 ```
 
-This compiles Java 21 bytecode, runs the JUnit suite, builds the shaded JAR, and
+Run this release's build with JDK 25 because the pinned Velocity API itself
+contains Java 25 class files. Maven still compiles SLS-LITE with `--release 21`.
+The command runs the JUnit suite, builds the shaded JAR, and
 packages license material. It also checks the pinned Google Java Format output
-and fails on high-priority SpotBugs findings. Tests cover parsing, validation,
+and fails on dependency declaration drift or high-priority SpotBugs findings.
+Tests cover parsing, validation,
 lifecycle, concurrency, resource accounting, installation, reconciliation,
 commands, lobbies, SLS-Limbo, protocol integration boundaries, and Velocity
 registration.
@@ -36,6 +39,12 @@ mvn -U clean verify
 ```
 
 That command requires Maven repository network access.
+
+GitHub Actions runs the same clean JDK 25 verification for every push and pull
+request, retains the shaded plugin artifact for 14 days, and reviews pull
+request dependency changes for moderate-or-higher known vulnerabilities. All
+third-party actions are pinned to exact commits; update those pins only after
+reviewing the corresponding upstream release.
 
 ## Protocol Tests
 

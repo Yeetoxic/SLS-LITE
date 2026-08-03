@@ -43,7 +43,8 @@ and translated paths.
 ## Requirements
 
 - A current compatible Velocity 4.x server.
-- Java 21 or newer for Velocity and SLS-LITE.
+- JDK 25 to build and run the pinned Velocity generation used by this release.
+  SLS-LITE itself is emitted as Java 21 bytecode for plugin compatibility.
 - Any additional Java majors required by the Minecraft versions you launch.
 - Permission to create files, bind loopback ports, and launch child Java
   processes inside the hosting allocation.

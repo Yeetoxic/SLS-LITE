@@ -11,6 +11,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -20,6 +21,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
@@ -85,6 +87,8 @@ public final class InstanceManager implements ServerController {
   private final InstanceCrashRecovery crashRecovery;
   private final ExecutorService finalizationExecutor;
   private final Map<String, ManagedInstance> instances = new java.util.HashMap<>();
+  private final Set<String> deferredShutdownCleanup =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
 
   private volatile boolean closed;
   private volatile MaintenanceStatus maintenance = MaintenanceStatus.accepting();
@@ -508,21 +512,37 @@ public final class InstanceManager implements ServerController {
               .completeExceptionally(
                   new CancellationException(
                       "Instance startup was cancelled during proxy shutdown: " + instance.id()));
+        } else if (instance.process() != null) {
+          metadata.writeBestEffort(instance, InstanceState.STOPPING, instance.process());
         }
       }
     }
     operationExecutor.shutdownNow();
     processSupervisor.shutdown(remaining(deadline));
-    finalizationExecutor.shutdown();
     awaitExecutor(operationExecutor, deadline, "managed instance operation");
+    awaitTerminalCleanup(snapshot, deadline);
+    finalizationExecutor.shutdown();
     awaitExecutor(finalizationExecutor, deadline, "instance finalization");
     finalizationExecutor.shutdownNow();
     for (ManagedInstance instance : snapshot) {
       if (findActive(instance.id()) == instance) {
-        logger.warn(
-            "Deferring unfinished shutdown cleanup for {} to startup reconciliation",
-            instance.id());
+        deferShutdownCleanup(instance);
       }
+    }
+  }
+
+  private void awaitTerminalCleanup(List<ManagedInstance> instances, long deadline) {
+    CompletableFuture<?>[] stopped =
+        instances.stream().map(ManagedInstance::stoppedFuture).toArray(CompletableFuture[]::new);
+    try {
+      CompletableFuture.allOf(stopped)
+          .get(Math.max(0L, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+    } catch (java.util.concurrent.ExecutionException | TimeoutException ignored) {
+      // A failed process still reaches terminal cleanup. A timeout is reported once per active
+      // instance below, after the finalization executor has stopped accepting work.
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      logger.warn("Interrupted while waiting for managed instance cleanup to stop");
     }
   }
 
@@ -554,12 +574,21 @@ public final class InstanceManager implements ServerController {
       }
       // Never let a late child exit start blocking storage work after the bounded plugin shutdown
       // has ended. Durable metadata and the instance directory remain for startup reconciliation.
-      logger.warn("Deferring late exit cleanup for {} to startup reconciliation", instance.id());
+      deferShutdownCleanup(instance);
       if (failure == null) {
         instance.stoppedFuture().complete(exitCode);
       } else {
         instance.stoppedFuture().completeExceptionally(failure);
       }
+    }
+  }
+
+  private void deferShutdownCleanup(ManagedInstance instance) {
+    if (deferredShutdownCleanup.add(instance.id())) {
+      logger.warn(
+          "Shutdown deadline expired before cleanup completed for {}; preserving its metadata "
+              + "and storage for startup reconciliation",
+          instance.id());
     }
   }
 

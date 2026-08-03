@@ -13,6 +13,7 @@ use Pterodactyl\Services\Allocations\AssignmentService;
 use Pterodactyl\Services\Servers\ServerCreationService;
 
 const EXTERNAL_ID = 'sls-lite-local-velocity';
+const VELOCITY_STARTUP = 'java -Xms128M -Xmx512M -jar {{SERVER_JARFILE}}';
 
 $panelRoot = getenv('PANEL_ROOT') ?: '/var/www/pterodactyl';
 
@@ -64,7 +65,7 @@ if (!$server) {
         'cpu' => 400,
         'threads' => null,
         'oom_disabled' => true,
-        'startup' => 'java -Xms128M -XX:MaxRAMPercentage=95.0 -jar {{SERVER_JARFILE}}',
+        'startup' => VELOCITY_STARTUP,
         'image' => 'ghcr.io/pterodactyl/yolks:java_25',
         'database_limit' => 0,
         'allocation_limit' => 0,
@@ -76,6 +77,13 @@ if (!$server) {
             'SERVER_JARFILE' => 'velocity.jar',
         ],
     ]);
+}
+
+// Keep the reusable fixture bounded when this helper is rerun after an older
+// allocation was created. Percentage-of-container heap sizing competes with
+// every SLS-LITE child JVM in the same Pterodactyl memory cgroup.
+if ($server->startup !== VELOCITY_STARTUP) {
+    $server->forceFill(['startup' => VELOCITY_STARTUP])->save();
 }
 
 $volume = '/var/lib/pterodactyl/volumes/' . $server->uuid;

@@ -116,6 +116,13 @@ allocation as Velocity. The Panel memory limit covers Velocity and every child
 process together. See [Velocity Testing](Velocity_Testing.md) for its software
 matrix.
 
+The repository helper bounds the fixture's Velocity heap at 512 MiB. Do not use
+container-wide `MaxRAMPercentage` sizing for the proxy when managed child JVMs
+share its allocation: that allows Velocity to claim memory reserved by
+`resources.total_memory_mib`, SLS-Limbo, JVM native overhead, and the operating
+system. Size the proxy heap and managed-memory admission budget separately and
+leave measured native/RSS headroom below the Panel limit.
+
 To test a disabled managed primary, set `lobby.auto_start: false` while keeping
 SLS-Limbo enabled, restart Velocity, and confirm no managed lobby process is
 resumed or recovered. Restore `true` and restart Velocity before continuing.
