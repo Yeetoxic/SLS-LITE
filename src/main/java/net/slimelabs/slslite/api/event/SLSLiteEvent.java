@@ -8,7 +8,8 @@ public sealed interface SLSLiteEvent
         InstanceFailureEvent,
         InstanceLifecycleEvent,
         LobbyStatusEvent,
-        PlayerMatchmakingEvent {
+        PlayerMatchmakingEvent,
+        SoftwareInstallationEvent {
 
   long sequence();
 

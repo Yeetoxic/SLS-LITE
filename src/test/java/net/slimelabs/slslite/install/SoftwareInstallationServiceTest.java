@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -55,6 +56,9 @@ class SoftwareInstallationServiceTest {
             new JavaJarProcessSpecFactory(temporaryDirectory),
             List.of(provider),
             LoggerFactory.getLogger(getClass()))) {
+      var transitions =
+          new CopyOnWriteArrayList<SoftwareInstallationService.InstallationTransition>();
+      service.installObserver(transitions::add);
       var first = service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0");
       var second = service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0");
 
@@ -63,6 +67,11 @@ class SoftwareInstallationServiceTest {
       assertEquals(1, installs.get());
       assertEquals("fixture", read(installed.resolve("server.jar")));
       assertEquals(InstallationState.READY, service.snapshot("fixture", "1.0").state());
+      assertEquals(
+          List.of(
+              SoftwareInstallationService.InstallationTransitionStatus.STARTED,
+              SoftwareInstallationService.InstallationTransitionStatus.READY),
+          transitions.stream().map(transition -> transition.status()).toList());
     }
   }
 
@@ -171,6 +180,9 @@ class SoftwareInstallationServiceTest {
           }
         };
     try (SoftwareInstallationService service = service(List.of(provider))) {
+      var transitions =
+          new CopyOnWriteArrayList<SoftwareInstallationService.InstallationTransition>();
+      service.installObserver(transitions::add);
       assertThrows(
           Exception.class,
           () -> service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0").join());
@@ -178,6 +190,16 @@ class SoftwareInstallationServiceTest {
       Path installed = service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0").join();
 
       assertEquals("retry", read(installed.resolve("server.jar")));
+      assertEquals(
+          List.of(
+              SoftwareInstallationService.InstallationTransitionStatus.STARTED,
+              SoftwareInstallationService.InstallationTransitionStatus.FAILED,
+              SoftwareInstallationService.InstallationTransitionStatus.STARTED,
+              SoftwareInstallationService.InstallationTransitionStatus.READY),
+          transitions.stream().map(transition -> transition.status()).toList());
+      assertEquals(
+          SoftwareInstallationService.InstallationFailureCategory.IO,
+          transitions.get(1).failureCategory());
       assertEquals(2, installs.get());
     }
   }
@@ -242,12 +264,20 @@ class SoftwareInstallationServiceTest {
           }
         };
     SoftwareInstallationService service = service(List.of(provider));
+    var transitions =
+        new CopyOnWriteArrayList<SoftwareInstallationService.InstallationTransition>();
+    service.installObserver(transitions::add);
     service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0");
     assertEquals(true, entered.await(5, TimeUnit.SECONDS));
 
     service.shutdown(Duration.ofSeconds(5));
 
     assertEquals(true, interrupted.await(1, TimeUnit.SECONDS));
+    assertEquals(
+        List.of(
+            SoftwareInstallationService.InstallationTransitionStatus.STARTED,
+            SoftwareInstallationService.InstallationTransitionStatus.CANCELLED),
+        transitions.stream().map(transition -> transition.status()).toList());
     assertThrows(
         Exception.class,
         () -> service.ensureInstalled(profile(SoftwareSource.PAPER), "2.0").join());

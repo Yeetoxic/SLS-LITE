@@ -30,6 +30,11 @@ import net.slimelabs.slslite.api.event.LobbyStatusEvent;
 import net.slimelabs.slslite.api.event.MatchmakingStatus;
 import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
 import net.slimelabs.slslite.api.event.SLSLiteEvent;
+import net.slimelabs.slslite.api.event.SoftwareInstallationEvent;
+import net.slimelabs.slslite.api.event.SoftwareInstallationFailureCategory;
+import net.slimelabs.slslite.api.event.SoftwareInstallationSource;
+import net.slimelabs.slslite.api.event.SoftwareInstallationStatus;
+import net.slimelabs.slslite.api.event.SoftwareReleaseChannel;
 import net.slimelabs.slslite.api.event.Subscription;
 import org.junit.jupiter.api.Test;
 
@@ -69,6 +74,11 @@ class PublicApiContractTest {
           LobbyStatusEvent.class,
           PlayerMatchmakingEvent.class,
           MatchmakingStatus.class,
+          SoftwareInstallationEvent.class,
+          SoftwareInstallationFailureCategory.class,
+          SoftwareInstallationSource.class,
+          SoftwareInstallationStatus.class,
+          SoftwareReleaseChannel.class,
           Subscription.class);
 
   @Test
@@ -80,6 +90,7 @@ class PublicApiContractTest {
     assertTrue(Set.of(Capability.values()).contains(Capability.INSTANCE_FAILURE_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.CATALOG_RELOAD_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.LOBBY_STATUS_EVENTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.SOFTWARE_INSTALLATION_EVENTS));
   }
 
   @Test

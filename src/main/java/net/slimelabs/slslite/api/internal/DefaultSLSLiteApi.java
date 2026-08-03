@@ -49,10 +49,16 @@ import net.slimelabs.slslite.api.event.LobbyStatusEvent;
 import net.slimelabs.slslite.api.event.MatchmakingStatus;
 import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
 import net.slimelabs.slslite.api.event.SLSLiteEvent;
+import net.slimelabs.slslite.api.event.SoftwareInstallationEvent;
+import net.slimelabs.slslite.api.event.SoftwareInstallationFailureCategory;
+import net.slimelabs.slslite.api.event.SoftwareInstallationSource;
+import net.slimelabs.slslite.api.event.SoftwareInstallationStatus;
+import net.slimelabs.slslite.api.event.SoftwareReleaseChannel;
 import net.slimelabs.slslite.api.event.Subscription;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.DefinitionReloader;
+import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.instance.InstanceManager;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
@@ -103,7 +109,8 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
       BlueprintRepository blueprints,
       InstanceManager instances,
       LocalJoinService joins,
-      LobbyProvider lobby) {
+      LobbyProvider lobby,
+      SoftwareInstallationService installations) {
     if (status.get() != ApiStatus.STARTING) {
       throw new IllegalStateException("API can only be activated once");
     }
@@ -111,10 +118,12 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
     this.instances = java.util.Objects.requireNonNull(instances, "instances");
     this.joins = java.util.Objects.requireNonNull(joins, "joins");
     java.util.Objects.requireNonNull(lobby, "lobby");
+    java.util.Objects.requireNonNull(installations, "installations");
     instances.installLifecycleObserver(this::publish);
     instances.installFailureObserver(this::publish);
     joins.installMatchmakingObserver(this::publish);
     lobby.installStatusObserver(this::publish);
+    installations.installObserver(this::publish);
     status.set(ApiStatus.READY);
     ready.complete(null);
   }
@@ -336,6 +345,20 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
             LobbyServiceStatus.valueOf(snapshot.primaryStatus().name()),
             LobbyServiceStatus.valueOf(snapshot.holdingStatus().name()),
             LobbyRoute.valueOf(snapshot.route().name()));
+    submit(event);
+  }
+
+  synchronized void publish(SoftwareInstallationService.InstallationTransition transition) {
+    SoftwareInstallationEvent event =
+        new SoftwareInstallationEvent(
+            eventSequence.incrementAndGet(),
+            transition.occurredAt(),
+            transition.key().softwareId(),
+            transition.key().version(),
+            SoftwareInstallationSource.valueOf(transition.source().name()),
+            SoftwareReleaseChannel.valueOf(transition.channel().name()),
+            SoftwareInstallationStatus.valueOf(transition.status().name()),
+            SoftwareInstallationFailureCategory.valueOf(transition.failureCategory().name()));
     submit(event);
   }
 

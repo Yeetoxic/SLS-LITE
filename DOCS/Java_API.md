@@ -85,7 +85,7 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 API 1.0 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
 `INSTANCE_START`, `INSTANCE_STOP`, `INSTANCE_DELETE`, `PLAYER_QUEUE`,
 `MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, `CATALOG_RELOAD_EVENTS`,
-`LOBBY_STATUS_EVENTS`, and `LIFECYCLE_EVENTS`.
+`LOBBY_STATUS_EVENTS`, `SOFTWARE_INSTALLATION_EVENTS`, and `LIFECYCLE_EVENTS`.
 
 ## Operations
 
@@ -189,6 +189,15 @@ Recovery can therefore be observed even while players remain safely routed to
 the holding lobby. `available()` is false only for route `NONE`. Server names,
 addresses, ports, child processes, retry details, and failure messages remain
 internal.
+
+Actual shared automatic-install jobs emit `SoftwareInstallationEvent` states:
+`STARTED`, then exactly one `READY`, `FAILED`, or `CANCELLED`. Concurrent callers
+waiting for the same target do not create duplicate event streams. Failures use
+only `IO`, `INSTALLER`, or `INTERNAL`; shutdown cancellation uses `CANCELLED`.
+Cache hits and requests rejected before work is accepted emit no installation
+event. Software/version, source, and release channel are exposed, while cache
+paths, download URLs, checksums, provider logs, progress text, and exception
+messages remain internal.
 
 ## Trust And Compatibility
 

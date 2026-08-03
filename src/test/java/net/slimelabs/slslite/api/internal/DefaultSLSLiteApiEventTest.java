@@ -30,12 +30,20 @@ import net.slimelabs.slslite.api.event.LobbyServiceStatus;
 import net.slimelabs.slslite.api.event.LobbyStatusEvent;
 import net.slimelabs.slslite.api.event.MatchmakingStatus;
 import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
+import net.slimelabs.slslite.api.event.SoftwareInstallationEvent;
+import net.slimelabs.slslite.api.event.SoftwareInstallationFailureCategory;
+import net.slimelabs.slslite.api.event.SoftwareInstallationSource;
+import net.slimelabs.slslite.api.event.SoftwareInstallationStatus;
+import net.slimelabs.slslite.api.event.SoftwareReleaseChannel;
 import net.slimelabs.slslite.config.DefinitionReloader;
+import net.slimelabs.slslite.install.InstallationKey;
+import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.LobbyStatus;
+import net.slimelabs.slslite.software.SoftwareSource;
 import net.slimelabs.slslite.velocity.LocalJoinService;
 import org.junit.jupiter.api.Test;
 import org.slf4j.helpers.NOPLogger;
@@ -222,6 +230,40 @@ class DefaultSLSLiteApiEventTest {
     assertEquals(LobbyServiceStatus.READY, lobby.holdingStatus());
     assertEquals(LobbyRoute.HOLDING, lobby.route());
     assertTrue(lobby.available());
+    api.close();
+  }
+
+  @Test
+  void mapsSanitizedSoftwareInstallationIntoTheGlobalOrderedEventStream() throws Exception {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    List<net.slimelabs.slslite.api.event.SLSLiteEvent> received = new CopyOnWriteArrayList<>();
+    CountDownLatch delivered = new CountDownLatch(2);
+    api.subscribe(
+        event -> {
+          received.add(event);
+          delivered.countDown();
+        });
+    api.publish(
+        new InstanceLifecycle.Transition(
+            "lobby.123", InstanceState.STARTING, InstanceState.READY, Instant.now()));
+    api.publish(
+        new SoftwareInstallationService.InstallationTransition(
+            new InstallationKey("paper", "1.21.11"),
+            SoftwareSource.PAPER,
+            net.slimelabs.slslite.software.SoftwareReleaseChannel.STABLE,
+            SoftwareInstallationService.InstallationTransitionStatus.FAILED,
+            SoftwareInstallationService.InstallationFailureCategory.IO,
+            Instant.now()));
+
+    assertTrue(delivered.await(2, TimeUnit.SECONDS));
+    assertEquals(List.of(1L, 2L), received.stream().map(event -> event.sequence()).toList());
+    SoftwareInstallationEvent installation = (SoftwareInstallationEvent) received.get(1);
+    assertEquals("paper", installation.softwareId());
+    assertEquals("1.21.11", installation.version());
+    assertEquals(SoftwareInstallationSource.PAPER, installation.source());
+    assertEquals(SoftwareReleaseChannel.STABLE, installation.channel());
+    assertEquals(SoftwareInstallationStatus.FAILED, installation.status());
+    assertEquals(SoftwareInstallationFailureCategory.IO, installation.failureCategory());
     api.close();
   }
 

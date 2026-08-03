@@ -19,12 +19,12 @@ The dedicated `sls-lite-0.1.0-SNAPSHOT-api.jar` was inspected after a clean
 build. It contained the public API/event classes and
 `META-INF/licenses/LICENSE`, contained no `api.internal`, instance, blueprint,
 or Velocity implementation classes, and had SHA-256
-`2115B45009840099231D6A917E5C091C10298A3DC28DE50BE6D1EAD92CD542E9`.
+`FB1F585F12015396A797F2829E9E2363E086D81D3B93D5D48D9EB0B5A4E11DF5`.
 `jdeps` found only Java base-library dependencies and Velocity's intentionally
 provided plugin/proxy API.
 
 The full shaded plugin had SHA-256
-`EA9D55D56F2FFE29E44F78836EB2501119397170F546645F3FAD4AFEA790AA21`.
+`78CDE893D958615565F8C174759A8C53DAFE2AF9C2A9D676E621234E606517B1`.
 Packaging review also exposed and corrected a pre-existing license-resource
 target mismatch; both the API classifier and full plugin now contain the
 project license at `META-INF/licenses/LICENSE`.
@@ -57,6 +57,11 @@ primary restoration, snapshot deduplication, observer failure isolation, and
 global API sequence mapping. The readiness callback was also moved onto the
 serialized health scheduler to remove a provider/fallback shutdown lock-order
 risk found during review.
+The software-installation event increment raised the complete passing tree to
+641 tests and the classifier to 39 public API classes with no internal classes.
+Tests cover one shared `STARTED -> READY` stream for concurrent waiters,
+sanitized `IO` failure followed by a successful retry, shutdown cancellation
+without a second failed event or warning, and global API sequence mapping.
 Dependency analysis, Spotless, and SpotBugs all passed, and `git diff --check`
 reported no whitespace errors. SnakeYAML remains shaded into the runtime plugin
 but is optional in the published POM, so API-classifier consumers do not inherit
@@ -111,3 +116,10 @@ removed and the allocation restarted again through the Panel; Velocity loaded
 its normal two plugins, SLS-Limbo and persistent lobby `lobby.b5kk8m` returned
 ready, the deployed checksum matched the build above, and only `sls-lite.jar`
 remained in the plugin directory.
+
+The software-installation event build was deployed through the same Panel
+workflow. The existing verified Paper cache was reused without a false
+installation-start event or download, while Velocity, SLS-Limbo, and persistent
+lobby `lobby.b5kk8m` returned ready normally. The deployed plugin matched the
+current shaded-plugin checksum above and the allocation was left running with
+only `sls-lite.jar` installed.

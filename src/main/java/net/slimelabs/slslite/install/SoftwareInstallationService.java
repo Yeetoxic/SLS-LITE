@@ -29,11 +29,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import net.slimelabs.slslite.io.BoundedFileReader;
 import net.slimelabs.slslite.io.ConfinedFiles;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSpecificationException;
 import net.slimelabs.slslite.software.SoftwareProfile;
+import net.slimelabs.slslite.software.SoftwareReleaseChannel;
 import net.slimelabs.slslite.software.SoftwareSource;
 import org.slf4j.Logger;
 
@@ -58,6 +60,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
   private final Logger logger;
   private final AtomicBoolean closed = new AtomicBoolean();
   private final Object lifecycleLock = new Object();
+  private volatile Consumer<InstallationTransition> installationObserver = ignored -> {};
 
   public SoftwareInstallationService(
       JavaJarProcessSpecFactory paths,
@@ -128,11 +131,22 @@ public final class SoftwareInstallationService implements AutoCloseable {
                   MutableInstallation record = new MutableInstallation(key);
                   history.put(key, record);
                   pruneHistory();
-                  CompletableFuture<Path> future =
-                      CompletableFuture.supplyAsync(
-                          () -> install(profile, version, target, record), executor);
-                  return new ActiveInstallation(
-                      profile.id(), version, profile.source(), profile.channel().name(), future);
+                  observe(
+                      key,
+                      profile.source(),
+                      profile.channel(),
+                      InstallationTransitionStatus.STARTED,
+                      InstallationFailureCategory.NONE);
+                  try {
+                    CompletableFuture<Path> future =
+                        CompletableFuture.supplyAsync(
+                            () -> install(profile, version, target, record), executor);
+                    return new ActiveInstallation(
+                        profile.id(), version, profile.source(), profile.channel(), record, future);
+                  } catch (java.util.concurrent.RejectedExecutionException exception) {
+                    failRecord(record, profile.source(), profile.channel(), exception);
+                    throw exception;
+                  }
                 });
       } catch (java.util.concurrent.RejectedExecutionException exception) {
         return CompletableFuture.failedFuture(
@@ -161,6 +175,16 @@ public final class SoftwareInstallationService implements AutoCloseable {
         .map(MutableInstallation::snapshot)
         .sorted(Comparator.comparing(snapshot -> snapshot.key().toString()))
         .toList();
+  }
+
+  public void installObserver(Consumer<InstallationTransition> observer) {
+    synchronized (lifecycleLock) {
+      if (!active.isEmpty()) {
+        throw new IllegalStateException(
+            "Installation observer must be installed before installation work starts");
+      }
+      installationObserver = java.util.Objects.requireNonNull(observer, "observer");
+    }
   }
 
   public InstallationSnapshot snapshot(String softwareId, String version) {
@@ -306,7 +330,20 @@ public final class SoftwareInstallationService implements AutoCloseable {
       if (!closed.compareAndSet(false, true)) {
         return;
       }
-      active.values().forEach(installation -> installation.future().cancel(true));
+      active
+          .values()
+          .forEach(
+              installation -> {
+                if (installation.record().cancelled()) {
+                  observe(
+                      installation.record().key,
+                      installation.source(),
+                      installation.channel(),
+                      InstallationTransitionStatus.CANCELLED,
+                      InstallationFailureCategory.CANCELLED);
+                }
+                installation.future().cancel(true);
+              });
       executor.shutdownNow();
     }
     try {
@@ -325,6 +362,8 @@ public final class SoftwareInstallationService implements AutoCloseable {
     if (provider == null) {
       throw fail(
           record,
+          profile.source(),
+          profile.channel(),
           new SoftwareInstallationException("No installer supports source " + profile.source()));
     }
     Path staging =
@@ -365,7 +404,14 @@ public final class SoftwareInstallationService implements AutoCloseable {
       }
       Files.createDirectories(target.getParent());
       moveDirectory(staging, target);
-      record.ready("Installed at " + target);
+      if (record.ready("Installed at " + target)) {
+        observe(
+            record.key,
+            profile.source(),
+            profile.channel(),
+            InstallationTransitionStatus.READY,
+            InstallationFailureCategory.NONE);
+      }
       logger.info("Installed software {} {} at {}", profile.id(), version, target);
       return target;
     } catch (Exception exception) {
@@ -383,7 +429,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
               restoreFailure);
         }
       }
-      throw fail(record, exception);
+      throw fail(record, profile.source(), profile.channel(), exception);
     }
   }
 
@@ -671,11 +717,61 @@ public final class SoftwareInstallationService implements AutoCloseable {
     }
   }
 
-  private CompletionException fail(MutableInstallation record, Exception exception) {
+  private CompletionException fail(
+      MutableInstallation record,
+      SoftwareSource source,
+      SoftwareReleaseChannel channel,
+      Exception exception) {
     String detail = rootMessage(exception);
-    record.failed(detail);
-    logger.warn("Software installation {} failed: {}", record.key, detail);
+    if (failRecord(record, source, channel, exception)) {
+      logger.warn("Software installation {} failed: {}", record.key, detail);
+    }
     return new CompletionException(new SoftwareInstallationException(detail, exception));
+  }
+
+  private boolean failRecord(
+      MutableInstallation record,
+      SoftwareSource source,
+      SoftwareReleaseChannel channel,
+      Throwable failure) {
+    if (record.failed(rootMessage(failure))) {
+      observe(
+          record.key,
+          source,
+          channel,
+          InstallationTransitionStatus.FAILED,
+          failureCategory(failure));
+      return true;
+    }
+    return false;
+  }
+
+  private void observe(
+      InstallationKey key,
+      SoftwareSource source,
+      SoftwareReleaseChannel channel,
+      InstallationTransitionStatus status,
+      InstallationFailureCategory failureCategory) {
+    try {
+      installationObserver.accept(
+          new InstallationTransition(key, source, channel, status, failureCategory, Instant.now()));
+    } catch (RuntimeException ignored) {
+      // Observability must never alter installation ownership or completion.
+    }
+  }
+
+  private static InstallationFailureCategory failureCategory(Throwable failure) {
+    Throwable root = failure;
+    while (root.getCause() != null) {
+      root = root.getCause();
+    }
+    if (root instanceof IOException) {
+      return InstallationFailureCategory.IO;
+    }
+    if (root instanceof SoftwareInstallationException) {
+      return InstallationFailureCategory.INSTALLER;
+    }
+    return InstallationFailureCategory.INTERNAL;
   }
 
   private static void deleteRecursively(Path path) {
@@ -733,16 +829,34 @@ public final class SoftwareInstallationService implements AutoCloseable {
       detail = line;
     }
 
-    private synchronized void ready(String message) {
+    private synchronized boolean ready(String message) {
+      if (state != InstallationState.INSTALLING) {
+        return false;
+      }
       log(message);
       state = InstallationState.READY;
       completedAt = Instant.now();
+      return true;
     }
 
-    private synchronized void failed(String message) {
+    private synchronized boolean failed(String message) {
+      if (state != InstallationState.INSTALLING) {
+        return false;
+      }
       log("Failed: " + message);
       state = InstallationState.FAILED;
       completedAt = Instant.now();
+      return true;
+    }
+
+    private synchronized boolean cancelled() {
+      if (state != InstallationState.INSTALLING) {
+        return false;
+      }
+      log("Cancelled during shutdown");
+      state = InstallationState.FAILED;
+      completedAt = Instant.now();
+      return true;
     }
 
     private synchronized InstallationSnapshot snapshot() {
@@ -755,13 +869,58 @@ public final class SoftwareInstallationService implements AutoCloseable {
       String softwareId,
       String version,
       SoftwareSource source,
-      String channel,
+      SoftwareReleaseChannel channel,
+      MutableInstallation record,
       CompletableFuture<Path> future) {
     private boolean matches(SoftwareProfile profile, String requestedVersion) {
       return softwareId.equals(profile.id())
           && version.equals(requestedVersion)
           && source == profile.source()
-          && channel.equals(profile.channel().name());
+          && channel == profile.channel();
+    }
+  }
+
+  public enum InstallationTransitionStatus {
+    STARTED,
+    READY,
+    FAILED,
+    CANCELLED
+  }
+
+  public enum InstallationFailureCategory {
+    NONE,
+    IO,
+    INSTALLER,
+    INTERNAL,
+    CANCELLED
+  }
+
+  public record InstallationTransition(
+      InstallationKey key,
+      SoftwareSource source,
+      SoftwareReleaseChannel channel,
+      InstallationTransitionStatus status,
+      InstallationFailureCategory failureCategory,
+      Instant occurredAt) {
+
+    public InstallationTransition {
+      java.util.Objects.requireNonNull(key, "key");
+      java.util.Objects.requireNonNull(source, "source");
+      java.util.Objects.requireNonNull(channel, "channel");
+      java.util.Objects.requireNonNull(status, "status");
+      java.util.Objects.requireNonNull(failureCategory, "failureCategory");
+      java.util.Objects.requireNonNull(occurredAt, "occurredAt");
+      boolean normal =
+          status == InstallationTransitionStatus.STARTED
+              || status == InstallationTransitionStatus.READY;
+      if (normal != (failureCategory == InstallationFailureCategory.NONE)) {
+        throw new IllegalArgumentException(
+            "started/ready transitions require NONE; failed/cancelled require a category");
+      }
+      if ((status == InstallationTransitionStatus.CANCELLED)
+          != (failureCategory == InstallationFailureCategory.CANCELLED)) {
+        throw new IllegalArgumentException("cancelled status and category must match");
+      }
     }
   }
 

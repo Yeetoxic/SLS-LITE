@@ -436,8 +436,11 @@ mutation, or silent instance corruption.
 - [x] Add deduplicated effective-lobby events covering primary and holding
       status, recovery/degradation, and the active primary/holding/none route
       without backend or process details.
-- [ ] Expand the bounded event model to cover software installation state,
-      reconciliation, and API shutdown. Give each event stable immutable data,
+- [x] Add exactly-once shared software-installation events for start,
+      ready, sanitized failure, and shutdown cancellation without cache paths,
+      URLs, checksums, provider logs, or duplicate waiter notifications.
+- [ ] Expand the bounded event model to cover reconciliation and API shutdown.
+      Give each event stable immutable data,
       sequence/timestamp semantics, and a capability when support is optional.
 - [ ] Add redacted, bounded diagnostic views for system and lobby status,
       maintenance, installation state, host capabilities, instance statistics,
