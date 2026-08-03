@@ -8,6 +8,7 @@ public record SLSConfig(
     int portRangeStart,
     int portRangeEnd,
     int queueTimeoutSeconds,
+    BlueprintSelectionMode blueprintSelectionMode,
     int idleShutdownSeconds,
     ManagedOutputConfig managedOutput,
     ForwardingConfig forwarding,
@@ -31,6 +32,7 @@ public record SLSConfig(
       SLSLimboConfig limbo,
       LobbyConfig lobby,
       StorageConfig storage,
+      DetailedLoggingConfig detailedLogging,
       Path instancesDirectory) {
     this(
         totalMemoryMiB,
@@ -38,6 +40,39 @@ public record SLSConfig(
         portRangeStart,
         portRangeEnd,
         queueTimeoutSeconds,
+        BlueprintSelectionMode.FIRST_AVAILABLE,
+        idleShutdownSeconds,
+        managedOutput,
+        forwarding,
+        security,
+        limbo,
+        lobby,
+        storage,
+        detailedLogging,
+        instancesDirectory);
+  }
+
+  public SLSConfig(
+      int totalMemoryMiB,
+      int maxManagedProcesses,
+      int portRangeStart,
+      int portRangeEnd,
+      int queueTimeoutSeconds,
+      int idleShutdownSeconds,
+      ManagedOutputConfig managedOutput,
+      ForwardingConfig forwarding,
+      SecurityConfig security,
+      SLSLimboConfig limbo,
+      LobbyConfig lobby,
+      StorageConfig storage,
+      Path instancesDirectory) {
+    this(
+        totalMemoryMiB,
+        maxManagedProcesses,
+        portRangeStart,
+        portRangeEnd,
+        queueTimeoutSeconds,
+        BlueprintSelectionMode.FIRST_AVAILABLE,
         idleShutdownSeconds,
         managedOutput,
         forwarding,
@@ -68,6 +103,7 @@ public record SLSConfig(
         portRangeStart,
         portRangeEnd,
         queueTimeoutSeconds,
+        BlueprintSelectionMode.FIRST_AVAILABLE,
         idleShutdownSeconds,
         managedOutput,
         forwarding,
@@ -99,6 +135,9 @@ public record SLSConfig(
     }
     if (queueTimeoutSeconds <= 0) {
       throw new IllegalArgumentException("queueTimeoutSeconds must be positive");
+    }
+    if (blueprintSelectionMode == null) {
+      throw new IllegalArgumentException("blueprintSelectionMode is required");
     }
     if (idleShutdownSeconds < 0) {
       throw new IllegalArgumentException("idleShutdownSeconds must not be negative");

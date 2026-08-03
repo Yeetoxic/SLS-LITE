@@ -45,6 +45,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   private final ScheduledExecutorService scheduler;
   private final TransferActionBar actionBar;
   private final JoinTimingReporter timingReporter;
+  private final BlueprintSelectionStrategy blueprintSelection;
   private final Map<UUID, QueueEntry> queue = new HashMap<>();
   private final Set<String> queueOwnedInstances = new java.util.HashSet<>();
   private final Set<String> drainingInstances = new java.util.HashSet<>();
@@ -61,7 +62,9 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         instances,
         queueTimeout,
         Executors.newSingleThreadScheduledExecutor(threadFactory()),
-        DEFAULT_LOGGER);
+        DEFAULT_LOGGER,
+        SLSDetailLog.disabled(),
+        BlueprintSelectionStrategy.firstAvailable());
   }
 
   public LocalJoinService(
@@ -70,7 +73,15 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       ServerController instances,
       Duration queueTimeout,
       Logger logger) {
-    this(proxy, blueprints, instances, queueTimeout, logger, SLSDetailLog.disabled());
+    this(
+        proxy,
+        blueprints,
+        instances,
+        queueTimeout,
+        Executors.newSingleThreadScheduledExecutor(threadFactory()),
+        logger,
+        SLSDetailLog.disabled(),
+        BlueprintSelectionStrategy.firstAvailable());
   }
 
   public LocalJoinService(
@@ -85,9 +96,28 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         blueprints,
         instances,
         queueTimeout,
+        logger,
+        detailLog,
+        BlueprintSelectionStrategy.firstAvailable());
+  }
+
+  public LocalJoinService(
+      ProxyServer proxy,
+      BlueprintRepository blueprints,
+      ServerController instances,
+      Duration queueTimeout,
+      Logger logger,
+      SLSDetailLog detailLog,
+      BlueprintSelectionStrategy blueprintSelection) {
+    this(
+        proxy,
+        blueprints,
+        instances,
+        queueTimeout,
         Executors.newSingleThreadScheduledExecutor(threadFactory()),
         logger,
-        detailLog);
+        detailLog,
+        blueprintSelection);
   }
 
   LocalJoinService(
@@ -97,7 +127,15 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       Duration queueTimeout,
       ScheduledExecutorService scheduler,
       Logger logger) {
-    this(proxy, blueprints, instances, queueTimeout, scheduler, logger, SLSDetailLog.disabled());
+    this(
+        proxy,
+        blueprints,
+        instances,
+        queueTimeout,
+        scheduler,
+        logger,
+        SLSDetailLog.disabled(),
+        BlueprintSelectionStrategy.firstAvailable());
   }
 
   LocalJoinService(
@@ -108,6 +146,26 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       ScheduledExecutorService scheduler,
       Logger logger,
       SLSDetailLog detailLog) {
+    this(
+        proxy,
+        blueprints,
+        instances,
+        queueTimeout,
+        scheduler,
+        logger,
+        detailLog,
+        BlueprintSelectionStrategy.firstAvailable());
+  }
+
+  LocalJoinService(
+      ProxyServer proxy,
+      BlueprintRepository blueprints,
+      ServerController instances,
+      Duration queueTimeout,
+      ScheduledExecutorService scheduler,
+      Logger logger,
+      SLSDetailLog detailLog,
+      BlueprintSelectionStrategy blueprintSelection) {
     if (queueTimeout.isZero() || queueTimeout.isNegative()) {
       throw new IllegalArgumentException("queueTimeout must be positive");
     }
@@ -118,6 +176,8 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     this.scheduler = scheduler;
     this.actionBar = new TransferActionBar(scheduler);
     this.timingReporter = new JoinTimingReporter(instances, logger, detailLog);
+    this.blueprintSelection =
+        java.util.Objects.requireNonNull(blueprintSelection, "blueprintSelection");
   }
 
   public JoinAttempt join(Player player, String registry, String server)
@@ -385,13 +445,15 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   }
 
   private Optional<Blueprint> provisionBlueprint(Blueprint requested, List<Blueprint> pool) {
-    return pool.stream()
-        .filter(candidate -> activeInstanceCount(candidate) < candidate.maxInstances())
-        .sorted(
-            Comparator.comparing(
-                    (Blueprint candidate) -> candidate.id().equals(requested.id()) ? 0 : 1)
-                .thenComparing(Blueprint::id))
-        .findFirst();
+    List<Blueprint> eligible =
+        pool.stream()
+            .filter(candidate -> activeInstanceCount(candidate) < candidate.maxInstances())
+            .toList();
+    Optional<Blueprint> selected = blueprintSelection.select(requested, eligible);
+    if (selected.isPresent() && !eligible.contains(selected.get())) {
+      throw new IllegalStateException("Blueprint selection returned an ineligible definition");
+    }
+    return selected;
   }
 
   private static String gameType(Blueprint blueprint) {

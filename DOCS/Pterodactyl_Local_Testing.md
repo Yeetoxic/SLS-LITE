@@ -98,6 +98,34 @@ Switch to external mode first. Connect a Minecraft client to
 After the test, start the external lobby again from its Panel console before
 continuing, or switch back to managed mode with the command above.
 
+### Stage 3.8 External-Lobby Ownership Gate
+
+The native-Linux Pterodactyl fixture passed the external ownership boundary on
+2026-08-02. The mode helper discovered the active Docker game-data volume,
+started the separate Paper 26.1.2 allocation on port `25566`, registered it as
+Velocity server `lobby`, and restarted the proxy. SLS-LITE reported `Using
+external lobby lobby`; its allocation contained only Velocity and the bounded
+SLS-Limbo child, with no managed-lobby JVM and no new managed-lobby instance.
+
+Provider and fallback-coordinator tests separately prove that the external
+server remains a lobby routing target while `ownsPrimaryLifecycle` is false.
+Intentional stop acquisition and restart/reset cycling are rejected without
+calling the managed `ServerController`. Switching back to managed mode stopped
+the separate Paper allocation with exit code zero, resumed the same persistent
+`lobby.97f1ae` directory, and returned SLS-Limbo and the managed lobby to ready.
+The helper uses a disposable Alpine container mounted only to the fixture's
+named game-data volume; it does not install tools into Wings or alter the normal
+Pterodactyl security profile.
+
+The same fixture passed the Stage 3.8 pluggable blueprint-selection gate on
+2026-08-02. The packaged plugin initialized successfully with
+`matchmaking.blueprint_selection: random`, then SLS-Limbo and persistent lobby
+`lobby.97f1ae` both reached ready. The fixture was returned to explicit
+`first-available`, restarted again, and reached the same healthy state. Focused
+tests verify that ready instances retain priority, full/draining instances are
+excluded, first-available prefers the requested definition then stable ID
+order, and seeded random selection reaches only capacity-eligible pool members.
+
 The fallback's architecture, configuration, limitations, and full manual test
 are documented in [SLS_Limbo.md](SLS_Limbo.md).
 

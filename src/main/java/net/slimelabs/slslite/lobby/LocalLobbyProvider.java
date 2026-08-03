@@ -130,6 +130,11 @@ public final class LocalLobbyProvider implements LobbyProvider {
   }
 
   @Override
+  public boolean ownsPrimaryLifecycle(String serverName) {
+    return config.mode() == LobbyMode.MANAGED && isLobby(serverName);
+  }
+
+  @Override
   public CompletableFuture<Void> evacuate(String serverName) {
     if (isLobby(serverName)) {
       return CompletableFuture.failedFuture(

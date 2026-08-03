@@ -341,13 +341,13 @@ data, leaking resources, or trapping players in unexplained states.
 - [ ] Exercise managed lobby, separately hosted external lobby, SLS-Limbo
       fallback, queues, transfers, multiple registries, full servers, forced
       administration, recovery, and shutdown in one repeatable plan.
-- [ ] Verify external lobby mode never starts, stops, copies, or owns that lobby.
+- [x] Verify external lobby mode never starts, stops, copies, or owns that lobby.
 - [ ] Verify supported native and ViaVersion-translated client ranges for the
       selected Velocity/NanoLimbo combination; do not claim new versions before
       the complete transfer path passes.
 - [ ] Document ViaBackwards and ViaRewind as optional operator choices for older
       clients and preserve native SLS-Limbo operation without ViaVersion.
-- [ ] Finish first-available/random pluggable blueprint selection while retaining
+- [x] Finish first-available/random pluggable blueprint selection while retaining
       existing ready-instance preference and capacity limits.
 - [ ] Allow operators to disable managed-lobby automatic startup only with clear
       routing and recovery behavior.
@@ -355,6 +355,17 @@ data, leaking resources, or trapping players in unexplained states.
 
 ### 3.9 Stage 3 Acceptance Gate
 
+- [ ] Back up any retained fixture evidence, fully reset the local Pterodactyl
+      test allocation, and perform a clean first-time SLS-LITE installation
+      using only the release candidate artifact and published instructions.
+      Record every required manual step, default-config correction, unexpected
+      file, failed assumption, and avoidable disk cost; then repeat from clean
+      state after fixing all release-blocking onboarding defects.
+- [ ] Profile release-candidate performance and overall efficiency under idle,
+      startup, queue/transfer, single-instance, multi-instance, recovery, and
+      shutdown workloads. Review CPU, heap/RSS, child-process admission, disk
+      use and churn, preparation/readiness latency, network overhead, log growth,
+      and cleanup, and resolve or explicitly document material regressions.
 - [ ] Add CI for compilation, tests, packaging, dependency checks, and the
       lightweight static rules approved during the organization work.
 - [ ] Run the complete automated suite, exact compatibility-corpus gate, package

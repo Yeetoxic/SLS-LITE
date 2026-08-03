@@ -83,6 +83,26 @@ class FallbackLobbyProviderTest {
   }
 
   @Test
+  void rejectsLifecycleDrainForExternalPrimary() {
+    RegisteredServer primaryServer = server("lobby");
+    RegisteredServer limboServer = server("sls-limbo");
+    LobbyProvider primary =
+        provider("primary", "lobby", primaryServer, LobbyStatus.EXTERNAL, new ArrayList<>());
+    LobbyProvider limbo = provider("limbo", "sls-limbo", limboServer, new ArrayList<>());
+    FallbackLobbyProvider fallback =
+        new FallbackLobbyProvider(
+            proxy(), primary, limbo, LoggerFactory.getLogger(FallbackLobbyProviderTest.class));
+    fallback.start();
+
+    assertTrue(fallback.isLobby("lobby"));
+    assertFalse(fallback.ownsPrimaryLifecycle("lobby"));
+    assertFalse(fallback.beginIntentionalStop("lobby"));
+    assertSame(primaryServer, fallback.server().orElseThrow());
+
+    fallback.close();
+  }
+
+  @Test
   void forcedPrimaryStopEvacuatesPlayersToSLSLimbo() {
     AtomicReference<RegisteredServer> requestedServer = new AtomicReference<>();
     Player player = player(requestedServer);
@@ -192,6 +212,11 @@ class FallbackLobbyProviderTest {
       @Override
       public boolean isLobby(String candidate) {
         return serverName.equals(candidate);
+      }
+
+      @Override
+      public boolean ownsPrimaryLifecycle(String candidate) {
+        return status != LobbyStatus.EXTERNAL && serverName.equals(candidate);
       }
 
       @Override

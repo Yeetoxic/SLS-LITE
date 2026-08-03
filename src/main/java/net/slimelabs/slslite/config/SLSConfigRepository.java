@@ -21,6 +21,7 @@ public final class SLSConfigRepository {
   private static final int DEFAULT_PORT_RANGE_START = 25570;
   private static final int DEFAULT_PORT_RANGE_END = 25670;
   private static final int DEFAULT_QUEUE_TIMEOUT_SECONDS = 180;
+  private static final String DEFAULT_BLUEPRINT_SELECTION = "first-available";
   private static final int DEFAULT_IDLE_SHUTDOWN_SECONDS = 180;
   private static final boolean DEFAULT_MIRROR_MANAGED_OUTPUT = false;
   private static final boolean DEFAULT_WRITE_TEMPORARY_LOG = true;
@@ -149,7 +150,8 @@ public final class SLSConfigRepository {
           resources, "resources", configPath, "total_memory_mib", "max_managed_processes");
       YamlValues.requireOnlyKeys(network, "network", configPath, "ports");
       YamlValues.requireOnlyKeys(ports, "network.ports", configPath, "start", "end");
-      YamlValues.requireOnlyKeys(matchmaking, "matchmaking", configPath, "queue_timeout_seconds");
+      YamlValues.requireOnlyKeys(
+          matchmaking, "matchmaking", configPath, "queue_timeout_seconds", "blueprint_selection");
       YamlValues.requireOnlyKeys(lifecycle, "lifecycle", configPath, "idle_shutdown_seconds");
       YamlValues.requireOnlyKeys(
           managedOutput,
@@ -229,6 +231,9 @@ public final class SLSConfigRepository {
       int queueTimeout =
           YamlValues.optionalPositiveInt(
               matchmaking, "queue_timeout_seconds", DEFAULT_QUEUE_TIMEOUT_SECONDS, configPath);
+      String blueprintSelection =
+          YamlValues.optionalString(
+              matchmaking, "blueprint_selection", DEFAULT_BLUEPRINT_SELECTION, configPath);
       int idleShutdown =
           YamlValues.optionalNonNegativeInt(
               lifecycle, "idle_shutdown_seconds", DEFAULT_IDLE_SHUTDOWN_SECONDS, configPath);
@@ -354,6 +359,7 @@ public final class SLSConfigRepository {
             portStart,
             portEnd,
             queueTimeout,
+            BlueprintSelectionMode.parse(blueprintSelection),
             idleShutdown,
             new ManagedOutputConfig(mirrorManagedOutput, writeTemporaryLog, temporaryLogMaxKiB),
             new ForwardingConfig(

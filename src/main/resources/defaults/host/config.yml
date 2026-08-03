@@ -29,6 +29,13 @@ network:
     end: 25670
 
 matchmaking:
+  # Blueprint used when a matchmaking game type contains multiple eligible
+  # definitions and no existing instance has capacity. first-available prefers
+  # the explicitly requested blueprint, then stable ID order. random chooses
+  # uniformly from eligible definitions. Existing ready instances are always
+  # preferred before this policy runs.
+  # Valid values: first-available, random.
+  blueprint_selection: first-available
   # Positive integer. Maximum time, in seconds, a player may wait for a managed
   # server to become ready. Expired requests are removed from the queue.
   queue_timeout_seconds: 180

@@ -25,6 +25,7 @@ and unknown keys include a nearest-key suggestion when one is unambiguous.
 | `network.ports.start` | `25570` | Integer `1024..65535`; first managed loopback port. |
 | `network.ports.end` | `25670` | Integer from `start..65535`; last managed loopback port. |
 | `matchmaking.queue_timeout_seconds` | `180` | Positive queue lifetime in seconds. |
+| `matchmaking.blueprint_selection` | `first-available` | `first-available` prefers the requested blueprint and then stable ID order; `random` uniformly selects from eligible pool definitions. Existing ready instances with capacity are always preferred before either provisioning policy. |
 | `lifecycle.idle_shutdown_seconds` | `180` | Non-negative seconds. `0` disables global idle cleanup. |
 | `storage.strategy` | `auto` | `auto`, `copy`, `reflink`, `btrfs`, `overlay`, `fuse-overlay`, or `snapshot-hook`. `auto` uses reflink, eligible Btrfs snapshots, kernel OverlayFS, or fuse-overlayfs after a successful per-path isolation probe and otherwise uses portable copy. Explicitly requesting an unavailable or still-disabled strategy fails startup. |
 | `storage.snapshot_hook.executable` | unset | Required only for `snapshot-hook`; relative executable below the SLS-LITE data directory. Never auto-discovered. |

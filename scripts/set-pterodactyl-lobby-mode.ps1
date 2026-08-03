@@ -9,7 +9,20 @@ $ErrorActionPreference = "Stop"
 $panelContainer = "sls-ptero-panel"
 $wingsContainer = "sls-ptero-wings"
 $velocityIdentifier = $VelocityUuid.Substring(0, 8)
-$velocityVolume = "/var/lib/pterodactyl/volumes/$VelocityUuid"
+$velocityContainer = (docker inspect $VelocityUuid | ConvertFrom-Json)[0]
+if ($LASTEXITCODE -ne 0 -or $null -eq $velocityContainer) {
+    throw "Could not inspect the active Velocity allocation."
+}
+$velocityVolume = ($velocityContainer.Mounts | Where-Object Destination -eq "/home/container").Source
+if ([string]::IsNullOrWhiteSpace($velocityVolume)) {
+    throw "Could not resolve the active Velocity allocation mount."
+}
+if ($velocityVolume -notmatch '^/var/lib/docker/volumes/([^/]+)/_data/volumes/') {
+    throw "Unsupported Velocity allocation mount: $velocityVolume"
+}
+$gameDataVolume = $Matches[1]
+$volumeDataRoot = "/var/lib/docker/volumes/$gameDataVolume/_data"
+$allocationRoot = $velocityVolume.Substring(0, $velocityVolume.LastIndexOf('/'))
 $pluginData = "$velocityVolume/plugins/sls-lite"
 $helper = Join-Path $PSScriptRoot "create-pterodactyl-paper-lobby-local.php"
 $velocityHelper = Join-Path $PSScriptRoot "create-pterodactyl-velocity-local.php"
@@ -30,11 +43,32 @@ function Invoke-PanelHelper([string]$LocalPath, [string]$ContainerName, [string[
     return ($output -join "`n") | ConvertFrom-Json
 }
 
-function Copy-To-Wsl([string]$Source, [string]$Destination) {
-    $sourceWsl = (wsl -d Ubuntu -e wslpath -a $Source).Trim()
-    Assert-LastExitCode "Resolving $Source for WSL"
-    wsl -d Ubuntu --user root -e cp -- $sourceWsl $Destination
-    Assert-LastExitCode "Copying $Source to $Destination"
+function Convert-ToUtilityPath([string]$AllocationPath) {
+    if (-not $AllocationPath.StartsWith("$volumeDataRoot/")) {
+        throw "Allocation path is outside the fixture volume: $AllocationPath"
+    }
+    return "/data/$($AllocationPath.Substring($volumeDataRoot.Length + 1))"
+}
+
+function Invoke-VolumeTool([string[]]$Arguments) {
+    docker run --rm -v "${gameDataVolume}:/data" alpine:3.22 @Arguments
+    Assert-LastExitCode "Running fixture-volume utility"
+}
+
+function Read-AllocationFile([string]$Path) {
+    $utilityPath = Convert-ToUtilityPath $Path
+    return (docker run --rm -v "${gameDataVolume}:/data" alpine:3.22 cat $utilityPath) -join "`n"
+}
+
+function Copy-To-Allocation([string]$Source, [string]$Destination) {
+    $sourceDirectory = Split-Path -Parent $Source
+    $sourceName = Split-Path -Leaf $Source
+    $utilityDestination = Convert-ToUtilityPath $Destination
+    docker run --rm `
+        -v "${gameDataVolume}:/data" `
+        -v "${sourceDirectory}:/input:ro" `
+        alpine:3.22 cp -- "/input/$sourceName" $utilityDestination
+    Assert-LastExitCode "Copying $Source into the fixture volume"
 }
 
 function Set-LobbyConfiguration(
@@ -43,10 +77,8 @@ function Set-LobbyConfiguration(
 ) {
     $velocityPath = "$velocityVolume/velocity.toml"
     $slsPath = "$pluginData/config.yml"
-    $velocity = (wsl -d Ubuntu -e cat $velocityPath) -join "`n"
-    Assert-LastExitCode "Reading velocity.toml"
-    $sls = (wsl -d Ubuntu -e cat $slsPath) -join "`n"
-    Assert-LastExitCode "Reading SLS-LITE config.yml"
+    $velocity = Read-AllocationFile $velocityPath
+    $sls = Read-AllocationFile $slsPath
 
     if ($LobbyMode -eq "external") {
         $servers = @"
@@ -86,10 +118,14 @@ try = []
     [System.IO.File]::WriteAllText($temporaryVelocity, $velocity, $utf8)
     [System.IO.File]::WriteAllText($temporarySls, $sls, $utf8)
     try {
-        Copy-To-Wsl $temporaryVelocity $velocityPath
-        Copy-To-Wsl $temporarySls $slsPath
-        wsl -d Ubuntu --user root -e chown 999:989 $velocityPath $slsPath
-        Assert-LastExitCode "Restoring Velocity file ownership"
+        Copy-To-Allocation $temporaryVelocity $velocityPath
+        Copy-To-Allocation $temporarySls $slsPath
+        Invoke-VolumeTool @(
+            "chown",
+            "999:989",
+            (Convert-ToUtilityPath $velocityPath),
+            (Convert-ToUtilityPath $slsPath)
+        )
     } finally {
         Remove-Item -LiteralPath $temporaryVelocity, $temporarySls `
             -Force -ErrorAction SilentlyContinue
@@ -107,21 +143,23 @@ if ($Mode -eq "external") {
         $helper `
         "create-pterodactyl-paper-lobby-local.php" `
         @()
+    $lobbyVolume = "$allocationRoot/$($lobby.uuid)"
     $paperSource = "$pluginData/software/paper/26.1.2/paper.jar"
-    wsl -d Ubuntu -e test -f $paperSource
-    Assert-LastExitCode "Locating the prepared Paper test JAR"
-    wsl -d Ubuntu --user root -e mkdir -p $lobby.volume
-    Assert-LastExitCode "Creating the external lobby volume"
-    wsl -d Ubuntu --user root -e cp -- $paperSource "$($lobby.volume)/server.jar"
-    Assert-LastExitCode "Copying Paper into the external lobby volume"
-    Copy-To-Wsl `
+    Invoke-VolumeTool @("test", "-f", (Convert-ToUtilityPath $paperSource))
+    Invoke-VolumeTool @("mkdir", "-p", (Convert-ToUtilityPath $lobbyVolume))
+    Invoke-VolumeTool @(
+        "cp",
+        "--",
+        (Convert-ToUtilityPath $paperSource),
+        (Convert-ToUtilityPath "$lobbyVolume/server.jar")
+    )
+    Copy-To-Allocation `
         (Join-Path $PSScriptRoot "fixtures\external-lobby-eula.txt") `
-        "$($lobby.volume)/eula.txt"
-    Copy-To-Wsl `
+        "$lobbyVolume/eula.txt"
+    Copy-To-Allocation `
         (Join-Path $PSScriptRoot "fixtures\external-lobby-server.properties") `
-        "$($lobby.volume)/server.properties"
-    wsl -d Ubuntu --user root -e chown -R 999:989 $lobby.volume
-    Assert-LastExitCode "Setting external lobby file ownership"
+        "$lobbyVolume/server.properties"
+    Invoke-VolumeTool @("chown", "-R", "999:989", (Convert-ToUtilityPath $lobbyVolume))
 
     $lobby = Invoke-PanelHelper `
         $helper `

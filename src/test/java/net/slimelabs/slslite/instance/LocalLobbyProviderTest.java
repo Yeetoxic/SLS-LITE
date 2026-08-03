@@ -1,6 +1,7 @@
 package net.slimelabs.slslite.instance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -178,6 +179,38 @@ class LocalLobbyProviderTest {
     assertSame(lobby, provider.readyFuture().get(1, TimeUnit.SECONDS));
     assertSame(lobby, requestedServer.get());
     provider.close();
+  }
+
+  @Test
+  void externalLobbyIsRoutingOnlyAndNeverInvokesManagedLifecycle() throws Exception {
+    BlueprintRepository blueprints = blueprints();
+    FakeController controller =
+        new FakeController(blueprints.get("lobby", "lobby").orElseThrow(), temporaryDirectory);
+    RegisteredServer lobby = registeredServer(List.of());
+    LocalLobbyProvider provider =
+        new LocalLobbyProvider(
+            proxy(new LinkedHashMap<>(Map.of("lobby", lobby))),
+            blueprints,
+            controller,
+            new LobbyConfig(LobbyMode.EXTERNAL, "ignored-registry", "lobby"),
+            LoggerFactory.getLogger(LocalLobbyProviderTest.class));
+
+    provider.start();
+
+    assertSame(lobby, provider.server().orElseThrow());
+    assertEquals(LobbyStatus.EXTERNAL, provider.status());
+    assertTrue(provider.isLobby("lobby"));
+    assertFalse(provider.ownsPrimaryLifecycle("lobby"));
+    assertFalse(provider.prepareIntentionalStop("lobby"));
+    assertTrue(provider.cyclePrimary("lobby", false).isCompletedExceptionally());
+    assertTrue(provider.cyclePrimary("lobby", true).isCompletedExceptionally());
+
+    provider.close();
+
+    assertEquals(0, controller.starts());
+    assertEquals(0, controller.restarts);
+    assertEquals(0, controller.resets);
+    assertEquals(0, controller.stops);
   }
 
   @Test
@@ -490,6 +523,7 @@ class LocalLobbyProviderTest {
     private int starts;
     private int restarts;
     private int resets;
+    private int stops;
     private String persistentId;
     private boolean failRestarts;
 
@@ -553,6 +587,7 @@ class LocalLobbyProviderTest {
 
     @Override
     public CompletableFuture<Integer> stop(String instanceId) {
+      stops++;
       return CompletableFuture.completedFuture(0);
     }
 

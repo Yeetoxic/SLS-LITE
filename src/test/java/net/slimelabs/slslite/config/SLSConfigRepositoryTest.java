@@ -39,6 +39,7 @@ class SLSConfigRepositoryTest {
     assertEquals(25570, config.portRangeStart());
     assertEquals(25670, config.portRangeEnd());
     assertEquals(180, config.queueTimeoutSeconds());
+    assertEquals(BlueprintSelectionMode.FIRST_AVAILABLE, config.blueprintSelectionMode());
     assertEquals(180, config.idleShutdownSeconds());
     assertEquals(false, config.managedOutput().mirrorToProxyConsole());
     assertEquals(true, config.managedOutput().writeTemporaryFile());
@@ -177,6 +178,36 @@ class SLSConfigRepositoryTest {
     repository.reload();
 
     assertEquals(StorageStrategy.FUSE_OVERLAY, repository.get().storage().strategy());
+  }
+
+  @Test
+  void loadsExplicitRandomBlueprintSelection() throws Exception {
+    writeConfig(
+        """
+                matchmaking:
+                  blueprint_selection: random
+                """);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.reload();
+
+    assertEquals(BlueprintSelectionMode.RANDOM, repository.get().blueprintSelectionMode());
+  }
+
+  @Test
+  void rejectsUnknownBlueprintSelection() throws Exception {
+    writeConfig(
+        """
+                matchmaking:
+                  blueprint_selection: round-robin
+                """);
+
+    ConfigurationException failure =
+        assertThrows(
+            ConfigurationException.class,
+            () -> new SLSConfigRepository(temporaryDirectory).reload());
+
+    assertTrue(failure.getMessage().contains("matchmaking.blueprint_selection"));
   }
 
   @Test

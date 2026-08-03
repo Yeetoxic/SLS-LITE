@@ -143,11 +143,15 @@ completion tests so dispatch cannot drift from suggestions.
 
 `LocalJoinService` retains the synchronized queue, matchmaking selection,
 draining, cancellation, and queue-owned instance cleanup as one race-sensitive
-state machine. `TransferActionBar` owns transfer UI, while
+state machine. `BlueprintSelectionStrategy` is the pluggable provisioning
+policy applied only after ready-instance preference and capacity filtering;
+the host selects deterministic first-available or random behavior.
+`TransferActionBar` owns transfer UI, while
 `JoinTimingReporter` owns first-player and connection timing presentation.
 
 The lobby providers keep separate lifecycle ownership:
-`LocalLobbyProvider` owns the managed or external primary,
+`LocalLobbyProvider` owns a managed primary but treats an external primary as a
+routing target only,
 `SLSLimboProvider` owns the isolated fallback process and its reserved
 resources, and `FallbackLobbyProvider` coordinates routing and evacuation
 between them. `LobbyRecoveryPolicy` is the only shared recovery abstraction;

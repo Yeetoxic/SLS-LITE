@@ -218,7 +218,9 @@ public final class SLSLite {
               instanceManager,
               Duration.ofSeconds(configuration.get().queueTimeoutSeconds()),
               logger,
-              detailLog);
+              detailLog,
+              net.slimelabs.slslite.velocity.BlueprintSelectionStrategy.forMode(
+                  configuration.get().blueprintSelectionMode()));
       joinActions = new BlueprintJoinActionService(instanceManager, logger);
       LobbyProvider primaryLobby =
           new LocalLobbyProvider(

@@ -107,6 +107,12 @@ Failure unwinds in reverse. A new acquisition must either join this order or
 provide tests proving that every subsequent failure releases all earlier
 reservations.
 
+External primary lobbies are registered Velocity routing targets, never
+SLS-LITE lifecycle resources. `isLobby` identifies routing destinations while
+`ownsPrimaryLifecycle` separately gates intentional stop, restart, and reset.
+External mode may inspect readiness and transfer players, but it may not start,
+stop, reset, copy, reconcile, or recover the external server.
+
 ## Path And Filesystem Security
 
 Paths cross several trust boundaries and are validated by the component that

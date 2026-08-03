@@ -104,6 +104,11 @@ public final class FallbackLobbyProvider implements LobbyProvider {
   }
 
   @Override
+  public boolean ownsPrimaryLifecycle(String serverName) {
+    return primary.ownsPrimaryLifecycle(serverName);
+  }
+
+  @Override
   public Optional<RegisteredServer> fallbackServer(String failedLobbyName) {
     if (primary.isLobby(failedLobbyName)) {
       markPrimaryUnavailable(failedLobbyName);
@@ -198,7 +203,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     if (closed
         || drainingPrimary != null
         || suppressedPrimary != null
-        || !primary.isLobby(serverName)) {
+        || !primary.ownsPrimaryLifecycle(serverName)) {
       return false;
     }
     drainingPrimary = serverName;
@@ -235,7 +240,9 @@ public final class FallbackLobbyProvider implements LobbyProvider {
   @Override
   public CompletableFuture<RegisteredServer> cyclePrimary(String serverName, boolean reset) {
     synchronized (this) {
-      if (closed || !serverName.equals(drainingPrimary) || !primary.isLobby(serverName)) {
+      if (closed
+          || !serverName.equals(drainingPrimary)
+          || !primary.ownsPrimaryLifecycle(serverName)) {
         return CompletableFuture.failedFuture(
             new IllegalStateException(
                 "The active primary lobby is not prepared for " + (reset ? "reset" : "restart")));

@@ -17,6 +17,14 @@ public interface LobbyProvider extends AutoCloseable {
 
   boolean isLobby(String serverName);
 
+  /**
+   * Returns whether SLS-LITE owns the primary lobby process and may perform lifecycle operations
+   * on it. External primary lobbies are routing targets only and must return {@code false}.
+   */
+  default boolean ownsPrimaryLifecycle(String serverName) {
+    return false;
+  }
+
   default Optional<RegisteredServer> fallbackServer(String failedLobbyName) {
     return Optional.empty();
   }
