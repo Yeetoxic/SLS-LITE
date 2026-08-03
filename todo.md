@@ -395,7 +395,7 @@ data, leaking resources, or trapping players in unexplained states.
       release record rather than mixing it into the product documentation.
 - [x] Add CI for compilation, tests, packaging, dependency checks, and the
       lightweight static rules approved during the organization work.
-- [ ] Run the complete automated suite, exact compatibility-corpus gate, package
+- [x] Run the complete automated suite, exact compatibility-corpus gate, package
       verification, storage harnesses, and documented Pterodactyl workflow.
 - [ ] Verify every supported command and every configuration, lifecycle,
       installation, storage, lobby, queue, transfer, recovery, and shutdown

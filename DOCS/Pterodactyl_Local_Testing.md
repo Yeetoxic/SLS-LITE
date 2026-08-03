@@ -192,10 +192,10 @@ and accounting were equivalent.
 ### Reflink
 
 Use an empty disposable XFS filesystem created with `reflink=1`. Run the
-selection and preparer real-kernel harnesses, verify shared physical extents,
-write isolation, replacement, deletion, and cleanup. The normal ext4 fixture
-should continue to select another strategy when its exact-path clone probe
-fails.
+`ReflinkSelectionRealKernelHarness` and `ReflinkPreparerRealKernelHarness`,
+verify shared physical extents, write isolation, replacement, deletion, and
+cleanup. The normal ext4 fixture should continue to select another strategy
+when its exact-path clone probe fails.
 
 ### Btrfs
 

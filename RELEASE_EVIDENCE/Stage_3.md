@@ -375,3 +375,51 @@ The final CI-equivalent artifact SHA-256
 was deployed through the Panel workflow. Velocity started with its bounded
 512 MiB heap, SLS-Limbo became ready, and persistent lobby `lobby.b5kk8m`
 returned ready without an SLS-LITE warning or failure.
+
+### Stage 3.9 Complete Release-Gate Rerun
+
+On 2026-08-03, the complete automated, compatibility, packaging, storage, and
+documented local Pterodactyl gate passed. `mvn clean verify` ran 612 tests with
+zero failures or errors and seven environment-dependent skips. Dependency
+analysis, Spotless, and SpotBugs passed. The exact modern corpus loaded all 54
+expected blueprints across `adventure`, `archive`, `experimental`, and
+`minigame`; the pinned SLS `v0.2.0` checkout at
+`8e8b1e3cf7d2157887764c16f11b8901f8241121` loaded all six example files with
+no unexpected rejection.
+
+The 5,972,105-byte shaded JAR contained all required defaults, notices,
+licenses, bundled NanoLimbo runtime, plugin metadata, and main classes. It
+contained no legacy root defaults or unrelocated SnakeYAML classes, and its
+main class retained Java 21 class-file version 65. The exact artifact deployed
+through the Panel workflow had SHA-256
+`82D9EA53C8C7ED44BEDA640E2F98ED709785571E1587899539602E060041507C`.
+
+Disposable Linux real-kernel runs passed portable sparse-copy and snapshot
+helper process-protocol coverage; Btrfs exact-path selection and
+prepare/reset/delete; kernel OverlayFS probing, automatic selection, lifecycle,
+and preparation; and rootless fuse-overlayfs exact-path selection plus
+prepare/reset/delete. The release rerun added the previously missing executable
+XFS harnesses. A loop-backed XFS `reflink=1` volume passed explicit selection,
+physically shared extents, write isolation, replacement, deletion, and source
+preservation. Its first lifecycle run exposed only an overly exact harness
+check for flag `0x2000`; XFS correctly reported the shared bit as `0x2001`, and
+the corrected bitmask assertion passed on a fresh volume.
+
+The production-style allocation retained its normal Pterodactyl security
+profile and correctly selected `portable-copy` on ext4: reflink cloning was
+rejected, the process lacked `CAP_SYS_ADMIN`, `/dev/fuse` was unavailable, and
+no explicit snapshot helper was configured. Startup reported eight passed, six
+informational, zero warnings, and zero failures. SLS-Limbo became ready,
+persistent Paper 26.2 lobby `lobby.b5kk8m` reconciled and returned ready, and a
+bounded join probe passed in 178 ms. Documented blueprint, status, info, stats,
+administrator, maintenance, installation, version, and local-node responses
+were exercised without a product error.
+
+Finally, an authenticated online-mode client connected through Velocity and
+was routed to the loopback-only managed lobby. Velocity and Paper both observed
+player `Yeetoxic`; Paper received Mojang UUID
+`adc76802-d75c-4143-89a6-ede25720ecce`, establishing modern forwarding rather
+than an offline test-client shortcut. Player-side `/sls info`, `/sls system`,
+and `/sls list` completed. Velocity's pre-registration no-server warning,
+Paper's offline-backend warning, and upstream JDK Unsafe deprecation warnings
+were expected for this secured proxy topology and were not SLS-LITE failures.
