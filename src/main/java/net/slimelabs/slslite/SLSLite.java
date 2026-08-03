@@ -285,6 +285,7 @@ public final class SLSLite implements SLSLiteApiProvider {
             administrators,
             adminClaims,
             installationService,
+            publicApi::publishCatalogReload,
             logger);
     proxy.getCommandManager().register(commandMeta, slsCommand);
     issueInitialAdministratorCode();

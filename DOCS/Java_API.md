@@ -84,7 +84,8 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 
 API 1.0 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
 `INSTANCE_START`, `INSTANCE_STOP`, `INSTANCE_DELETE`, `PLAYER_QUEUE`,
-`MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, and `LIFECYCLE_EVENTS`.
+`MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, `CATALOG_RELOAD_EVENTS`, and
+`LIFECYCLE_EVENTS`.
 
 ## Operations
 
@@ -172,6 +173,14 @@ it to operator diagnostics. It never exposes an exception, exception message,
 filesystem path, child-process output, or mutable coordinator. A process exit
 after successful Velocity registration uses phase `RUNTIME`; startup and
 readiness exits remain distinct.
+
+An operator `/sls reload all|blueprints|software` attempt emits one
+`CatalogReloadEvent` after the atomic transaction commits or rejects. Committed
+events expose only added, updated, and removed counts for blueprints and
+software. Rejected events report zero committed changes and one sanitized
+`CatalogReloadFailureCategory`: `IO`, `VALIDATION`, or `INTERNAL`. The event's
+correlation ID joins it to operator logs without exposing definition IDs, file
+names, paths, or parser messages.
 
 ## Trust And Compatibility
 

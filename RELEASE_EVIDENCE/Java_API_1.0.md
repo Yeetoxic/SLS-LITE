@@ -19,12 +19,12 @@ The dedicated `sls-lite-0.1.0-SNAPSHOT-api.jar` was inspected after a clean
 build. It contained the public API/event classes and
 `META-INF/licenses/LICENSE`, contained no `api.internal`, instance, blueprint,
 or Velocity implementation classes, and had SHA-256
-`554A1C42FB0FF2D56959E258950BC4386BE21762141AF17939DA5DB3A1C97B54`.
+`D29870F5607D3D7E80371FB06C19A45845F3A99E08F96D263D203EE16C4B5E48`.
 `jdeps` found only Java base-library dependencies and Velocity's intentionally
 provided plugin/proxy API.
 
 The full shaded plugin had SHA-256
-`E94FF466C7A401F64FA4F481AE3C54BC764BD3ADAB6B85BFE22C8126513B5F19`.
+`937270E2C50297111EBC821560B42D8DBB8A584331C5063230835F6CD7A0C558`.
 Packaging review also exposed and corrected a pre-existing license-resource
 target mismatch; both the API classifier and full plugin now contain the
 project license at `META-INF/licenses/LICENSE`.
@@ -43,6 +43,13 @@ It verifies exactly-once startup failure delivery, post-registration process
 crashes classified as `RUNTIME`/`PROCESS`, sanitized public mapping, and global
 sequence integration. `mvn verify` again passed dependency analysis, Spotless,
 and SpotBugs with zero findings.
+The atomic catalog-reload event and artifact-boundary CI increment raised the
+complete passing tree to 637 tests. Committed and rejected reloads publish one
+bounded result at the serialized transaction edge; observer failures cannot
+alter the transaction. The API classifier contained 31 public API classes, no
+`api.internal` classes, and no project classes outside the API package. CI now
+enforces that boundary and the required API/license entries before artifact
+upload.
 Dependency analysis, Spotless, and SpotBugs all passed, and `git diff --check`
 reported no whitespace errors. SnakeYAML remains shaded into the runtime plugin
 but is optional in the published POM, so API-classifier consumers do not inherit
@@ -81,9 +88,9 @@ through the Panel. Only `sls-lite.jar` remained in the live plugin directory;
 SLS-Limbo and persistent Paper 26.2 lobby `lobby.b5kk8m` returned ready. No
 fixture data was deleted and no SLS-LITE startup error was observed.
 
-The instance-failure build was subsequently deployed with the same Panel
-stop/start workflow. The container copy matched the shaded-plugin checksum
-above; Velocity 4.0.0 loaded SLS-LITE, SLS-Limbo became ready, and persistent
-lobby `lobby.b5kk8m` returned ready on its managed loopback port. Only
-`sls-lite.jar` was present in the live plugin directory and the allocation was
-left running.
+The latest API-event build was subsequently deployed with the same Panel
+stop/start workflow after both the instance-failure and atomic-reload
+increments. The container copy matched the shaded-plugin checksum above;
+Velocity 4.0.0 loaded SLS-LITE, SLS-Limbo became ready, and persistent lobby
+`lobby.b5kk8m` returned ready on its managed loopback port. Only `sls-lite.jar`
+was present in the live plugin directory and the allocation was left running.

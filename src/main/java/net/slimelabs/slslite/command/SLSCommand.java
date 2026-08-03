@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -31,6 +32,7 @@ import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.instance.lifecycle.MaintenanceStatus;
 import net.slimelabs.slslite.lobby.LobbyProvider;
+import net.slimelabs.slslite.log.CorrelationIds;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.security.AdminClaimService;
@@ -57,6 +59,7 @@ public final class SLSCommand implements SimpleCommand {
   private final ConsoleOutputSessions consoleOutput;
   private final OperatorJoinProbeService joinProbes;
   private final Logger logger;
+  private final Consumer<DefinitionReloader.DefinitionReloadTransition> reloadObserver;
 
   public SLSCommand(
       ProxyServer proxy,
@@ -107,6 +110,42 @@ public final class SLSCommand implements SimpleCommand {
       AdminClaimService adminClaims,
       SoftwareInstallationService installationService,
       Logger logger) {
+    this(
+        proxy,
+        blueprints,
+        softwareProfiles,
+        resourceBudget,
+        processSupervisor,
+        instances,
+        joinService,
+        lobbyProvider,
+        outputConfig,
+        activeConfig,
+        hostCapabilities,
+        administrators,
+        adminClaims,
+        installationService,
+        ignored -> {},
+        logger);
+  }
+
+  public SLSCommand(
+      ProxyServer proxy,
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository softwareProfiles,
+      ResourceBudget resourceBudget,
+      ProcessSupervisor processSupervisor,
+      ServerController instances,
+      LocalJoinService joinService,
+      LobbyProvider lobbyProvider,
+      ManagedOutputConfig outputConfig,
+      SLSConfig activeConfig,
+      HostCapabilityReport hostCapabilities,
+      AdministratorStore administrators,
+      AdminClaimService adminClaims,
+      SoftwareInstallationService installationService,
+      Consumer<DefinitionReloader.DefinitionReloadTransition> reloadObserver,
+      Logger logger) {
     this.proxy = proxy;
     this.blueprints = blueprints;
     this.softwareProfiles = softwareProfiles;
@@ -141,6 +180,7 @@ public final class SLSCommand implements SimpleCommand {
     this.debugPlayers = new DebugPlayerRegistry();
     this.consoleOutput = new ConsoleOutputSessions();
     this.joinProbes = new OperatorJoinProbeService();
+    this.reloadObserver = java.util.Objects.requireNonNull(reloadObserver, "reloadObserver");
     this.logger = logger;
   }
 
@@ -514,6 +554,7 @@ public final class SLSCommand implements SimpleCommand {
               NamedTextColor.GRAY));
       return;
     }
+    String correlationId = CorrelationIds.next("reload");
     try {
       net.slimelabs.slslite.config.DefinitionReloadReport report =
           DefinitionReloader.reload(
@@ -521,7 +562,9 @@ public final class SLSCommand implements SimpleCommand {
               blueprints,
               softwareProfiles,
               "all".equals(mode) || "blueprints".equals(mode),
-              "all".equals(mode) || "software".equals(mode));
+              "all".equals(mode) || "software".equals(mode),
+              correlationId,
+              reloadObserver);
       source.sendMessage(
           CommandMessages.message(
               "Reloaded "
@@ -533,8 +576,9 @@ public final class SLSCommand implements SimpleCommand {
                   + ".",
               NamedTextColor.GREEN));
       logger.info(
-          "Definition reload {} committed: blueprint added={} updated={} removed={}; "
+          "Definition reload [{}] {} committed: blueprint added={} updated={} removed={}; "
               + "software added={} updated={} removed={}",
+          correlationId,
           mode,
           report.blueprints().added(),
           report.blueprints().updated(),
@@ -546,7 +590,7 @@ public final class SLSCommand implements SimpleCommand {
           CommandMessages.message(
               "Host config changes require a Velocity restart.", NamedTextColor.GRAY));
     } catch (Exception exception) {
-      logger.error("Unable to reload SLS-LITE " + mode, exception);
+      logger.error("Unable to reload SLS-LITE " + mode + " [" + correlationId + "]", exception);
       source.sendMessage(
           CommandMessages.message("Reload failed: " + rootMessage(exception), NamedTextColor.RED));
     }

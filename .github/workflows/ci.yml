@@ -30,11 +30,34 @@ jobs:
       - name: Compile, test, package, and analyze
         run: mvn -B --no-transfer-progress clean verify
 
+      - name: Verify public API artifact boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_jars=(target/sls-lite-*-api.jar)
+          if [[ ${#api_jars[@]} -ne 1 || ! -f "${api_jars[0]}" ]]; then
+            echo "Expected exactly one public API classifier JAR" >&2
+            exit 1
+          fi
+          contents="$(jar tf "${api_jars[0]}")"
+          grep -qx 'net/slimelabs/slslite/api/SLSLiteApi.class' <<<"$contents"
+          grep -qx 'META-INF/licenses/LICENSE' <<<"$contents"
+          leaks="$(grep -E '^net/slimelabs/slslite/.*\.class$' <<<"$contents" \
+            | grep -Ev '^net/slimelabs/slslite/api/' || true)"
+          internals="$(grep -E '^net/slimelabs/slslite/api/internal/' <<<"$contents" || true)"
+          if [[ -n "$leaks" || -n "$internals" ]]; then
+            echo "Public API classifier contains implementation classes:" >&2
+            printf '%s\n%s\n' "$leaks" "$internals" >&2
+            exit 1
+          fi
+
       - name: Upload shaded plugin and public API
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sls-lite-java25-${{ github.sha }}
-          path: target/sls-lite-*.jar
+          path: |
+            target/sls-lite-*.jar
+            !target/sls-lite-*-shaded.jar
           if-no-files-found: error
           retention-days: 14
 

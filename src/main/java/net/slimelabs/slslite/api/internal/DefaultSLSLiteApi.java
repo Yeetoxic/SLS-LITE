@@ -34,6 +34,11 @@ import net.slimelabs.slslite.api.SLSLiteApi;
 import net.slimelabs.slslite.api.SLSLiteApiException;
 import net.slimelabs.slslite.api.StartRequest;
 import net.slimelabs.slslite.api.VolumeView;
+import net.slimelabs.slslite.api.event.CatalogDelta;
+import net.slimelabs.slslite.api.event.CatalogReloadEvent;
+import net.slimelabs.slslite.api.event.CatalogReloadFailureCategory;
+import net.slimelabs.slslite.api.event.CatalogReloadScope;
+import net.slimelabs.slslite.api.event.CatalogReloadStatus;
 import net.slimelabs.slslite.api.event.InstanceFailureCategory;
 import net.slimelabs.slslite.api.event.InstanceFailureEvent;
 import net.slimelabs.slslite.api.event.InstanceFailurePhase;
@@ -44,6 +49,7 @@ import net.slimelabs.slslite.api.event.SLSLiteEvent;
 import net.slimelabs.slslite.api.event.Subscription;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.config.DefinitionReloader;
 import net.slimelabs.slslite.instance.InstanceManager;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
@@ -288,6 +294,27 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
             transition.correlationId(),
             InstanceFailurePhase.valueOf(transition.phase().name()),
             InstanceFailureCategory.valueOf(transition.category().name()));
+    submit(event);
+  }
+
+  public synchronized void publishCatalogReload(
+      DefinitionReloader.DefinitionReloadTransition transition) {
+    CatalogReloadEvent event =
+        new CatalogReloadEvent(
+            eventSequence.incrementAndGet(),
+            transition.occurredAt(),
+            transition.correlationId(),
+            CatalogReloadScope.valueOf(transition.scope().name()),
+            CatalogReloadStatus.valueOf(transition.status().name()),
+            CatalogReloadFailureCategory.valueOf(transition.failureCategory().name()),
+            new CatalogDelta(
+                transition.blueprintsAdded(),
+                transition.blueprintsUpdated(),
+                transition.blueprintsRemoved()),
+            new CatalogDelta(
+                transition.softwareAdded(),
+                transition.softwareUpdated(),
+                transition.softwareRemoved()));
     submit(event);
   }
 

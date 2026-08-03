@@ -17,12 +17,17 @@ import java.util.stream.LongStream;
 import net.slimelabs.slslite.api.ApiStatus;
 import net.slimelabs.slslite.api.InstanceStatus;
 import net.slimelabs.slslite.api.SLSLiteApiException;
+import net.slimelabs.slslite.api.event.CatalogReloadEvent;
+import net.slimelabs.slslite.api.event.CatalogReloadFailureCategory;
+import net.slimelabs.slslite.api.event.CatalogReloadScope;
+import net.slimelabs.slslite.api.event.CatalogReloadStatus;
 import net.slimelabs.slslite.api.event.InstanceFailureCategory;
 import net.slimelabs.slslite.api.event.InstanceFailureEvent;
 import net.slimelabs.slslite.api.event.InstanceFailurePhase;
 import net.slimelabs.slslite.api.event.InstanceLifecycleEvent;
 import net.slimelabs.slslite.api.event.MatchmakingStatus;
 import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
+import net.slimelabs.slslite.config.DefinitionReloader;
 import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.model.InstanceState;
@@ -145,6 +150,44 @@ class DefaultSLSLiteApiEventTest {
     assertEquals(InstanceFailureCategory.PROCESS, failure.category());
     assertEquals("arena", failure.blueprintId());
     assertEquals("instance-test", failure.correlationId());
+    api.close();
+  }
+
+  @Test
+  void mapsBoundedCatalogReloadResultIntoTheGlobalOrderedEventStream() throws Exception {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    List<net.slimelabs.slslite.api.event.SLSLiteEvent> received = new CopyOnWriteArrayList<>();
+    CountDownLatch delivered = new CountDownLatch(2);
+    api.subscribe(
+        event -> {
+          received.add(event);
+          delivered.countDown();
+        });
+    api.publish(
+        new InstanceLifecycle.Transition(
+            "arena.123", InstanceState.CREATED, InstanceState.PREPARING, Instant.now()));
+    api.publishCatalogReload(
+        new DefinitionReloader.DefinitionReloadTransition(
+            "reload-test",
+            DefinitionReloader.ReloadScope.ALL,
+            DefinitionReloader.ReloadStatus.COMMITTED,
+            DefinitionReloader.ReloadFailureCategory.NONE,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            Instant.now()));
+
+    assertTrue(delivered.await(2, TimeUnit.SECONDS));
+    assertEquals(List.of(1L, 2L), received.stream().map(event -> event.sequence()).toList());
+    CatalogReloadEvent reload = (CatalogReloadEvent) received.get(1);
+    assertEquals(CatalogReloadScope.ALL, reload.scope());
+    assertEquals(CatalogReloadStatus.COMMITTED, reload.status());
+    assertEquals(CatalogReloadFailureCategory.NONE, reload.failureCategory());
+    assertEquals(6, reload.blueprints().changed());
+    assertEquals(15, reload.software().changed());
     api.close();
   }
 

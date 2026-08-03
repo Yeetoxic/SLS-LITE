@@ -15,6 +15,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.slimelabs.slslite.api.event.CatalogDelta;
+import net.slimelabs.slslite.api.event.CatalogReloadEvent;
+import net.slimelabs.slslite.api.event.CatalogReloadFailureCategory;
+import net.slimelabs.slslite.api.event.CatalogReloadScope;
+import net.slimelabs.slslite.api.event.CatalogReloadStatus;
 import net.slimelabs.slslite.api.event.InstanceFailureCategory;
 import net.slimelabs.slslite.api.event.InstanceFailureEvent;
 import net.slimelabs.slslite.api.event.InstanceFailurePhase;
@@ -47,6 +52,11 @@ class PublicApiContractTest {
           SLSLiteApi.class,
           SLSLiteApiProvider.class,
           SLSLiteEvent.class,
+          CatalogDelta.class,
+          CatalogReloadEvent.class,
+          CatalogReloadFailureCategory.class,
+          CatalogReloadScope.class,
+          CatalogReloadStatus.class,
           InstanceFailureEvent.class,
           InstanceFailurePhase.class,
           InstanceFailureCategory.class,
@@ -62,6 +72,7 @@ class PublicApiContractTest {
     assertTrue(Set.of(Capability.values()).contains(Capability.PLAYER_QUEUE));
     assertTrue(Set.of(Capability.values()).contains(Capability.MATCHMAKING_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.INSTANCE_FAILURE_EVENTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.CATALOG_RELOAD_EVENTS));
   }
 
   @Test

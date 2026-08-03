@@ -4,7 +4,10 @@ import java.time.Instant;
 
 /** Marker for events published through the versioned SLS-LITE API. */
 public sealed interface SLSLiteEvent
-    permits InstanceFailureEvent, InstanceLifecycleEvent, PlayerMatchmakingEvent {
+    permits CatalogReloadEvent,
+        InstanceFailureEvent,
+        InstanceLifecycleEvent,
+        PlayerMatchmakingEvent {
 
   long sequence();
 

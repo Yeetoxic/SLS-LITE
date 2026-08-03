@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
@@ -21,6 +22,7 @@ class DefinitionReloaderTest {
   void leavesBothRepositoriesUntouchedWhenCandidatesAreIncompatible() throws Exception {
     Repositories repositories = repositories();
     writeProfile(repositories.profilesPath(), "replacement");
+    var transitions = new CopyOnWriteArrayList<DefinitionReloader.DefinitionReloadTransition>();
 
     assertThrows(
         ConfigurationException.class,
@@ -30,10 +32,18 @@ class DefinitionReloaderTest {
                 repositories.blueprints(),
                 repositories.profiles(),
                 true,
-                true));
+                true,
+                "reload-rejected",
+                transitions::add));
 
     assertEquals("paper", repositories.blueprints().get("test").orElseThrow().software());
     assertEquals("paper", repositories.profiles().getAll().iterator().next().id());
+    assertEquals(1, transitions.size());
+    assertEquals(DefinitionReloader.ReloadStatus.REJECTED, transitions.getFirst().status());
+    assertEquals(
+        DefinitionReloader.ReloadFailureCategory.VALIDATION,
+        transitions.getFirst().failureCategory());
+    assertEquals(0, transitions.getFirst().blueprintsUpdated());
   }
 
   @Test
@@ -51,6 +61,37 @@ class DefinitionReloaderTest {
     assertEquals(java.util.List.of("test"), report.blueprints().updated());
     assertEquals(java.util.List.of("replacement"), report.software().added());
     assertEquals(java.util.List.of("paper"), report.software().removed());
+  }
+
+  @Test
+  void publishesBoundedCommittedDeltaAndIsolatesObserverFailure() throws Exception {
+    Repositories repositories = repositories();
+    writeProfile(repositories.profilesPath(), "replacement");
+    writeBlueprint(repositories.blueprintsPath(), "replacement");
+    var transitions = new CopyOnWriteArrayList<DefinitionReloader.DefinitionReloadTransition>();
+
+    DefinitionReloadReport report =
+        DefinitionReloader.reload(
+            repositories.config(),
+            repositories.blueprints(),
+            repositories.profiles(),
+            true,
+            true,
+            "reload-committed",
+            transition -> {
+              transitions.add(transition);
+              throw new IllegalStateException("broken observer");
+            });
+
+    assertEquals(java.util.List.of("test"), report.blueprints().updated());
+    assertEquals(1, transitions.size());
+    var transition = transitions.getFirst();
+    assertEquals(DefinitionReloader.ReloadStatus.COMMITTED, transition.status());
+    assertEquals(DefinitionReloader.ReloadScope.ALL, transition.scope());
+    assertEquals(DefinitionReloader.ReloadFailureCategory.NONE, transition.failureCategory());
+    assertEquals(1, transition.blueprintsUpdated());
+    assertEquals(1, transition.softwareAdded());
+    assertEquals(1, transition.softwareRemoved());
   }
 
   @Test
