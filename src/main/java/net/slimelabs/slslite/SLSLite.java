@@ -183,6 +183,7 @@ public final class SLSLite implements SLSLiteApiProvider {
       InstanceReconciliationReport reconciliation =
           new InstanceReconciler(directoryPreparer, logger, detailLog, startupCorrelation)
               .reconcile();
+      publicApi.recordReconciliation(reconciliation, startupCorrelation);
       logger.info(
           "Instance reconciliation recovered {} storage transaction(s) "
               + "and inspected {} directorie(s): "
@@ -255,7 +256,12 @@ public final class SLSLite implements SLSLiteApiProvider {
               configuration.get().idleShutdownSeconds(),
               logger);
       publicApi.activate(
-          blueprints, instanceManager, joinService, lobbyProvider, installationService);
+          blueprints,
+          instanceManager,
+          joinService,
+          lobbyProvider,
+          installationService,
+          hostCapabilities);
     } catch (Exception exception) {
       logger.error(
           "SLS-LITE initialization failed; managed server features are disabled", exception);

@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.slimelabs.slslite.api.event.ApiShutdownEvent;
 import net.slimelabs.slslite.api.event.CatalogDelta;
 import net.slimelabs.slslite.api.event.CatalogReloadEvent;
 import net.slimelabs.slslite.api.event.CatalogReloadFailureCategory;
@@ -29,6 +30,7 @@ import net.slimelabs.slslite.api.event.LobbyServiceStatus;
 import net.slimelabs.slslite.api.event.LobbyStatusEvent;
 import net.slimelabs.slslite.api.event.MatchmakingStatus;
 import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
+import net.slimelabs.slslite.api.event.ReconciliationEvent;
 import net.slimelabs.slslite.api.event.SLSLiteEvent;
 import net.slimelabs.slslite.api.event.SoftwareInstallationEvent;
 import net.slimelabs.slslite.api.event.SoftwareInstallationFailureCategory;
@@ -45,10 +47,18 @@ class PublicApiContractTest {
           ApiVersion.class,
           ApiStatus.class,
           Capability.class,
+          DiagnosticsSnapshot.class,
+          HostCapabilityState.class,
+          HostCapabilityView.class,
+          InstallationDiagnosticView.class,
+          InstanceLogSnapshot.class,
           InstanceStatus.class,
+          InstanceStatisticsView.class,
           VolumeView.class,
           BlueprintView.class,
           InstanceView.class,
+          LobbyDiagnosticView.class,
+          MaintenanceView.class,
           InstanceOverrides.class,
           StartRequest.class,
           InstanceOperationResult.class,
@@ -59,7 +69,9 @@ class PublicApiContractTest {
           SLSLiteApiException.class,
           SLSLiteApi.class,
           SLSLiteApiProvider.class,
+          SystemDiagnosticView.class,
           SLSLiteEvent.class,
+          ApiShutdownEvent.class,
           CatalogDelta.class,
           CatalogReloadEvent.class,
           CatalogReloadFailureCategory.class,
@@ -73,6 +85,7 @@ class PublicApiContractTest {
           LobbyServiceStatus.class,
           LobbyStatusEvent.class,
           PlayerMatchmakingEvent.class,
+          ReconciliationEvent.class,
           MatchmakingStatus.class,
           SoftwareInstallationEvent.class,
           SoftwareInstallationFailureCategory.class,
@@ -91,6 +104,9 @@ class PublicApiContractTest {
     assertTrue(Set.of(Capability.values()).contains(Capability.CATALOG_RELOAD_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.LOBBY_STATUS_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.SOFTWARE_INSTALLATION_EVENTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.RECONCILIATION_EVENTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.API_SHUTDOWN_EVENTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.DIAGNOSTICS));
   }
 
   @Test

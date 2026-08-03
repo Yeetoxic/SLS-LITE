@@ -23,17 +23,27 @@ import net.slimelabs.slslite.api.ApiVersion;
 import net.slimelabs.slslite.api.BlueprintView;
 import net.slimelabs.slslite.api.Capability;
 import net.slimelabs.slslite.api.DeleteResult;
+import net.slimelabs.slslite.api.DiagnosticsSnapshot;
+import net.slimelabs.slslite.api.HostCapabilityState;
+import net.slimelabs.slslite.api.HostCapabilityView;
+import net.slimelabs.slslite.api.InstallationDiagnosticView;
+import net.slimelabs.slslite.api.InstanceLogSnapshot;
 import net.slimelabs.slslite.api.InstanceOperationResult;
 import net.slimelabs.slslite.api.InstanceOverrides;
+import net.slimelabs.slslite.api.InstanceStatisticsView;
 import net.slimelabs.slslite.api.InstanceStatus;
 import net.slimelabs.slslite.api.InstanceView;
+import net.slimelabs.slslite.api.LobbyDiagnosticView;
+import net.slimelabs.slslite.api.MaintenanceView;
 import net.slimelabs.slslite.api.QueueRequest;
 import net.slimelabs.slslite.api.QueueResult;
 import net.slimelabs.slslite.api.QueueTicket;
 import net.slimelabs.slslite.api.SLSLiteApi;
 import net.slimelabs.slslite.api.SLSLiteApiException;
 import net.slimelabs.slslite.api.StartRequest;
+import net.slimelabs.slslite.api.SystemDiagnosticView;
 import net.slimelabs.slslite.api.VolumeView;
+import net.slimelabs.slslite.api.event.ApiShutdownEvent;
 import net.slimelabs.slslite.api.event.CatalogDelta;
 import net.slimelabs.slslite.api.event.CatalogReloadEvent;
 import net.slimelabs.slslite.api.event.CatalogReloadFailureCategory;
@@ -48,6 +58,7 @@ import net.slimelabs.slslite.api.event.LobbyServiceStatus;
 import net.slimelabs.slslite.api.event.LobbyStatusEvent;
 import net.slimelabs.slslite.api.event.MatchmakingStatus;
 import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
+import net.slimelabs.slslite.api.event.ReconciliationEvent;
 import net.slimelabs.slslite.api.event.SLSLiteEvent;
 import net.slimelabs.slslite.api.event.SoftwareInstallationEvent;
 import net.slimelabs.slslite.api.event.SoftwareInstallationFailureCategory;
@@ -58,13 +69,16 @@ import net.slimelabs.slslite.api.event.Subscription;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.config.DefinitionReloader;
+import net.slimelabs.slslite.host.HostCapabilityReport;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.instance.InstanceManager;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
+import net.slimelabs.slslite.instance.reconcile.InstanceReconciliationReport;
 import net.slimelabs.slslite.lobby.LobbyProvider;
+import net.slimelabs.slslite.log.DiagnosticMessages;
 import net.slimelabs.slslite.velocity.LocalJoinService;
 import org.slf4j.Logger;
 
@@ -99,6 +113,13 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   private volatile BlueprintRepository blueprints;
   private volatile InstanceManager instances;
   private volatile LocalJoinService joins;
+  private volatile LobbyProvider lobby;
+  private volatile SoftwareInstallationService installations;
+  private volatile HostCapabilityReport hostCapabilities;
+  private volatile ReconciliationEvent reconciliation;
+  private volatile LobbyStatusEvent latestLobbyStatus;
+  private final java.util.ArrayDeque<InstanceFailureEvent> recentFailures =
+      new java.util.ArrayDeque<>(64);
 
   public DefaultSLSLiteApi(ProxyServer proxy, Logger logger) {
     this.proxy = java.util.Objects.requireNonNull(proxy, "proxy");
@@ -110,15 +131,17 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
       InstanceManager instances,
       LocalJoinService joins,
       LobbyProvider lobby,
-      SoftwareInstallationService installations) {
+      SoftwareInstallationService installations,
+      HostCapabilityReport hostCapabilities) {
     if (status.get() != ApiStatus.STARTING) {
       throw new IllegalStateException("API can only be activated once");
     }
     this.blueprints = java.util.Objects.requireNonNull(blueprints, "blueprints");
     this.instances = java.util.Objects.requireNonNull(instances, "instances");
     this.joins = java.util.Objects.requireNonNull(joins, "joins");
-    java.util.Objects.requireNonNull(lobby, "lobby");
-    java.util.Objects.requireNonNull(installations, "installations");
+    this.lobby = java.util.Objects.requireNonNull(lobby, "lobby");
+    this.installations = java.util.Objects.requireNonNull(installations, "installations");
+    this.hostCapabilities = java.util.Objects.requireNonNull(hostCapabilities, "hostCapabilities");
     instances.installLifecycleObserver(this::publish);
     instances.installFailureObserver(this::publish);
     joins.installMatchmakingObserver(this::publish);
@@ -136,6 +159,29 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
         new SLSLiteApiException(
             SLSLiteApiException.Code.NOT_READY,
             "SLS-LITE initialization failed; the public API is unavailable"));
+  }
+
+  public synchronized void recordReconciliation(
+      InstanceReconciliationReport report, String correlationId) {
+    java.util.Objects.requireNonNull(report, "report");
+    if (reconciliation != null) {
+      throw new IllegalStateException("Startup reconciliation was already recorded");
+    }
+    ReconciliationEvent event =
+        new ReconciliationEvent(
+            eventSequence.incrementAndGet(),
+            java.time.Instant.now(),
+            correlationId,
+            report.recoveredStorageTransactions(),
+            report.removedEphemeral(),
+            report.preservedPersistent(),
+            report.preservedRunning(),
+            report.preservedUnknown(),
+            report.failures());
+    reconciliation = event;
+    if (!subscribers.isEmpty()) {
+      submit(event);
+    }
   }
 
   @Override
@@ -156,6 +202,56 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   @Override
   public Set<Capability> capabilities() {
     return CAPABILITIES;
+  }
+
+  @Override
+  public synchronized DiagnosticsSnapshot diagnostics() {
+    requireReady();
+    var allManaged = instances.getAll();
+    List<ManagedInstance> managed = allManaged.stream().limit(256).toList();
+    List<InstallationDiagnosticView> installationViews =
+        installations.snapshots().stream()
+            .map(
+                snapshot ->
+                    new InstallationDiagnosticView(
+                        snapshot.key().softwareId(),
+                        snapshot.key().version(),
+                        switch (snapshot.state()) {
+                          case INSTALLING -> SoftwareInstallationStatus.STARTED;
+                          case READY -> SoftwareInstallationStatus.READY;
+                          case FAILED -> SoftwareInstallationStatus.FAILED;
+                        },
+                        snapshot.startedAt(),
+                        Optional.ofNullable(snapshot.completedAt()),
+                        safe(snapshot.detail()),
+                        tail(snapshot.logs(), 20).stream().map(DefaultSLSLiteApi::safe).toList()))
+            .toList();
+    List<HostCapabilityView> capabilityViews =
+        hostCapabilities.capabilities().stream()
+            .limit(64)
+            .map(
+                capability ->
+                    new HostCapabilityView(
+                        safe(capability.name()),
+                        HostCapabilityState.valueOf(capability.status().name()),
+                        safe(capability.detail())))
+            .toList();
+    var maintenance = instances.maintenanceStatus();
+    return new DiagnosticsSnapshot(
+        java.time.Instant.now(),
+        new SystemDiagnosticView(
+            status.get(),
+            blueprints.getAll().size(),
+            allManaged.size(),
+            joins.queuedPlayers().size()),
+        new MaintenanceView(
+            maintenance.enabled(), maintenance.changedAt(), safe(maintenance.reason())),
+        lobbyDiagnostics(),
+        installationViews,
+        capabilityViews,
+        managed.stream().map(this::statistics).toList(),
+        managed.stream().map(DefaultSLSLiteApi::logs).toList(),
+        List.copyOf(recentFailures));
   }
 
   @Override
@@ -282,6 +378,10 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
           SLSLiteApiException.Code.REJECTED, "SLS-LITE API subscriber limit reached");
     }
     subscribers.add(listener);
+    ReconciliationEvent retained = reconciliation;
+    if (retained != null) {
+      submit(retained, List.of(listener), false);
+    }
     AtomicBoolean subscribed = new AtomicBoolean(true);
     return () -> {
       if (subscribed.compareAndSet(true, false)) {
@@ -312,6 +412,10 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
             transition.correlationId(),
             InstanceFailurePhase.valueOf(transition.phase().name()),
             InstanceFailureCategory.valueOf(transition.category().name()));
+    if (recentFailures.size() == 64) {
+      recentFailures.removeFirst();
+    }
+    recentFailures.addLast(event);
     submit(event);
   }
 
@@ -345,6 +449,7 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
             LobbyServiceStatus.valueOf(snapshot.primaryStatus().name()),
             LobbyServiceStatus.valueOf(snapshot.holdingStatus().name()),
             LobbyRoute.valueOf(snapshot.route().name()));
+    latestLobbyStatus = event;
     submit(event);
   }
 
@@ -374,9 +479,23 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   }
 
   private void submit(SLSLiteEvent event) {
+    submit(event, List.copyOf(subscribers), false);
+  }
+
+  private void submit(
+      SLSLiteEvent event, List<Consumer<? super SLSLiteEvent>> recipients, boolean terminal) {
+    Runnable delivery = () -> deliver(event, recipients);
     try {
-      eventExecutor.execute(() -> deliver(event));
+      eventExecutor.execute(delivery);
     } catch (RejectedExecutionException exception) {
+      if (terminal && eventExecutor.getQueue().poll() != null) {
+        try {
+          eventExecutor.execute(delivery);
+          return;
+        } catch (RejectedExecutionException ignored) {
+          // The dispatcher was concurrently forced down after the terminal event was created.
+        }
+      }
       if (status.get() != ApiStatus.CLOSED && shouldReportOverflow()) {
         logger.warn(
             "SLS-LITE API event queue is full; slow extension subscribers are dropping events");
@@ -384,8 +503,11 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
     }
   }
 
-  private void deliver(SLSLiteEvent event) {
-    for (Consumer<? super SLSLiteEvent> subscriber : subscribers) {
+  private void deliver(SLSLiteEvent event, List<Consumer<? super SLSLiteEvent>> recipients) {
+    for (Consumer<? super SLSLiteEvent> subscriber : recipients) {
+      if (!subscribers.contains(subscriber)) {
+        continue;
+      }
       try {
         subscriber.accept(event);
       } catch (RuntimeException exception) {
@@ -417,6 +539,77 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
         instance.blueprint().save(),
         instance.createdAt(),
         instance.correlationId());
+  }
+
+  private InstanceStatisticsView statistics(ManagedInstance instance) {
+    int players =
+        proxy.getServer(instance.id()).map(server -> server.getPlayersConnected().size()).orElse(0);
+    var resources = instance.processResources();
+    return new InstanceStatisticsView(
+        instance.id(),
+        status(instance.state()),
+        players,
+        instance.retainedLogLines(),
+        instance.logRetentionCapacity(),
+        instance.processCpuTime(),
+        resources
+            .map(ManagedInstance.ProcessResourceSnapshot::residentBytes)
+            .orElseGet(java.util.OptionalLong::empty),
+        resources
+            .map(ManagedInstance.ProcessResourceSnapshot::storageBytesRead)
+            .orElseGet(java.util.OptionalLong::empty),
+        resources
+            .map(ManagedInstance.ProcessResourceSnapshot::storageBytesWritten)
+            .orElseGet(java.util.OptionalLong::empty));
+  }
+
+  private static InstanceLogSnapshot logs(ManagedInstance instance) {
+    var page = instance.logs(1, 20);
+    return new InstanceLogSnapshot(
+        instance.id(),
+        page.lines().stream().map(DefaultSLSLiteApi::safe).toList(),
+        page.totalRetainedLines(),
+        page.retentionCapacity());
+  }
+
+  private LobbyDiagnosticView lobbyDiagnostics() {
+    LobbyStatusEvent current = latestLobbyStatus;
+    var limbo = lobby.limboDiagnostics();
+    LobbyServiceStatus primary;
+    LobbyServiceStatus holding;
+    LobbyRoute route;
+    if (current != null) {
+      primary = current.primaryStatus();
+      holding = current.holdingStatus();
+      route = current.route();
+    } else {
+      primary = LobbyServiceStatus.valueOf(lobby.status().name());
+      holding =
+          limbo
+              .map(value -> LobbyServiceStatus.valueOf(value.status().name()))
+              .orElse(LobbyServiceStatus.OFFLINE);
+      route =
+          lobby.primaryServer().isPresent()
+              ? LobbyRoute.PRIMARY
+              : lobby.server().isPresent() ? LobbyRoute.HOLDING : LobbyRoute.NONE;
+    }
+    return new LobbyDiagnosticView(
+        primary,
+        holding,
+        route,
+        limbo.map(value -> value.enabled()).orElse(false),
+        limbo.map(value -> value.recoveryAttempts()).orElse(0),
+        limbo.map(value -> value.maxRecoveryAttempts()).orElse(0),
+        limbo.flatMap(value -> value.lastFailure()).map(DefaultSLSLiteApi::safe).orElse(""));
+  }
+
+  private static List<String> tail(List<String> values, int maximum) {
+    int start = Math.max(0, values.size() - maximum);
+    return List.copyOf(values.subList(start, values.size()));
+  }
+
+  private static String safe(String value) {
+    return value == null || value.isBlank() ? "" : DiagnosticMessages.safe(value);
   }
 
   private static BlueprintView view(Blueprint blueprint) {
@@ -551,6 +744,10 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
       ready.completeExceptionally(
           new SLSLiteApiException(SLSLiteApiException.Code.CLOSED, "SLS-LITE API closed"));
     }
+    submit(
+        new ApiShutdownEvent(eventSequence.incrementAndGet(), java.time.Instant.now()),
+        List.copyOf(subscribers),
+        true);
     eventExecutor.shutdown();
     try {
       if (!eventExecutor.awaitTermination(2, TimeUnit.SECONDS)) {

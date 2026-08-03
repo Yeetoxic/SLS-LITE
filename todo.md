@@ -439,10 +439,10 @@ mutation, or silent instance corruption.
 - [x] Add exactly-once shared software-installation events for start,
       ready, sanitized failure, and shutdown cancellation without cache paths,
       URLs, checksums, provider logs, or duplicate waiter notifications.
-- [ ] Expand the bounded event model to cover reconciliation and API shutdown.
+- [x] Expand the bounded event model to cover reconciliation and API shutdown.
       Give each event stable immutable data,
       sequence/timestamp semantics, and a capability when support is optional.
-- [ ] Add redacted, bounded diagnostic views for system and lobby status,
+- [x] Add redacted, bounded diagnostic views for system and lobby status,
       maintenance, installation state, host capabilities, instance statistics,
       recent log snapshots, and correlated failure summaries. Do not expose
       mutable buffers, credentials, filesystem paths, process handles, or

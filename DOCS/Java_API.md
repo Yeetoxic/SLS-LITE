@@ -74,6 +74,7 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 | `version()` | Return the Java API version. |
 | `status()` / `ready()` | Inspect or await provider readiness. |
 | `capabilities()` | Discover supported optional features. |
+| `diagnostics()` | Capture redacted bounded operational diagnostics. |
 | `blueprints()` / `blueprint(id)` | Inspect immutable blueprint views. |
 | `instances()` / `instance(id)` | Inspect immutable instance views. |
 | `start(request)` | Start and register an instance. |
@@ -85,7 +86,8 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 API 1.0 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
 `INSTANCE_START`, `INSTANCE_STOP`, `INSTANCE_DELETE`, `PLAYER_QUEUE`,
 `MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, `CATALOG_RELOAD_EVENTS`,
-`LOBBY_STATUS_EVENTS`, `SOFTWARE_INSTALLATION_EVENTS`, and `LIFECYCLE_EVENTS`.
+`LOBBY_STATUS_EVENTS`, `SOFTWARE_INSTALLATION_EVENTS`, `RECONCILIATION_EVENTS`,
+`API_SHUTDOWN_EVENTS`, `DIAGNOSTICS`, and `LIFECYCLE_EVENTS`.
 
 ## Operations
 
@@ -125,6 +127,21 @@ api.enqueue(new QueueRequest(playerId, "minigame", "block_hunt"))
 one. Queue requests still enforce blueprint pools, maximum instances, player
 capacity, maintenance mode, memory admission, and normal connection behavior.
 
+## Diagnostics
+
+`diagnostics()` returns one immutable point-in-time `DiagnosticsSnapshot`.
+It includes system and queue counts, maintenance state, effective primary and
+holding-lobby health, up to 100 recent installations, 64 startup host probes,
+256 instance statistics and redacted 20-line output tails, and the latest 64
+sanitized correlated instance failures. System counts remain exact when the
+detailed instance lists are truncated.
+
+Messages are single-line, redacted, and limited to 512 characters. The view
+does not expose credentials, filesystem paths, download URLs, process IDs or
+handles, mutable log buffers, internal exceptions, coordinators, or repository
+objects. Callers receive defensive list copies and must request a new snapshot
+to observe later changes.
+
 ## Lifecycle Events
 
 ```java
@@ -140,6 +157,8 @@ subscription.close();
 ```
 
 Events are delivered in transition order by one bounded SLS-LITE dispatcher.
+Recipients are captured when an event is published, so a new subscriber never
+receives ordinary events that were already queued before it subscribed.
 Callbacks must return quickly and offload blocking work. A subscriber that
 throws is disabled after its first logged failure. If a slow extension fills
 the 1,024-event queue, SLS-LITE drops later notifications and warns at most once
@@ -198,6 +217,22 @@ Cache hits and requests rejected before work is accepted emit no installation
 event. Software/version, source, and release channel are exposed, while cache
 paths, download URLs, checksums, provider logs, progress text, and exception
 messages remain internal.
+
+Startup produces one `ReconciliationEvent` containing bounded outcome counts
+and the startup correlation ID. Because reconciliation finishes before the API
+becomes ready, this is the only retained event: it is replayed once to each
+subscriber that registers after reconciliation. Its original sequence and
+timestamp are preserved, and it is delivered before that subscriber's later
+live events. No instance identifiers, paths, mount details, or failure messages
+are exposed.
+
+Closing SLS-LITE publishes one terminal `ApiShutdownEvent` to the subscribers
+registered at shutdown, then drains the dispatcher within the normal bounded
+shutdown deadline. The terminal notification reserves queue capacity by evicting at
+most one older queued notification if a saturated extension has filled the
+queue. As with other callbacks, a subscriber that blocks past the shutdown
+deadline can prevent delivery. Subscriptions and new API operations are
+rejected after closure.
 
 ## Trust And Compatibility
 

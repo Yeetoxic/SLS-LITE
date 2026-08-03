@@ -17,6 +17,7 @@ import java.util.stream.LongStream;
 import net.slimelabs.slslite.api.ApiStatus;
 import net.slimelabs.slslite.api.InstanceStatus;
 import net.slimelabs.slslite.api.SLSLiteApiException;
+import net.slimelabs.slslite.api.event.ApiShutdownEvent;
 import net.slimelabs.slslite.api.event.CatalogReloadEvent;
 import net.slimelabs.slslite.api.event.CatalogReloadFailureCategory;
 import net.slimelabs.slslite.api.event.CatalogReloadScope;
@@ -30,6 +31,7 @@ import net.slimelabs.slslite.api.event.LobbyServiceStatus;
 import net.slimelabs.slslite.api.event.LobbyStatusEvent;
 import net.slimelabs.slslite.api.event.MatchmakingStatus;
 import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
+import net.slimelabs.slslite.api.event.ReconciliationEvent;
 import net.slimelabs.slslite.api.event.SoftwareInstallationEvent;
 import net.slimelabs.slslite.api.event.SoftwareInstallationFailureCategory;
 import net.slimelabs.slslite.api.event.SoftwareInstallationSource;
@@ -41,6 +43,7 @@ import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.model.InstanceState;
+import net.slimelabs.slslite.instance.reconcile.InstanceReconciliationReport;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.LobbyStatus;
 import net.slimelabs.slslite.software.SoftwareSource;
@@ -304,6 +307,86 @@ class DefaultSLSLiteApiEventTest {
     assertTrue(delivered.await(2, TimeUnit.SECONDS));
     assertEquals(LongStream.rangeClosed(1, eventCount).boxed().toList(), sequences);
     api.close();
+  }
+
+  @Test
+  void replaysRetainedReconciliationBeforeFutureLiveEvents() throws Exception {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    api.recordReconciliation(new InstanceReconciliationReport(1, 2, 3, 4, 5, 6), "startup-test");
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            api.recordReconciliation(
+                new InstanceReconciliationReport(0, 0, 0, 0, 0, 0), "duplicate"));
+    List<net.slimelabs.slslite.api.event.SLSLiteEvent> received = new CopyOnWriteArrayList<>();
+    CountDownLatch delivered = new CountDownLatch(2);
+    api.subscribe(
+        event -> {
+          received.add(event);
+          delivered.countDown();
+        });
+    api.publish(
+        new InstanceLifecycle.Transition(
+            "arena.123", InstanceState.CREATED, InstanceState.PREPARING, Instant.now()));
+
+    assertTrue(delivered.await(2, TimeUnit.SECONDS));
+    ReconciliationEvent reconciliation = (ReconciliationEvent) received.getFirst();
+    assertEquals(1L, reconciliation.sequence());
+    assertEquals(20, reconciliation.inspected());
+    assertEquals("startup-test", reconciliation.correlationId());
+    assertEquals(2L, received.get(1).sequence());
+    api.close();
+  }
+
+  @Test
+  void subscriptionDoesNotReceiveEventsQueuedBeforeItSubscribed() throws Exception {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    CountDownLatch firstEntered = new CountDownLatch(1);
+    CountDownLatch releaseFirst = new CountDownLatch(1);
+    api.subscribe(
+        event -> {
+          if (event.sequence() == 1L) {
+            firstEntered.countDown();
+            try {
+              releaseFirst.await();
+            } catch (InterruptedException exception) {
+              Thread.currentThread().interrupt();
+            }
+          }
+        });
+    api.publish(
+        new InstanceLifecycle.Transition(
+            "arena.1", InstanceState.CREATED, InstanceState.PREPARING, Instant.now()));
+    assertTrue(firstEntered.await(2, TimeUnit.SECONDS));
+
+    List<Long> lateSequences = new CopyOnWriteArrayList<>();
+    CountDownLatch lateDelivered = new CountDownLatch(1);
+    api.subscribe(
+        event -> {
+          lateSequences.add(event.sequence());
+          lateDelivered.countDown();
+        });
+    releaseFirst.countDown();
+    api.publish(
+        new InstanceLifecycle.Transition(
+            "arena.2", InstanceState.CREATED, InstanceState.PREPARING, Instant.now()));
+
+    assertTrue(lateDelivered.await(2, TimeUnit.SECONDS));
+    assertEquals(List.of(2L), lateSequences);
+    api.close();
+  }
+
+  @Test
+  void deliversFinalShutdownEventBeforeDispatcherCloses() throws Exception {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    List<net.slimelabs.slslite.api.event.SLSLiteEvent> received = new CopyOnWriteArrayList<>();
+    api.subscribe(received::add);
+
+    api.close();
+
+    assertEquals(1, received.size());
+    assertTrue(received.getFirst() instanceof ApiShutdownEvent);
+    assertEquals(ApiStatus.CLOSED, api.status());
   }
 
   private static ProxyServer proxy() {

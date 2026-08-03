@@ -10,7 +10,8 @@ rather than forming part of the public contract.
 API version `1.0` provides capability and readiness discovery, immutable
 blueprint and instance views, asynchronous start/stop/delete requests,
 player matchmaking queue operations, and globally ordered instance lifecycle,
-player matchmaking, and sanitized instance-failure events.
+player matchmaking, sanitized instance-failure, reconciliation, and API
+shutdown events.
 Only `net.slimelabs.slslite.api` and its `event` child package are supported.
 The implementation adapter, coordinators, filesystem paths, process handles,
 and mutable repositories remain internal.
@@ -19,12 +20,12 @@ The dedicated `sls-lite-0.1.0-SNAPSHOT-api.jar` was inspected after a clean
 build. It contained the public API/event classes and
 `META-INF/licenses/LICENSE`, contained no `api.internal`, instance, blueprint,
 or Velocity implementation classes, and had SHA-256
-`FB1F585F12015396A797F2829E9E2363E086D81D3B93D5D48D9EB0B5A4E11DF5`.
+`92C5D4E8AD88CC7015E0CE67125DF6DC39D7AC6CEE2A1AA9B071B8DDFA30DECC`.
 `jdeps` found only Java base-library dependencies and Velocity's intentionally
 provided plugin/proxy API.
 
 The full shaded plugin had SHA-256
-`78CDE893D958615565F8C174759A8C53DAFE2AF9C2A9D676E621234E606517B1`.
+`C491F2DFFD5987F123C9C1A7C9E9DC5471D60A4AE222A96D272B9E79716926BD`.
 Packaging review also exposed and corrected a pre-existing license-resource
 target mismatch; both the API classifier and full plugin now contain the
 project license at `META-INF/licenses/LICENSE`.
@@ -66,6 +67,20 @@ Dependency analysis, Spotless, and SpotBugs all passed, and `git diff --check`
 reported no whitespace errors. SnakeYAML remains shaded into the runtime plugin
 but is optional in the published POM, so API-classifier consumers do not inherit
 that implementation dependency.
+The reconciliation/API-shutdown increment raised the complete clean tree to
+644 tests with zero failures or errors and the same eight environment-dependent
+skips. The classifier contained 41 public API classes and no internal classes.
+Tests cover retained per-subscriber reconciliation replay, exclusion of events
+queued before subscription, original sequence preservation, duplicate
+reconciliation rejection, and terminal shutdown delivery before dispatcher
+closure. Recipient sets are captured at publication time, preventing late
+subscribers from observing stale queued events.
+The bounded diagnostics increment raised the complete clean tree to 646 tests
+with zero failures or errors and eight environment-dependent skips. The
+classifier contained 50 public API classes and no internal classes. Contract
+tests cover defensive collection copies, log/entry limits, control-character
+rejection, implementation-package exclusion, and documentation of the new
+`DIAGNOSTICS` capability.
 
 The public contract test rejects implementation-package types in API methods
 and constructors and requires every API method and advertised capability to
@@ -123,3 +138,25 @@ installation-start event or download, while Velocity, SLS-Limbo, and persistent
 lobby `lobby.b5kk8m` returned ready normally. The deployed plugin matched the
 current shaded-plugin checksum above and the allocation was left running with
 only `sls-lite.jar` installed.
+
+For the reconciliation and API-shutdown increment, the API-only consumer was
+rebuilt against the 41-class classifier. Although it subscribed after startup
+reconciliation, it received the retained summary first with one inspected
+persistent instance and zero failures, then API readiness and live lobby
+events. A Panel restart produced the terminal `ApiShutdownEvent` at sequence
+10 after the lobby stopped and before process exit. The next startup replayed a
+new reconciliation summary and restored the persistent lobby. The disposable
+consumer was removed, and a final Panel restart left Velocity running with its
+normal two plugins, SLS-Limbo ready, persistent lobby `lobby.b5kk8m` ready,
+only `sls-lite.jar` installed, and the deployed checksum matching the verified
+build above.
+
+The API-only consumer was then rebuilt against the diagnostics classifier and
+captured a real snapshot from the normal fixture. It reported one managed
+instance, zero queued players, maintenance disabled, 14 host probes, one
+bounded instance-log snapshot, and zero recent failures while both lobby
+processes were still starting; the subsequent lifecycle events and console
+confirmed SLS-Limbo and persistent lobby `lobby.b5kk8m` reached ready. After
+removing the disposable consumer, a final Panel restart loaded the normal two
+plugins, restored both lobby services, left only `sls-lite.jar` installed, and
+matched the shaded-plugin checksum above.
