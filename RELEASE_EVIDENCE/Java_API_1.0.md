@@ -19,12 +19,12 @@ The dedicated `sls-lite-0.1.0-SNAPSHOT-api.jar` was inspected after a clean
 build. It contained the public API/event classes and
 `META-INF/licenses/LICENSE`, contained no `api.internal`, instance, blueprint,
 or Velocity implementation classes, and had SHA-256
-`D29870F5607D3D7E80371FB06C19A45845F3A99E08F96D263D203EE16C4B5E48`.
+`2115B45009840099231D6A917E5C091C10298A3DC28DE50BE6D1EAD92CD542E9`.
 `jdeps` found only Java base-library dependencies and Velocity's intentionally
 provided plugin/proxy API.
 
 The full shaded plugin had SHA-256
-`937270E2C50297111EBC821560B42D8DBB8A584331C5063230835F6CD7A0C558`.
+`EA9D55D56F2FFE29E44F78836EB2501119397170F546645F3FAD4AFEA790AA21`.
 Packaging review also exposed and corrected a pre-existing license-resource
 target mismatch; both the API classifier and full plugin now contain the
 project license at `META-INF/licenses/LICENSE`.
@@ -50,6 +50,13 @@ alter the transaction. The API classifier contained 31 public API classes, no
 `api.internal` classes, and no project classes outside the API package. CI now
 enforces that boundary and the required API/license entries before artifact
 upload.
+The lobby-status increment raised the complete passing tree to 640 tests and
+the classifier to 34 public API classes with no internal classes. Tests cover
+primary recovery while the holding lobby remains available, total lobby loss,
+primary restoration, snapshot deduplication, observer failure isolation, and
+global API sequence mapping. The readiness callback was also moved onto the
+serialized health scheduler to remove a provider/fallback shutdown lock-order
+risk found during review.
 Dependency analysis, Spotless, and SpotBugs all passed, and `git diff --check`
 reported no whitespace errors. SnakeYAML remains shaded into the runtime plugin
 but is optional in the published POM, so API-classifier consumers do not inherit
@@ -94,3 +101,13 @@ increments. The container copy matched the shaded-plugin checksum above;
 Velocity 4.0.0 loaded SLS-LITE, SLS-Limbo became ready, and persistent lobby
 `lobby.b5kk8m` returned ready on its managed loopback port. Only `sls-lite.jar`
 was present in the live plugin directory and the allocation was left running.
+
+For the lobby-event increment, the disposable API-only consumer was rebuilt
+against the classifier and deployed alongside the verified plugin. On a normal
+fixture restart it reported 11 capabilities, then observed
+`primary=STARTING, holding=READY, route=HOLDING, available=true`, followed by
+`primary=READY, holding=READY, route=PRIMARY, available=true`. The consumer was
+removed and the allocation restarted again through the Panel; Velocity loaded
+its normal two plugins, SLS-Limbo and persistent lobby `lobby.b5kk8m` returned
+ready, the deployed checksum matched the build above, and only `sls-lite.jar`
+remained in the plugin directory.
