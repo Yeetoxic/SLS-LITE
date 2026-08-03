@@ -47,7 +47,8 @@ entry targeting `plugins/` installs the complete group into that instance.
 Other shared assets may also be organized below `volumes/`; any contained
 non-instance source path is valid. SLS-LITE creates `volumes/worlds/` and
 `volumes/plugins/` empty on startup and never treats their contents as
-generated data.
+generated data. The operator-facing `software/` and `runtimes/` roots are also
+created empty so manual installations and Java runtimes have an obvious home.
 
 `software/` is the reusable exact-version cache. `runtimes/` holds optional
 operator-supplied Java installations. `instances/` contains prepared runtime

@@ -226,3 +226,31 @@ scan contained no authentication, forwarding, secret, or connection failure.
 The fixture was left online with the authenticated player, Velocity,
 SLS-Limbo, and the managed lobby healthy. The pre-reset fixture remains
 recoverable in `sls-ptero-stage3-online-preclean-20260802`.
+
+### Corrected Operator-Layout Repeat
+
+After the production-style run exposed missing operator content roots, the
+allocation was backed up and verified file-for-file in the recoverable Docker
+volume `sls-ptero-stage3-layout-preclean-20260802`. A direct Docker stop proved
+to be an invalid test boundary because Wings retained the allocation's running
+intent; the repeat therefore used the Panel power path for every stop, start,
+and restart.
+
+Artifact SHA-256
+`E9DE06A75382F4E8297DC14AC0A415C93A0684955BAEED44DF62E1A3137670B6`
+started with no prior SLS-LITE data. Before any blueprint or provider download,
+it created empty `volumes/worlds/`, `volumes/plugins/`, `software/`, and
+`runtimes/` roots with allocation ownership and generated no `volumes/PGM/`.
+The initial data footprint was 5.3 MiB, principally NanoLimbo. The ignored
+blueprint example was the only file below `blueprints/`.
+
+After the documented modern-forwarding, online-mode, EULA, and managed-lobby
+settings were applied, Paper 26.2 downloaded from an empty cache and persistent
+lobby `lobby.b5kk8m` reached ready. A Mojang-authenticated client reached that
+lobby and claimed administration; its Velocity UUID persisted in the fresh
+administrator store. A normal Panel restart completed SLS-LITE shutdown,
+preserved the same instance directory and lobby ID, and returned it to ready in
+10.6 seconds without reinstalling Paper. The detail log contained no failed or
+exception events, and the fixture ended with only Velocity, SLS-Limbo, and the
+managed lobby JVM running. The final full verification run passed 608 tests
+with zero failures or errors and seven environment-dependent skips.

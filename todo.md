@@ -370,6 +370,17 @@ data, leaking resources, or trapping players in unexplained states.
       shutdown workloads. Review CPU, heap/RSS, child-process admission, disk
       use and churn, preparation/readiness latency, network overhead, log growth,
       and cleanup, and resolve or explicitly document material regressions.
+- [ ] Audit every generated configuration and software-profile default for
+      environment neutrality. Identify values inherited from the local test rig
+      and replace them with safe common-ground defaults or clearly marked
+      operator choices. Review paths, ports, memory/process budgets, Java
+      selection, forwarding and online-mode assumptions, lobby behavior,
+      storage strategy, logging, timeouts, provider channels, installation
+      policy, and lifecycle limits across self-hosted, Pterodactyl, container,
+      Windows, and native Linux environments. Keep fixture-specific values in
+      ignored test fixtures or scripts rather than shipped product defaults,
+      then repeat the fresh-install workflow using only the revised defaults
+      and published setup instructions.
 - [x] Remove dated proof-of-concept and test-evidence narratives from the
       operator and contributor documentation so those pages function solely as
       clear, current information and instructions. Preserve still-useful test

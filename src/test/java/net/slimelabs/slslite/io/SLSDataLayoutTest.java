@@ -24,6 +24,8 @@ class SLSDataLayoutTest {
 
     assertTrue(Files.isDirectory(dataDirectory.resolve("volumes/worlds")));
     assertTrue(Files.isDirectory(dataDirectory.resolve("volumes/plugins")));
+    assertTrue(Files.isDirectory(dataDirectory.resolve("software")));
+    assertTrue(Files.isDirectory(dataDirectory.resolve("runtimes")));
     try (var children = Files.list(dataDirectory.resolve("volumes"))) {
       assertEquals(
           Set.of("worlds", "plugins"),

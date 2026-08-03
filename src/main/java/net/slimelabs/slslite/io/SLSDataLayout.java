@@ -8,7 +8,12 @@ import java.util.List;
 public final class SLSDataLayout {
 
   private static final List<Path> OPERATOR_DIRECTORIES =
-      List.of(Path.of("volumes"), Path.of("volumes", "worlds"), Path.of("volumes", "plugins"));
+      List.of(
+          Path.of("volumes"),
+          Path.of("volumes", "worlds"),
+          Path.of("volumes", "plugins"),
+          Path.of("software"),
+          Path.of("runtimes"));
 
   private SLSDataLayout() {}
 

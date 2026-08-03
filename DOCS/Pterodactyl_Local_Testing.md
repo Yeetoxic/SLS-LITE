@@ -18,6 +18,11 @@ Generated local credentials are stored in the ignored
 passwords. Configure TLS and rotate every credential before exposing the Panel
 outside the local machine.
 
+Use the Panel or the repository's Panel helpers for game-server power actions.
+Stopping a Wings-owned game container directly with Docker does not change the
+allocation's desired power state, so Wings may recreate or restart it while a
+filesystem test expects the allocation to remain stopped.
+
 ## Services
 
 The fixture contains Panel, Wings, MariaDB, Redis, a `Local Wings` node, the
