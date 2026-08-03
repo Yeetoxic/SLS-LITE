@@ -31,13 +31,13 @@ their schema:
 | Document | Purpose |
 | --- | --- |
 | [Compatibility](Compatibility.md) | Current feature scope and local adaptations. |
-| [SLS v0.2.0 Compatibility Matrix](SLS_v0.2.0_Compatibility.md) | Pinned field comparison, scope decisions, and integration evidence. |
+| [SLS v0.2.0 Compatibility Matrix](SLS_v0.2.0_Compatibility.md) | Pinned field comparison and scope decisions. |
 | [SLS Command Compatibility](SLS_Command_Compatibility.md) | Pinned vSLS command contract and remaining command work. |
 | [Protocol Compatibility](Protocol_Compatibility.md) | Tested SLS-Limbo and ViaVersion protocol paths. |
 
-Compatibility claims are versioned observations, not promises that every
-modern SLS file is accepted. The pinned matrix records the supported subset,
-intentional differences, and reproducible evidence.
+Compatibility claims apply only to the documented subset and are not promises
+that every modern SLS file is accepted. The pinned matrix records supported
+fields and intentional differences.
 
 ## Developers And Testers
 
@@ -58,6 +58,7 @@ and runtime caches are test data and must not be committed.
 ## Project Records
 
 - [Roadmap](../todo.md)
+- [Stage 3 engineering evidence](../RELEASE_EVIDENCE/Stage_3.md)
 - [License](../LICENSE)
 - [Third-party notices](../THIRD_PARTY/THIRD-PARTY-NOTICES.txt)
 - [NanoLimbo provenance](../THIRD_PARTY/NanoLimbo.md)

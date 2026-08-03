@@ -5,12 +5,10 @@ This is the pinned modern SLS source contract for SLS-LITE.
 - Upstream repository: `https://github.com/jessefaler/SLS`
 - Release/tag: `v0.2.0`
 - Commit: `8e8b1e3cf7d2157887764c16f11b8901f8241121`
-- Pin verified: 2026-07-28
 - Upstream license: GNU AGPL v3.0
 
-The matrix is based on the pinned source models, parsers, bundled examples,
-software definitions, vSLS implementation, automated corpus tests, and the
-deployed multi-world validation run.
+The matrix describes SLS-LITE's contract with the pinned source models,
+parsers, bundled examples, software definitions, and vSLS implementation.
 
 ## Status Terms
 
@@ -23,7 +21,7 @@ deployed multi-world validation run.
 
 ## Compatibility And Scope Review
 
-Review completed on 2026-07-29 against:
+The compatibility scope is derived from:
 
 - the pinned SLS `v0.2.0` source and bundled examples;
 - the official blueprint, software, and vSLS command documentation;
@@ -232,84 +230,10 @@ COW, native-Linux performance work, and release hardening remain roadmap work.
 examples, or vSLS implementation. It is treated as announced/deferred work and
 will be reconsidered only after an upstream schema and behavior stabilize.
 
-## Validation Record
+## Verification Requirements
 
-1. Pinned, attributed accepted and rejected fixtures: complete.
-2. Automated coverage for the supported/adapted rows: complete.
-3. Exact-ID loading of the project owner's copied modern blueprints: complete.
-4. Required local compatibility gaps: implemented.
-5. Resulting multi-world network: complete; evidence is recorded below.
-6. Final compatibility code-review corrections: complete and deployed.
-7. Project-owner scope approval: granted on 2026-07-29.
-
-## Deployed Integration Evidence
-
-The 2026-07-29 local Docker Desktop/Pterodactyl run used SLS-LITE
-`0.1.0-SNAPSHOT` with SHA-256
-`F335058F554693F047D7D1754B8336C9BB23470248DD38C5F1D12E5AFDD42644`.
-The regular Maven suite passed 302 tests, and the separate corpus integration
-gate passed its test with all 54 expected blueprint IDs.
-
-The managed Paper 1.18.2 lobby, the `stage2_undead` Paper 1.18.2 fixture, and an
-unchanged modern `wildfire` Paper 1.15.2 blueprint all launched and accepted a
-real client through Velocity. Transfers into both registries and back to the
-lobby succeeded. The run verified:
-
-- Java 17 and Java 8 selection from modern software mappings;
-- software-cache reuse;
-- COW world preparation, `state.copy`, and `state.env`;
-- `server.properties` patches, including command blocks and MOTD;
-- vSLS lifecycle, matchmaking, and one-shot `on-join` behavior;
-- graceful manual and idle shutdown with ephemeral directory cleanup;
-- atomic rejection of undeclared host mounts and persistent single-instance
-  enforcement for explicit shared `rw`
-  volumes without leaked instances or processes.
-
-Wildfire software resolution took 1.159 seconds, private world preparation took
-60.189 seconds, and total readiness took 185.483 seconds on Windows-backed
-Docker storage. These measurements pass compatibility and provide the
-full-stack performance baseline.
-
-The old Undead world emitted a legacy `set_data` loot-table warning unrelated
-to SLS-LITE lifecycle behavior. Pterodactyl Wings also logged a harmless
-disk-usage scan race when an ephemeral directory disappeared during its walk;
-the instance still exited and cleaned up correctly.
-
-The final review-correction build was packaged and deployed separately with
-SHA-256
-`0C6A9C7811D8C98DA5346104E91153D99FA15F17D029308821E3934E35AF1C1F`.
-Its regular suite passed 308 tests, the exact 54-ID corpus gate passed, and the
-Pterodactyl startup verified:
-
-- required Java 8, 11, 16, and 17 runtimes and the selected default runtime
-  passed preflight;
-- configured but unused Java 21 and 25 runtimes produced warnings without
-  disabling SLS-LITE;
-- 13 blueprints and 2 software profiles initialized;
-- SLS-Limbo and persistent managed lobby `lobby.97f1ae` reached `READY`.
-
-## Corpus Evidence
-
-On 2026-07-29, the opt-in parser harness loaded the exact 54 expected
-definitions from the normalized compatibility copy:
-
-- 54 blueprints;
-- registries: `adventure`, `archive`, `experimental`, and `minigame`;
-- explicit Java image selectors, one contained software path override,
-  properties and YAML config patches, distributed limit metadata, and shorthand
-  COW volumes.
-
-`BLUEPRINT_TEMPLATE.yaml.example` is excluded, while
-`adventures/temple_of_doom.yaml` is included. The harness compares loaded IDs
-with `EXPECTED_BLUEPRINT_IDS.txt`, so equal counts cannot hide omissions or
-substitutions. The owner's source directory remains untouched.
-
-Volume source directories were intentionally not required for this parser run.
-The pinned upstream example harness loaded all 6 examples independently. This
-includes duplicate/multi-source COW merge, `ro`/`rw` definitions, properties,
-YAML, and text-file patches. Runtime volume sources remain a separate launch
-gate.
-
-An attributed fixture derived from `protocube/blueprint/example.yml` separately
-verifies `state.copy` mapping/shorthand and `state.env`, because neither field
-is used by the current 54-blueprint SlimeLabs corpus.
+Changes to this compatibility contract must keep attributed accepted/rejected
+fixtures, exact-ID corpus loading, upstream example coverage, and automated
+tests for every supported or adapted row. Parser-only acceptance does not prove
+runtime volume sources, Java selection, process launch, or player transfer;
+those remain separate integration gates described in [Testing](Testing.md).

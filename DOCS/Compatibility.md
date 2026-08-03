@@ -5,11 +5,9 @@ It does not run under full SLS and does not require Protocube, a daemon, S4J,
 Docker, or another SLS installation.
 
 The compatibility contract is pinned to SLS `v0.2.0` at commit
-`8e8b1e3cf7d2157887764c16f11b8901f8241121`. The working field-level comparison
-and recorded integration evidence are in the
-[SLS v0.2.0 Compatibility Matrix](SLS_v0.2.0_Compatibility.md). The schema and
-multi-world compatibility runs, final review corrections, and project-owner
-scope approval were completed on 2026-07-29.
+`8e8b1e3cf7d2157887764c16f11b8901f8241121`. The field-level comparison and
+scope decisions are in the
+[SLS v0.2.0 Compatibility Matrix](SLS_v0.2.0_Compatibility.md).
 
 ## Current Feature Matrix
 
@@ -61,9 +59,9 @@ scope approval were completed on 2026-07-29.
 See [SLS Command Compatibility](SLS_Command_Compatibility.md). Historical
 single-host migration behavior is summarized in [Migration](Migration.md).
 
-## Validated Development Environment
+## Reference Development Environment
 
-| Component | Current validation |
+| Component | Reference value |
 | --- | --- |
 | SLS-LITE bytecode | Java 21 |
 | Build/runtime JDK used by the local fixture | Temurin 25.0.3 |

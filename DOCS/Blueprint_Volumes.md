@@ -73,18 +73,14 @@ strategy may change blueprint behavior:
 - unsupported native capabilities fall back to portable copying unless an
   operator explicitly requires a native strategy.
 
-Every native COW implementation must be verified for storage-location support,
-write isolation, unclean shutdown recovery, cleanup, and real disk savings
-before becoming automatic. Reflink passed its implementation gates through the
-contained probe, transactional preparation tests, and a real XFS `reflink=1`
-shared-extent test on WSL2. Btrfs passed contained snapshot/isolation/cleanup
-probing plus prepare, replacement, reconciliation, deletion, and shared-extent
-tests on a disposable real Btrfs filesystem. Snapshot helpers are never
-auto-discovered. fuse-overlayfs passed the same overlay lifecycle tests plus a
-real contained probe and prepare/restart/reset/delete gate. `/dev/fuse` alone
-does not make a host eligible: the contained mount must succeed. Snapshot
-helpers passed fake-provider process, timeout, malformed-response, rollback,
-lifecycle, and reconciliation tests.
+Every native COW implementation requires storage-location support, write
+isolation, unclean-shutdown recovery, cleanup, and real disk savings before it
+can participate in automatic selection. Reflink eligibility requires a real
+clone and isolation probe; Btrfs requires eligible subvolume sources plus safe
+snapshot deletion; and fuse-overlayfs requires a successful contained mount,
+not merely `/dev/fuse` and a binary. Snapshot helpers are never auto-discovered
+and must obey the bounded process, response, rollback, lifecycle, and
+reconciliation contract.
 
 The current `auto` priority is `reflink`, Btrfs snapshot, kernel OverlayFS,
 rootless fuse-overlayfs, then portable copy. An operator `snapshot-hook` is

@@ -9,10 +9,9 @@ SLS-LITE follows modern SLS terminology and compatible configuration shapes
 where they make sense on one host. It remains a separate, self-contained
 product: full SLS is not a runtime dependency or operating mode.
 
-> **Development status:** The core historical-world network and the pinned
-> modern SLS `v0.2.0` compatibility run have passed. The project is not a
-> production release; full-stack performance, command completion, failure
-> hardening, and release qualification remain.
+> **Development status:** The core historical-world network and pinned modern
+> SLS `v0.2.0` subset are implemented. The project is not a production release;
+> release qualification and candidate hardening remain.
 
 ## What Works
 
@@ -38,7 +37,7 @@ The exact current scope and intentional limitations are listed in
 ViaVersion is detected when the operator installs it on Velocity; it is not
 bundled or required by SLS-LITE. Detection alone does not make an untested
 Minecraft client version supported. See
-[Protocol Compatibility](DOCS/Protocol_Compatibility.md) for validated native
+[Protocol Compatibility](DOCS/Protocol_Compatibility.md) for supported native
 and translated paths.
 
 ## Requirements

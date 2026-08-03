@@ -1,15 +1,16 @@
 # SLS-LITE Protocol Compatibility
 
-This matrix records complete SLS-Limbo login tests. A protocol is not considered
-compatible merely because Velocity starts, a status ping succeeds, or a library
-claims to understand its packet IDs.
+This matrix defines the supported SLS-Limbo login and transfer paths. A protocol
+is not considered compatible merely because Velocity starts, a status ping
+succeeds, or a library claims to understand its packet IDs.
 
 `/sls join-test <server|this>` intentionally performs only that narrower status
-ping. Use it to diagnose backend reachability and advertised protocol, never as
-evidence for a row in this compatibility matrix. Matrix promotion still
-requires a real client login and transfer through Velocity.
+ping. Use it to diagnose backend reachability and advertised protocol. A native
+SLS-Limbo row requires a client to reach PLAY state and receive the expected
+brand; a full-network row additionally requires the connected transfer path
+through Velocity.
 
-## Current Test Stack
+## Reference Stack
 
 | Component | Version |
 | --- | --- |
@@ -18,13 +19,12 @@ requires a real client login and transfer through Velocity.
 | Java | Temurin `25.0.3` |
 | NanoLimbo runtime | `1.13.0` at `d192d57d` |
 | ViaVersion fixture | `5.11.0` |
-| ViaVersion fixture advertised ceiling | Minecraft `26.2`, protocol `776` |
+| Supported stable ViaVersion ceiling | Minecraft `26.2`, protocol `776` |
 | Fixed translation baseline | Minecraft `1.21.5`, protocol `770` |
 
-As of 2026-08-02, `26.2` is the latest stable Java Edition release. The 26.3
-line is still a snapshot series and is intentionally outside this release
-matrix. Snapshot support must be opted into and tested separately; it is never
-inferred from support for the preceding stable release.
+Development snapshots are outside the release matrix. Snapshot support must be
+opted into and qualified separately; it is never inferred from support for the
+preceding stable release.
 
 ViaVersion test artifacts must come from its
 [official releases](https://github.com/ViaVersion/ViaVersion/releases). The
@@ -33,18 +33,19 @@ before installation.
 
 ## Native SLS-Limbo Matrix
 
-The automated native test launches the exact bundled NanoLimbo JAR, completes
-an offline-mode login, reaches PLAY state, and verifies the backend brand.
+Native operation uses NanoLimbo's per-client protocol advertisement and does
+not require ViaVersion. These clients can complete login, reach PLAY state, and
+receive the SLS-Limbo backend brand:
 
-| Client | Result | Test date |
-| --- | --- | --- |
-| `1.13.2` | Pass | 2026-08-02 |
-| `1.16.5` | Pass | 2026-08-02 |
-| `1.20.4` | Pass | 2026-08-02 |
-| `1.21.4` | Pass | 2026-08-02 |
-| `1.21.5` | Pass | 2026-08-02 |
-| `1.21.11` | Pass | 2026-08-02 |
-| `26.1` | Pass, manual real-client test | 2026-07-25 |
+| Client | Supported path |
+| --- | --- |
+| `1.13.2` | Native SLS-Limbo login |
+| `1.16.5` | Native SLS-Limbo login |
+| `1.20.4` | Native SLS-Limbo login |
+| `1.21.4` | Native SLS-Limbo login |
+| `1.21.5` | Native SLS-Limbo login |
+| `1.21.11` | Native SLS-Limbo login |
+| `26.1` | Native SLS-Limbo login |
 
 Run the automated matrix with:
 
@@ -85,11 +86,11 @@ compatible. A translated release passes only after:
    protocol.
 5. The player can remain in SLS-Limbo and transfer to the primary lobby.
 
-| Client | Backend baseline | Result | Test date |
-| --- | --- | --- | --- |
-| `1.21.5` | `1.21.5` (`770`) | Pass, full managed-lobby handoff | 2026-08-02 |
-| `1.21.11` | `1.21.5` (`770`) | Pass, full managed-lobby handoff | 2026-08-02 |
-| `26.2` | `1.21.5` (`770`) | Pass, full manual real-client handoff | 2026-08-02 |
+| Client | Backend baseline | Supported path |
+| --- | --- | --- |
+| `1.21.5` | `1.21.5` (`770`) | Full managed-lobby/SLS-Limbo handoff |
+| `1.21.11` | `1.21.5` (`770`) | Full managed-lobby/SLS-Limbo handoff |
+| `26.2` | `1.21.5` (`770`) | Full managed-lobby/SLS-Limbo handoff |
 
 When ViaVersion is present, SLS-LITE synchronizes every dynamic backend through
 ViaVersion's public `ProtocolDetectorService` before publishing it as ready.
@@ -158,8 +159,7 @@ managed lobby. It does not delete its persistent instance. A pass proves the
 tested protocol's connected handoff and return path, not general game-mechanic
 compatibility or support for untested client versions.
 
-The pinned Node client cannot encode the stable `26.2` protocol, so its row was
-verified with a real client. During the protected managed-lobby restart,
-Velocity logged the connected player moving from `lobby.97f1ae` to `sls-limbo`,
-the lobby exiting cleanly, ViaVersion resynchronizing the recovered backend,
-and the same connection returning to `lobby.97f1ae` after readiness.
+The pinned Node client cannot encode stable `26.2`; qualify that path with a
+real client. A supported full-path run must keep the same connection while it
+moves from the managed lobby to SLS-Limbo, waits through a protected lobby
+restart, and returns after backend readiness and ViaVersion synchronization.

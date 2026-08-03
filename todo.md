@@ -370,7 +370,7 @@ data, leaking resources, or trapping players in unexplained states.
       shutdown workloads. Review CPU, heap/RSS, child-process admission, disk
       use and churn, preparation/readiness latency, network overhead, log growth,
       and cleanup, and resolve or explicitly document material regressions.
-- [ ] Remove dated proof-of-concept and test-evidence narratives from the
+- [x] Remove dated proof-of-concept and test-evidence narratives from the
       operator and contributor documentation so those pages function solely as
       clear, current information and instructions. Preserve still-useful test
       procedures, supported compatibility claims, and performance guidance;

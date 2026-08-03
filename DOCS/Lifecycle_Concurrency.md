@@ -60,5 +60,5 @@ Every terminal race must prove all of the following:
   deadline.
 
 Focused unit tests cover each ownership boundary. The documented
-Pterodactyl/Velocity workflow remains the process, registration, port, lobby,
-and persistent-recovery integration proof.
+Pterodactyl/Velocity workflow supplies process, registration, port, lobby, and
+persistent-recovery integration coverage.

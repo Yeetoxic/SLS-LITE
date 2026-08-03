@@ -259,10 +259,8 @@ The blueprint `memory` value and `resources.total_memory_mib` are admission
 limits for child Java maximum heaps; they are not measurements of total
 resident memory. JVM native memory, thread stacks, mapped files, Velocity,
 SLS-Limbo, and the operating system all require additional panel/host
-headroom. Use `/sls stats` on a representative loaded instance and container
-metrics when sizing a real allocation. The measured local-fixture values and
-their limitations are recorded in
-[Pterodactyl Local Testing](Pterodactyl_Local_Testing.md#representative-storage-and-resource-samples).
+headroom. Use `/sls stats` on representative loaded instances and container
+metrics when sizing a real allocation.
 
 **Server remains in STARTING**
 
@@ -283,12 +281,10 @@ a release performance baseline. Functional failures still count everywhere.
 
 Prefer a native Linux filesystem for `paths.instances`, blueprint sources, and
 the software cache whenever the provider exposes one. Docker Desktop's
-Windows-translated `9p` storage is useful for compatibility checks, but the
-Stage 3 samples measured roughly 19-46 times slower median preparation and
-roughly 10-142 times slower median cleanup than WSL2 ext4 across the sampled
-profiles. Remote or translated filesystems can have different caching and
-durability behavior, so benchmark the exact provider path before selecting
-capacity or timeout thresholds.
+Windows-translated `9p` storage remains useful for compatibility checks, but
+remote and translated filesystems can have substantially different latency,
+caching, and durability behavior. Benchmark the exact provider path before
+selecting capacity or timeout thresholds.
 
 For repeatable copy samples, compile test classes and run
 `StoragePerformanceBenchmarkHarness` with an immutable source directory, an
@@ -320,7 +316,7 @@ the client.
 - Use native Linux storage where possible.
 - Measure startup and loaded memory for the actual plugins and worlds.
 
-The Stage 3 squeezed-allocation audit found:
+Constrained-host behavior is bounded as follows:
 
 | Area | Bounded behavior | Operator responsibility |
 | --- | --- | --- |
@@ -357,14 +353,10 @@ partial destination. Stage 3 also tracks safe reuse of verified immutable
 artifacts and avoiding unnecessary reconstruction of valid persistent
 instances. Mutable world files are never hard-linked.
 
-In the disposable Linux baseline, a 64 MiB logical sparse file used 64 MiB
-after ordinary Java copying and 2 MiB through the sparse-aware fallback; source
-and target content matched byte-for-byte.
-
-The enabled actual-preparer path was benchmarked against its sequential form.
-On Windows/NTFS, 1,000 16 KiB files improved from 2,221 ms to 1,141 ms and
-eight 8 MiB files from 49 ms to 23 ms. In disposable Linux Docker storage, the
-same workloads improved from 176 ms to 162 ms and from 66 ms to 12 ms.
+On non-Windows hosts the sparse-aware fallback preserves sampled large zero
+runs as holes while verifying byte-for-byte content. Bounded parallel copying
+improves independent-file throughput without changing merge order or allowing
+rollback to race unfinished workers.
 
 Valid persistent instances reuse their existing directory on restart and do
 not reapply a changed software template. Only an explicit reset constructs a
