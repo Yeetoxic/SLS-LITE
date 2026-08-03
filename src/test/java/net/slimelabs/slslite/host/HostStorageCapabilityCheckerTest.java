@@ -30,20 +30,17 @@ class HostStorageCapabilityCheckerTest {
             .filter(capability -> capability.name().endsWith("COW"))
             .filter(capability -> capability.status() != HostCapabilityStatus.PASS)
             .allMatch(capability -> capability.status() == HostCapabilityStatus.INFO));
-    boolean reflinkAvailable =
-        capabilities.stream()
-            .anyMatch(
-                capability ->
-                    capability.name().equals("Reflink COW")
-                        && capability.status() == HostCapabilityStatus.PASS);
-    boolean overlayAvailable =
-        capabilities.stream()
-            .anyMatch(
-                capability ->
-                    capability.name().equals("OverlayFS COW")
-                        && capability.status() == HostCapabilityStatus.PASS);
     String expectedSelection =
-        reflinkAvailable ? "reflink" : overlayAvailable ? "overlay" : "portable-copy";
+        List.of(
+                new StrategyCapability("Reflink COW", "reflink"),
+                new StrategyCapability("Btrfs snapshot COW", "btrfs"),
+                new StrategyCapability("OverlayFS COW", "overlay"),
+                new StrategyCapability("fuse-overlayfs COW", "fuse-overlay"))
+            .stream()
+            .filter(candidate -> hasPassingCapability(capabilities, candidate.capabilityName()))
+            .map(StrategyCapability::selectedName)
+            .findFirst()
+            .orElse("portable-copy");
     assertTrue(
         capabilities.stream()
             .anyMatch(
@@ -114,4 +111,15 @@ class HostStorageCapabilityCheckerTest {
   private static boolean hasCapability(List<HostCapability> capabilities, String name) {
     return capabilities.stream().anyMatch(capability -> capability.name().equals(name));
   }
+
+  private static boolean hasPassingCapability(
+      List<HostCapability> capabilities, String capabilityName) {
+    return capabilities.stream()
+        .anyMatch(
+            capability ->
+                capability.name().equals(capabilityName)
+                    && capability.status() == HostCapabilityStatus.PASS);
+  }
+
+  private record StrategyCapability(String capabilityName, String selectedName) {}
 }

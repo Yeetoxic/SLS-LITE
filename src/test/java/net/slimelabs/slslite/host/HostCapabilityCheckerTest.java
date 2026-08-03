@@ -34,7 +34,12 @@ class HostCapabilityCheckerTest {
 
     assertFalse(report.hasFailures(), report.failureSummary());
     assertTrue(
-        java.util.Set.of(StorageStrategy.COPY, StorageStrategy.REFLINK)
+        java.util.Set.of(
+                StorageStrategy.COPY,
+                StorageStrategy.REFLINK,
+                StorageStrategy.BTRFS,
+                StorageStrategy.OVERLAY,
+                StorageStrategy.FUSE_OVERLAY)
             .contains(report.selectedStorageStrategy().orElseThrow()));
     assertTrue(ports.reservations().isEmpty());
     assertTrue(

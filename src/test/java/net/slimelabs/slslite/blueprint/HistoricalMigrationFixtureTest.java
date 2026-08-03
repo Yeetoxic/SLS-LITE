@@ -3,6 +3,7 @@ package net.slimelabs.slslite.blueprint;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -25,9 +26,9 @@ class HistoricalMigrationFixtureTest {
           "archive.yml", "archives");
   private static final Map<String, String> EXPECTED_SHA256 =
       Map.of(
-          "minigames.yml", "7b6e7cfad0df0ee1fc43b4cddc1dbf1d384bac31011e39d521203a28c56840fb",
-          "adventureMaps.yml", "9bd9991aa6b7d53212e528611d28b79be9a58ddcce28bc70db0f91cad062a832",
-          "archive.yml", "c092e396d757b021b13b4ccede52692974f1b6950972dc6881529e17898d6603");
+          "minigames.yml", "c67c32a6ed9623e673d67c3f160b3db22462ea4b1b07ab5d70a295cf81d75839",
+          "adventureMaps.yml", "9bd6f7e8fe6b3858f7c81ea956ace463cce8f2611dce6b57b7f40e4134c925b4",
+          "archive.yml", "62d61dd8cafee25c5274a756963efb46318e9e2ae17156684351fbfc2816840f");
 
   @Test
   void preservesTheThreeHistoricalRegistryFixturesOutsideRuntimeDefinitions() throws Exception {
@@ -38,7 +39,9 @@ class HistoricalMigrationFixtureTest {
       assertEquals(
           EXPECTED_SHA256.get(expected.getKey()),
           HexFormat.of()
-              .formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(fixture))));
+              .formatHex(
+                  MessageDigest.getInstance("SHA-256")
+                      .digest(canonicalFixtureBytes(Files.readString(fixture)))));
       LoaderOptions options = new LoaderOptions();
       options.setAllowDuplicateKeys(false);
       Object loaded = new Yaml(new SafeConstructor(options)).load(Files.readString(fixture));
@@ -52,5 +55,9 @@ class HistoricalMigrationFixtureTest {
 
     assertEquals(EXPECTED_ROOTS, observed);
     assertTrue(FIXTURES.normalize().startsWith(Path.of("DOCS")));
+  }
+
+  private static byte[] canonicalFixtureBytes(String contents) {
+    return contents.replace("\r\n", "\n").replace('\r', '\n').getBytes(StandardCharsets.UTF_8);
   }
 }
