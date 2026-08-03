@@ -16,14 +16,22 @@ Section order is for readability; YAML key order does not change behavior.
 Validation errors identify the source file and the complete known YAML path,
 and unknown keys include a nearest-key suggestion when one is unambiguous.
 
+The generated values are portable safety baselines, not automatic host sizing.
+SLS-LITE cannot reliably infer how much of a panel/container limit must remain
+for Velocity, JVM native memory, the operating environment, and unrelated
+services. Operators must review memory, process, and port budgets for the real
+allocation. Repository test fixtures keep their larger budgets, shorter
+lifecycle timers, verbose diagnostics, and offline-security exceptions in
+fixture scripts rather than in these product defaults.
+
 ## Reference
 
 | Key | Default | Valid values and behavior |
 | --- | --- | --- |
-| `resources.total_memory_mib` | `4096` | Positive MiB admission budget for managed children. Excludes Velocity and does not measure the panel limit. |
-| `resources.max_managed_processes` | `101` (port count) | Positive process count, no greater than the managed port count. When omitted, defaults to the configured port count. SLS-Limbo consumes one slot. |
+| `resources.total_memory_mib` | `2048` | Portable starting admission budget for managed children, not host detection. Excludes Velocity and does not measure the panel limit; operators must size it from the real allocation. |
+| `resources.max_managed_processes` | `20` | Positive process count no greater than the configured port count. When omitted manually, it follows that port count. SLS-Limbo consumes one slot. |
 | `network.ports.start` | `25570` | Integer `1024..65535`; first managed loopback port. |
-| `network.ports.end` | `25670` | Integer from `start..65535`; last managed loopback port. |
+| `network.ports.end` | `25589` | Integer from `start..65535`; last managed loopback port. The default range contains 20 slots. |
 | `matchmaking.queue_timeout_seconds` | `180` | Positive queue lifetime in seconds. |
 | `matchmaking.blueprint_selection` | `first-available` | `first-available` prefers the requested blueprint and then stable ID order; `random` uniformly selects from eligible pool definitions. Existing ready instances with capacity are always preferred before either provisioning policy. |
 | `lifecycle.idle_shutdown_seconds` | `180` | Non-negative seconds. `0` disables global idle cleanup. |
@@ -32,12 +40,12 @@ and unknown keys include a nearest-key suggestion when one is unambiguous.
 | `storage.snapshot_hook.timeout_seconds` | `30` | Per-operation helper timeout from 1 through 300 seconds. |
 | `managed_output.mirror_to_proxy_console` | `false` | Mirror every child output line into the Velocity console. |
 | `managed_output.write_temporary_file` | `true` | Write bounded `logs/sls-lite-console.log` inside each instance. |
-| `managed_output.temporary_file_max_kib` | `4096` | Per-instance hard limit, `1..1048576` KiB. No rotation archives. |
-| `detailed_logging.level` | `detailed` | `off`, `normal`, or `detailed`. Controls SLS-LITE's own bounded detail file independently from child output and concise console messages. |
+| `managed_output.temporary_file_max_kib` | `2048` | Per-instance hard limit, `1..1048576` KiB. No rotation archives. |
+| `detailed_logging.level` | `normal` | `off`, `normal`, or `detailed`. Controls SLS-LITE's own bounded detail file independently from child output and concise console messages. |
 | `detailed_logging.mirror_to_proxy_console` | `false` | Mirror detail records to Velocity's console. This never disables milestones, warnings, failures, or command responses. |
-| `detailed_logging.max_file_kib` | `8192` | Active detail-file limit, `64..1048576` KiB. |
-| `detailed_logging.retained_files` | `5` | `1..32`; includes the active file. Older rotations are replaced. |
-| `detailed_logging.queue_capacity` | `4096` | Bounded asynchronous queue, `128..65536`. Overflow drops detail rather than blocking lifecycle threads and emits sparse warnings. |
+| `detailed_logging.max_file_kib` | `4096` | Active detail-file limit, `64..1048576` KiB. |
+| `detailed_logging.retained_files` | `3` | `1..32`; includes the active file. Older rotations are replaced. |
+| `detailed_logging.queue_capacity` | `1024` | Bounded asynchronous queue, `128..65536`. Overflow drops detail rather than blocking lifecycle threads and emits sparse warnings. |
 | `detailed_logging.redact_paths` | `true` | Redact known roots and absolute path-shaped values. Credential redaction is mandatory regardless of this option. |
 | `forwarding.mode` | `none` | `none` or `modern`. |
 | `forwarding.online_mode` | `true` | Must match Velocity online mode when forwarding is `modern`. |

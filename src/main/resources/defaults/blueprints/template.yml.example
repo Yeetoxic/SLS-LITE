@@ -35,7 +35,9 @@ server:
     # Positive integer. Maximum simultaneous instances for this blueprint.
     max_instances: 1
     # Positive integer MiB admission reservation for each instance.
-    memory_limit: 2048
+    # Portable example baseline. Measure the selected software and plugins,
+    # then size this within resources.total_memory_mib and the real host limit.
+    memory_limit: 1024
 
 # false creates an ephemeral instance; true preserves owned instance data and
 # requires explicit reset when the blueprint/software definition changes.

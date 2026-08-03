@@ -17,20 +17,20 @@ public final class SLSConfigRepository {
 
   private static final String DEFAULT_CONFIG_RESOURCE = "defaults/host/config.yml";
 
-  private static final int DEFAULT_TOTAL_MEMORY_MIB = 4096;
+  private static final int DEFAULT_TOTAL_MEMORY_MIB = 2048;
   private static final int DEFAULT_PORT_RANGE_START = 25570;
-  private static final int DEFAULT_PORT_RANGE_END = 25670;
+  private static final int DEFAULT_PORT_RANGE_END = 25589;
   private static final int DEFAULT_QUEUE_TIMEOUT_SECONDS = 180;
   private static final String DEFAULT_BLUEPRINT_SELECTION = "first-available";
   private static final int DEFAULT_IDLE_SHUTDOWN_SECONDS = 180;
   private static final boolean DEFAULT_MIRROR_MANAGED_OUTPUT = false;
   private static final boolean DEFAULT_WRITE_TEMPORARY_LOG = true;
-  private static final int DEFAULT_TEMPORARY_LOG_MAX_KIB = 4096;
-  private static final String DEFAULT_DETAIL_LOG_LEVEL = "detailed";
+  private static final int DEFAULT_TEMPORARY_LOG_MAX_KIB = 2048;
+  private static final String DEFAULT_DETAIL_LOG_LEVEL = "normal";
   private static final boolean DEFAULT_DETAIL_CONSOLE_MIRROR = false;
-  private static final int DEFAULT_DETAIL_LOG_MAX_KIB = 8192;
-  private static final int DEFAULT_DETAIL_LOG_RETAINED_FILES = 5;
-  private static final int DEFAULT_DETAIL_LOG_QUEUE_CAPACITY = 4096;
+  private static final int DEFAULT_DETAIL_LOG_MAX_KIB = 4096;
+  private static final int DEFAULT_DETAIL_LOG_RETAINED_FILES = 3;
+  private static final int DEFAULT_DETAIL_LOG_QUEUE_CAPACITY = 1024;
   private static final boolean DEFAULT_DETAIL_LOG_REDACT_PATHS = true;
   private static final String DEFAULT_FORWARDING_MODE = "none";
   private static final boolean DEFAULT_FORWARDING_ONLINE_MODE = true;

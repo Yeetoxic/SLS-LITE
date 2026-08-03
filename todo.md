@@ -370,7 +370,7 @@ data, leaking resources, or trapping players in unexplained states.
       shutdown workloads. Review CPU, heap/RSS, child-process admission, disk
       use and churn, preparation/readiness latency, network overhead, log growth,
       and cleanup, and resolve or explicitly document material regressions.
-- [ ] Audit every generated configuration and software-profile default for
+- [x] Audit every generated configuration and software-profile default for
       environment neutrality. Identify values inherited from the local test rig
       and replace them with safe common-ground defaults or clearly marked
       operator choices. Review paths, ports, memory/process budgets, Java
@@ -381,6 +381,12 @@ data, leaking resources, or trapping players in unexplained states.
       ignored test fixtures or scripts rather than shipped product defaults,
       then repeat the fresh-install workflow using only the revised defaults
       and published setup instructions.
+- [ ] Investigate the managed-lobby shutdown path that can report both
+      `Deferring unfinished shutdown cleanup` and `Deferring late exit cleanup`
+      during an otherwise successful Panel stop. Determine whether cleanup is
+      genuinely late or the warning is a callback-order race, eliminate false
+      console noise, and verify that real deadline overruns still leave durable
+      reconciliation state and an actionable warning.
 - [x] Remove dated proof-of-concept and test-evidence narratives from the
       operator and contributor documentation so those pages function solely as
       clear, current information and instructions. Preserve still-useful test

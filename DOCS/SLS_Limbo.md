@@ -126,6 +126,9 @@ copies the configured Velocity forwarding secret into the isolated SLS-Limbo
 runtime directory and references that file from generated settings. The secret
 is not embedded in generated YAML, command arguments, or normal logs.
 
+The generated SLS-Limbo player capacity follows Velocity's
+`show-max-players` value instead of using a separate hard-coded network size.
+
 Do not expose a managed port publicly. In offline-mode test environments,
 built-in administrator claims remain disabled unless
 `security.allow_insecure_offline_administrators` is explicitly enabled.

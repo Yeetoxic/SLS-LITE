@@ -283,7 +283,12 @@ public final class SLSLimboProvider implements LobbyProvider {
       port = ports.allocate();
     }
     if (installation == null) {
-      installation = installer.install(port, forwarding, config.advertisedProtocol());
+      installation =
+          installer.install(
+              port,
+              forwarding,
+              config.advertisedProtocol(),
+              Math.max(1, proxy.getConfiguration().getShowMaxPlayers()));
     }
   }
 

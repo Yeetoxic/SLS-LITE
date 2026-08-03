@@ -26,6 +26,6 @@ public record DetailedLoggingConfig(
   }
 
   public static DetailedLoggingConfig defaults() {
-    return new DetailedLoggingConfig(DetailLogLevel.DETAILED, false, 8192, 5, 4096, true);
+    return new DetailedLoggingConfig(DetailLogLevel.NORMAL, false, 4096, 3, 1024, true);
   }
 }

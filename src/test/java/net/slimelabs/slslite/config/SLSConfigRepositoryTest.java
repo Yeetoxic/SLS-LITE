@@ -34,16 +34,16 @@ class SLSConfigRepositoryTest {
     repository.initialize();
 
     SLSConfig config = repository.get();
-    assertEquals(4096, config.totalMemoryMiB());
-    assertEquals(101, config.maxManagedProcesses());
+    assertEquals(2048, config.totalMemoryMiB());
+    assertEquals(20, config.maxManagedProcesses());
     assertEquals(25570, config.portRangeStart());
-    assertEquals(25670, config.portRangeEnd());
+    assertEquals(25589, config.portRangeEnd());
     assertEquals(180, config.queueTimeoutSeconds());
     assertEquals(BlueprintSelectionMode.FIRST_AVAILABLE, config.blueprintSelectionMode());
     assertEquals(180, config.idleShutdownSeconds());
     assertEquals(false, config.managedOutput().mirrorToProxyConsole());
     assertEquals(true, config.managedOutput().writeTemporaryFile());
-    assertEquals(4096, config.managedOutput().temporaryFileMaxKiB());
+    assertEquals(2048, config.managedOutput().temporaryFileMaxKiB());
     assertEquals(ForwardingMode.NONE, config.forwarding().mode());
     assertEquals(true, config.forwarding().onlineMode());
     assertEquals(
@@ -67,17 +67,25 @@ class SLSConfigRepositoryTest {
     assertEquals(60, config.lobby().maxBackoffSeconds());
     assertEquals(120, config.lobby().stableAfterSeconds());
     assertEquals(StorageStrategy.AUTO, config.storage().strategy());
-    assertEquals(DetailLogLevel.DETAILED, config.detailedLogging().level());
+    assertEquals(DetailLogLevel.NORMAL, config.detailedLogging().level());
     assertEquals(false, config.detailedLogging().mirrorToProxyConsole());
-    assertEquals(8192, config.detailedLogging().maxFileKiB());
-    assertEquals(5, config.detailedLogging().retainedFiles());
-    assertEquals(4096, config.detailedLogging().queueCapacity());
+    assertEquals(4096, config.detailedLogging().maxFileKiB());
+    assertEquals(3, config.detailedLogging().retainedFiles());
+    assertEquals(1024, config.detailedLogging().queueCapacity());
     assertEquals(true, config.detailedLogging().redactPaths());
     assertEquals(
         temporaryDirectory.resolve("instances").toAbsolutePath().normalize(),
         config.instancesDirectory());
     assertTrue(Files.isRegularFile(temporaryDirectory.resolve("config.yml")));
     assertTrue(Files.isDirectory(config.instancesDirectory()));
+  }
+
+  @Test
+  void codeLevelDetailedLoggingDefaultsMatchGeneratedConfiguration() throws Exception {
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+    repository.initialize();
+
+    assertEquals(DetailedLoggingConfig.defaults(), repository.get().detailedLogging());
   }
 
   @Test

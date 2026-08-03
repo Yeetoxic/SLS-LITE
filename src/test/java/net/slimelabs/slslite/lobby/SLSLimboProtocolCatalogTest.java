@@ -22,7 +22,8 @@ class SLSLimboProtocolCatalogTest {
                     net.slimelabs.slslite.config.ForwardingMode.NONE,
                     true,
                     temporaryDirectory.resolve("unused.secret")),
-                -1);
+                -1,
+                100);
 
     Map<Integer, String> protocols = SLSLimboProtocolCatalog.inspect(installation.runtimeJar());
 

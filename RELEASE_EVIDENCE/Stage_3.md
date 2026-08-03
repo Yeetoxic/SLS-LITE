@@ -254,3 +254,27 @@ preserved the same instance directory and lobby ID, and returned it to ready in
 exception events, and the fixture ended with only Velocity, SLS-Limbo, and the
 managed lobby JVM running. The final full verification run passed 608 tests
 with zero failures or errors and seven environment-dependent skips.
+
+### Environment-Neutral Default Audit
+
+The generated host configuration, blueprint example, software profiles,
+SLS-Limbo settings, omitted-key fallbacks, and fixture overrides were reviewed
+after the corrected clean-install run. Rig-sized product defaults were reduced
+from a 4096 MiB/101-process/101-port baseline to an explicit 2048 MiB managed
+budget, 20 process and loopback slots, and a 1024 MiB blueprint example.
+Managed child logs now default to 2048 KiB; SLS-LITE diagnostics default to
+normal level with a 4096 KiB file, three retained files, and a 1024-record
+queue. Test fixtures retain larger or more verbose values explicitly.
+
+Generated SLS-Limbo settings no longer hard-code 100 players and instead copy
+Velocity's configured `show-max-players` value. Artifact SHA-256
+`40C8954055D5462A672ED17503A4ADA86E3472AF0A9E89F5CCC571460C9FD361`
+was booted with an empty plugin data directory on the native-ext4 fixture. The
+live generated file contained every revised value, its 5.3 MiB initial
+footprint contained no provider cache or instance, normal logging emitted no
+detailed records, and SLS-Limbo inherited Velocity's configured 500-player
+capacity. The claimed production snapshot was then restored from verified
+volume `sls-ptero-stage3-default-audit-preclean-20260802`; the same persistent
+`lobby.b5kk8m` and administrator returned ready under the audited artifact.
+The full verification run passed 610 tests with zero failures or errors and
+seven environment-dependent skips.

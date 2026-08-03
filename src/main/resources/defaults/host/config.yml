@@ -9,12 +9,17 @@ resources:
   # measurement of the hosting
   # panel's real memory limit. A start is rejected when its blueprint memory
   # limit would make the total reservations exceed this value.
-  total_memory_mib: 4096
+  # Portable baseline only: enough admission room for SLS-Limbo and one modest
+  # 1024 MiB server. Set this from the actual allocation after reserving room
+  # for Velocity, JVM native memory, the OS/container, and other services.
+  total_memory_mib: 2048
 
   # Positive integer. Maximum number of child processes SLS-LITE may supervise
   # at once. Defaults to the configured loopback port count when omitted and
   # cannot exceed it. SLS-Limbo consumes one slot while it is running.
-  max_managed_processes: 101
+  # Matches the bounded managed-port count below. Set a lower value when the
+  # host imposes a stricter process limit.
+  max_managed_processes: 20
 
 network:
   ports:
@@ -26,7 +31,10 @@ network:
     # Make the range large enough for the maximum number of simultaneous
     # managed servers, and do not overlap ports used by other local services.
     start: 25570
-    end: 25670
+    # The portable default exposes 20 local slots, including SLS-Limbo. Test
+    # rigs or larger hosts may explicitly select a different non-conflicting
+    # range after checking their panel and local-service allocations.
+    end: 25589
 
 matchmaking:
   # Blueprint used when a matchmaking game type contains multiple eligible
@@ -78,27 +86,27 @@ managed_output:
   # Positive integer from 1 through 1048576. Hard per-instance file limit in
   # KiB. SLS-LITE stops writing when the limit is reached and does not create
   # rotated archives. This value is still validated when file output is false.
-  temporary_file_max_kib: 4096
+  temporary_file_max_kib: 2048
 
 # SLS-LITE's own lifecycle/probe detail stream. This is independent from
 # managed child output above.
 detailed_logging:
-  # off, normal, or detailed. Detailed keeps probe, timing, reconciliation,
-  # storage, and lifecycle evidence in logs/sls-lite-detail.log.
-  level: detailed
+  # off, normal, or detailed. Normal retains important lifecycle and recovery
+  # records without the probe/timing volume intended for diagnosis and testing.
+  level: normal
 
   # Default false. Mirrors detailed records into the Velocity console without
   # suppressing concise milestones, warnings, failures, or command responses.
   mirror_to_proxy_console: false
 
   # Each file is capped and rotated. retained_files includes the active file.
-  max_file_kib: 8192
-  retained_files: 5
+  max_file_kib: 4096
+  retained_files: 3
 
   # Bounded asynchronous queue. Full queues drop detail records rather than
   # blocking Velocity or lifecycle threads and emit logarithmically bounded
   # warnings.
-  queue_capacity: 4096
+  queue_capacity: 1024
 
   # Replace known host/data roots and absolute path-shaped values. Secret and
   # credential patterns are always redacted regardless of this option.

@@ -36,7 +36,10 @@ accounting.
 
 The generated defaults are intentionally conservative: forwarding is disabled,
 provider downloads require an explicit EULA choice, child output is not
-mirrored into the proxy console, and SLS-Limbo is enabled as a fallback.
+mirrored into the proxy console, normal rather than test-level detailed
+diagnostics are retained, and SLS-Limbo is enabled as a fallback. The 2048 MiB
+managed budget and 20-port range are portable starting points, not detected
+host capacity; resize both for the real allocation before importing a network.
 The generated blueprint template has an `.example` suffix and is not loaded
 until it is copied or renamed to `.yml`.
 

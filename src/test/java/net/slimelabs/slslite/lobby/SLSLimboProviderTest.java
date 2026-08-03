@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.velocitypowered.api.proxy.ProxyServer;
+import com.velocitypowered.api.proxy.config.ProxyConfig;
 import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
@@ -69,11 +70,19 @@ class SLSLimboProviderTest {
   }
 
   private static ProxyServer proxy() {
+    ProxyConfig configuration =
+        (ProxyConfig)
+            Proxy.newProxyInstance(
+                ProxyConfig.class.getClassLoader(),
+                new Class<?>[] {ProxyConfig.class},
+                (proxy, method, arguments) ->
+                    method.getName().equals("getShowMaxPlayers") ? 250 : null);
     return (ProxyServer)
         Proxy.newProxyInstance(
             ProxyServer.class.getClassLoader(),
             new Class<?>[] {ProxyServer.class},
-            (proxy, method, arguments) -> null);
+            (proxy, method, arguments) ->
+                method.getName().equals("getConfiguration") ? configuration : null);
   }
 
   private static BackendRegistry backends() {
