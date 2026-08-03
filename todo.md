@@ -400,7 +400,7 @@ data, leaking resources, or trapping players in unexplained states.
 - [x] Verify every supported command and every configuration, lifecycle,
       installation, storage, lobby, queue, transfer, recovery, and shutdown
       branch retained for the first release.
-- [ ] Compare SLS-LITE against the complete current SLS project, not only the
+- [x] Compare SLS-LITE against the complete current SLS project, not only the
       historical Velocity-only implementation. Audit blueprint and software
       schemas, commands, configuration, APIs, lifecycle and matchmaking
       behavior, storage, installation, networking, nodes, persistence,
@@ -408,7 +408,7 @@ data, leaking resources, or trapping players in unexplained states.
       difference as compatible, locally adapted, intentionally outside the
       single-host scope, deferred, or a release-blocking defect; fix blockers
       and carry the resulting compatibility map into the consolidated docs.
-- [ ] Resolve every release-blocking full-stack defect and repeat each affected
+- [x] Resolve every release-blocking full-stack defect and repeat each affected
       scenario.
 
 Acceptance: the complete retained product and its expected failure matrix pass
@@ -457,7 +457,7 @@ feedback without destabilizing the completed full stack.
         `server.properties` fallback; never upload packs to an external
         conversion service automatically, and evaluate local conversion only as
         an optional adapter/tool.
-  - [ ] Classify internal lifecycle events and a small versioned public Java API
+  - [x] Include internal lifecycle events and a small versioned public Java API
         for capability discovery, blueprint/instance inspection,
         queue/start/stop/delete requests, and subscriptions without exposing
         implementation classes.

@@ -40,6 +40,8 @@ backend protocol synchronization all succeed.
 
 | Package | Responsibility |
 | --- | --- |
+| `api` | Versioned immutable extension contract; no implementation classes cross this boundary. |
+| `api.internal` | Adapter, bounded event dispatch, and mapping between the public contract and owned services. |
 | `blueprint` | Blueprint schema, recursive loading, lifecycle annotation policy. |
 | `command` | `/sls` dispatch, permissions, vSLS presentation, selectors, and completions. |
 | `config` | Host configuration, validation, immutable definition catalogs, reload. |
@@ -327,8 +329,9 @@ Typical changes belong in:
 - Velocity integration: `VelocityBackendRegistry`, `LocalJoinService`, and
   protocol synchronization.
 
-There is not yet a public versioned Java API. Other plugins must not depend on
-internal classes as a stable contract.
+The versioned Java extension contract is under `net.slimelabs.slslite.api` and
+documented in [Java Extension API](Java_API.md). Other plugins must not depend
+on `api.internal` or any other implementation package as a stable contract.
 
 ## Dependency Boundary
 

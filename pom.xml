@@ -34,6 +34,7 @@
         <junit.version>5.13.4</junit.version>
         <google-java-format.version>1.35.0</google-java-format.version>
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
+        <maven-jar-plugin.version>3.4.1</maven-jar-plugin.version>
         <spotbugs-maven-plugin.version>4.10.3.0</spotbugs-maven-plugin.version>
         <spotless-maven-plugin.version>3.9.0</spotless-maven-plugin.version>
     </properties>
@@ -60,6 +61,7 @@
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
             <version>${snakeyaml.version}</version>
+            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>net.kyori</groupId>
@@ -106,7 +108,7 @@
             </resource>
             <resource>
                 <directory>${project.basedir}</directory>
-                <targetPath>META-INF</targetPath>
+                <targetPath>META-INF/licenses</targetPath>
                 <includes>
                     <include>LICENSE</include>
                 </includes>
@@ -206,6 +208,30 @@
                         <goals>
                             <goal>check</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${maven-jar-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>public-api-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>api</classifier>
+                            <includes>
+                                <include>net/slimelabs/slslite/api/**</include>
+                                <include>META-INF/licenses/LICENSE</include>
+                            </includes>
+                            <excludes>
+                                <exclude>net/slimelabs/slslite/api/internal/**</exclude>
+                            </excludes>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

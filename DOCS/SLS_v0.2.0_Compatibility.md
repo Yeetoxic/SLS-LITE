@@ -28,8 +28,9 @@ The compatibility scope is derived from:
 - the copied 54-blueprint SlimeLabs corpus;
 - the current SLS-LITE parser, command, lifecycle, storage, and process code.
 
-SLS `v0.2.0` was the latest published upstream release at review time. The pin
-keeps this contract reproducible even after upstream development continues.
+As of 2026-08-03, upstream `main` and tag `v0.2.0` resolve to this same commit.
+The pin therefore represents both the reproducible release contract and the
+current upstream source tree at the time of the Stage 3 acceptance audit.
 
 ### Resolved Findings
 
@@ -58,15 +59,16 @@ The compatibility pass closed five shared behavior gaps and one fixture defect:
 | `vsls.on-join` and `vsls.matchmaking.gameType` | Implemented vSLS adaptations, covered by transition and pool tests. |
 | Container CPU, swap, I/O, disk, affinity, and OOM enforcement | Preserve as visible metadata; do not claim enforcement by a portable child JVM. |
 | Docker images | Treat `java_<major>` as a local Java selector; reject other image semantics at launch. |
-| Host mounts and shared `rw` volumes | Intentionally unsupported because they bypass local containment and instance isolation. |
+| Host mounts | Intentionally unsupported because arbitrary host paths bypass the plugin data boundary and cannot be made portable across managed hosts. |
+| Shared `rw` volumes | Implemented local adaptation using a verified directory link to a source confined below the SLS-LITE data root. The shared-write and concurrency risk is explicit. |
 | Nodes, load balancing, Protocube API, daemon event stream, and container administration | Intentionally unsupported; these define full SLS rather than SLS-LITE. |
-| Public Java/API integration contract | Deferred until the local lifecycle is stable; do not expose internal classes as an accidental API. |
+| Public Java integration contract | Implemented as a separate versioned API-only artifact with immutable views, bounded lifecycle events, and asynchronous safe-local requests. |
 | Resource-pack conversion | Intentionally separate from SLS-LITE. Preserve annotations and support normal Minecraft URLs; conversion belongs in SlimePacks or another pack service. |
 | Resource-pack discovery/serving for local test worlds | Useful local integration, but not part of the shared SLS blueprint contract. |
 | SLS-Limbo, built-in administrator claims, local lobby recovery, provider-backed Paper/vanilla installation, and bounded local logs | Retained SLS-LITE extensions needed for a self-contained constrained-host product. |
-| True OverlayFS/reflink COW | Reflink preparation and kernel OverlayFS lifecycle are implemented with exact-path validation and portable fallback. |
-| `create`, `delete`, `kill`, `blueprint`, `debug`, and complete command-output parity | Full-stack command work. Preserve roots now; implement only meaningful and safe local semantics. |
-| `pause` and `resume` | Do not prioritize. Portable process suspension is unsafe and low-value for the constrained-host goal. |
+| True filesystem COW | Reflink, eligible Btrfs snapshots, kernel OverlayFS, rootless fuse-overlayfs, and an explicit snapshot-helper protocol are implemented with exact-path probes, durable lifecycle metadata, reconciliation, and safe fallback rules. |
+| `create`, `delete`, `kill`, `blueprint`, and `debug` | Implemented with safe local semantics, granular permissions, bounded diagnostics, and explicit rejection of daemon-only modifiers. |
+| `pause` and `resume` | Command shapes are retained and explain that portable process suspension is unavailable in local mode. |
 | `node` | Keep the explicit local-mode response; never emulate distributed node control. |
 
 No existing SLS-LITE subsystem is currently a removal candidate. The largest
@@ -101,7 +103,7 @@ out of scope.
 | Volume shorthand `name:source:target[:mode]` | Supported | Omitted mode defaults to `cow`. |
 | Multiple `cow` volumes targeting one directory | Adapted | Deterministic declaration-order merge; first source wins collisions, matching SLS v0.2.0 OverlayFS lower-layer precedence. |
 | `mode: ro` | Adapted | Private writable instance snapshot protects the source; not a strict read-only bind mount. |
-| `mode: rw` | Intentionally unsupported at runtime | Definition parses, but launch fails before preparation because shared mutable host state is unsafe in portable local mode. |
+| `mode: rw` | Adapted | Creates and verifies a directory link to a source confined below the SLS-LITE data root. The source outlives instances and is shared concurrently; operators should normally combine it with a single-instance policy. |
 | `state.mounts` | Intentionally unsupported | Reload fails with a local-mode explanation and recommends a contained `cow` or `ro` volume. |
 | `state.copy` mapping and shorthand | Adapted | Transactional contained file/directory copy after software and volumes. Sources must be relative to the SLS-LITE data root; full-SLS absolute/allowed-host sources are intentionally rejected. Persistent instances refresh sources on reset rather than every restart. |
 | `state.env` | Adapted | Validated strings reach the local child process; JVM, loader, path, and SLS-owned variables are rejected. Names are visible to operators, values are not logged. |
@@ -164,7 +166,7 @@ configures the executable for that major locally.
 | Horizontal node allocation | Intentionally unsupported | SLS-LITE is one host. |
 | Docker isolation and limits | Intentionally unsupported | Local Java children and admission accounting. |
 | Protocube HTTP API | Intentionally unsupported | No central controller in local mode. |
-| Daemon event stream | Deferred local equivalent | A public in-proxy event/API contract does not exist yet. |
+| Daemon event stream | Adapted local equivalent | The Java API publishes ordered, bounded managed-instance lifecycle transitions. It is not a distributed daemon stream. |
 | True overlay COW | Implemented on eligible Linux hosts | Exact-path probing, durable private layers, safe remount/unmount, reset/delete handling, and crash reconciliation are implemented. |
 | vSLS command surface | Partial/adapted | See `SLS_Command_Compatibility.md`. |
 | `resource_pack` annotation | Metadata only | Public serving and transfer orchestration are deferred. |
@@ -198,22 +200,24 @@ split deliberately:
   are additive and do not replace upstream forms.
 
 Commands currently implemented with local semantics are `info`, `list`,
-`start`, `join`, `find`, `system`, `console`, `logs`, `reload`, `stop`,
-`dequeue`, `status`, `stats`, `version`, `restart`, `reset`, and `install`.
-The detailed argument-level status remains in
-`SLS_Command_Compatibility.md`.
+`create`, `start`, `join`, `find`, `system`, `console`, `blueprint`, `debug`,
+`delete`, `logs`, `reload`, `stop`, `kill`, `dequeue`, `status`, `stats`, and
+`version`. SLS-LITE also supplies local `restart`, `reset`, `install`,
+`registries`, `blueprints`, `admin`, `maintenance`, and `join-test` operations.
+The detailed argument-level contract is in `SLS_Command_Compatibility.md`.
 
-The unimplemented `create` root includes an upstream `--env=KEY=value`
-override in the pinned source. If local `create` is implemented, it must reuse
-the same environment validation as blueprint `state.env`; node and container
-resource overrides must return explicit local-mode errors rather than being
-accepted without enforcement.
+The upstream `create --env=KEY=value` modifier is deliberately recognized but
+rejected: persisting arbitrary secret-bearing command input would create a
+different security contract from reviewed blueprint `state.env`. Node,
+container-image, and container-resource modifiers are likewise recognized and
+return explicit local-mode errors rather than pretending to enforce them.
 
 ## Acceptance Boundary
 
 The parser, inheritance, mappings, annotation behavior, actionable rejection,
-exact-ID corpus, and deployed multi-world gates are complete. The final code
-review identified and resolved three correctness gaps:
+exact-ID corpus, command contract, native storage backends, and deployed
+multi-world gates are complete. Reviews identified and resolved correctness
+gaps including:
 
 1. overlapping `parser: file` prefixes are rejected before file preparation;
 2. interpreted vSLS lifecycle, capacity, and matchmaking annotations enforce
@@ -221,8 +225,9 @@ review identified and resolved three correctness gaps:
 3. host preflight requires Java runtimes selected by active resolved
    blueprints while treating other configured runtimes as optional warnings.
 
-Command completion, destructive bulk commands, public APIs, true filesystem
-COW, native-Linux performance work, and release hardening remain roadmap work.
+Network APIs and distributed control-plane behavior remain outside the first
+single-host release. The separate versioned Java extension API is supported;
+it does not emulate Protocube, daemon, or S4J endpoints.
 
 ## Fields Not In The Pin
 
@@ -237,3 +242,6 @@ fixtures, exact-ID corpus loading, upstream example coverage, and automated
 tests for every supported or adapted row. Parser-only acceptance does not prove
 runtime volume sources, Java selection, process launch, or player transfer;
 those remain separate integration gates described in [Testing](Testing.md).
+The complete current-project classification is summarized in
+[Compatibility](Compatibility.md); dated acceptance results remain outside the
+operator documentation under `RELEASE_EVIDENCE/`.

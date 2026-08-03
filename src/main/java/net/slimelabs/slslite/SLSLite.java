@@ -17,6 +17,9 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import net.kyori.adventure.text.Component;
+import net.slimelabs.slslite.api.SLSLiteApi;
+import net.slimelabs.slslite.api.SLSLiteApiProvider;
+import net.slimelabs.slslite.api.internal.DefaultSLSLiteApi;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.command.SLSCommand;
 import net.slimelabs.slslite.config.ConfigurationValidator;
@@ -66,7 +69,7 @@ import org.slf4j.Logger;
     url = "https://github.com/Yeetoxic/SLS-LITE",
     authors = {"Protoxon", "Yeetoxic"},
     dependencies = {@Dependency(id = "viaversion", optional = true)})
-public final class SLSLite {
+public final class SLSLite implements SLSLiteApiProvider {
 
   private final ProxyServer proxy;
   private final Logger logger;
@@ -74,6 +77,7 @@ public final class SLSLite {
   private final SLSConfigRepository configuration;
   private final SoftwareProfileRepository softwareProfiles;
   private final Path dataDirectory;
+  private final DefaultSLSLiteApi publicApi;
   private ResourceBudget resourceBudget;
   private ProcessSupervisor processSupervisor;
   private InstanceManager instanceManager;
@@ -94,6 +98,7 @@ public final class SLSLite {
     this.proxy = proxy;
     this.logger = logger;
     this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
+    this.publicApi = new DefaultSLSLiteApi(proxy, logger);
     DefinitionCatalog definitions = new DefinitionCatalog();
     this.blueprints =
         new BlueprintRepository(this.dataDirectory.resolve("blueprints"), definitions);
@@ -249,6 +254,7 @@ public final class SLSLite {
               lobbyProvider,
               configuration.get().idleShutdownSeconds(),
               logger);
+      publicApi.activate(blueprints, instanceManager, joinService);
     } catch (Exception exception) {
       logger.error(
           "SLS-LITE initialization failed; managed server features are disabled", exception);
@@ -258,6 +264,7 @@ public final class SLSLite {
         detailLog.close();
         detailLog = null;
       }
+      publicApi.fail();
       return;
     }
 
@@ -481,7 +488,13 @@ public final class SLSLite {
       detailLog.normal("shutdown", "shutdown", "SLS-LITE shutdown completed");
       detailLog.close();
     }
+    publicApi.close();
     ConsoleBanner.logShutdown(logger);
+  }
+
+  @Override
+  public SLSLiteApi api() {
+    return publicApi;
   }
 
   private Component lobbyUnavailableMessage() {

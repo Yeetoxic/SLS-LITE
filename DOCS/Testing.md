@@ -19,6 +19,13 @@ lifecycle, concurrency, resource accounting, installation, reconciliation,
 commands, lobbies, SLS-Limbo, protocol integration boundaries, and Velocity
 registration.
 
+Public API coverage includes reflection checks that reject implementation-type
+leaks, deep-immutability checks, lifecycle-observer failure isolation, bounded
+subscriber behavior, ordered event delivery, and API shutdown state. Packaging
+must also produce `target/sls-lite-<version>-api.jar`; inspect it when changing
+the classifier rules to confirm that `api.internal` and all other product
+packages are absent while `META-INF/licenses/LICENSE` is present.
+
 During development:
 
 ```powershell
@@ -41,7 +48,7 @@ mvn -U clean verify
 That command requires Maven repository network access.
 
 GitHub Actions runs the same clean JDK 25 verification for every push and pull
-request, retains the shaded plugin artifact for 14 days, and reviews pull
+request, retains the shaded plugin and API artifacts for 14 days, and reviews pull
 request dependency changes for moderate-or-higher known vulnerabilities. All
 third-party actions are pinned to exact commits; update those pins only after
 reviewing the corresponding upstream release.

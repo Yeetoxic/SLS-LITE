@@ -5,8 +5,10 @@ It supplements [Architecture](ARCHITECTURE.md), which explains ownership, and
 [Internal Invariants](Internal_Invariants.md), which defines behavior that a
 refactor must preserve.
 
-SLS-LITE does not yet expose a versioned Java API. Treat the classes below as
-internal modification points, not as compatibility promises to other plugins.
+SLS-LITE exposes only `net.slimelabs.slslite.api` as its versioned Java
+extension contract. Treat every other class below as an internal modification
+point, not as a compatibility promise to other plugins. Changes to the public
+package require contract tests and [Java API](Java_API.md) updates.
 
 ## Change Workflow
 
@@ -27,6 +29,26 @@ packaging.
 Do not move stateful code merely to make packages look symmetrical. Lifecycle,
 matchmaking, provider recovery, and storage transactions contain synchronized
 or rollback-sensitive state that must move with their tests.
+
+## Java Extension API
+
+Start at:
+
+- `api/SLSLiteApi` for the versioned operation surface;
+- the immutable records and enums directly under `api/` for public values;
+- `api/event/` for lifecycle notifications and subscriptions;
+- `api/internal/DefaultSLSLiteApi` for the adapter over internal services;
+- `SLSLite` for provider discovery, activation, and shutdown wiring.
+
+Never expose internal coordinators, mutable repositories, process handles,
+filesystem paths, or Velocity result objects through the public package. Additive
+features require a capability flag, immutable public values, sanitized failures,
+and bounded asynchronous behavior. Breaking signatures or record shapes require
+a new API major version.
+
+Pair changes with `PublicApiContractTest`, the applicable adapter/event test,
+and an extension compiled only against the API classifier. Update
+[Java API](Java_API.md) and inspect the packaged classifier before handoff.
 
 ## Commands
 

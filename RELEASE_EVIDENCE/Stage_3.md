@@ -426,3 +426,11 @@ were expected for this secured proxy topology and were not SLS-LITE failures.
 
 The exhaustive retained command, configuration, runtime, and expected-failure
 mapping is preserved in [Stage 3 Retained-Branch Audit](Stage_3_Branch_Audit.md).
+
+The complete Protocube, daemon, vSLS, shared-schema, and SlimePacks comparison
+is preserved in
+[Stage 3 Current SLS Comparison](Stage_3_Current_SLS_Comparison.md).
+
+The versioned extension boundary, classifier inspection, automated contract
+coverage, and disposable Velocity consumer run are preserved in
+[Java API 1.0 Evidence](Java_API_1.0.md).

@@ -85,6 +85,8 @@ public final class InstanceManager implements ServerController {
   private final InstancePreparationPipeline preparationPipeline;
   private final InstanceSoftwareProtectionInventory softwareProtection;
   private final InstanceCrashRecovery crashRecovery;
+  private volatile java.util.function.Consumer<InstanceLifecycle.Transition> lifecycleObserver =
+      ignored -> {};
   private final ExecutorService finalizationExecutor;
   private final Map<String, ManagedInstance> instances = new java.util.HashMap<>();
   private final Set<String> deferredShutdownCleanup =
@@ -259,8 +261,8 @@ public final class InstanceManager implements ServerController {
         throw new InstanceOperationException(exception.getMessage(), exception);
       }
 
-      InstanceLifecycle lifecycle = new InstanceLifecycle(instanceId);
-      lifecycle.transitionTo(InstanceState.PREPARING);
+      InstanceLifecycle lifecycle =
+          new InstanceLifecycle(instanceId, this::observeLifecycleTransition);
       Path directory = directoryPreparer.root().resolve(instanceId);
       ManagedInstance instance =
           new ManagedInstance(
@@ -273,6 +275,7 @@ public final class InstanceManager implements ServerController {
               lifecycle,
               Instant.now());
       instances.put(instanceId, instance);
+      lifecycle.transitionTo(InstanceState.PREPARING);
       logger.info(
           "Instance start accepted [{}]: {} from {}/{} ({} {}, {} MiB, port {})",
           instance.correlationId(),
@@ -300,6 +303,16 @@ public final class InstanceManager implements ServerController {
   @Override
   public synchronized Collection<ManagedInstance> getAll() {
     return instances.values().stream().sorted(Comparator.comparing(ManagedInstance::id)).toList();
+  }
+
+  /** Installs the one process-wide lifecycle observer before managed instances are created. */
+  public synchronized void installLifecycleObserver(
+      java.util.function.Consumer<InstanceLifecycle.Transition> observer) {
+    if (!instances.isEmpty()) {
+      throw new IllegalStateException(
+          "Lifecycle observer must be installed before instances exist");
+    }
+    lifecycleObserver = java.util.Objects.requireNonNull(observer, "observer");
   }
 
   @Override
@@ -652,6 +665,7 @@ public final class InstanceManager implements ServerController {
         timings.provisioned();
         timingReporter.logProvisioning(
             instance.correlationId(), instance.id(), instance.timings(), "ready");
+        publishRegisteredReady(instance.id());
         instance.readyFuture().complete(instance);
         crashRecovery.ready(instance);
         logger.info(
@@ -900,8 +914,8 @@ public final class InstanceManager implements ServerController {
         throw new InstanceOperationException(exception.getMessage(), exception);
       }
 
-      InstanceLifecycle lifecycle = new InstanceLifecycle(instanceId);
-      lifecycle.transitionTo(InstanceState.PREPARING);
+      InstanceLifecycle lifecycle =
+          new InstanceLifecycle(instanceId, this::observeLifecycleTransition);
       instance =
           new ManagedInstance(
               instanceId,
@@ -913,6 +927,7 @@ public final class InstanceManager implements ServerController {
               lifecycle,
               metadata.createdAt());
       instances.put(instanceId, instance);
+      lifecycle.transitionTo(InstanceState.PREPARING);
       try {
         operationExecutor.execute(() -> preparationPipeline.run(instance, profile, true));
       } catch (RuntimeException exception) {
@@ -1043,5 +1058,24 @@ public final class InstanceManager implements ServerController {
         ? "New instance creation is disabled while SLS-LITE is in maintenance mode"
         : "New instance creation is disabled while SLS-LITE is in maintenance mode: "
             + status.reason();
+  }
+
+  private void observeLifecycleTransition(InstanceLifecycle.Transition transition) {
+    // Process readiness precedes Velocity registration. Publish public READY only after
+    // registerReady has made the backend externally usable.
+    if (transition.current() == InstanceState.READY) {
+      return;
+    }
+    lifecycleObserver.accept(transition);
+  }
+
+  private void publishRegisteredReady(String instanceId) {
+    try {
+      lifecycleObserver.accept(
+          new InstanceLifecycle.Transition(
+              instanceId, InstanceState.STARTING, InstanceState.READY, Instant.now()));
+    } catch (RuntimeException ignored) {
+      // Extension observability cannot invalidate successful Velocity registration.
+    }
   }
 }

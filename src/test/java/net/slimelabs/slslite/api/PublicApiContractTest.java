@@ -1,0 +1,146 @@
+package net.slimelabs.slslite.api;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.lang.reflect.AnnotatedType;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import net.slimelabs.slslite.api.event.InstanceLifecycleEvent;
+import net.slimelabs.slslite.api.event.SLSLiteEvent;
+import net.slimelabs.slslite.api.event.Subscription;
+import org.junit.jupiter.api.Test;
+
+class PublicApiContractTest {
+
+  private static final List<Class<?>> API_TYPES =
+      List.of(
+          ApiVersion.class,
+          ApiStatus.class,
+          Capability.class,
+          InstanceStatus.class,
+          VolumeView.class,
+          BlueprintView.class,
+          InstanceView.class,
+          InstanceOverrides.class,
+          StartRequest.class,
+          InstanceOperationResult.class,
+          DeleteResult.class,
+          QueueRequest.class,
+          QueueTicket.class,
+          QueueResult.class,
+          SLSLiteApiException.class,
+          SLSLiteApi.class,
+          SLSLiteApiProvider.class,
+          SLSLiteEvent.class,
+          InstanceLifecycleEvent.class,
+          Subscription.class);
+
+  @Test
+  void versionAndCapabilitiesAreStable() {
+    assertEquals("1.0", ApiVersion.CURRENT.toString());
+    assertTrue(Set.of(Capability.values()).contains(Capability.LIFECYCLE_EVENTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.PLAYER_QUEUE));
+  }
+
+  @Test
+  void publicMethodsAndCapabilitiesRemainDocumented() throws Exception {
+    String documentation = Files.readString(Path.of("DOCS", "Java_API.md"));
+
+    Arrays.stream(SLSLiteApi.class.getDeclaredMethods())
+        .map(method -> "`" + method.getName() + "(")
+        .forEach(token -> assertTrue(documentation.contains(token), () -> "Missing " + token));
+    Arrays.stream(Capability.values())
+        .map(Enum::name)
+        .forEach(
+            capability ->
+                assertTrue(
+                    documentation.contains("`" + capability + "`"),
+                    () -> "Missing capability " + capability));
+  }
+
+  @Test
+  void publicContractDoesNotExposeImplementationPackages() {
+    for (Class<?> apiType : API_TYPES) {
+      for (var method : apiType.getDeclaredMethods()) {
+        assertPublicType(method.getGenericReturnType(), apiType + " return type");
+        for (Type parameter : method.getGenericParameterTypes()) {
+          assertPublicType(parameter, apiType + " parameter");
+        }
+      }
+      for (var constructor : apiType.getDeclaredConstructors()) {
+        for (Type parameter : constructor.getGenericParameterTypes()) {
+          assertPublicType(parameter, apiType + " constructor");
+        }
+      }
+      for (AnnotatedType permitted : apiType.getAnnotatedInterfaces()) {
+        assertPublicType(permitted.getType(), apiType + " interface");
+      }
+    }
+  }
+
+  @Test
+  void blueprintViewsDeepCopyExtensionMetadata() {
+    List<String> nested = new ArrayList<>(List.of("one"));
+    Map<String, Object> annotation = new LinkedHashMap<>();
+    annotation.put("nested", nested);
+    Map<String, Object> annotations = new LinkedHashMap<>();
+    annotations.put("extension", annotation);
+    BlueprintView view =
+        new BlueprintView(
+            "arena",
+            "Arena",
+            "minigame",
+            "paper",
+            "26.2",
+            1024,
+            20,
+            1,
+            false,
+            List.of(new VolumeView("world", "volumes/worlds/arena", "/world", "cow")),
+            false,
+            Set.of("PUBLIC_ENDPOINT"),
+            annotations);
+
+    nested.add("two");
+    annotation.put("late", true);
+    annotations.clear();
+
+    Map<?, ?> copied = (Map<?, ?>) view.annotations().get("extension");
+    assertEquals(List.of("one"), copied.get("nested"));
+    assertEquals(false, copied.containsKey("late"));
+    assertThrows(UnsupportedOperationException.class, () -> view.annotations().clear());
+    assertThrows(
+        UnsupportedOperationException.class, () -> ((List<?>) copied.get("nested")).clear());
+  }
+
+  private static void assertPublicType(Type type, String context) {
+    if (type instanceof Class<?> raw) {
+      if (raw.isArray()) {
+        assertPublicType(raw.getComponentType(), context);
+        return;
+      }
+      String name = raw.getName();
+      assertTrue(
+          !name.startsWith("net.slimelabs.slslite.")
+              || name.startsWith("net.slimelabs.slslite.api."),
+          () -> context + " leaks " + name);
+      return;
+    }
+    if (type instanceof ParameterizedType parameterized) {
+      assertPublicType(parameterized.getRawType(), context);
+      for (Type argument : parameterized.getActualTypeArguments()) {
+        assertPublicType(argument, context);
+      }
+    }
+  }
+}
