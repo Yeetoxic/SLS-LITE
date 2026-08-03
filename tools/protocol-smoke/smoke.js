@@ -6,7 +6,8 @@ const options = parseArguments(process.argv.slice(2));
 
 async function main() {
   let failures = 0;
-  for (const version of options.versions) {
+  for (let index = 0; index < options.versions.length; index += 1) {
+    const version = options.versions[index];
     try {
       const result = await connect(version);
       console.log(
@@ -15,6 +16,9 @@ async function main() {
     } catch (error) {
       failures += 1;
       console.error(`FAIL ${version}: ${error.message}`);
+    }
+    if (index + 1 < options.versions.length) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
   process.exitCode = failures === 0 ? 0 : 1;
@@ -68,7 +72,7 @@ function connect(version) {
       if (!isBrandChannel(packet.channel)) {
         return;
       }
-      brand = decodeProtocolString(packet.data).replaceAll(/§./g, "");
+      brand = decodeProtocolString(packet.data).replaceAll(/\u00c2?\u00a7./g, "");
       if (process.env.SLS_PROTOCOL_DEBUG === "1") {
         console.log(`DEBUG ${version}: decoded brand=${JSON.stringify(brand)}`);
       }

@@ -97,6 +97,63 @@ class ConfigurationValidatorTest {
   }
 
   @Test
+  void disabledManagedLobbyAutomaticStartupNeedsOnlyTheLimboProcessSlot() throws Exception {
+    Repositories repositories = repositories("paper", 1024, 1120);
+    SLSConfig source = repositories.config();
+    SLSConfig config =
+        new SLSConfig(
+            source.totalMemoryMiB(),
+            1,
+            source.portRangeStart(),
+            source.portRangeEnd(),
+            source.queueTimeoutSeconds(),
+            source.blueprintSelectionMode(),
+            source.idleShutdownSeconds(),
+            source.managedOutput(),
+            source.forwarding(),
+            source.security(),
+            source.limbo(),
+            new LobbyConfig(LobbyMode.MANAGED, "game", "test", false, 5, 5, 60, 120),
+            source.storage(),
+            source.detailedLogging(),
+            source.instancesDirectory());
+
+    assertDoesNotThrow(
+        () ->
+            ConfigurationValidator.validate(
+                config, repositories.blueprints(), repositories.profiles()));
+  }
+
+  @Test
+  void disabledManagedLobbyAutomaticStartupRejectsDisabledLimbo() throws Exception {
+    Repositories repositories = repositories("paper", 1024, 2048);
+    SLSConfig source = repositories.config();
+    SLSConfig config =
+        new SLSConfig(
+            source.totalMemoryMiB(),
+            source.maxManagedProcesses(),
+            source.portRangeStart(),
+            source.portRangeEnd(),
+            source.queueTimeoutSeconds(),
+            source.blueprintSelectionMode(),
+            source.idleShutdownSeconds(),
+            source.managedOutput(),
+            source.forwarding(),
+            source.security(),
+            new SLSLimboConfig(false, 96, 30, -1, 5, 2, 30, 120),
+            new LobbyConfig(LobbyMode.MANAGED, "game", "test", false, 5, 5, 60, 120),
+            source.storage(),
+            source.detailedLogging(),
+            source.instancesDirectory());
+
+    assertThrows(
+        ConfigurationException.class,
+        () ->
+            ConfigurationValidator.validate(
+                config, repositories.blueprints(), repositories.profiles()));
+  }
+
+  @Test
   void rejectsCombinedMemoryThatOverflowsAnInteger() throws Exception {
     Repositories repositories = repositories("paper", Integer.MAX_VALUE, Integer.MAX_VALUE);
     SLSConfig config =

@@ -53,6 +53,27 @@ Proxy-routed smoke clients:
   -ExpectedBrand SLS-Limbo
 ```
 
+For an end-to-end managed-lobby recovery handoff on the disposable local
+Pterodactyl fixture, run:
+
+```powershell
+.\scripts\test-pterodactyl-lobby-handoff.ps1 `
+  -Versions 1.21.5,1.21.11
+```
+
+The connected clients must observe the managed Paper lobby, SLS-Limbo during a
+forced protected-lobby restart, and the recovered Paper lobby in that order.
+
+The complementary bounded matchmaking scenario is:
+
+```powershell
+.\scripts\test-pterodactyl-matchmaking.ps1
+```
+
+It requires the local `minigame/stage1_lifecycle` fixture and verifies queue
+cancellation, two real backend transfers, multiple-registry visibility, and
+full matchmaking-pool rejection.
+
 See [Protocol Compatibility](Protocol_Compatibility.md) for the acceptance
 definition and recorded matrix. Test clients use offline authentication and
 must never target a production online network.

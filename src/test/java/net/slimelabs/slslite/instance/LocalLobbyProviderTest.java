@@ -90,6 +90,35 @@ class LocalLobbyProviderTest {
   }
 
   @Test
+  void disabledManagedAutomaticStartupDoesNotTouchInstanceLifecycle() throws Exception {
+    BlueprintRepository blueprints = persistentBlueprints();
+    FakeController controller =
+        new FakeController(blueprints.get("lobby", "lobby").orElseThrow(), temporaryDirectory);
+    controller.persistentId = "lobby.saved01";
+    LocalLobbyProvider provider =
+        new LocalLobbyProvider(
+            proxy(new LinkedHashMap<>()),
+            blueprints,
+            controller,
+            new LobbyConfig(LobbyMode.MANAGED, "lobby", "lobby", false, 5, 5, 60, 120),
+            LoggerFactory.getLogger(LocalLobbyProviderTest.class));
+
+    provider.start();
+
+    assertEquals(LobbyStatus.OFFLINE, provider.status());
+    assertTrue(provider.server().isEmpty());
+    assertTrue(provider.readyFuture().isCompletedExceptionally());
+    assertFalse(provider.isLobby("lobby.saved01"));
+    assertFalse(provider.ownsPrimaryLifecycle("lobby.saved01"));
+    assertEquals(0, controller.starts());
+    assertEquals(0, controller.restarts);
+    assertEquals(0, controller.resets);
+    assertEquals(0, controller.stops);
+
+    provider.close();
+  }
+
+  @Test
   void explicitCycleAdoptsReplacementManagedLobby() throws Exception {
     BlueprintRepository blueprints = persistentBlueprints();
     FakeController controller =

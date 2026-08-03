@@ -4,13 +4,33 @@ public record LobbyConfig(
     LobbyMode mode,
     String registry,
     String server,
+    boolean autoStart,
     int maxRestartAttempts,
     int initialBackoffSeconds,
     int maxBackoffSeconds,
     int stableAfterSeconds) {
 
   public LobbyConfig(LobbyMode mode, String registry, String server) {
-    this(mode, registry, server, 5, 5, 60, 120);
+    this(mode, registry, server, true, 5, 5, 60, 120);
+  }
+
+  public LobbyConfig(
+      LobbyMode mode,
+      String registry,
+      String server,
+      int maxRestartAttempts,
+      int initialBackoffSeconds,
+      int maxBackoffSeconds,
+      int stableAfterSeconds) {
+    this(
+        mode,
+        registry,
+        server,
+        true,
+        maxRestartAttempts,
+        initialBackoffSeconds,
+        maxBackoffSeconds,
+        stableAfterSeconds);
   }
 
   public LobbyConfig {

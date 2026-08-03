@@ -15,7 +15,7 @@ server:
   # Must match a loaded software profile.
   software: paper
   # Exact version understood by that profile.
-  version: "26.1"
+  version: "26.2"
 
   # Optional modern SLS-compatible server.properties overrides.
   configs:

@@ -59,6 +59,7 @@ class SLSConfigRepositoryTest {
     assertEquals(30, config.limbo().maxBackoffSeconds());
     assertEquals(120, config.limbo().stableAfterSeconds());
     assertEquals(LobbyMode.EXTERNAL, config.lobby().mode());
+    assertEquals(true, config.lobby().autoStart());
     assertEquals("lobby", config.lobby().registry());
     assertEquals("lobby", config.lobby().server());
     assertEquals(5, config.lobby().maxRestartAttempts());
@@ -164,6 +165,21 @@ class SLSConfigRepositoryTest {
     SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
 
     assertThrows(ConfigurationException.class, repository::reload);
+  }
+
+  @Test
+  void loadsDisabledManagedLobbyAutomaticStartup() throws Exception {
+    writeConfig(
+        """
+                lobby:
+                  mode: managed
+                  auto_start: false
+                """);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.reload();
+
+    assertEquals(false, repository.get().lobby().autoStart());
   }
 
   @Test

@@ -139,6 +139,10 @@ lobby:
   #   external - use an existing backend already registered in velocity.toml.
   #   managed  - start the configured SLS-LITE blueprint as a local child.
   mode: external
+  # Managed mode only. When false, SLS-LITE does not prepare, resume, or recover
+  # the configured primary. SLS-Limbo must remain enabled and handles all lobby
+  # routing until this is set true and Velocity is restarted.
+  auto_start: true
 
   # Non-blank registry/type name containing the managed lobby blueprint.
   # This value is ignored in external mode.

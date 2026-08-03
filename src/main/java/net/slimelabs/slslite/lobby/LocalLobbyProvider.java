@@ -94,6 +94,10 @@ public final class LocalLobbyProvider implements LobbyProvider {
       startExternal();
       return;
     }
+    if (!config.autoStart()) {
+      disableManagedPrimary();
+      return;
+    }
     provision(false);
   }
 
@@ -286,6 +290,17 @@ public final class LocalLobbyProvider implements LobbyProvider {
     status = LobbyStatus.EXTERNAL;
     ready.complete(external);
     logger.info("Using external lobby {}", config.server());
+  }
+
+  private void disableManagedPrimary() {
+    IllegalStateException unavailable =
+        new IllegalStateException(
+            "Managed lobby automatic startup is disabled; SLS-Limbo is the active lobby");
+    status = LobbyStatus.OFFLINE;
+    ready.completeExceptionally(unavailable);
+    logger.info(
+        "Managed lobby automatic startup is disabled; using SLS-Limbo until configuration is "
+            + "enabled and Velocity restarts");
   }
 
   private void provision(boolean recovery) {

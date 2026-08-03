@@ -18,7 +18,13 @@ requires a real client login and transfer through Velocity.
 | Java | Temurin `25.0.3` |
 | NanoLimbo runtime | `1.13.0` at `d192d57d` |
 | ViaVersion fixture | `5.11.0` |
+| ViaVersion fixture advertised ceiling | Minecraft `26.2`, protocol `776` |
 | Fixed translation baseline | Minecraft `1.21.5`, protocol `770` |
+
+As of 2026-08-02, `26.2` is the latest stable Java Edition release. The 26.3
+line is still a snapshot series and is intentionally outside this release
+matrix. Snapshot support must be opted into and tested separately; it is never
+inferred from support for the preceding stable release.
 
 ViaVersion test artifacts must come from its
 [official releases](https://github.com/ViaVersion/ViaVersion/releases). The
@@ -32,12 +38,12 @@ an offline-mode login, reaches PLAY state, and verifies the backend brand.
 
 | Client | Result | Test date |
 | --- | --- | --- |
-| `1.13.2` | Pass | 2026-07-25 |
-| `1.16.5` | Pass | 2026-07-25 |
-| `1.20.4` | Pass | 2026-07-25 |
-| `1.21.4` | Pass | 2026-07-25 |
-| `1.21.5` | Pass | 2026-07-25 |
-| `1.21.11` | Pass | 2026-07-25 |
+| `1.13.2` | Pass | 2026-08-02 |
+| `1.16.5` | Pass | 2026-08-02 |
+| `1.20.4` | Pass | 2026-08-02 |
+| `1.21.4` | Pass | 2026-08-02 |
+| `1.21.5` | Pass | 2026-08-02 |
+| `1.21.11` | Pass | 2026-08-02 |
 | `26.1` | Pass, manual real-client test | 2026-07-25 |
 
 Run the automated matrix with:
@@ -81,8 +87,9 @@ compatible. A translated release passes only after:
 
 | Client | Backend baseline | Result | Test date |
 | --- | --- | --- | --- |
-| `1.21.11` | `1.21.5` (`770`) | Pass, warning-free automated login | 2026-07-25 |
-| `26.1` | `1.21.5` (`770`) | Pending real-client test | - |
+| `1.21.5` | `1.21.5` (`770`) | Pass, full managed-lobby handoff | 2026-08-02 |
+| `1.21.11` | `1.21.5` (`770`) | Pass, full managed-lobby handoff | 2026-08-02 |
+| `26.2` | `1.21.5` (`770`) | Pass, full manual real-client handoff | 2026-08-02 |
 
 When ViaVersion is present, SLS-LITE synchronizes every dynamic backend through
 ViaVersion's public `ProtocolDetectorService` before publishing it as ready.
@@ -98,8 +105,27 @@ baselines below protocol `770`; native `advertised_protocol: -1` operation is
 unchanged. Protocol `770` uses NanoLimbo's modern heightmap encoding and avoids
 maintaining a private patched runtime.
 
-ViaBackwards and ViaRewind remain optional operator choices. They are not
-required by SLS-LITE and are not included in this matrix.
+### Optional Older-Client Translation
+
+ViaBackwards and ViaRewind are optional operator choices, not SLS-LITE
+dependencies:
+
+- [ViaBackwards](https://github.com/ViaVersion/ViaBackwards) allows older
+  clients to join newer server protocols and requires ViaVersion.
+- [ViaRewind](https://github.com/ViaVersion/ViaRewind) extends that older-client
+  path to the legacy versions it supports. Consult its current release notes
+  before making a compatibility claim.
+- Install the Via plugins on Velocity **or** on the backend servers, never both.
+  SLS-LITE networks should normally keep the matching set on Velocity because
+  managed backends are dynamic. Follow ViaVersion's
+  [official installation guidance](https://github.com/ViaVersion/ViaVersion/wiki/Installation)
+  and fully restart the proxy after changing the set.
+
+SLS-LITE does not download, update, configure, or guarantee these plugins.
+Native SLS-Limbo operation with `advertised_protocol: -1` does not require any
+Via plugin. An older-client version belongs in a release matrix only after that
+exact plugin set completes the same Velocity -> SLS-Limbo -> managed-backend
+transfer path; a Via project support table alone is not evidence.
 
 ## Proxy Smoke Client
 
@@ -114,3 +140,26 @@ With the test proxy deliberately routing initial joins to SLS-Limbo, run:
 The command fails unless every client reaches PLAY state and receives the
 expected backend brand. Use a unique local/offline test proxy; do not run
 automated offline clients against a production online-mode network.
+
+## Managed-Lobby Handoff Smoke
+
+The local Pterodactyl fixture can exercise the complete recovery path while a
+protocol client remains connected. The test discovers the managed lobby,
+forces its protected restart through the Velocity console, and requires the
+client to observe `Paper (Velocity) -> SLS-Limbo -> Paper (Velocity)`:
+
+```powershell
+.\scripts\test-pterodactyl-lobby-handoff.ps1 `
+  -Versions 1.21.5,1.21.11
+```
+
+This intentionally mutates the disposable local fixture by restarting its
+managed lobby. It does not delete its persistent instance. A pass proves the
+tested protocol's connected handoff and return path, not general game-mechanic
+compatibility or support for untested client versions.
+
+The pinned Node client cannot encode the stable `26.2` protocol, so its row was
+verified with a real client. During the protected managed-lobby restart,
+Velocity logged the connected player moving from `lobby.97f1ae` to `sls-limbo`,
+the lobby exiting cleanly, ViaVersion resynchronizing the recovered backend,
+and the same connection returning to `lobby.97f1ae` after readiness.

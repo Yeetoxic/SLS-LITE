@@ -96,6 +96,11 @@ public final class ConfigurationValidator {
               + " MiB host budget");
     }
     if (config.lobby().mode() == LobbyMode.MANAGED) {
+      if (!config.lobby().autoStart() && !config.limbo().enabled()) {
+        throw new ConfigurationException(
+            "lobby.auto_start=false requires lobby.limbo.enabled=true so players have a safe "
+                + "routing destination");
+      }
       Blueprint lobbyBlueprint =
           java.util.Optional.ofNullable(blueprintsById.get(config.lobby().server()))
               .filter(blueprint -> blueprint.type().equals(config.lobby().registry()))
@@ -112,20 +117,22 @@ public final class ConfigurationValidator {
                 + lobbyBlueprint.id()
                 + "' must use lobby.recovery instead of restart-on-crash");
       }
-      long requiredMemory = (long) limboMemory + lobbyBlueprint.memoryLimitMiB();
+      int lobbyMemory = config.lobby().autoStart() ? lobbyBlueprint.memoryLimitMiB() : 0;
+      long requiredMemory = (long) limboMemory + lobbyMemory;
       if (requiredMemory > config.totalMemoryMiB()) {
         throw new ConfigurationException(
             "Managed lobby and SLS-Limbo require "
                 + requiredMemory
                 + " MiB ("
-                + lobbyBlueprint.memoryLimitMiB()
+                + lobbyMemory
                 + " + "
                 + limboMemory
                 + "), exceeding the "
                 + config.totalMemoryMiB()
                 + " MiB host budget");
       }
-      int requiredProcesses = config.limbo().enabled() ? 2 : 1;
+      int requiredProcesses =
+          (config.lobby().autoStart() ? 1 : 0) + (config.limbo().enabled() ? 1 : 0);
       if (config.maxManagedProcesses() < requiredProcesses) {
         throw new ConfigurationException(
             "Managed lobby and SLS-Limbo require "

@@ -126,6 +126,14 @@ tests verify that ready instances retain priority, full/draining instances are
 excluded, first-available prefers the requested definition then stable ID
 order, and seeded random selection reaches only capacity-eligible pool members.
 
+Managed `lobby.auto_start: false` was also exercised on 2026-08-02. After a
+Velocity restart, only Velocity and the bounded NanoLimbo JVM were present;
+SLS-LITE neither resumed nor recovered `lobby.97f1ae`, and new arrivals were
+routed to ready SLS-Limbo. Restoring `auto_start: true` and restarting Velocity
+resumed the same persistent lobby directory and returned both backends to
+ready. Configuration validation rejects the disabled-primary mode when limbo
+is also disabled, so there is always an explicit initial-routing target.
+
 The fallback's architecture, configuration, limitations, and full manual test
 are documented in [SLS_Limbo.md](SLS_Limbo.md).
 
@@ -169,6 +177,48 @@ docker exec -e PANEL_ROOT=/app sls-ptero-panel php /tmp/sls-lite-send-command.ph
 The helper uses the Panel's existing internal Wings repository and contains no
 credentials. Keep it available only to users who already have local Docker
 access.
+
+## Repeatable Stage 3.8 Network Scenario
+
+With the fixture in managed-lobby mode and the bundled
+`minigame/stage1_lifecycle` blueprint loaded, run:
+
+```powershell
+.\scripts\test-pterodactyl-matchmaking.ps1
+.\scripts\test-pterodactyl-lobby-handoff.ps1 `
+  -Versions 1.21.5,1.21.11
+```
+
+The first script uses four bounded offline clients. It cancels one queued
+preparation, fills both one-player instances permitted by the fixture, verifies
+transfers, lists the `lobby` and `minigame` registries, and confirms that a
+third player is rejected when the complete matchmaking pool is full. The
+clients disconnect in a `finally` block; wait for the configured idle timeout
+and confirm the two ephemeral instances stop before ending the fixture run.
+
+The second script proves forced protected-lobby administration, SLS-Limbo
+evacuation, persistent-lobby restart/recovery, connected player return, and the
+native/translated protocol paths listed in
+[Protocol Compatibility](Protocol_Compatibility.md). The external-lobby half
+of the plan remains the separately documented ownership gate above because it
+requires switching fixture modes. Finish by restarting the Velocity allocation
+and confirming reconciliation preserves only the persistent lobby, SLS-Limbo
+becomes ready, and no test client remains connected.
+
+This managed scenario passed on 2026-08-02 with Minecraft `1.21.5`. It created
+and cancelled one queue-owned preparation, transferred two clients into the
+two one-player `stage1_lifecycle` instances, exposed both required registries,
+and rejected a third join at the pool limit. The handoff script passed for both
+`1.21.5` and ViaVersion-translated `1.21.11`, with each connected client
+observing Paper, SLS-Limbo, then the recovered persistent Paper lobby.
+
+The stable upper boundary, Minecraft `26.2`, passed the same full path with a
+manual real client on 2026-08-02. Velocity retained the `Yeetoxic` connection,
+moved it from `lobby.97f1ae` to `sls-limbo`, stopped the persistent lobby with
+exit code zero, resynchronized the recovered protocol-758 Paper backend, and
+returned the connection immediately after the lobby became ready. This closes
+the Stage 3.8 stable-release protocol gate; 26.3 development snapshots remain
+outside the release matrix.
 
 ## Stage 3 Performance Baseline
 

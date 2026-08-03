@@ -48,6 +48,7 @@ public final class SLSConfigRepository {
   private static final String DEFAULT_LOBBY_MODE = "external";
   private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
   private static final String DEFAULT_LOBBY_SERVER = "lobby";
+  private static final boolean DEFAULT_LOBBY_AUTO_START = true;
   private static final String DEFAULT_STORAGE_STRATEGY = "auto";
   private static final int DEFAULT_SNAPSHOT_HOOK_TIMEOUT_SECONDS = 30;
   private static final int DEFAULT_LOBBY_MAX_RESTART_ATTEMPTS = 5;
@@ -185,6 +186,7 @@ public final class SLSConfigRepository {
           "mode",
           "registry",
           "server",
+          "auto_start",
           "limbo",
           "emergency",
           "recovery");
@@ -288,6 +290,8 @@ public final class SLSConfigRepository {
           YamlValues.optionalString(lobby, "registry", DEFAULT_LOBBY_REGISTRY, configPath);
       String lobbyServer =
           YamlValues.optionalString(lobby, "server", DEFAULT_LOBBY_SERVER, configPath);
+      boolean lobbyAutoStart =
+          YamlValues.optionalBoolean(lobby, "auto_start", DEFAULT_LOBBY_AUTO_START, configPath);
       int lobbyMaxRestartAttempts =
           YamlValues.optionalNonNegativeInt(
               lobbyRecovery, "max_attempts", DEFAULT_LOBBY_MAX_RESTART_ATTEMPTS, configPath);
@@ -380,6 +384,7 @@ public final class SLSConfigRepository {
                 LobbyMode.parse(lobbyMode),
                 lobbyRegistry,
                 lobbyServer,
+                lobbyAutoStart,
                 lobbyMaxRestartAttempts,
                 lobbyInitialBackoff,
                 lobbyMaxBackoff,

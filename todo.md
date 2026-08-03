@@ -338,20 +338,24 @@ data, leaking resources, or trapping players in unexplained states.
 
 ### 3.8 Lobby, Matchmaking, Protocol, and Network Scenarios
 
-- [ ] Exercise managed lobby, separately hosted external lobby, SLS-Limbo
+- [x] Exercise managed lobby, separately hosted external lobby, SLS-Limbo
       fallback, queues, transfers, multiple registries, full servers, forced
       administration, recovery, and shutdown in one repeatable plan.
 - [x] Verify external lobby mode never starts, stops, copies, or owns that lobby.
-- [ ] Verify supported native and ViaVersion-translated client ranges for the
+- [x] Verify supported native and ViaVersion-translated client ranges for the
       selected Velocity/NanoLimbo combination; do not claim new versions before
-      the complete transfer path passes.
-- [ ] Document ViaBackwards and ViaRewind as optional operator choices for older
+      the complete transfer path passes. Native 1.13.2-1.21.11 and complete
+      1.21.5/1.21.11 automated handoffs and the stable 26.2 real-client handoff
+      pass. Development 26.3 snapshots are outside the release matrix.
+- [x] Document ViaBackwards and ViaRewind as optional operator choices for older
       clients and preserve native SLS-Limbo operation without ViaVersion.
 - [x] Finish first-available/random pluggable blueprint selection while retaining
       existing ready-instance preference and capacity limits.
-- [ ] Allow operators to disable managed-lobby automatic startup only with clear
+- [x] Allow operators to disable managed-lobby automatic startup only with clear
       routing and recovery behavior.
-- [ ] Re-run the real-client workflow across every supported protocol boundary.
+- [x] Re-run the real-client workflow across every supported protocol boundary,
+      including the stable 26.2 managed lobby -> SLS-Limbo -> recovered managed
+      lobby handoff.
 
 ### 3.9 Stage 3 Acceptance Gate
 
@@ -366,6 +370,12 @@ data, leaking resources, or trapping players in unexplained states.
       shutdown workloads. Review CPU, heap/RSS, child-process admission, disk
       use and churn, preparation/readiness latency, network overhead, log growth,
       and cleanup, and resolve or explicitly document material regressions.
+- [ ] Remove dated proof-of-concept and test-evidence narratives from the
+      operator and contributor documentation so those pages function solely as
+      clear, current information and instructions. Preserve still-useful test
+      procedures, supported compatibility claims, and performance guidance;
+      move release evidence that must be retained into a dedicated test or
+      release record rather than mixing it into the product documentation.
 - [ ] Add CI for compilation, tests, packaging, dependency checks, and the
       lightweight static rules approved during the organization work.
 - [ ] Run the complete automated suite, exact compatibility-corpus gate, package
@@ -379,6 +389,24 @@ data, leaking resources, or trapping players in unexplained states.
 Acceptance: the complete retained product and its expected failure matrix pass
 without unexplained player states, leaked resources, weakened security, source
 mutation, or silent instance corruption.
+
+### 3.10 Documentation Consolidation and Wiki Draft
+
+- [ ] Review the complete documentation set as one operator and contributor
+      journey; remove duplication and drift, repair navigation, establish one
+      canonical home for each concept, and make installation, configuration,
+      daily operation, troubleshooting, compatibility, backup/recovery, and
+      development guidance read coherently from start to finish.
+- [ ] Create a basic release-candidate GitHub Wiki source set with a home page,
+      sidebar/navigation, installation and first-run guide, configuration,
+      commands and permissions, storage/COW, lobby and matchmaking, operations,
+      troubleshooting, compatibility, and contributor entry points. Keep wiki
+      source reviewable in the repository and define the publication/update
+      workflow before copying it to GitHub.
+
+Acceptance: the repository documentation and draft wiki present one consistent
+release-candidate story, link to canonical detail instead of diverging copies,
+and can be published without inventing unsupported behavior.
 
 ## Stage 4: Release Candidate
 

@@ -25,7 +25,10 @@ const timeout = setTimeout(
 client.on("login", () => {
   let delay = 500;
   for (const command of options.commands) {
-    setTimeout(() => client.write("chat", {message: `/${command}`}), delay);
+    // Let minecraft-protocol select the version-correct chat or command
+    // packet; writing the legacy `chat` packet directly corrupts modern
+    // protocol streams once ViaVersion remaps them.
+    setTimeout(() => client.chat(`/${command}`), delay);
     delay += 500;
   }
 });
@@ -34,6 +37,9 @@ client.on("packet", (packet, metadata) => {
     return;
   }
   const text = JSON.stringify(packet);
+  if (process.env.SLS_PROTOCOL_DEBUG === "1") {
+    console.log(`CHAT ${metadata.name}: ${text}`);
+  }
   for (const expected of options.expected) {
     if (text.includes(expected)) {
       matched.add(expected);

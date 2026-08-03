@@ -45,6 +45,7 @@ and unknown keys include a nearest-key suggestion when one is unambiguous.
 | `security.allow_insecure_offline_administrators` | `false` | Permit UUID-based built-in admins on an offline proxy. Unsafe for public use. |
 | `security.claim_code_expiry_seconds` | `600` | Positive one-time administrator-code lifetime. |
 | `lobby.mode` | `external` | `external` or `managed`. |
+| `lobby.auto_start` | `true` | Managed mode only. `false` prevents preparation, resume, and recovery of the primary; enabled SLS-Limbo handles lobby routing until the option is restored and Velocity restarts. |
 | `lobby.registry` | `lobby` | Managed-lobby blueprint type. Ignored by external mode. |
 | `lobby.server` | `lobby` | External Velocity server name or managed blueprint ID. |
 | `lobby.limbo.enabled` | `true` | Start bundled SLS-Limbo. |
@@ -90,6 +91,13 @@ not start or stop that server.
 `managed` starts `lobby.registry/lobby.server` from the blueprint catalog,
 protects it from ordinary stop/restart/reset operations, and applies bounded
 crash recovery.
+
+With managed mode and `auto_start: false`, SLS-LITE deliberately leaves the
+primary offline and routes through SLS-Limbo. It does not adopt an ordinary
+instance started from the same blueprint and does not run primary recovery.
+Set `auto_start: true` and restart Velocity to restore managed-primary
+ownership. Configuration validation rejects this mode when SLS-Limbo is
+disabled because that would intentionally start with no safe lobby.
 
 SLS-Limbo is a fallback for either mode, not a third primary mode. Normal queued
 players stay on their current healthy backend.
