@@ -14,7 +14,7 @@ class BundledResourceTest {
     for (String resource :
         List.of(
             "defaults/host/config.yml",
-            "defaults/blueprints/template.yml",
+            "defaults/blueprints/template.yml.example",
             "defaults/software/paper-software.yml",
             "defaults/software/vanilla-software.yml",
             "velocity-plugin.json",

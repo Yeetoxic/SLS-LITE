@@ -702,14 +702,26 @@ class BlueprintRepositoryTest {
   }
 
   @Test
-  void installsBundledTemplateIntoEmptyDirectory() throws Exception {
+  void installsIgnoredBundledTemplateIntoEmptyDirectory() throws Exception {
     BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
 
     repository.initialize();
 
-    assertEquals(1, repository.getAll().size());
-    assertEquals("template", repository.getAll().iterator().next().id());
-    assertTrue(Files.isRegularFile(temporaryDirectory.resolve("template.yml")));
+    assertTrue(repository.getAll().isEmpty());
+    assertTrue(Files.isRegularFile(temporaryDirectory.resolve("template.yml.example")));
+  }
+
+  @Test
+  void preservesEditedBundledTemplateWhenNoBlueprintsExist() throws Exception {
+    BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
+    repository.initialize();
+    Path template = temporaryDirectory.resolve("template.yml.example");
+    Files.writeString(template, "operator notes");
+
+    repository.initialize();
+
+    assertEquals("operator notes", Files.readString(template));
+    assertTrue(repository.getAll().isEmpty());
   }
 
   @Test

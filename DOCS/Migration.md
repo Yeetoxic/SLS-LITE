@@ -13,7 +13,7 @@ folders. SLS-LITE does not load those registry files directly.
 For each historical entry:
 
 1. Copy the clean world/server content into an organized source directory below
-   `plugins/sls-lite/worlds/`.
+   `plugins/sls-lite/volumes/worlds/`.
 2. Identify the exact Minecraft version, Java requirement, memory, startup
    behavior, reset policy, command-block setting, plugins, and resource pack.
 3. Select or create a software profile.
@@ -73,7 +73,7 @@ of truth for each definition.
 
 1. Stop Velocity normally.
 2. Back up the entire SLS-LITE data directory.
-3. Keep `config.yml`, blueprints, worlds, profiles, administrators, software
+3. Keep `config.yml`, blueprints, volumes, profiles, administrators, software
    caches, runtimes, and persistent instances together.
 4. Replace the plugin JAR.
 5. Start Velocity and read configuration, reconciliation, metadata migration,

@@ -11,7 +11,7 @@ adaptations and boundaries.
 state:
   volumes:
     - name: world
-      source: worlds/minigames/spleef
+      source: volumes/worlds/minigames/spleef
       target: /world
       mode: cow
 ```
@@ -130,11 +130,16 @@ content. Configuration patches may not target paths through the link.
 ## Paths
 
 `source` is relative to the SLS-LITE plugin data directory. For example,
-`worlds/minigames/spleef` resolves to:
+`volumes/worlds/minigames/spleef` resolves to:
 
 ```text
-<SLS-LITE data>/worlds/minigames/spleef
+<SLS-LITE data>/volumes/worlds/minigames/spleef
 ```
+
+Fresh installations create empty `volumes/worlds/` and `volumes/plugins/`
+directories as the default homes for source worlds and per-instance plugin
+assets. Older contained paths such as `worlds/...` and `files/...` remain valid;
+SLS-LITE does not move or rewrite existing operator data.
 
 Blueprint YAML files can be organized into nested folders below `blueprints/`.
 The folder name is for operators only; the blueprint's `blueprint.type` remains

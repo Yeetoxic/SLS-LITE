@@ -43,7 +43,7 @@ annotations:
 
 SLS-LITE preserves this annotation but does not yet resolve the logical ID to a
 public URL. The historical regression archive contains
-`worlds/minigames/combat_cube/resources.zip`, matching that historical
+`volumes/worlds/minigames/combat_cube/resources.zip`, matching the current
 convention. The imported Meteor Miners and Missile Wars worlds do not currently
 contain a conventional client resource-pack ZIP.
 

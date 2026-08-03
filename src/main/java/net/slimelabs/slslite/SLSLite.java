@@ -34,6 +34,7 @@ import net.slimelabs.slslite.instance.lifecycle.IdleInstanceReaper;
 import net.slimelabs.slslite.instance.reconcile.InstanceReconciler;
 import net.slimelabs.slslite.instance.reconcile.InstanceReconciliationReport;
 import net.slimelabs.slslite.instance.storage.InstanceDirectoryPreparer;
+import net.slimelabs.slslite.io.SLSDataLayout;
 import net.slimelabs.slslite.lobby.FallbackLobbyProvider;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.LobbyStatus;
@@ -109,6 +110,7 @@ public final class SLSLite {
     ConsoleBanner.logStartup(logger);
 
     try {
+      SLSDataLayout.initialize(dataDirectory);
       configuration.initialize();
       detailLog =
           new SLSDetailLog(

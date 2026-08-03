@@ -90,7 +90,9 @@ plugins/sls-lite/
 |-- config.yml
 |-- administrators.properties
 |-- blueprints/
-|-- worlds/
+|-- volumes/
+|   |-- worlds/
+|   `-- plugins/
 |-- software-profiles/
 |-- software/
 |-- runtimes/

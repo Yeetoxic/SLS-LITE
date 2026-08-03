@@ -25,6 +25,15 @@ class SLSLimboProviderTest {
   @TempDir Path temporaryDirectory;
 
   @Test
+  void mapsNativeProtocolSentinelToSafeIntegrationBaseline() {
+    SLSLimboConfig nativeConfig = new SLSLimboConfig(true, 96, 30, -1, 5, 2, 30, 120);
+    SLSLimboConfig fixedConfig = new SLSLimboConfig(true, 96, 30, 775, 5, 2, 30, 120);
+
+    assertEquals(770, nativeConfig.synchronizationProtocol());
+    assertEquals(775, fixedConfig.synchronizationProtocol());
+  }
+
+  @Test
   void releasesReservationsWhenRecoveryIsExhaustedBeforeLaunch() throws Exception {
     ResourceBudget budget = new ResourceBudget(256);
     int port = findAvailablePort();

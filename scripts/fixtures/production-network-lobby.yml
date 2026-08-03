@@ -1,0 +1,18 @@
+blueprint:
+  id: lobby
+  name: Production Network Lobby
+  type: lobby
+
+server:
+  software: paper
+  version: "26.2"
+  limits:
+    memory_limit: 1536
+    max_players: 100
+    max_instances: 1
+
+save: true
+
+annotations:
+  sls-lite:
+    keep-alive: true

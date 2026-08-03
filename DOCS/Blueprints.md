@@ -40,7 +40,7 @@ save: false
 state:
   volumes:
     - name: world
-      source: worlds/minigames/biome_run
+      source: volumes/worlds/minigames/biome_run
       target: /world
       mode: cow
 
@@ -236,10 +236,10 @@ Mapping and shorthand forms are accepted:
 state:
   volumes:
     - name: world
-      source: worlds/archive
+      source: volumes/worlds/archive
       target: /world
       mode: cow
-    - "nether:worlds/archive/DIM-1:/world_nether/DIM-1:cow"
+    - "nether:volumes/worlds/archive/DIM-1:/world_nether/DIM-1:cow"
 ```
 
 The shorthand shape is `name:source:target[:mode]`; omitted mode defaults to
@@ -263,15 +263,24 @@ after the software base and volumes:
 ```yaml
 state:
   copy:
-    - source: files/plugins/example.jar
+    # Shared plugin bundle for this blueprint or game category.
+    - source: volumes/plugins/minigames/
+      target: plugins/
+    # Optional one-off plugin.
+    - source: volumes/plugins/example.jar
       target: plugins/example.jar
-    - "files/server-icon.png:server-icon.png"
+    - "volumes/server-icon.png:server-icon.png"
 ```
 
 Both mapping and `source:target` shorthand forms are accepted. Sources are
 relative to `plugins/sls-lite/`; targets are relative to the instance root.
 Files replace an existing file, while directories merge and replace matching
-files in declaration order.
+files in declaration order. A directory source such as
+`volumes/plugins/minigames/` therefore copies every plugin and subdirectory in
+that bundle into the instance's `plugins/` directory. Organize bundles by game
+type, blueprint, or any other operator convention; SLS-LITE does not assign
+meaning to the folder name. Later copy entries can deliberately replace a file
+from an earlier bundle.
 
 Copy preparation is transactional with the software and volumes. Missing
 sources, traversal, symbolic links, special files, and file/directory type

@@ -19,7 +19,9 @@ import net.slimelabs.slslite.io.ConfinedFiles;
 
 public final class BlueprintRepository {
 
-  private static final String DEFAULT_TEMPLATE_RESOURCE = "defaults/blueprints/template.yml";
+  private static final String DEFAULT_TEMPLATE_RESOURCE =
+      "defaults/blueprints/template.yml.example";
+  private static final String DEFAULT_TEMPLATE_FILE = "template.yml.example";
 
   private final Path directory;
   private final DefinitionCatalog catalog;
@@ -108,7 +110,8 @@ public final class BlueprintRepository {
   }
 
   private void installTemplateWhenEmpty() throws IOException {
-    if (!blueprintFiles().isEmpty()) {
+    if (!blueprintFiles().isEmpty()
+        || Files.exists(directory.resolve(DEFAULT_TEMPLATE_FILE), LinkOption.NOFOLLOW_LINKS)) {
       return;
     }
 
@@ -118,7 +121,7 @@ public final class BlueprintRepository {
         throw new IOException("Bundled blueprint default is missing: " + DEFAULT_TEMPLATE_RESOURCE);
       }
       ConfinedFiles.atomicCopy(
-          directory, "template.yml", source, BlueprintParser.MAX_BLUEPRINT_BYTES);
+          directory, DEFAULT_TEMPLATE_FILE, source, BlueprintParser.MAX_BLUEPRINT_BYTES);
     }
   }
 

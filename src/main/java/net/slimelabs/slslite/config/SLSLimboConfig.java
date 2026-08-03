@@ -37,4 +37,9 @@ public record SLSLimboConfig(
       throw new IllegalArgumentException("SLS-Limbo stable period must be positive");
     }
   }
+
+  /** Protocol exposed to integrations that cannot represent NanoLimbo's native sentinel. */
+  public int synchronizationProtocol() {
+    return advertisedProtocol == -1 ? MINIMUM_FIXED_PROTOCOL : advertisedProtocol;
+  }
 }

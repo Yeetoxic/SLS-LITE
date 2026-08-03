@@ -228,7 +228,7 @@ Packaged resources are organized by purpose:
 
 Internal classpath paths are not operator contracts. The repositories and
 installer explicitly map them to the existing `config.yml`,
-`blueprints/template.yml`, software-profile, and `sls-limbo` runtime paths.
+`blueprints/template.yml.example`, software-profile, and `sls-limbo` runtime paths.
 
 ## Important Invariants
 

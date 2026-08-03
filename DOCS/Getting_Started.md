@@ -20,19 +20,25 @@ accounting.
 ## Install
 
 1. Stop Velocity.
-2. Place the shaded SLS-LITE JAR in Velocity's `plugins/` directory.
-3. Start Velocity and wait for `SLS-LITE initialized`.
-4. Stop Velocity before making the first host-wide configuration changes.
-5. Review `plugins/sls-lite/config.yml`.
-6. Configure player forwarding for the test or production environment.
-7. Review `software-profiles/paper.yml` and `vanilla.yml`.
-8. Set `accept_eula: true` only after accepting the Minecraft EULA.
-9. Add blueprints and source worlds.
-10. Start Velocity and inspect `/sls system`.
+2. Remove Velocity's example `lobby`, `factions`, and `minigames` entries from
+   `[servers]` and `[forced-hosts]`, then set `try = []`. Add only real,
+   reachable external servers; SLS-LITE registers managed servers itself.
+3. Place the shaded SLS-LITE JAR in Velocity's `plugins/` directory.
+4. Start Velocity and wait for `SLS-LITE initialized`.
+5. Stop Velocity before making the first host-wide configuration changes.
+6. Review `plugins/sls-lite/config.yml`.
+7. Configure player forwarding for the test or production environment.
+8. Review `software-profiles/paper.yml` and `vanilla.yml`.
+9. Set `accept_eula: true` only after accepting the Minecraft EULA.
+10. Copy `blueprints/template.yml.example` to a `.yml` file, then customize it
+    and add any required source worlds.
+11. Start Velocity and inspect `/sls system`.
 
 The generated defaults are intentionally conservative: forwarding is disabled,
 provider downloads require an explicit EULA choice, child output is not
 mirrored into the proxy console, and SLS-Limbo is enabled as a fallback.
+The generated blueprint template has an `.example` suffix and is not loaded
+until it is copied or renamed to `.yml`.
 
 ## First Administrator
 
@@ -56,7 +62,7 @@ or the granular nodes in [Commands](Commands.md).
 Place source content below the SLS-LITE data directory:
 
 ```text
-plugins/sls-lite/worlds/minigames/example/
+plugins/sls-lite/volumes/worlds/minigames/example/
 ```
 
 Then create `blueprints/minigames/example.yml`:
@@ -80,7 +86,7 @@ save: false
 state:
   volumes:
     - name: world
-      source: worlds/minigames/example
+      source: volumes/worlds/minigames/example
       target: /world
       mode: cow
 ```
@@ -102,7 +108,9 @@ For an isolated offline smoke test, `forwarding.mode: none` is acceptable. For
 a real Paper network:
 
 1. Configure Velocity `player-info-forwarding-mode = "modern"`.
-2. Configure Velocity's forwarding secret.
+2. Replace Velocity's placeholder secret with a cryptographically random value
+   of at least 32 characters and restrict the secret file to the account that
+   runs Velocity. Do not reuse, publish, or commit this value.
 3. Set `forwarding.mode: modern`.
 4. Set `forwarding.online_mode` to Velocity's `online-mode`.
 5. Point `forwarding.secret_file` to the same secret file.
@@ -131,7 +139,7 @@ Back up:
 - `config.yml`
 - `administrators.properties`
 - `blueprints/`
-- `worlds/`
+- `volumes/` (including source worlds and per-instance plugin assets)
 - `software-profiles/`
 - any persistent `instances/`
 - manually supplied `software/` and `runtimes/` that cannot be reproduced
@@ -150,4 +158,3 @@ reproducible, but retaining them avoids downloads and first-start delays.
 
 Deleting the data directory permanently removes persistent managed instances,
 source worlds stored there, blueprints, administrators, and caches.
-

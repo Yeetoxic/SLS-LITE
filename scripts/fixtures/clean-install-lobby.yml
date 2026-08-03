@@ -1,0 +1,19 @@
+blueprint:
+  id: lobby
+  name: Clean Install Lobby
+  type: lobby
+
+server:
+  software: paper
+  version: "26.2"
+  limits:
+    memory_limit: 1024
+    max_players: 8
+    max_instances: 1
+
+save: true
+
+annotations:
+  sls-lite:
+    test-only: true
+    keep-alive: true

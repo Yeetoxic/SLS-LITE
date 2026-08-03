@@ -118,7 +118,9 @@ forwarding:
 
   # Non-blank relative path from the Velocity working directory to the same
   # secret file configured by forwarding-secret-file in velocity.toml. Absolute
-  # paths and paths escaping the Velocity directory are rejected.
+  # paths and paths escaping the Velocity directory are rejected. Replace
+  # Velocity's placeholder with a private cryptographically random value of at
+  # least 32 characters before enabling modern forwarding.
   secret_file: forwarding.secret
 
 security:
@@ -173,8 +175,10 @@ lobby:
     #              proxy-installed ViaVersion to translate to. Older fixed
     #              baselines have unsafe heightmap translation behavior.
     # Keep -1 unless the selected protocol is listed as tested in
-    # DOCS/Protocol_Compatibility.md. This does not install ViaVersion or make an
-    # unknown Minecraft release compatible by itself.
+    # DOCS/Protocol_Compatibility.md. When ViaVersion is present, native mode is
+    # exposed to ViaVersion as the safe 1.21.5 baseline instead of its internal
+    # -1 sentinel. This does not install ViaVersion or make an unknown Minecraft
+    # release compatible by itself.
     advertised_protocol: -1
 
     recovery:

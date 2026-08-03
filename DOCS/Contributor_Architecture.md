@@ -72,7 +72,7 @@ Pair changes with `BlueprintParserTest`, `BlueprintRepositoryTest`,
 `InstanceDefinitionIdentityTest`, and the applicable corpus compatibility
 integration test. Update [Blueprints](Blueprints.md),
 [Blueprint Volumes](Blueprint_Volumes.md), the bundled
-`defaults/blueprints/template.yml`, and the compatibility matrix when needed.
+`defaults/blueprints/template.yml.example`, and the compatibility matrix when needed.
 
 ## Software Profiles and Installers
 

@@ -9,11 +9,9 @@ plugins/sls-lite/
 |   |-- lobbies/
 |   |-- minigames/
 |   `-- adventures/
-|-- worlds/
-|   |-- lobbies/
-|   |-- minigames/
-|   `-- adventures/
-|-- files/
+|-- volumes/
+|   |-- worlds/
+|   `-- plugins/
 |-- software/
 |-- software-profiles/
 |-- runtimes/
@@ -36,14 +34,20 @@ modern SLS blueprint vocabulary. For example:
 state:
   volumes:
     - name: world
-      source: worlds/minigames/blastoff
+      source: volumes/worlds/minigames/blastoff
       target: /world
       mode: cow
 ```
 
-`state.copy` sources use the same contained data-directory root. `files/` is
-the recommended operator location for copied plugins, configuration, icons,
-and other assets, but any contained non-instance source path is valid.
+`state.copy` sources use the same contained data-directory root.
+`volumes/plugins/` is the recommended operator location for plugins copied
+into individual instances. It may contain individual JARs or grouped
+directories such as `volumes/plugins/minigames/`; a `state.copy` directory
+entry targeting `plugins/` installs the complete group into that instance.
+Other shared assets may also be organized below `volumes/`; any contained
+non-instance source path is valid. SLS-LITE creates `volumes/worlds/` and
+`volumes/plugins/` empty on startup and never treats their contents as
+generated data.
 
 `software/` is the reusable exact-version cache. `runtimes/` holds optional
 operator-supplied Java installations. `instances/` contains prepared runtime
@@ -54,7 +58,7 @@ size, retention, redaction, and default-off Velocity-console mirroring are
 configured under `detailed_logging`. `sls-limbo/` is an extracted,
 reproducible runtime directory.
 
-Operators should back up blueprints, worlds, software profiles, configuration,
+Operators should back up blueprints, volumes, software profiles, configuration,
 administrators, and any persistent instances.
 
 Persistent instance metadata schema 3 records the exact software ID and version
@@ -77,6 +81,7 @@ metadata was written, or removes the backup when the replacement had already
 committed.
 
 The historical regression allocation uses the network directly from organized
-`worlds/lobbies`, `worlds/minigames`, and `worlds/adventures` directories.
+`volumes/worlds/lobbies`, `volumes/worlds/minigames`, and
+`volumes/worlds/adventures` directories.
 Import archives and retired fixtures belong outside the live blueprint registry
 so they cannot appear in commands or tab completion.

@@ -157,3 +157,72 @@ and seven environment-dependent skips. Spotless and SpotBugs passed. Script
 syntax, documentation-contract tests, protocol matrices, `git diff --check`,
 and the local process audit passed. The fixture ended with only Velocity,
 SLS-Limbo, and the persistent managed lobby JVM running.
+
+## Stage 3.9 Clean-Install Exercise
+
+On 2026-08-02, the stopped native-ext4 Pterodactyl allocation was copied to the
+recoverable Docker volume `sls-ptero-stage3-preclean-20260802`, then only that
+allocation was cleared. A preserved Velocity JAR with SHA-256
+`4540289F48C83E305FC2F2C495A84D1F4D0B7F360830251E169DD5A208740E70`
+generated a stock Velocity 4 configuration before the release candidate was
+installed.
+
+The first pass exposed two onboarding defects: the bundled `template.yml` was
+loaded as a real `game/template` blueprint, and Velocity's stock unreachable
+`lobby` entry was trusted as the external primary. The latter produced a
+connection-refused stack trace before fallback. The fixes changed the generated
+template to ignored `template.yml.example`, required an external-primary health
+probe before routing, and documented removal of stock servers with Velocity's
+required `try = []` setting. The affected clean boot was repeated with artifact
+SHA-256 `26F68B99DD8AF67CFE4969509D269A4D944B8418557633543D8F4C63FCFFB2E8`.
+It loaded zero blueprints, generated only the ignored example, started
+SLS-Limbo, and accepted a 1.21.5 login without a failed-backend stack trace.
+
+Fresh SLS-LITE defaults occupied 5.2 MiB, chiefly the reproducible NanoLimbo
+runtime. After accepting the EULA and adding the retained clean-install lobby
+fixture, Paper 26.2 installed and the new persistent `lobby.u24v30` reached
+ready. The complete allocation occupied 320.6 MiB: SLS-LITE used 296.6 MiB,
+including 58.9 MiB of reusable Paper software and 232.5 MiB for the generated
+lobby instance and world. Normal shutdown exited cleanly; restart preserved one
+persistent directory and returned the same lobby ID to ready in 10.1 seconds
+without reinstalling software.
+
+The optional ViaVersion follow-up exposed a separate integration defect:
+NanoLimbo's native `-1` sentinel was cached as an actual ViaVersion backend
+protocol. SLS-LITE now exposes native mode to integrations as the tested 770
+baseline while retaining NanoLimbo's native configuration. Focused regression
+tests passed, and updated artifact SHA-256
+`00DB8DC378442E78A7363BA72FB52FF4DE6F9F6CE933A9345381F488D592FA09`
+mapped `sls-limbo` to 770 in the live fixture. A 1.21.5 client rejected by the
+newer Paper 26.2 backend then reached `SLS-Limbo (Velocity)` without the former
+Via decoder failure. ViaBackwards remains required if older clients must enter
+newer Paper rather than use the holding lobby.
+
+The final verification run passed 605 tests with zero failures or errors and
+seven environment-dependent skips. Spotless and SpotBugs passed.
+
+### Production-Style Online Network Repeat
+
+A second clean allocation run retained only Velocity's JAR and used no prior
+SLS-LITE data, software cache, world, or optional plugin configuration. The
+stock Velocity configuration remained in online mode; its example backends
+were removed, `try = []` was retained, and modern forwarding was enabled with
+a newly generated private 256-bit secret. The generated SLS-LITE configuration
+was changed to modern forwarding with matching online-mode semantics, and a
+fresh persistent Paper 26.2 lobby was installed with explicit EULA acceptance.
+
+Velocity, SLS-Limbo, and managed lobby `lobby.58e8xc` reached ready without a
+forwarding warning or error. Paper was confined to `127.0.0.1`, used backend
+`online-mode=false`, enabled Velocity forwarding with `online-mode=true`, and
+contained the exact Velocity secret. An unauthenticated automated client was
+rejected by Velocity before backend routing. Normal proxy shutdown preserved
+the persistent lobby and secret; the same lobby ID returned ready in 9.7
+seconds without reinstalling Paper.
+
+A Mojang-authenticated 26.2 client then connected through Velocity to the
+managed Paper lobby. Paper received the same authenticated UUID, the one-time
+administrator claim persisted that UUID and player name, and the proxy error
+scan contained no authentication, forwarding, secret, or connection failure.
+The fixture was left online with the authenticated player, Velocity,
+SLS-Limbo, and the managed lobby healthy. The pre-reset fixture remains
+recoverable in `sls-ptero-stage3-online-preclean-20260802`.

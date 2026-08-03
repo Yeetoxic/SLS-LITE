@@ -142,7 +142,7 @@ class InstanceDirectoryPreparerTest {
   @Test
   void mergesStateCopyDirectoryIntoExistingTarget() throws Exception {
     Path software = createSource();
-    Path source = temporaryDirectory.resolve("files/plugins");
+    Path source = temporaryDirectory.resolve("volumes/plugins/minigames");
     Files.createDirectories(source);
     Files.writeString(source.resolve("plugin.jar"), "plugin");
     Files.createDirectories(software.resolve("plugins"));
@@ -155,7 +155,7 @@ class InstanceDirectoryPreparerTest {
             "game.x82odk",
             software,
             List.of(),
-            List.of(new BlueprintCopy("files/plugins", "plugins")),
+            List.of(new BlueprintCopy("volumes/plugins/minigames/", "plugins/")),
             () -> false);
 
     assertEquals("plugin", Files.readString(prepared.resolve("plugins/plugin.jar")));

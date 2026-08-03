@@ -69,7 +69,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
       return;
     }
     started = true;
-    primaryAvailable = primary.server().isPresent();
+    primaryAvailable = false;
     AtomicInteger failures = new AtomicInteger();
     connectReadiness(primary, failures, true);
     connectReadiness(limbo, failures, false);
@@ -289,6 +289,10 @@ public final class FallbackLobbyProvider implements LobbyProvider {
             (server, failure) -> {
               if (failure == null) {
                 if (primaryProvider) {
+                  if (provider.status() == LobbyStatus.EXTERNAL) {
+                    refreshPrimaryAvailability();
+                    return;
+                  }
                   publishPrimaryReady(server);
                 }
                 ready.complete(server);
@@ -330,6 +334,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
                 externalProbeInFlight.set(false);
                 if (failure == null && !closed) {
                   publishPrimaryReady(candidate);
+                  ready.complete(candidate);
                 }
               });
     } catch (RuntimeException exception) {

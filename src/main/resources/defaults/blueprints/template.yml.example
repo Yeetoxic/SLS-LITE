@@ -52,12 +52,16 @@ save: false
 # state:
 #   volumes:
 #     - name: world
-#       source: worlds/example
+#       source: volumes/worlds/example
 #       target: /world
 #       mode: cow
 #   copy:
-#     - source: files/plugins/example.jar
-#       target: plugins/example.jar
+#     # Copy every plugin in a shared bundle into this instance.
+#     - source: volumes/plugins/example/
+#       target: plugins/
+#     # Individual plugin files can also be copied to an exact target.
+#     # - source: volumes/plugins/one-off.jar
+#     #   target: plugins/one-off.jar
 #   env:
 #     FEATURE_FLAG: "true"
 

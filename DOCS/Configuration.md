@@ -51,7 +51,7 @@ and unknown keys include a nearest-key suggestion when one is unambiguous.
 | `lobby.limbo.enabled` | `true` | Start bundled SLS-Limbo. |
 | `lobby.limbo.memory_mib` | `96` | At least `64` MiB; included in managed admission. |
 | `lobby.limbo.startup_timeout_seconds` | `30` | Positive readiness timeout. |
-| `lobby.limbo.advertised_protocol` | `-1` | `-1` for native behavior, or a tested protocol at least `770`. |
+| `lobby.limbo.advertised_protocol` | `-1` | `-1` for native behavior, or a tested protocol at least `770`. ViaVersion sees native mode as the safe `770` integration baseline because its detector cannot represent the `-1` sentinel. |
 | `lobby.limbo.recovery.max_attempts` | `5` | Non-negative restart attempts; `0` disables recovery. |
 | `lobby.limbo.recovery.initial_backoff_seconds` | `2` | Positive first delay. |
 | `lobby.limbo.recovery.max_backoff_seconds` | `30` | At least the initial delay. |

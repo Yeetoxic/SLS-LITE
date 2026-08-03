@@ -359,7 +359,7 @@ data, leaking resources, or trapping players in unexplained states.
 
 ### 3.9 Stage 3 Acceptance Gate
 
-- [ ] Back up any retained fixture evidence, fully reset the local Pterodactyl
+- [x] Back up any retained fixture evidence, fully reset the local Pterodactyl
       test allocation, and perform a clean first-time SLS-LITE installation
       using only the release candidate artifact and published instructions.
       Record every required manual step, default-config correction, unexpected
@@ -383,6 +383,14 @@ data, leaking resources, or trapping players in unexplained states.
 - [ ] Verify every supported command and every configuration, lifecycle,
       installation, storage, lobby, queue, transfer, recovery, and shutdown
       branch retained for the first release.
+- [ ] Compare SLS-LITE against the complete current SLS project, not only the
+      historical Velocity-only implementation. Audit blueprint and software
+      schemas, commands, configuration, APIs, lifecycle and matchmaking
+      behavior, storage, installation, networking, nodes, persistence,
+      observability, security, operations, and extensions. Classify every
+      difference as compatible, locally adapted, intentionally outside the
+      single-host scope, deferred, or a release-blocking defect; fix blockers
+      and carry the resulting compatibility map into the consolidated docs.
 - [ ] Resolve every release-blocking full-stack defect and repeat each affected
       scenario.
 
