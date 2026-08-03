@@ -25,12 +25,17 @@ import net.slimelabs.slslite.api.event.InstanceFailureCategory;
 import net.slimelabs.slslite.api.event.InstanceFailureEvent;
 import net.slimelabs.slslite.api.event.InstanceFailurePhase;
 import net.slimelabs.slslite.api.event.InstanceLifecycleEvent;
+import net.slimelabs.slslite.api.event.LobbyRoute;
+import net.slimelabs.slslite.api.event.LobbyServiceStatus;
+import net.slimelabs.slslite.api.event.LobbyStatusEvent;
 import net.slimelabs.slslite.api.event.MatchmakingStatus;
 import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
 import net.slimelabs.slslite.config.DefinitionReloader;
 import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.model.InstanceState;
+import net.slimelabs.slslite.lobby.LobbyProvider;
+import net.slimelabs.slslite.lobby.LobbyStatus;
 import net.slimelabs.slslite.velocity.LocalJoinService;
 import org.junit.jupiter.api.Test;
 import org.slf4j.helpers.NOPLogger;
@@ -188,6 +193,35 @@ class DefaultSLSLiteApiEventTest {
     assertEquals(CatalogReloadFailureCategory.NONE, reload.failureCategory());
     assertEquals(6, reload.blueprints().changed());
     assertEquals(15, reload.software().changed());
+    api.close();
+  }
+
+  @Test
+  void mapsEffectiveLobbyStatusIntoTheGlobalOrderedEventStream() throws Exception {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    List<net.slimelabs.slslite.api.event.SLSLiteEvent> received = new CopyOnWriteArrayList<>();
+    CountDownLatch delivered = new CountDownLatch(2);
+    api.subscribe(
+        event -> {
+          received.add(event);
+          delivered.countDown();
+        });
+    api.publish(
+        new InstanceLifecycle.Transition(
+            "lobby.123", InstanceState.STARTING, InstanceState.READY, Instant.now()));
+    api.publish(
+        new LobbyProvider.LobbyStatusTransition(
+            new LobbyProvider.LobbyStatusSnapshot(
+                LobbyStatus.RECOVERING, LobbyStatus.READY, LobbyProvider.LobbyRoute.HOLDING),
+            Instant.now()));
+
+    assertTrue(delivered.await(2, TimeUnit.SECONDS));
+    assertEquals(List.of(1L, 2L), received.stream().map(event -> event.sequence()).toList());
+    LobbyStatusEvent lobby = (LobbyStatusEvent) received.get(1);
+    assertEquals(LobbyServiceStatus.RECOVERING, lobby.primaryStatus());
+    assertEquals(LobbyServiceStatus.READY, lobby.holdingStatus());
+    assertEquals(LobbyRoute.HOLDING, lobby.route());
+    assertTrue(lobby.available());
     api.close();
   }
 

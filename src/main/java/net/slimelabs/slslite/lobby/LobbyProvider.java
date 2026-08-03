@@ -1,6 +1,8 @@
 package net.slimelabs.slslite.lobby;
 
 import com.velocitypowered.api.proxy.server.RegisteredServer;
+import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -41,6 +43,8 @@ public interface LobbyProvider extends AutoCloseable {
     readyFuture().thenAccept(listener);
   }
 
+  default void installStatusObserver(Consumer<LobbyStatusTransition> observer) {}
+
   default void markPrimaryUnavailable(String serverName) {}
 
   default Optional<SLSLimboDiagnostics> limboDiagnostics() {
@@ -74,4 +78,32 @@ public interface LobbyProvider extends AutoCloseable {
 
   @Override
   void close();
+
+  enum LobbyRoute {
+    PRIMARY,
+    HOLDING,
+    NONE
+  }
+
+  record LobbyStatusSnapshot(
+      LobbyStatus primaryStatus, LobbyStatus holdingStatus, LobbyRoute route) {
+
+    public LobbyStatusSnapshot {
+      Objects.requireNonNull(primaryStatus, "primaryStatus");
+      Objects.requireNonNull(holdingStatus, "holdingStatus");
+      Objects.requireNonNull(route, "route");
+    }
+
+    public boolean available() {
+      return route != LobbyRoute.NONE;
+    }
+  }
+
+  record LobbyStatusTransition(LobbyStatusSnapshot snapshot, Instant occurredAt) {
+
+    public LobbyStatusTransition {
+      Objects.requireNonNull(snapshot, "snapshot");
+      Objects.requireNonNull(occurredAt, "occurredAt");
+    }
+  }
 }

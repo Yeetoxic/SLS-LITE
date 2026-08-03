@@ -7,6 +7,7 @@ public sealed interface SLSLiteEvent
     permits CatalogReloadEvent,
         InstanceFailureEvent,
         InstanceLifecycleEvent,
+        LobbyStatusEvent,
         PlayerMatchmakingEvent {
 
   long sequence();

@@ -24,6 +24,9 @@ import net.slimelabs.slslite.api.event.InstanceFailureCategory;
 import net.slimelabs.slslite.api.event.InstanceFailureEvent;
 import net.slimelabs.slslite.api.event.InstanceFailurePhase;
 import net.slimelabs.slslite.api.event.InstanceLifecycleEvent;
+import net.slimelabs.slslite.api.event.LobbyRoute;
+import net.slimelabs.slslite.api.event.LobbyServiceStatus;
+import net.slimelabs.slslite.api.event.LobbyStatusEvent;
 import net.slimelabs.slslite.api.event.MatchmakingStatus;
 import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
 import net.slimelabs.slslite.api.event.SLSLiteEvent;
@@ -61,6 +64,9 @@ class PublicApiContractTest {
           InstanceFailurePhase.class,
           InstanceFailureCategory.class,
           InstanceLifecycleEvent.class,
+          LobbyRoute.class,
+          LobbyServiceStatus.class,
+          LobbyStatusEvent.class,
           PlayerMatchmakingEvent.class,
           MatchmakingStatus.class,
           Subscription.class);
@@ -73,6 +79,7 @@ class PublicApiContractTest {
     assertTrue(Set.of(Capability.values()).contains(Capability.MATCHMAKING_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.INSTANCE_FAILURE_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.CATALOG_RELOAD_EVENTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.LOBBY_STATUS_EVENTS));
   }
 
   @Test

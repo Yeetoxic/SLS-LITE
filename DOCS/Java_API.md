@@ -84,8 +84,8 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 
 API 1.0 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
 `INSTANCE_START`, `INSTANCE_STOP`, `INSTANCE_DELETE`, `PLAYER_QUEUE`,
-`MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, `CATALOG_RELOAD_EVENTS`, and
-`LIFECYCLE_EVENTS`.
+`MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, `CATALOG_RELOAD_EVENTS`,
+`LOBBY_STATUS_EVENTS`, and `LIFECYCLE_EVENTS`.
 
 ## Operations
 
@@ -181,6 +181,14 @@ software. Rejected events report zero committed changes and one sanitized
 `CatalogReloadFailureCategory`: `IO`, `VALIDATION`, or `INTERNAL`. The event's
 correlation ID joins it to operator logs without exposing definition IDs, file
 names, paths, or parser messages.
+
+`LobbyStatusEvent` provides a deduplicated snapshot of the effective lobby
+service. It reports the primary and holding-lobby `LobbyServiceStatus` values
+and the currently selected `LobbyRoute`: `PRIMARY`, `HOLDING`, or `NONE`.
+Recovery can therefore be observed even while players remain safely routed to
+the holding lobby. `available()` is false only for route `NONE`. Server names,
+addresses, ports, child processes, retry details, and failure messages remain
+internal.
 
 ## Trust And Compatibility
 

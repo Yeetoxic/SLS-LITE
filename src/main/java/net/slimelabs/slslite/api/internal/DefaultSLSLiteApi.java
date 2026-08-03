@@ -43,6 +43,9 @@ import net.slimelabs.slslite.api.event.InstanceFailureCategory;
 import net.slimelabs.slslite.api.event.InstanceFailureEvent;
 import net.slimelabs.slslite.api.event.InstanceFailurePhase;
 import net.slimelabs.slslite.api.event.InstanceLifecycleEvent;
+import net.slimelabs.slslite.api.event.LobbyRoute;
+import net.slimelabs.slslite.api.event.LobbyServiceStatus;
+import net.slimelabs.slslite.api.event.LobbyStatusEvent;
 import net.slimelabs.slslite.api.event.MatchmakingStatus;
 import net.slimelabs.slslite.api.event.PlayerMatchmakingEvent;
 import net.slimelabs.slslite.api.event.SLSLiteEvent;
@@ -55,6 +58,7 @@ import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
+import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.velocity.LocalJoinService;
 import org.slf4j.Logger;
 
@@ -96,16 +100,21 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   }
 
   public synchronized void activate(
-      BlueprintRepository blueprints, InstanceManager instances, LocalJoinService joins) {
+      BlueprintRepository blueprints,
+      InstanceManager instances,
+      LocalJoinService joins,
+      LobbyProvider lobby) {
     if (status.get() != ApiStatus.STARTING) {
       throw new IllegalStateException("API can only be activated once");
     }
     this.blueprints = java.util.Objects.requireNonNull(blueprints, "blueprints");
     this.instances = java.util.Objects.requireNonNull(instances, "instances");
     this.joins = java.util.Objects.requireNonNull(joins, "joins");
+    java.util.Objects.requireNonNull(lobby, "lobby");
     instances.installLifecycleObserver(this::publish);
     instances.installFailureObserver(this::publish);
     joins.installMatchmakingObserver(this::publish);
+    lobby.installStatusObserver(this::publish);
     status.set(ApiStatus.READY);
     ready.complete(null);
   }
@@ -315,6 +324,18 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
                 transition.softwareAdded(),
                 transition.softwareUpdated(),
                 transition.softwareRemoved()));
+    submit(event);
+  }
+
+  synchronized void publish(LobbyProvider.LobbyStatusTransition transition) {
+    LobbyProvider.LobbyStatusSnapshot snapshot = transition.snapshot();
+    LobbyStatusEvent event =
+        new LobbyStatusEvent(
+            eventSequence.incrementAndGet(),
+            transition.occurredAt(),
+            LobbyServiceStatus.valueOf(snapshot.primaryStatus().name()),
+            LobbyServiceStatus.valueOf(snapshot.holdingStatus().name()),
+            LobbyRoute.valueOf(snapshot.route().name()));
     submit(event);
   }
 

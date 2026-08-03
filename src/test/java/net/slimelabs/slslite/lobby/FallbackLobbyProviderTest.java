@@ -19,11 +19,78 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 class FallbackLobbyProviderTest {
+
+  @Test
+  void publishesDeduplicatedEffectiveLobbyRouteChangesAndIsolatesObserverFailure() {
+    RegisteredServer primaryServer = server("lobby");
+    RegisteredServer limboServer = server("sls-limbo");
+    LobbyProvider primary = provider("primary", "lobby", primaryServer, new ArrayList<>());
+    LobbyProvider limbo = provider("limbo", "sls-limbo", limboServer, new ArrayList<>());
+    FallbackLobbyProvider fallback =
+        new FallbackLobbyProvider(
+            proxy(), primary, limbo, LoggerFactory.getLogger(FallbackLobbyProviderTest.class));
+    var transitions = new CopyOnWriteArrayList<LobbyProvider.LobbyStatusTransition>();
+    fallback.installStatusObserver(
+        transition -> {
+          transitions.add(transition);
+          if (transitions.size() == 1) {
+            throw new IllegalStateException("broken observer");
+          }
+        });
+
+    fallback.start();
+    fallback.refreshPrimaryAvailability();
+    int afterStart = transitions.size();
+    assertTrue(afterStart >= 1);
+    assertEquals(LobbyProvider.LobbyRoute.PRIMARY, transitions.getLast().snapshot().route());
+
+    fallback.refreshPrimaryAvailability();
+    assertEquals(afterStart, transitions.size());
+    fallback.markPrimaryUnavailable("lobby");
+    assertEquals(LobbyProvider.LobbyRoute.HOLDING, transitions.getLast().snapshot().route());
+    fallback.refreshPrimaryAvailability();
+    assertEquals(LobbyProvider.LobbyRoute.PRIMARY, transitions.getLast().snapshot().route());
+
+    fallback.close();
+  }
+
+  @Test
+  void publishesPrimaryRecoveryAndTotalLobbyLossWithoutLeakingTargets() {
+    RegisteredServer primaryServer = server("lobby");
+    RegisteredServer limboServer = server("sls-limbo");
+    AtomicReference<LobbyStatus> primaryStatus = new AtomicReference<>(LobbyStatus.READY);
+    AtomicReference<LobbyStatus> holdingStatus = new AtomicReference<>(LobbyStatus.READY);
+    LobbyProvider primary = mutableProvider("lobby", primaryServer, primaryStatus);
+    LobbyProvider limbo = mutableProvider("sls-limbo", limboServer, holdingStatus);
+    FallbackLobbyProvider fallback =
+        new FallbackLobbyProvider(
+            proxy(), primary, limbo, LoggerFactory.getLogger(FallbackLobbyProviderTest.class));
+    var transitions = new CopyOnWriteArrayList<LobbyProvider.LobbyStatusTransition>();
+    fallback.installStatusObserver(transitions::add);
+    fallback.start();
+
+    primaryStatus.set(LobbyStatus.RECOVERING);
+    fallback.refreshPrimaryAvailability();
+    var recovering = transitions.getLast().snapshot();
+    assertEquals(LobbyStatus.RECOVERING, recovering.primaryStatus());
+    assertEquals(LobbyProvider.LobbyRoute.HOLDING, recovering.route());
+
+    holdingStatus.set(LobbyStatus.OFFLINE);
+    fallback.refreshPrimaryAvailability();
+    assertEquals(LobbyProvider.LobbyRoute.NONE, transitions.getLast().snapshot().route());
+    assertFalse(transitions.getLast().snapshot().available());
+
+    primaryStatus.set(LobbyStatus.READY);
+    fallback.refreshPrimaryAvailability();
+    assertEquals(LobbyProvider.LobbyRoute.PRIMARY, transitions.getLast().snapshot().route());
+    fallback.close();
+  }
 
   @Test
   void startsSLSLimboFirstAndPrefersReadyPrimary() {
@@ -196,6 +263,46 @@ class FallbackLobbyProviderTest {
         server,
         server == null ? LobbyStatus.STARTING : LobbyStatus.READY,
         starts);
+  }
+
+  private static LobbyProvider mutableProvider(
+      String serverName, RegisteredServer server, AtomicReference<LobbyStatus> status) {
+    CompletableFuture<RegisteredServer> ready = CompletableFuture.completedFuture(server);
+    return new LobbyProvider() {
+      @Override
+      public void start() {}
+
+      @Override
+      public Optional<RegisteredServer> server() {
+        LobbyStatus current = status.get();
+        return current == LobbyStatus.READY || current == LobbyStatus.EXTERNAL
+            ? Optional.of(server)
+            : Optional.empty();
+      }
+
+      @Override
+      public CompletableFuture<RegisteredServer> readyFuture() {
+        return ready;
+      }
+
+      @Override
+      public LobbyStatus status() {
+        return status.get();
+      }
+
+      @Override
+      public boolean isLobby(String candidate) {
+        return serverName.equals(candidate);
+      }
+
+      @Override
+      public CompletableFuture<Void> evacuate(String candidate) {
+        return CompletableFuture.completedFuture(null);
+      }
+
+      @Override
+      public void close() {}
+    };
   }
 
   private static LobbyProvider provider(

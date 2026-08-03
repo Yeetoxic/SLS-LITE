@@ -433,8 +433,10 @@ mutation, or silent instance corruption.
 - [x] Add one bounded catalog reload event at the atomic commit/reject edge,
       exposing only scope, correlation, sanitized result, and committed change
       counts without definition identifiers or parser details.
-- [ ] Expand the bounded event model to cover lobby status/recovery, software
-      installation state,
+- [x] Add deduplicated effective-lobby events covering primary and holding
+      status, recovery/degradation, and the active primary/holding/none route
+      without backend or process details.
+- [ ] Expand the bounded event model to cover software installation state,
       reconciliation, and API shutdown. Give each event stable immutable data,
       sequence/timestamp semantics, and a capability when support is optional.
 - [ ] Add redacted, bounded diagnostic views for system and lobby status,

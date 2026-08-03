@@ -254,7 +254,7 @@ public final class SLSLite implements SLSLiteApiProvider {
               lobbyProvider,
               configuration.get().idleShutdownSeconds(),
               logger);
-      publicApi.activate(blueprints, instanceManager, joinService);
+      publicApi.activate(blueprints, instanceManager, joinService, lobbyProvider);
     } catch (Exception exception) {
       logger.error(
           "SLS-LITE initialization failed; managed server features are disabled", exception);

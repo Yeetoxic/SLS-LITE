@@ -14,6 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 
@@ -28,6 +29,8 @@ public final class FallbackLobbyProvider implements LobbyProvider {
       new CopyOnWriteArrayList<>();
   private final CompletableFuture<RegisteredServer> ready = new CompletableFuture<>();
   private final AtomicBoolean externalProbeInFlight = new AtomicBoolean();
+  private final AtomicReference<LobbyStatusSnapshot> publishedStatus = new AtomicReference<>();
+  private volatile Consumer<LobbyStatusTransition> statusObserver = ignored -> {};
   private volatile boolean primaryAvailable;
   private volatile String drainingPrimary;
   private volatile String suppressedPrimary;
@@ -75,6 +78,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     connectReadiness(limbo, failures, false);
     limbo.start();
     primary.start();
+    refreshPrimaryAvailability();
     healthScheduler.scheduleWithFixedDelay(
         this::refreshPrimaryAvailability, 1, 1, TimeUnit.SECONDS);
   }
@@ -137,9 +141,18 @@ public final class FallbackLobbyProvider implements LobbyProvider {
   }
 
   @Override
+  public synchronized void installStatusObserver(Consumer<LobbyStatusTransition> observer) {
+    if (started) {
+      throw new IllegalStateException("Lobby status observer must be installed before startup");
+    }
+    statusObserver = java.util.Objects.requireNonNull(observer, "observer");
+  }
+
+  @Override
   public void markPrimaryUnavailable(String serverName) {
     if (primary.isLobby(serverName)) {
       primaryAvailable = false;
+      publishStatusIfChanged();
     }
   }
 
@@ -208,6 +221,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     }
     drainingPrimary = serverName;
     primaryAvailable = false;
+    publishStatusIfChanged();
     return true;
   }
 
@@ -233,6 +247,8 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     primaryAvailable = false;
     if (!prepared) {
       refreshPrimaryAvailability();
+    } else {
+      publishStatusIfChanged();
     }
     return prepared;
   }
@@ -261,6 +277,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
               publishPrimaryReady(server);
             } else {
               primaryAvailable = false;
+              publishStatusIfChanged();
             }
           }
         });
@@ -276,6 +293,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     primary.close();
     limbo.close();
     healthScheduler.shutdownNow();
+    publishStatusIfChanged();
     if (!ready.isDone()) {
       ready.completeExceptionally(new IllegalStateException("Lobby providers are shutting down"));
     }
@@ -285,7 +303,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
       LobbyProvider provider, AtomicInteger failures, boolean primaryProvider) {
     provider
         .readyFuture()
-        .whenComplete(
+        .whenCompleteAsync(
             (server, failure) -> {
               if (failure == null) {
                 if (primaryProvider) {
@@ -301,17 +319,21 @@ public final class FallbackLobbyProvider implements LobbyProvider {
                     new IllegalStateException(
                         "The primary lobby and SLS-Limbo both failed", failure));
               }
-            });
+              publishStatusIfChanged();
+            },
+            healthScheduler);
   }
 
   void refreshPrimaryAvailability() {
     if (closed || drainingPrimary != null) {
+      publishStatusIfChanged();
       return;
     }
     reportDualFailureState();
     RegisteredServer candidate = primary.server().orElse(null);
     if (candidate == null) {
       primaryAvailable = false;
+      publishStatusIfChanged();
       return;
     }
     if (primary.status() != LobbyStatus.EXTERNAL) {
@@ -319,6 +341,7 @@ public final class FallbackLobbyProvider implements LobbyProvider {
         publishPrimaryReady(candidate);
       } else {
         primaryAvailable = false;
+        publishStatusIfChanged();
       }
       return;
     }
@@ -335,6 +358,8 @@ public final class FallbackLobbyProvider implements LobbyProvider {
                 if (failure == null && !closed) {
                   publishPrimaryReady(candidate);
                   ready.complete(candidate);
+                } else {
+                  publishStatusIfChanged();
                 }
               });
     } catch (RuntimeException exception) {
@@ -371,6 +396,28 @@ public final class FallbackLobbyProvider implements LobbyProvider {
     if (changed) {
       primaryReadyListeners.forEach(listener -> listener.accept(server));
     }
+    publishStatusIfChanged();
+  }
+
+  private synchronized void publishStatusIfChanged() {
+    LobbyStatusSnapshot current =
+        new LobbyStatusSnapshot(primary.status(), limbo.status(), activeRoute());
+    LobbyStatusSnapshot previous = publishedStatus.getAndSet(current);
+    if (current.equals(previous)) {
+      return;
+    }
+    try {
+      statusObserver.accept(new LobbyStatusTransition(current, java.time.Instant.now()));
+    } catch (RuntimeException ignored) {
+      // Observability must never alter lobby routing or recovery.
+    }
+  }
+
+  private LobbyRoute activeRoute() {
+    if (primaryAvailable && primary.server().isPresent()) {
+      return LobbyRoute.PRIMARY;
+    }
+    return limbo.server().isPresent() ? LobbyRoute.HOLDING : LobbyRoute.NONE;
   }
 
   private static CompletableFuture<Void> transfer(Player player, RegisteredServer target) {
