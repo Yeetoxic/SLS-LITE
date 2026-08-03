@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -25,6 +27,30 @@ class SLSConfigRepositoryTest {
             () -> new SLSConfigRepository(temporaryDirectory).reload());
 
     assertTrue(failure.getMessage().contains("Unable to read"));
+  }
+
+  @Test
+  void rejectsConfigurationPathThatIsNotARegularFile() throws Exception {
+    Path dataDirectory = temporaryDirectory.resolve("directory-config");
+    Files.createDirectories(dataDirectory.resolve("config.yml"));
+
+    assertThrows(
+        ConfigurationException.class, () -> new SLSConfigRepository(dataDirectory).reload());
+  }
+
+  @Test
+  void rejectsSymbolicLinkConfiguration() throws Exception {
+    Path dataDirectory = Files.createDirectories(temporaryDirectory.resolve("linked-config"));
+    Path target = temporaryDirectory.resolve("outside-config.yml");
+    Files.writeString(target, "resources:\n  total_memory_mib: 2048\n");
+    try {
+      Files.createSymbolicLink(dataDirectory.resolve("config.yml"), target);
+    } catch (UnsupportedOperationException | java.io.IOException exception) {
+      Assumptions.abort("Symbolic links are unavailable: " + exception.getMessage());
+    }
+
+    assertThrows(
+        ConfigurationException.class, () -> new SLSConfigRepository(dataDirectory).reload());
   }
 
   @Test
@@ -578,6 +604,66 @@ class SLSConfigRepositoryTest {
 
     assertThrows(ConfigurationException.class, repository::reload);
   }
+
+  @Test
+  void rejectsEveryDocumentedOutOfRangeConfigurationPolicy() throws Exception {
+    List<InvalidConfig> invalidConfigurations =
+        List.of(
+            invalid("total memory", "resources:\n  total_memory_mib: 0"),
+            invalid("managed processes", "resources:\n  max_managed_processes: 0"),
+            invalid("low port", "network:\n  ports:\n    start: 1023"),
+            invalid("high port", "network:\n  ports:\n    end: 65536"),
+            invalid("queue timeout", "matchmaking:\n  queue_timeout_seconds: 0"),
+            invalid("selection mode", "matchmaking:\n  blueprint_selection: newest"),
+            invalid("idle shutdown", "lifecycle:\n  idle_shutdown_seconds: -1"),
+            invalid("temporary log lower bound", "managed_output:\n  temporary_file_max_kib: 0"),
+            invalid(
+                "temporary log upper bound", "managed_output:\n  temporary_file_max_kib: 1048577"),
+            invalid("detail level", "detailed_logging:\n  level: verbose"),
+            invalid("detail file lower bound", "detailed_logging:\n  max_file_kib: 63"),
+            invalid("detail file upper bound", "detailed_logging:\n  max_file_kib: 1048577"),
+            invalid("detail retention lower bound", "detailed_logging:\n  retained_files: 0"),
+            invalid("detail retention upper bound", "detailed_logging:\n  retained_files: 33"),
+            invalid("detail queue lower bound", "detailed_logging:\n  queue_capacity: 127"),
+            invalid("detail queue upper bound", "detailed_logging:\n  queue_capacity: 65537"),
+            invalid("forwarding mode", "forwarding:\n  mode: legacy"),
+            invalid("claim expiry", "security:\n  claim_code_expiry_seconds: 0"),
+            invalid("lobby registry", "lobby:\n  registry: ''"),
+            invalid("lobby server", "lobby:\n  server: ''"),
+            invalid("lobby attempts", "lobby:\n  recovery:\n    max_attempts: -1"),
+            invalid("lobby initial backoff", "lobby:\n  recovery:\n    initial_backoff_seconds: 0"),
+            invalid("lobby stable period", "lobby:\n  recovery:\n    stable_after_seconds: 0"),
+            invalid("limbo startup timeout", "lobby:\n  limbo:\n    startup_timeout_seconds: 0"),
+            invalid("limbo attempts", "lobby:\n  limbo:\n    recovery:\n      max_attempts: -1"),
+            invalid(
+                "limbo initial backoff",
+                "lobby:\n  limbo:\n    recovery:\n      initial_backoff_seconds: 0"),
+            invalid(
+                "limbo stable period",
+                "lobby:\n  limbo:\n    recovery:\n      stable_after_seconds: 0"),
+            invalid(
+                "snapshot timeout lower bound",
+                "storage:\n  snapshot_hook:\n    timeout_seconds: 0"),
+            invalid(
+                "snapshot timeout upper bound",
+                "storage:\n  snapshot_hook:\n    timeout_seconds: 301"));
+
+    for (InvalidConfig invalid : invalidConfigurations) {
+      writeConfig(invalid.yaml());
+      SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+      assertThrows(
+          ConfigurationException.class,
+          repository::reload,
+          () -> "Expected repository rejection for " + invalid.description());
+    }
+  }
+
+  private static InvalidConfig invalid(String description, String yaml) {
+    return new InvalidConfig(description, yaml + "\n");
+  }
+
+  private record InvalidConfig(String description, String yaml) {}
 
   private void writeConfig(String content) throws Exception {
     Files.writeString(temporaryDirectory.resolve("config.yml"), content);

@@ -423,3 +423,6 @@ than an offline test-client shortcut. Player-side `/sls info`, `/sls system`,
 and `/sls list` completed. Velocity's pre-registration no-server warning,
 Paper's offline-backend warning, and upstream JDK Unsafe deprecation warnings
 were expected for this secured proxy topology and were not SLS-LITE failures.
+
+The exhaustive retained command, configuration, runtime, and expected-failure
+mapping is preserved in [Stage 3 Retained-Branch Audit](Stage_3_Branch_Audit.md).

@@ -397,7 +397,7 @@ data, leaking resources, or trapping players in unexplained states.
       lightweight static rules approved during the organization work.
 - [x] Run the complete automated suite, exact compatibility-corpus gate, package
       verification, storage harnesses, and documented Pterodactyl workflow.
-- [ ] Verify every supported command and every configuration, lifecycle,
+- [x] Verify every supported command and every configuration, lifecycle,
       installation, storage, lobby, queue, transfer, recovery, and shutdown
       branch retained for the first release.
 - [ ] Compare SLS-LITE against the complete current SLS project, not only the

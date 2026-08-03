@@ -103,6 +103,44 @@ class AdminCommandHandlerTest {
     assertTrue(plainText(consoleMessages.getFirst()).contains("Administrator claim code:"));
   }
 
+  @Test
+  void claimPersistsTheOnlinePlayerAndConsumesTheCode() throws Exception {
+    List<Component> messages = new ArrayList<>();
+    Player claimant = player("Claimant", Set.of(), messages);
+    AdminCommandHandler handler = handler(List.of(claimant));
+    String code = claims.issueCode();
+
+    handler.execute(claimant, new String[] {"admin", "claim", code});
+
+    assertTrue(administrators.contains(claimant.getUniqueId()));
+    assertTrue(plainText(messages.getFirst()).contains("You are now an SLS-LITE administrator."));
+
+    messages.clear();
+    Player second = player("Second", Set.of(), messages);
+    handler.execute(second, new String[] {"admin", "claim", code});
+
+    assertTrue(plainText(messages.getFirst()).contains("No administrator claim code is active"));
+  }
+
+  @Test
+  void addAndRemovePersistAdministratorMutations() throws Exception {
+    List<Component> messages = new ArrayList<>();
+    Player operator = player("Operator", Set.of(CommandPermissions.ADMIN), messages);
+    Player target = player("Target", Set.of(), new ArrayList<>());
+    AdminCommandHandler handler = handler(List.of(operator, target));
+
+    handler.execute(operator, new String[] {"admin", "add", "Target"});
+
+    assertTrue(administrators.contains(target.getUniqueId()));
+    assertTrue(plainText(messages.getFirst()).contains("Added SLS-LITE administrator Target."));
+
+    messages.clear();
+    handler.execute(operator, new String[] {"admin", "remove", "target"});
+
+    assertTrue(administrators.find("Target").isEmpty());
+    assertTrue(plainText(messages.getFirst()).contains("Removed SLS-LITE administrator Target."));
+  }
+
   private AdminCommandHandler handler(Collection<Player> players) {
     ProxyServer proxy =
         (ProxyServer)
