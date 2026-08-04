@@ -1,5 +1,7 @@
 # vSLS Command Compatibility
 
+[Documentation home](README.md)
+
 SLS-LITE mirrors the vSLS in-game command interface so operators and players can
 move between the two products without relearning command names or argument
 order. The compatibility target is:
@@ -33,7 +35,7 @@ instance are rejected.
 
 ## Compatibility Status
 
-| vSLS command | Permission | SLS-LITE status | Remaining compatibility work |
+| vSLS command | Permission | SLS-LITE status | SLS-LITE behavior |
 | --- | --- | --- | --- |
 | `info [server]` | Details: `sls.command.admin` | Adapted | Summary and local instance details include players, lifecycle, process, resource, queue, log, and directory information. |
 | `list` | Public | Adapted | vSLS layout, status colors, counts, and hover information matched. |
@@ -42,7 +44,7 @@ instance are rejected.
 | `join <type> <id> [target]` | Self public; others admin | Adapted | Capacity-aware allocation is supported; admin `/sls join player <player> --force` can bypass a full target instance. |
 | `find <player>` | Public | Supported | vSLS messages, hover details, and action-bar feedback matched. |
 | `system` | Admin | Adapted | Reports local runtime, JVM memory, managed memory allocation, supervised process usage and limit, CPU threads, Java, OS, lobby state, output policy, and startup capability probes. |
-| `node <id> [drained [value]]` | Admin | Local-mode response planned | Node administration is distributed-only. |
+| `node <id> [drained [value]]` | Admin | Explicit local-mode boundary | Node administration is distributed-only; the retained command explains the boundary and points to local system/lifecycle commands. |
 | `console <server> <command>` | Admin | Adapted | Safe local process input is followed by an asynchronous, cursor-isolated capture of at most eight new lines over two seconds. Additive `--follow` and `--unfollow` modes provide one bounded nonblocking live stream per source, with line/batch caps, retention-loss notices, and disconnect/stop/shutdown cleanup. |
 | `blueprint <id>` | Admin | Supported | Pretty-prints one globally unique blueprint ID with its local launch/storage details. The additive `blueprints [registry]` form remains available for catalog browsing. |
 | `debug` | Admin, player-only | Adapted | Matches the pinned player-only toggle and gray `Debug mode enabled.` / `Debug mode disabled.` feedback under `sls.command.debug` or umbrella administration. The local opt-in stream emits bounded timestamp-hovered command-dispatch context only; arguments and child-console content are excluded, and subscriptions are removed on disconnect or shutdown. |

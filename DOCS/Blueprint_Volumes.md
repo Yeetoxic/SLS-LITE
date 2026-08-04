@@ -1,5 +1,7 @@
 # Blueprint Volumes
 
+[Documentation home](README.md)
+
 Status: SLS and SLS-LITE field shape; adapted for SLS-LITE local mode.
 
 SLS-LITE supports the modern SLS `state.volumes` structure for placing locally
@@ -19,16 +21,19 @@ state:
 ## Local `cow` Behavior
 
 Full SLS can provide copy-on-write storage through its node infrastructure.
-SLS-LITE must work without that infrastructure, so it implements the same
-isolation outcome as a portable directory copy:
+SLS-LITE provides the same isolated writable-instance outcome locally and
+selects the safest available implementation for the configured paths:
 
-1. SLS-LITE copies the selected software base into a new instance directory.
-2. It copies each volume source into its configured instance target.
-3. The managed server changes only its private copy.
-4. Ephemeral cleanup removes that copy. Persistent instances retain it until
-   reset or deletion.
-5. Resetting a persistent instance recopies both its software base and its
-   clean volume sources.
+1. SLS-LITE prepares the selected software base in a transactional staging
+   directory.
+2. Each `cow` source becomes an isolated writable target using the selected
+   reflink, Btrfs, OverlayFS, fuse-overlayfs, snapshot-helper, or portable-copy
+   implementation.
+3. The managed server changes only its private view; the configured source
+   remains unchanged.
+4. Ephemeral cleanup removes that view and any owned mount/layer metadata.
+   Persistent instances retain and remount or resume it as required.
+5. Reset reconstructs the instance from its clean software and volume sources.
 
 Multiple `cow` entries may target the same exact directory. SLS-LITE merges
 them in blueprint declaration order, matching the lower-layer order used by
@@ -40,9 +45,9 @@ SLS v0.2.0:
 - repeated volume names are accepted because upstream examples use them for
   same-target plugin merges.
 
-This baseline uses more disk space and startup time than filesystem-native
-copy-on-write. It works on ordinary shared-host filesystems without requiring
-Docker mounts, overlay filesystems, or elevated privileges.
+Portable copy is the universal baseline. It uses more initial disk space and
+startup time than filesystem-native COW but works on ordinary shared-host
+filesystems without Docker mounts, FUSE access, or elevated privileges.
 
 ## Storage Strategy Contract
 
@@ -165,16 +170,20 @@ the previous instance directory.
 
 ## Current Limits
 
-- `cow` and local-snapshot `ro` use complete directory copies.
+- Native COW is path- and host-dependent. `auto` falls back per source to
+  portable copy whenever the selected native strategy cannot safely represent
+  that source.
+- `ro` uses the same source-protecting private writable semantics as `cow`; it
+  is not a strict read-only bind mount.
 - `rw` requires a persistent, single-instance blueprint and host directory
   symbolic-link support.
 - Volume sources must already exist before the blueprint is started.
-- Operators must budget disk space for a complete copy per instance.
+- Operators must budget for a complete copy per instance because portable
+  fallback can be selected even on a host that supports a native strategy.
 - Do not modify a source directory while an instance is being prepared.
 
-These limits define the portable baseline. Native copy-on-write optimizations
-may be added later only when they preserve the same blueprint behavior and have
-a reliable portable fallback. Stage 3 also includes improving that fallback
-through measured bounded parallelism, sparse-file preservation, safe reuse of
-verified immutable artifacts, and avoidance of unnecessary persistent-instance
-reconstruction. Mutable world data must never be hard-linked or shared.
+The portable engine uses bounded parallel copying for independent files and
+preserves eligible large sparse extents on non-Windows hosts. Same-target
+first-wins merges remain sequential. Valid persistent instances reuse their
+existing prepared directory on restart; reset is the explicit reconstruction
+operation. Mutable world data is never hard-linked or implicitly shared.

@@ -1,8 +1,9 @@
 # Contributing
 
-SLS-LITE is under active pre-release development. Changes should remain small,
-reviewable, compatible with the single-host goal, and covered in proportion to
-their lifecycle or data risk.
+[Documentation home](README.md)
+
+Changes should remain small, reviewable, compatible with the single-host goal,
+and covered in proportion to their lifecycle or data risk.
 
 ## Build Environment
 
@@ -67,9 +68,9 @@ Update all affected:
 
 ## Documentation Standard
 
-Public docs must describe implemented behavior, not planned behavior. Planned
-features belong in [the roadmap](../todo.md) or in an explicitly labeled
-planned section.
+Public docs must describe supported behavior and explicit product boundaries,
+not development plans. Proposed features belong only in the
+[project plan](../todo.md) until implemented.
 
 Use these labels where relevant:
 
@@ -77,7 +78,7 @@ Use these labels where relevant:
 - `Adapted for local mode`
 - `SLS-LITE only`
 - `Full SLS only`
-- `Planned`
+- `Unsupported by SLS-LITE`
 
 Commands, permissions, fields, defaults, valid ranges, restart requirements,
 security implications, and destructive behavior must be explicit.
@@ -91,13 +92,12 @@ requirements.
 
 ## Release Artifacts
 
-A release candidate must be built from a reviewed source revision, pass the
-complete automated and documented manual suites, contain required license and
-third-party material, and publish a checksum. Snapshot artifacts are not
-production releases.
+A release must be built from a reviewed source revision, pass the complete
+automated and documented manual suites, contain required license and
+third-party material, and publish a checksum.
 
-Before freezing the Java API, run the manually triggered **API distribution
-smoke** workflow from the reviewed branch. It creates a private draft GitHub
+Run the manually triggered **API distribution smoke** workflow after changing
+the Java API or developer-artifact packaging. It creates a private draft GitHub
 Release, downloads the plugin, API, sources, Javadocs, and checksum file on a
 separate clean runner, and compiles the example extension with both Maven and
 Gradle against only the downloaded API classifier. Leave `cleanup_draft`

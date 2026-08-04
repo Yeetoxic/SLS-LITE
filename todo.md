@@ -488,13 +488,13 @@ SPIs, distributed SLS control, or an authenticated HTTP API are available.
 
 ### 3.11 Documentation Consolidation and Wiki Draft
 
-- [ ] Review the complete documentation set as one operator and contributor
+- [x] Review the complete documentation set as one operator and contributor
       journey after the Stage 3.10 API contract is frozen; remove duplication
       and drift, repair navigation, establish one canonical home for each
       concept, and make installation, configuration, daily operation,
       troubleshooting, compatibility, backup/recovery, extension development,
       and contribution guidance read coherently from start to finish.
-- [ ] Create a basic release-candidate GitHub Wiki source set with a home page,
+- [x] Create a basic release-candidate GitHub Wiki source set with a home page,
       sidebar/navigation, installation and first-run guide, configuration,
       commands and permissions, storage/COW, lobby and matchmaking, operations,
       troubleshooting, compatibility, Java extension development, and

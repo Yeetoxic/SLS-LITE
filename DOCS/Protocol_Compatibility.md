@@ -1,5 +1,7 @@
 # SLS-LITE Protocol Compatibility
 
+[Documentation home](README.md)
+
 This matrix defines the supported SLS-Limbo login and transfer paths. A protocol
 is not considered compatible merely because Velocity starts, a status ping
 succeeds, or a library claims to understand its packet IDs.

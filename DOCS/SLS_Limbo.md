@@ -1,14 +1,15 @@
 # SLS-Limbo
 
-## Status
+[Documentation home](README.md)
+
+## Overview
 
 SLS-Limbo is SLS-LITE's default virtual lobby: a literal liminal space for a
 network that is not fully configured yet, a destination that is still starting,
 or a player moving between places. Players remain connected and can use
 Velocity-level `/sls` commands without requiring a Paper lobby to be ready.
-The project as a whole is not yet production-ready. SLS-Limbo has automated
-native protocol coverage and local recovery coverage; translated real-client
-coverage remains a release gate.
+Supported native and translated client versions are listed in the
+[protocol compatibility matrix](Protocol_Compatibility.md).
 
 SLS-Limbo complements the configured lobby rather than becoming a third primary
 lobby mode. `lobby.mode` remains either `external` or `managed`.
@@ -169,7 +170,8 @@ one actionable error and disconnects players who have no usable backend.
 - External-primary failure is detected reactively after a failed player
   connection; once detected, recovery is checked with background pings.
 - Native client compatibility has an automated representative matrix.
-  ViaVersion-translated proxy coverage remains a release gate.
+  ViaVersion-translated compatibility is limited to the exact client,
+  ViaVersion, baseline, and handoff combinations in the published matrix.
 - If both the primary lobby and SLS-Limbo fail, SLS-LITE enters a degraded
   no-lobby state. Players without a usable backend are disconnected with a clear
   lobby-unavailable message, while Velocity, console administration, diagnostics,

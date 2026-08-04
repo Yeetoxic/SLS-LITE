@@ -1,5 +1,7 @@
 # Compatibility
 
+[Documentation home](README.md)
+
 SLS-LITE is an independent, single-host implementation of useful SLS concepts.
 It does not run under full SLS and does not require Protocube, a daemon, S4J,
 Docker, or another SLS installation.
@@ -33,7 +35,7 @@ scope decisions are in the
 | Java extension API | Supported | Versioned capability discovery, immutable inspection, asynchronous local requests, queues, and ordered lifecycle subscriptions. |
 | Authenticated HTTP/event API | Deferred | No public network listener or distributed event service exists. |
 | Resource-pack hosting | Deferred | Public URL properties work; built-in serving and transfer orchestration do not. |
-| True filesystem COW | Stage 3 | Reflink, eligible Btrfs subvolume snapshots, kernel OverlayFS, fuse-overlayfs, and an explicit bounded operator snapshot-helper protocol are implemented. Portable copy remains the tested universal fallback. |
+| True filesystem COW | Supported when the host/path qualifies | Reflink, eligible Btrfs subvolume snapshots, kernel OverlayFS, fuse-overlayfs, and an explicit bounded operator snapshot-helper protocol are implemented. Portable copy remains the universal fallback. |
 
 ## Complete Current SLS Project Map
 
@@ -111,8 +113,8 @@ single-host migration behavior is summarized in [Migration](Migration.md).
 
 Paper or vanilla provider availability for an exact version does not by itself
 mean every world, plugin, Java combination, forwarding mode, or client protocol
-is supported. Native-Linux performance and broad current-Paper compatibility
-remain later test gates.
+is supported. Only the documented host and protocol profiles belong to the
+current support matrix.
 
 ## Named Host Capability Profiles
 

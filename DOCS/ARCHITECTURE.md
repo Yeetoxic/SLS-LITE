@@ -1,5 +1,7 @@
 # Architecture
 
+[Documentation home](README.md)
+
 SLS-LITE runs as one Velocity plugin and supervises local child Java processes.
 It has no daemon, remote controller, database, container runtime, or full-SLS
 dependency.
@@ -69,10 +71,8 @@ children during proxy shutdown.
 
 ### Target Package Map
 
-Stage 3.4 is moving the current broad packages toward the following ownership
-boundaries. These are dependency boundaries, not only directory names.
-The storage, model, metadata, reconciliation, configuration, diagnostics, and
-lifecycle boundaries are complete:
+The codebase uses the following ownership boundaries. These are dependency
+boundaries, not only directory names:
 
 | Target package | Owns | May depend on |
 | --- | --- | --- |
@@ -98,7 +98,7 @@ configuration editing, lifecycle state, reconciliation, and diagnostics mixed
 beside orchestration. The root package is now reduced to five production
 classes: the public controller/orchestration facade, its managed-instance
 facade, and the two shared operation exceptions. `SLSCommand` now dispatches
-to focused command-family handlers. The remaining large pressure points are
+to focused command-family handlers. The intentionally broad orchestration points are
 `InstanceDirectoryPreparer` and `InstanceManager`; they should be decomposed
 only along tested ownership boundaries, not during unrelated behavioral
 rewrites.
@@ -175,9 +175,8 @@ path, Java executables, argument lists, readiness pattern, and stop behavior.
 
 `SLSConfigRepository` owns installation and atomic publication of the host
 configuration snapshot. Its strict YAML validation, defaults, compatibility
-alias handling, and confined-path resolution remain together until the planned
-operator-YAML normalization defines stable section boundaries; splitting that
-single parse transaction earlier would duplicate key and path context.
+alias handling, and confined-path resolution remain together because they form
+one parse transaction with shared key and path context.
 
 `SoftwareInstallationService` keeps the active-installation registry,
 consumer cancellation, staging transaction, integrity metadata, and bounded

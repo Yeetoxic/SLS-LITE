@@ -1,13 +1,15 @@
 # Resource Packs
 
-## Current Support
+[Documentation home](README.md)
+
+## Supported Behavior
 
 SLS-LITE copies a world-local `resources.zip` with the rest of a blueprint
 volume. This preserves historical worlds without modifying their contents, but
 copying the archive does not make it downloadable by multiplayer clients.
 
 Minecraft clients fetch server resource packs from an HTTP or HTTPS URL. An
-operator can currently configure that URL through the supported modern-style
+operator can configure that URL through the supported modern-style
 `server.properties` patch:
 
 ```yaml
@@ -41,27 +43,15 @@ annotations:
   resource_pack: "combat_cube"
 ```
 
-SLS-LITE preserves this annotation but does not yet resolve the logical ID to a
+SLS-LITE preserves this annotation but does not resolve the logical ID to a
 public URL. The historical regression archive contains
-`volumes/worlds/minigames/combat_cube/resources.zip`, matching the current
-convention. The imported Meteor Miners and Missile Wars worlds do not currently
+`volumes/worlds/minigames/combat_cube/resources.zip`, matching the established
+convention. The imported Meteor Miners and Missile Wars worlds do not
 contain a conventional client resource-pack ZIP.
 
-## Planned SLS-LITE Flow
+## Unavailable Behavior
 
-The intended self-contained integration is:
-
-1. Discover an explicitly configured pack or a conventional
-   `<world>/resources.zip`.
-2. Validate the ZIP, compute its SHA-1, and associate it with the blueprint's
-   logical `resource_pack` ID.
-3. Serve it from an optional bounded static-pack endpoint when the hosting
-   allocation provides a client-reachable port, or use an operator-provided
-   public base URL.
-4. Ask Velocity to offer, replace, or clear the pack during server transfers.
-5. Report acceptance, rejection, download failure, and unsupported-protocol
-   behavior without requiring another plugin.
-
-The built-in endpoint cannot create a public allocation or bypass a hosting
-provider's firewall. Operators without an exposed HTTP port must use normal
-static hosting or a CDN.
+SLS-LITE does not host resource packs, compute or publish pack URLs,
+resolve logical annotation IDs, or apply, replace, or clear packs during a
+Velocity transfer. Operators must use client-reachable static hosting or a CDN
+and the supported version-appropriate `server.properties` fields.

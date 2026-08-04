@@ -1,5 +1,7 @@
 # Operations And Recovery
 
+[Documentation home](README.md)
+
 SLS-LITE owns local child processes, loopback registrations, admission
 reservations, instance directories, and queued transfers. Use SLS-LITE commands
 or normal Velocity shutdown so those resources are released coherently.
@@ -241,66 +243,13 @@ reconciliation suspend managed layers before traversing or moving directories.
 Unmount refuses a live filesystem unless its type and upper/work paths match
 the manifest.
 
-## Common Failures
+## Troubleshooting
 
-**Managed initialization failed**
-
-Run `/sls system` from console where available and inspect startup capability
-failures. Check child Java paths, writable storage, loopback ports, memory/process
-budget, and forwarding consistency.
-
-**Insufficient managed memory**
-
-Stop unused instances, reduce safe blueprint reservations, or increase both the
-real panel allocation and SLS-LITE admission budget. Do not raise only the
-declared budget beyond the real host limit.
-
-The blueprint `memory` value and `resources.total_memory_mib` are admission
-limits for child Java maximum heaps; they are not measurements of total
-resident memory. JVM native memory, thread stacks, mapped files, Velocity,
-SLS-Limbo, and the operating system all require additional panel/host
-headroom. Use `/sls stats` on representative loaded instances and container
-metrics when sizing a real allocation.
-
-**Server remains in STARTING**
-
-Inspect `/sls logs <instance>` for first-run Paperclip work, EULA rejection,
-wrong Java, plugin errors, or a readiness pattern that does not match the
-software output.
-
-**Player remains in SLS-Limbo**
-
-Run `/sls info` and `/sls system`. Verify the primary lobby is `READY`, its
-protocol is compatible, and ViaVersion mappings are available where required.
-
-**World or plugin is slow on the local fixture**
-
-Docker Desktop and Windows-backed bind mounts heavily penalize copies and
-region-file access. Reproduce on native Linux storage before treating timing as
-a release performance baseline. Functional failures still count everywhere.
-
-Prefer a native Linux filesystem for `paths.instances`, blueprint sources, and
-the software cache whenever the provider exposes one. Docker Desktop's
-Windows-translated `9p` storage remains useful for compatibility checks, but
-remote and translated filesystems can have substantially different latency,
-caching, and durability behavior. Benchmark the exact provider path before
-selecting capacity or timeout thresholds.
-
-For repeatable copy samples, compile test classes and run
-`StoragePerformanceBenchmarkHarness` with an immutable source directory, an
-existing empty disposable target root, a profile label, and an optional repeat
-count. Two further optional arguments set preparation and cleanup p95 limits in
-milliseconds; both must be supplied, and an exceeded limit returns a failing
-process. The harness uses the production portable preparer, verifies file count
-and logical bytes, deletes every target, and reports preparation/cleanup
-distributions, allocated bytes, peak harness RSS, and `/proc/self/io` counters
-where available. It does not drop host caches or claim durable-write latency.
-
-**Resource pack does not load**
-
-Confirm `resource-pack` is a client-reachable HTTP(S) URL and its SHA-1 matches
-the exact served ZIP. A path inside the game container cannot be downloaded by
-the client.
+Use the ordered diagnosis and symptom-specific procedures in
+[Troubleshooting](Troubleshooting.md). Preserve the correlation ID, relevant
+detail-log excerpt, instance/software identity, and `/sls system` output when
+reporting a failure; do not publish forwarding secrets, administrator claim
+codes, complete player logs, or unrelated host paths.
 
 ## Constrained Hosts
 
@@ -345,13 +294,12 @@ portable fallback preserves
 sampled large zero runs as sparse extents while small and ordinary files retain
 native Java copying. Windows retains native copying because seek-created holes
 do not guarantee NTFS sparse allocation without platform-specific controls.
-Full directory snapshots use bounded parallel copying with no more than four
+Full directory copies use bounded parallel copying with no more than four
 workers and two in-flight tasks per worker. Ordered first-wins volume merges
 remain sequential. Failure and cancellation stop queued work, drain every
 started worker, and only then allow transactional rollback to remove the
-partial destination. Stage 3 also tracks safe reuse of verified immutable
-artifacts and avoiding unnecessary reconstruction of valid persistent
-instances. Mutable world files are never hard-linked.
+partial destination. Valid persistent instances reuse their prepared storage
+until an explicit reset, and mutable world files are never hard-linked.
 
 On non-Windows hosts the sparse-aware fallback preserves sampled large zero
 runs as holes while verifying byte-for-byte content. Bounded parallel copying

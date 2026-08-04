@@ -1,5 +1,7 @@
 # SLS v0.2.0 Compatibility Matrix
 
+[Documentation home](README.md)
+
 This is the pinned modern SLS source contract for SLS-LITE.
 
 - Upstream repository: `https://github.com/jessefaler/SLS`
@@ -19,38 +21,11 @@ parsers, bundled examples, software definitions, and vSLS implementation.
 - **Deferred:** useful local behavior that still needs implementation or tests.
 - **SLS-LITE extension:** local-only behavior outside the shared SLS contract.
 
-## Compatibility And Scope Review
+## Scope Boundary
 
-The compatibility scope is derived from:
-
-- the pinned SLS `v0.2.0` source and bundled examples;
-- the official blueprint, software, and vSLS command documentation;
-- the copied 54-blueprint SlimeLabs corpus;
-- the current SLS-LITE parser, command, lifecycle, storage, and process code.
-
-As of 2026-08-03, upstream `main` and tag `v0.2.0` resolve to this same commit.
-The pin therefore represents both the reproducible release contract and the
-current upstream source tree at the time of the Stage 3 acceptance audit.
-
-### Resolved Findings
-
-The compatibility pass closed five shared behavior gaps and one fixture defect:
-
-1. Modern software `limits.memory_limit` now supplies the reservation when a
-   blueprint omits `server.limits.memory_limit`.
-2. Modern software mappings now select a `java_<major>` image key from the game
-   version when a blueprint omits `server.image`.
-3. Bounded `annotations.vsls.on-join` commands run once after each successful
-   managed-backend transition with `{PLAYER_NAME}` substitution.
-4. `annotations.vsls.matchmaking.gameType` now forms local pools without
-   replacing `blueprint.type` as the operator registry.
-5. Arbitrary annotation trees now retain YAML null values in immutable models.
-6. The copied corpus now excludes the template, includes
-   `adventures/temple_of_doom.yaml`, and is checked against an explicit
-   54-blueprint ID manifest. The owner's original source directory was not
-   changed.
-
-### Scope Decision
+The pinned tag and commit define the reproducible shared schema and command
+comparison. The table below describes current behavior; implementation and test
+history belongs in release records rather than this operator-facing matrix.
 
 | Area | Compatibility decision |
 | --- | --- |
@@ -71,10 +46,9 @@ The compatibility pass closed five shared behavior gaps and one fixture defect:
 | `pause` and `resume` | Command shapes are retained and explain that portable process suspension is unavailable in local mode. |
 | `node` | Keep the explicit local-mode response; never emulate distributed node control. |
 
-No existing SLS-LITE subsystem is currently a removal candidate. The largest
-local extensions all replace infrastructure that budget-host users otherwise
-need to purchase or install. New distributed APIs, container emulation, and
-resource-pack conversion would exceed the product boundary and should remain
+The local extensions replace infrastructure that constrained-host users would
+otherwise need to purchase or install. Distributed APIs, container emulation,
+and resource-pack conversion exceed the SLS-LITE product boundary and remain
 out of scope.
 
 ## Blueprint Schema
@@ -199,7 +173,7 @@ split deliberately:
   lifecycle permissions, `--force` lobby protection, and install diagnostics
   are additive and do not replace upstream forms.
 
-Commands currently implemented with local semantics are `info`, `list`,
+Commands implemented with local semantics are `info`, `list`,
 `create`, `start`, `join`, `find`, `system`, `console`, `blueprint`, `debug`,
 `delete`, `logs`, `reload`, `stop`, `kill`, `dequeue`, `status`, `stats`, and
 `version`. SLS-LITE also supplies local `restart`, `reset`, `install`,
@@ -242,6 +216,5 @@ fixtures, exact-ID corpus loading, upstream example coverage, and automated
 tests for every supported or adapted row. Parser-only acceptance does not prove
 runtime volume sources, Java selection, process launch, or player transfer;
 those remain separate integration gates described in [Testing](Testing.md).
-The complete current-project classification is summarized in
-[Compatibility](Compatibility.md); dated acceptance results remain outside the
-operator documentation under `RELEASE_EVIDENCE/`.
+The complete product classification is summarized in
+[Compatibility](Compatibility.md).

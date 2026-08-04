@@ -1,5 +1,7 @@
 # Local Pterodactyl Test Environment
 
+[Documentation home](README.md)
+
 This disposable development environment runs the Pterodactyl control plane and
 game servers in Docker Desktop. Persistent Panel, Wings, database, and server
 data remain in Ubuntu WSL2. It is a local integration fixture, not a production

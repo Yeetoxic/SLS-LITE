@@ -1,5 +1,7 @@
 # SLS-LITE Data Layout
 
+[Documentation home](README.md)
+
 SLS-LITE keeps modern SLS-compatible concepts under its Velocity plugin data
 directory while managing every process locally:
 
@@ -81,8 +83,5 @@ reconciliation restores the backup if a reset was interrupted before valid
 metadata was written, or removes the backup when the replacement had already
 committed.
 
-The historical regression allocation uses the network directly from organized
-`volumes/worlds/lobbies`, `volumes/worlds/minigames`, and
-`volumes/worlds/adventures` directories.
-Import archives and retired fixtures belong outside the live blueprint registry
-so they cannot appear in commands or tab completion.
+Import archives and retired definitions belong outside the live blueprint
+registry so they cannot appear in commands or tab completion.

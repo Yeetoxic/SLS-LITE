@@ -1,6 +1,8 @@
 # Lifecycle Concurrency And Failure Matrix
 
-This is the Stage 3 lifecycle contract. A request either acquires the named
+[Documentation home](README.md)
+
+This is the lifecycle contract. A request either acquires the named
 ownership, joins an already accepted operation, or returns the stable conflict
 described below. No loser may release resources owned by the winner.
 

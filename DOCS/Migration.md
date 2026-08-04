@@ -1,5 +1,7 @@
 # Migration
 
+[Documentation home](README.md)
+
 Back up the source installation before converting any network. SLS-LITE does
 not modify another SLS installation in place and has no automatic migration
 command yet.
@@ -37,14 +39,14 @@ settings require a Velocity restart.
 
 ## From Modern SLS
 
-SLS-LITE currently accepts the subset in [Blueprints](Blueprints.md) directly:
+SLS-LITE accepts the subset in [Blueprints](Blueprints.md) directly:
 
 - blueprint ID, name, and type;
 - software ID and exact version;
 - memory, player, and instance limits;
 - `server.properties` patches;
 - persistence;
-- `cow` state volumes;
+- `cow`, locally adapted `ro`, and explicit contained `rw` state volumes;
 - annotations.
 
 Copy representative definitions into `blueprints/` and run:
@@ -55,8 +57,8 @@ Copy representative definitions into `blueprints/` and run:
 
 Unsupported structural fields are rejected with their YAML path. Do not delete
 an unsupported field merely to make parsing succeed until its operational
-intent is understood. Distributed node placement, container mounts, shared
-read-write storage, and remote services remain outside local mode. Contained
+intent is understood. Distributed node placement, arbitrary container/host
+mounts, and remote services remain outside local mode. Contained
 `state.copy`, validated `state.env`, nested YAML patches, and line-prefix file
 patches have documented local equivalents. `state.mounts` is rejected with a
 contained `cow`/`ro` alternative.

@@ -1,5 +1,7 @@
 # Commands And Permissions
 
+[Documentation home](README.md)
+
 <!-- sls-command-contract-sha256:7e2d50bf0b261b2bf563d63296ce93f08236f82713a486708e975f07c1c9e947 -->
 
 SLS-LITE uses `/sls` and mirrors the pinned vSLS command tree where the local

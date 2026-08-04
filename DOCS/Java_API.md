@@ -1,17 +1,16 @@
 # Java Extension API
 
-SLS-LITE exposes a versioned in-process Java API for trusted Velocity plugins.
-The internally frozen API `1.0` candidate supports capability discovery, immutable
-blueprint and instance inspection, asynchronous start/stop/delete and
-player-matchmaking requests, queue inspection/cancellation, and ordered
-instance lifecycle events.
+[Documentation home](README.md)
 
-The accepted JVM contract is frozen by the checked signature baseline. Breaking
-changes now require a new API major version even before the first public plugin
-release. External availability remains gated on downloading and recompiling the
-example against the final artifacts from the selected release channel; local
-snapshot coordinates are development inputs, not a publication guarantee. See
-the remaining [Java API release gate](Java_API_Roadmap.md).
+SLS-LITE exposes a versioned in-process Java API for trusted Velocity plugins.
+API `1.0` supports capability discovery, immutable blueprint and instance
+inspection, asynchronous start/stop/delete and player-matchmaking requests,
+queue inspection/cancellation, and ordered instance lifecycle events.
+
+The JVM contract is enforced by a checked signature baseline. Breaking changes
+require a new API major version. Distribution verification covers checksums,
+public-package boundaries, and clean Maven/Gradle example compilation. See the
+[API scope and compatibility policy](Java_API_Compatibility.md).
 
 This is not the Protocube HTTP API or an S4J endpoint. It cannot manage remote
 nodes, containers, or another SLS installation.
@@ -52,10 +51,8 @@ One verified build produces four relevant JARs:
 
 The sources and Javadocs exclude `net.slimelabs.slslite.api.internal`. Javadoc
 generation validates references, HTML, syntax, and accessibility with doclint
-and fails the build on warnings. Successful CI
-runs upload this exact artifact set together; a release candidate must attach
-the same reviewed set to its GitHub Release. The plugin JAR is the only artifact
-an operator needs.
+and fails the build on warnings. Release builds publish this reviewed artifact
+set together. The plugin JAR is the only artifact an operator needs.
 
 For Maven, install or resolve the reviewed artifact set and use a provided
 classifier dependency:
@@ -64,7 +61,7 @@ classifier dependency:
 <dependency>
   <groupId>net.slimelabs</groupId>
   <artifactId>sls-lite</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>${sls-lite.version}</version>
   <classifier>api</classifier>
   <scope>provided</scope>
 </dependency>
@@ -73,12 +70,18 @@ classifier dependency:
 For Gradle Kotlin DSL, use the same classifier as a compile-only dependency:
 
 ```kotlin
-repositories {
-    mavenLocal() // Replace with the published release repository when available.
-}
-
 dependencies {
-    compileOnly("net.slimelabs:sls-lite:0.1.0-SNAPSHOT:api")
+    compileOnly("net.slimelabs:sls-lite:$slsLiteVersion:api")
+}
+```
+
+When consuming the classifier directly from a GitHub Release rather than a
+Maven repository, keep the reviewed JAR outside the plugin output and use a
+compile-only file dependency:
+
+```kotlin
+dependencies {
+    compileOnly(files("libs/sls-lite-<version>-api.jar"))
 }
 ```
 
@@ -376,7 +379,7 @@ Only packages below `net.slimelabs.slslite.api` are public. Do not import
 expose mutable repositories, coordinators, child processes, filesystem paths,
 Velocity connection results, or internal exceptions.
 
-After the release gate freezes 1.x, API versions use `major.minor` semantics. A
+API versions use `major.minor` semantics. A
 major change may break source or binary compatibility. A minor change may add
 new types, capabilities, event implementations, exception codes, or interface
 default methods; existing method signatures and record shapes remain stable

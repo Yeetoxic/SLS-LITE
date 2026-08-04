@@ -1,5 +1,7 @@
 # Contributor Architecture Guide
 
+[Documentation home](README.md)
+
 This guide answers the practical question: **which files must change together?**
 It supplements [Architecture](ARCHITECTURE.md), which explains ownership, and
 [Internal Invariants](Internal_Invariants.md), which defines behavior that a
@@ -257,7 +259,7 @@ or player behavior. Use:
   commands, routing, and operator workflow;
 - the protocol clients for changes that affect SLS-Limbo or protocol routing.
 
-Follow [Testing](Testing.md) for exact commands and evidence requirements.
+Follow [Testing](Testing.md) for exact commands and verification requirements.
 Fixtures under `src/test/resources/fixtures/` are test input; production
 defaults under `src/main/resources/defaults/` are operator-facing artifacts.
 

@@ -1,5 +1,7 @@
 # Testing
 
+[Documentation home](README.md)
+
 Testing is split between deterministic Maven tests, protocol clients, a
 synthetic Velocity fixture, and the local Pterodactyl historical-world network.
 
@@ -18,6 +20,11 @@ Tests cover parsing, validation,
 lifecycle, concurrency, resource accounting, installation, reconciliation,
 commands, lobbies, SLS-Limbo, protocol integration boundaries, and Velocity
 registration.
+
+Documentation tests verify that the command/permission and configuration
+references match runtime contracts, every top-level guide returns to the
+canonical index, local Markdown targets resolve, required wiki pages and
+sidebar entries exist, and wiki links point to repository content that exists.
 
 Public API coverage includes reflection checks that reject implementation-type
 leaks, deep-immutability checks, lifecycle-observer failure isolation, bounded
@@ -159,6 +166,7 @@ state are intentionally ignored by Git.
 | Lobby/routing | Primary success/failure, SLS-Limbo fallback, no reconnect loop, handoff. |
 | Protocol | Full PLAY-state client test, not only ping or server startup. |
 | Packaging | Shaded JAR contents, licenses, bundled runtime checksum. |
+| Documentation/wiki | Canonical-page update, local-link/navigation contract, availability-claim review. |
 
 Manual evidence should record the artifact hash, runtime versions, configuration
 relevant to the result, exact command sequence, and both player-facing and

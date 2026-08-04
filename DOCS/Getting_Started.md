@@ -1,5 +1,7 @@
 # Getting Started
 
+[Documentation home](README.md)
+
 SLS-LITE is designed for a Velocity allocation whose host permits additional
 local Java processes. Test host capabilities before importing a real network.
 
@@ -105,7 +107,8 @@ Reload and test:
 ```
 
 The source world is never used as the live world. SLS-LITE prepares a private
-instance copy. Keep an independent backup anyway.
+writable instance view using the selected COW strategy or portable-copy
+fallback. Keep an independent backup anyway.
 
 ## Forwarding
 

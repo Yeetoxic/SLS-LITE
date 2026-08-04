@@ -1,5 +1,7 @@
 # Blueprints
 
+[Documentation home](README.md)
+
 Blueprints describe launchable server types. SLS-LITE recursively loads
 `.yml` and `.yaml` files below `plugins/sls-lite/blueprints/`. Folder names are
 only organization; `blueprint.type` is the dynamic registry used by commands.
@@ -371,8 +373,8 @@ connecting player's identity. Actions run once per backend transition and are
 cleared when the player disconnects. Malformed actions reject the definition
 during reload.
 
-`start-on-proxy-start` is roadmap work. Because annotations are open-ended, the
-key can be preserved in an imported blueprint, but it currently has no effect.
+`start-on-proxy-start` is not supported. Because annotations are open-ended,
+the key can be preserved in an imported blueprint, but it has no effect.
 
 ## Resource Packs
 

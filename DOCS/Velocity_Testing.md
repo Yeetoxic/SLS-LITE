@@ -1,5 +1,7 @@
 # Velocity Test Environment
 
+[Documentation home](README.md)
+
 The primary local integration fixture is the preserved SLS v2.1.2 minigame
 network. It validates SLS-LITE against real worlds, exact historical Paper
 versions, modern organized blueprints, and a current Velocity proxy.

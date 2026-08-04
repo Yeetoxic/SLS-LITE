@@ -9,11 +9,7 @@ SLS-LITE follows modern SLS terminology and compatible configuration shapes
 where they make sense on one host. It remains a separate, self-contained
 product: full SLS is not a runtime dependency or operating mode.
 
-> **Development status:** The core historical-world network and pinned modern
-> SLS `v0.2.0` subset are implemented. The project is not a production release;
-> release qualification and candidate hardening remain.
-
-## What Works
+## Features
 
 - Dynamic blueprint registries and `registry/server` command targeting.
 - Composite instance IDs such as `biome_run.vued73`.
@@ -30,9 +26,9 @@ product: full SLS is not a runtime dependency or operating mode.
 - Bounded in-game logs, temporary log files, lifecycle logging, resource
   admission, forwarding configuration, and host capability checks.
 - Built-in administrator claiming plus standard Velocity permissions.
-- Pre-release Java extension API candidate for capability discovery, immutable
+- Versioned Java extension API 1.0 for capability discovery, immutable
   inspection, asynchronous lifecycle/matchmaking requests, and lifecycle
-  subscriptions; the 1.x expansion contract freezes after its documented gate.
+  subscriptions.
 
 The exact current scope and intentional limitations are listed in
 [Compatibility](DOCS/Compatibility.md).
@@ -69,9 +65,8 @@ restrictions.
 6. Add worlds and blueprints, then restart Velocity or run
    `/sls reload blueprints`.
 
-The project is currently a snapshot, so clean-install and update instructions
-are development guidance rather than a release guarantee. See
-[Getting Started](DOCS/Getting_Started.md) before operating a test network.
+See [Getting Started](DOCS/Getting_Started.md) for clean installation, updates,
+backup, and removal.
 
 ## Basic Use
 
@@ -115,11 +110,12 @@ the blueprint's `blueprint.type`.
 - [Blueprint reference](DOCS/Blueprints.md)
 - [Commands and permissions](DOCS/Commands.md)
 - [Operations and recovery](DOCS/Operations.md)
+- [Troubleshooting](DOCS/Troubleshooting.md)
 - [Migration](DOCS/Migration.md)
 - [Architecture and contributor map](DOCS/ARCHITECTURE.md)
 - [Java extension API](DOCS/Java_API.md)
-- [Java API scope and release gate](DOCS/Java_API_Roadmap.md)
-- [Roadmap](todo.md)
+- [Java API scope and compatibility policy](DOCS/Java_API_Compatibility.md)
+- [Reviewable GitHub Wiki source](WIKI/README.md)
 
 ## Build
 
@@ -127,9 +123,8 @@ the blueprint's `blueprint.type`.
 mvn verify
 ```
 
-The shaded plugin is written to
-`target/sls-lite-0.1.0-SNAPSHOT.jar`; the compile-only public extension contract
-is written to `target/sls-lite-0.1.0-SNAPSHOT-api.jar`. The plugin build embeds
+The shaded plugin is written to `target/sls-lite-<version>.jar`; the compile-only
+public extension contract is written to `target/sls-lite-<version>-api.jar`. The plugin build embeds
 SLS-LITE's AGPL license, third-party notices, SnakeYAML, and the pinned
 NanoLimbo runtime used by SLS-Limbo.
 

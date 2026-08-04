@@ -1,5 +1,7 @@
 # Software Installation
 
+[Documentation home](README.md)
+
 Status: adapted for local mode.
 
 SLS-LITE separates how software is launched, configured, and obtained. Paper is
@@ -21,7 +23,7 @@ software:
   server_jar: paper.jar
 ```
 
-- `runtime` is currently `java-jar`. SLS-LITE launches argument lists directly
+- `runtime` is `java-jar`. SLS-LITE launches argument lists directly
   and never invokes a shell.
 - `configurator` is `paper`, `vanilla`, or `generic`. Paper forwarding files
   are only edited for `paper`.
@@ -58,7 +60,7 @@ disable the proxy.
 Profiles created before provider support remain `manual` unless their
 `software.source` is changed explicitly. Existing software is never replaced.
 
-`runtime` currently accepts only `java-jar`. Unsupported enum values and unknown
+`runtime` accepts only `java-jar`. Unsupported enum values and unknown
 structural keys fail profile loading.
 
 ## Modern SLS Definitions

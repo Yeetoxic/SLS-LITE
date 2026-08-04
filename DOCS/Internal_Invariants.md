@@ -1,5 +1,7 @@
 # Internal Invariants
 
+[Documentation home](README.md)
+
 This document records the implementation rules that must remain true while
 SLS-LITE evolves. It describes current code, not planned behavior. Changes to
 these rules require focused failure-path tests and corresponding updates here.

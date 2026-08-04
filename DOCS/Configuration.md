@@ -1,5 +1,7 @@
 # Configuration
 
+[Documentation home](README.md)
+
 SLS-LITE generates `plugins/sls-lite/config.yml`. The bundled, commented
 [`config.yml`](../src/main/resources/defaults/host/config.yml) is the canonical
 default.
@@ -35,7 +37,7 @@ fixture scripts rather than in these product defaults.
 | `matchmaking.queue_timeout_seconds` | `180` | Positive queue lifetime in seconds. |
 | `matchmaking.blueprint_selection` | `first-available` | `first-available` prefers the requested blueprint and then stable ID order; `random` uniformly selects from eligible pool definitions. Existing ready instances with capacity are always preferred before either provisioning policy. |
 | `lifecycle.idle_shutdown_seconds` | `180` | Non-negative seconds. `0` disables global idle cleanup. |
-| `storage.strategy` | `auto` | `auto`, `copy`, `reflink`, `btrfs`, `overlay`, `fuse-overlay`, or `snapshot-hook`. `auto` uses reflink, eligible Btrfs snapshots, kernel OverlayFS, or fuse-overlayfs after a successful per-path isolation probe and otherwise uses portable copy. Explicitly requesting an unavailable or still-disabled strategy fails startup. |
+| `storage.strategy` | `auto` | `auto`, `copy`, `reflink`, `btrfs`, `overlay`, `fuse-overlay`, or `snapshot-hook`. `auto` uses reflink, eligible Btrfs snapshots, kernel OverlayFS, or fuse-overlayfs after a successful per-path isolation probe and otherwise uses portable copy. Explicitly requesting an unavailable strategy fails startup. |
 | `storage.snapshot_hook.executable` | unset | Required only for `snapshot-hook`; relative executable below the SLS-LITE data directory. Never auto-discovered. |
 | `storage.snapshot_hook.timeout_seconds` | `30` | Per-operation helper timeout from 1 through 300 seconds. |
 | `managed_output.mirror_to_proxy_console` | `false` | Mirror every child output line into the Velocity console. |
@@ -127,5 +129,5 @@ catalog. Running instances keep the definitions with which they were created.
 Successful commands report added, updated, and removed IDs separately for
 blueprints and software. A failure publishes none of either candidate, and its
 diagnostic identifies the source definition/path where validation failed.
-Host configuration, storage strategy, output and detailed-log policy, forwarding, lobby mode,
-ports, memory, and security require a Velocity restart.
+Host configuration, storage strategy, output and detailed-log policy,
+forwarding, lobby mode, ports, memory, and security require a Velocity restart.
