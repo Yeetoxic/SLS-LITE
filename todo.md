@@ -469,11 +469,10 @@ mutation, or silent instance corruption.
 - [x] Publish complete warning-free Javadocs, Maven and Gradle compile-only
       examples, API and source/Javadoc artifacts, and one canonical extension
       guide; enforce their public-only boundary in CI.
-- [ ] Test the final developer-artifact distribution path through a GitHub
-      Release, a Maven repository, or both. The manual API distribution smoke
-      workflow now assembles a private draft, downloads it on a separate clean
-      runner, verifies its checksums/boundary, and builds both example consumers;
-      one successful GitHub run remains part of the API freeze gate.
+- [x] Test the final developer-artifact distribution path through a GitHub
+      Release. The manual API distribution smoke assembled a private draft,
+      downloaded it on a separate clean runner, verified its checksums and API
+      boundary, and built both Maven and Gradle example consumers successfully.
 - [x] Perform a focused API security, concurrency, compatibility, and usability
       review. Mutable annotation leakage, callback/operation-message exposure,
       shutdown monitor waiting, and a diagnostics/manager lock inversion were
@@ -531,10 +530,9 @@ feedback without destabilizing the completed full stack.
         `server.properties` fallback; never upload packs to an external
         conversion service automatically, and evaluate local conversion only as
         an optional adapter/tool.
-  - [ ] Complete and freeze the Stage 3.10 Java extension API release gate; the
-        small API foundation is implemented, but the extension promise is not
-        release-ready until its events, diagnostics, ownership, example,
-        distribution, compatibility baseline, and live operation matrix pass.
+  - [ ] Confirm that the frozen Stage 3.10 Java extension API and its verified
+        artifact-distribution contract remain in candidate scope without
+        expanding the public provider SPI.
   - [ ] Classify an authenticated local administration/event API and opt-in
         privacy-safe metrics.
   - [ ] Classify warm instance pools with strict process/memory accounting and
@@ -549,6 +547,13 @@ feedback without destabilizing the completed full stack.
 
 ### 4.2 Candidate Artifact and Documentation
 
+- [ ] Evolve the proven Stage 3.10 API distribution smoke into one reusable
+      Build Release workflow with explicit `distribution-smoke`,
+      `release-candidate`, and `release` modes. Reuse the clean-runner download,
+      checksum, artifact-boundary, and Maven/Gradle consumer verification in
+      every mode; keep smoke releases private drafts, require an approved
+      environment before publishing a candidate or final release, and prevent
+      a mode or rerun from silently promoting an artifact.
 - [ ] Produce one versioned plugin JAR and one canonical commented configuration.
 - [ ] Publish installation, update, backup, uninstall, host-capability, runtime,
       storage, compatibility, command, lifecycle, recovery, and troubleshooting
