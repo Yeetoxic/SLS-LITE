@@ -74,6 +74,7 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 | `version()` | Return the Java API version. |
 | `status()` / `ready()` | Inspect or await provider readiness. |
 | `capabilities()` | Discover supported optional features. |
+| `extension(namespace)` | Create an owned extension callback/subscription context. |
 | `diagnostics()` | Capture redacted bounded operational diagnostics. |
 | `blueprints()` / `blueprint(id)` | Inspect immutable blueprint views. |
 | `instances()` / `instance(id)` | Inspect immutable instance views. |
@@ -87,7 +88,8 @@ API 1.0 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
 `INSTANCE_START`, `INSTANCE_STOP`, `INSTANCE_DELETE`, `PLAYER_QUEUE`,
 `MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, `CATALOG_RELOAD_EVENTS`,
 `LOBBY_STATUS_EVENTS`, `SOFTWARE_INSTALLATION_EVENTS`, `RECONCILIATION_EVENTS`,
-`API_SHUTDOWN_EVENTS`, `DIAGNOSTICS`, and `LIFECYCLE_EVENTS`.
+`API_SHUTDOWN_EVENTS`, `DIAGNOSTICS`, `EXTENSION_CONTEXTS`, and
+`LIFECYCLE_EVENTS`.
 
 ## Operations
 
@@ -141,6 +143,33 @@ does not expose credentials, filesystem paths, download URLs, process IDs or
 handles, mutable log buffers, internal exceptions, coordinators, or repository
 objects. Callers receive defensive list copies and must request a new snapshot
 to observe later changes.
+
+## Extension Contexts
+
+Use one `ExtensionContext` for each extension plugin and close it during that
+plugin's shutdown:
+
+```java
+ExtensionContext context = api.extension("example-plugin");
+context.subscribe(event -> handle(event));
+context.onComplete(api.start(request), (instance, failure) -> handle(instance, failure));
+
+// During extension shutdown:
+context.close();
+```
+
+Namespaces are case-normalized plugin-style identifiers and remain unique
+while owned. At most 128 contexts and 256 registrations per context are
+accepted. Event subscriptions and completion registrations return independently
+idempotent `Subscription` handles, while closing the context releases all of
+them at once. A completed future automatically releases its registration.
+
+Completion callbacks execute on the thread completing their source stage;
+event callbacks use the bounded SLS-LITE event dispatcher. Callbacks must remain
+non-blocking. Closing a context gates callbacks that have not begun but cannot
+interrupt user code already executing. SLS-LITE shutdown first delivers the
+terminal `ApiShutdownEvent`, then closes every remaining context; incomplete
+future callbacks are suppressed as soon as API shutdown begins.
 
 ## Lifecycle Events
 

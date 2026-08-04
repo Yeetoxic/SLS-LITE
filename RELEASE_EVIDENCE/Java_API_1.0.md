@@ -20,12 +20,12 @@ The dedicated `sls-lite-0.1.0-SNAPSHOT-api.jar` was inspected after a clean
 build. It contained the public API/event classes and
 `META-INF/licenses/LICENSE`, contained no `api.internal`, instance, blueprint,
 or Velocity implementation classes, and had SHA-256
-`92C5D4E8AD88CC7015E0CE67125DF6DC39D7AC6CEE2A1AA9B071B8DDFA30DECC`.
+`5F297C9B187BB2D949779F0E66EC974A073A2C09C52069F6EB34E4269217DA48`.
 `jdeps` found only Java base-library dependencies and Velocity's intentionally
 provided plugin/proxy API.
 
 The full shaded plugin had SHA-256
-`C491F2DFFD5987F123C9C1A7C9E9DC5471D60A4AE222A96D272B9E79716926BD`.
+`9817641356B0784787C54E75DCFCBAA02C6BD405D5C9A14CF60D15C94DE27F86`.
 Packaging review also exposed and corrected a pre-existing license-resource
 target mismatch; both the API classifier and full plugin now contain the
 project license at `META-INF/licenses/LICENSE`.
@@ -81,6 +81,12 @@ classifier contained 50 public API classes and no internal classes. Contract
 tests cover defensive collection copies, log/entry limits, control-character
 rejection, implementation-package exclusion, and documentation of the new
 `DIAGNOSTICS` capability.
+The extension-context increment raised the complete clean tree to 651 tests
+with zero failures or errors and eight environment-dependent skips. The
+classifier contained 51 public API classes and no internal classes. Tests cover
+owned event removal, late-future suppression, terminal shutdown delivery,
+idempotent context and registration closure, normalized namespace conflicts and
+reuse, and the 256-registration bound.
 
 The public contract test rejects implementation-package types in API methods
 and constructors and requires every API method and advertised capability to
@@ -160,3 +166,12 @@ confirmed SLS-Limbo and persistent lobby `lobby.b5kk8m` reached ready. After
 removing the disposable consumer, a final Panel restart loaded the normal two
 plugins, restored both lobby services, left only `sls-lite.jar` installed, and
 matched the shaded-plugin checksum above.
+
+The disposable consumer was rebuilt once more to use only an owned
+`ExtensionContext` for its event subscription and readiness callback. It
+received retained reconciliation, completed readiness and diagnostics once,
+and reached normal lobby health. The extension deliberately did not close its
+context before a Panel restart; the archived Velocity log recorded lobby
+`STOPPING -> STOPPED` followed by `ApiShutdownEvent` sequence 11. SLS-LITE then
+closed the context automatically. The consumer was removed before the final
+clean-fixture restart.

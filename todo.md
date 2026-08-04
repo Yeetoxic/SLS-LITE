@@ -447,7 +447,7 @@ mutation, or silent instance corruption.
       recent log snapshots, and correlated failure summaries. Do not expose
       mutable buffers, credentials, filesystem paths, process handles, or
       implementation exceptions.
-- [ ] Add an extension context/registration handle that owns subscriptions and
+- [x] Add an extension context/registration handle that owns subscriptions and
       future callbacks, closes idempotently, and cannot leave work registered
       after extension or SLS-LITE shutdown.
 - [ ] Define and implement only the narrow pre-release extension hooks justified

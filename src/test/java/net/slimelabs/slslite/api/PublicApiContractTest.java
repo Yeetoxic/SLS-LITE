@@ -48,6 +48,7 @@ class PublicApiContractTest {
           ApiStatus.class,
           Capability.class,
           DiagnosticsSnapshot.class,
+          ExtensionContext.class,
           HostCapabilityState.class,
           HostCapabilityView.class,
           InstallationDiagnosticView.class,
@@ -107,6 +108,7 @@ class PublicApiContractTest {
     assertTrue(Set.of(Capability.values()).contains(Capability.RECONCILIATION_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.API_SHUTDOWN_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.DIAGNOSTICS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.EXTENSION_CONTEXTS));
   }
 
   @Test

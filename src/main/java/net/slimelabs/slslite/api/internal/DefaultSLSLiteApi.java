@@ -86,6 +86,7 @@ import org.slf4j.Logger;
 public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
 
   private static final int MAX_SUBSCRIBERS = 128;
+  private static final int MAX_EXTENSION_CONTEXTS = 128;
   private static final Set<Capability> CAPABILITIES = Set.of(Capability.values());
 
   private final ProxyServer proxy;
@@ -96,6 +97,8 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
       new CopyOnWriteArrayList<>();
   private final AtomicLong eventSequence = new AtomicLong();
   private final AtomicLong lastOverflowWarningNanos = new AtomicLong();
+  private final java.util.concurrent.ConcurrentHashMap<String, DefaultExtensionContext>
+      extensionContexts = new java.util.concurrent.ConcurrentHashMap<>();
   private final ThreadPoolExecutor eventExecutor =
       new ThreadPoolExecutor(
           1,
@@ -202,6 +205,34 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   @Override
   public Set<Capability> capabilities() {
     return CAPABILITIES;
+  }
+
+  @Override
+  public synchronized net.slimelabs.slslite.api.ExtensionContext extension(String namespace) {
+    if (status.get() == ApiStatus.CLOSED) {
+      throw new SLSLiteApiException(SLSLiteApiException.Code.CLOSED, "SLS-LITE API is closed");
+    }
+    String normalized = validateNamespace(namespace);
+    if (extensionContexts.size() >= MAX_EXTENSION_CONTEXTS) {
+      throw new SLSLiteApiException(
+          SLSLiteApiException.Code.REJECTED, "SLS-LITE extension context limit reached");
+    }
+    DefaultExtensionContext context = new DefaultExtensionContext(normalized, this, logger);
+    DefaultExtensionContext existing = extensionContexts.putIfAbsent(normalized, context);
+    if (existing != null) {
+      throw new SLSLiteApiException(
+          SLSLiteApiException.Code.CONFLICT,
+          "An extension context is already registered for " + normalized);
+    }
+    return context;
+  }
+
+  void release(DefaultExtensionContext context) {
+    extensionContexts.remove(context.namespace(), context);
+  }
+
+  boolean closed() {
+    return status.get() == ApiStatus.CLOSED;
   }
 
   @Override
@@ -734,6 +765,17 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
     }
   }
 
+  private static String validateNamespace(String namespace) {
+    if (namespace == null) {
+      throw new IllegalArgumentException("namespace must not be null");
+    }
+    String normalized = namespace.strip().toLowerCase(java.util.Locale.ROOT);
+    if (!normalized.matches("[a-z][a-z0-9._-]{0,63}")) {
+      throw new IllegalArgumentException("namespace must match [a-z][a-z0-9._-]{0,63}");
+    }
+    return normalized;
+  }
+
   @Override
   public synchronized void close() {
     ApiStatus previous = status.getAndSet(ApiStatus.CLOSED);
@@ -758,6 +800,8 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
       Thread.currentThread().interrupt();
       eventExecutor.shutdownNow();
     }
+    extensionContexts.values().forEach(DefaultExtensionContext::closeFromApi);
+    extensionContexts.clear();
     subscribers.clear();
   }
 }

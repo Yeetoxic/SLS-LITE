@@ -26,6 +26,8 @@ public interface SLSLiteApi {
 
   Set<Capability> capabilities();
 
+  ExtensionContext extension(String namespace);
+
   DiagnosticsSnapshot diagnostics();
 
   List<BlueprintView> blueprints();
