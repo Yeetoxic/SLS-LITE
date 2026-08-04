@@ -3,7 +3,16 @@ package net.slimelabs.slslite.api;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Immutable public view of a player's current matchmaking ticket. */
+/**
+ * Immutable public view of a player's current matchmaking ticket.
+ *
+ * @param playerId queued player's UUID
+ * @param playerName queued player's last observed name
+ * @param registry requested blueprint registry/type
+ * @param blueprintId requested blueprint identifier
+ * @param instanceId selected managed-instance identifier
+ * @param queuedAt ticket creation time
+ */
 public record QueueTicket(
     UUID playerId,
     String playerName,

@@ -1,6 +1,17 @@
 package net.slimelabs.slslite.api;
 
-/** Safe local overrides accepted by a public API start request. */
+/**
+ * Safe local overrides accepted by a public API start request.
+ *
+ * <p>A {@code null} component retains the blueprint value.
+ *
+ * @param memoryLimitMiB optional positive memory limit in mebibytes
+ * @param persistent optional persistence override
+ * @param seed optional bounded Minecraft world seed
+ * @param viewDistance optional view distance from 2 through 32
+ * @param simulationDistance optional simulation distance from 2 through 32
+ * @param enableCommandBlock optional command-block setting
+ */
 public record InstanceOverrides(
     Integer memoryLimitMiB,
     Boolean persistent,

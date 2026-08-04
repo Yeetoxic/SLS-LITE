@@ -13,6 +13,11 @@ their lifecycle or data risk.
 - Docker Desktop, WSL, Node, and Minecraft clients only for their respective
   integration fixtures.
 
+Maven packaging uses the fixed `project.build.outputTimestamp` in `pom.xml` so
+the same source and dependency inputs produce byte-identical JARs. Update that
+timestamp only as an explicit release/build-metadata decision; changing it
+changes every published checksum even when compiled code is unchanged.
+
 Run:
 
 ```powershell

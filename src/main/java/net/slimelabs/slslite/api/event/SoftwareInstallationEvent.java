@@ -3,7 +3,18 @@ package net.slimelabs.slslite.api.event;
 import java.time.Instant;
 import java.util.Objects;
 
-/** Bounded state transition for one shared automatic software installation. */
+/**
+ * Bounded state transition for one shared automatic software installation.
+ *
+ * @param sequence provider-lifetime event sequence number
+ * @param occurredAt transition time
+ * @param softwareId configured software identifier
+ * @param version requested software version
+ * @param source installation provider/source family
+ * @param channel requested release channel
+ * @param status new installation status
+ * @param failureCategory sanitized terminal failure category, or {@code NONE}
+ */
 public record SoftwareInstallationEvent(
     long sequence,
     Instant occurredAt,

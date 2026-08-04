@@ -4,7 +4,19 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.OptionalLong;
 
-/** Runtime statistics without a process identifier or implementation handle. */
+/**
+ * Runtime statistics without a process identifier or implementation handle.
+ *
+ * @param instanceId managed-instance identifier
+ * @param status current public lifecycle status
+ * @param connectedPlayers current connected-player count
+ * @param retainedLogLines lines currently retained in memory
+ * @param logRetentionCapacity maximum retained lines
+ * @param cpuTime cumulative child-process CPU time when supported
+ * @param residentBytes resident memory bytes when supported
+ * @param storageBytesRead process storage bytes read when supported
+ * @param storageBytesWritten process storage bytes written when supported
+ */
 public record InstanceStatisticsView(
     String instanceId,
     InstanceStatus status,

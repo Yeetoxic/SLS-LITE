@@ -2,7 +2,14 @@ package net.slimelabs.slslite.api;
 
 import java.util.List;
 
-/** Redacted tail of one instance's bounded in-memory output. */
+/**
+ * Redacted tail of one instance's bounded in-memory output.
+ *
+ * @param instanceId managed-instance identifier
+ * @param lines up to 20 most recent sanitized lines
+ * @param totalRetainedLines lines currently retained by the bounded buffer
+ * @param retentionCapacity maximum lines retained by that buffer
+ */
 public record InstanceLogSnapshot(
     String instanceId, List<String> lines, int totalRetainedLines, int retentionCapacity) {
 

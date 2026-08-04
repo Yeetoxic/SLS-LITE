@@ -2,7 +2,13 @@ package net.slimelabs.slslite.api;
 
 import java.time.Instant;
 
-/** Current host-wide instance-admission state. */
+/**
+ * Current host-wide instance-admission state.
+ *
+ * @param enabled whether new managed-instance admission is disabled
+ * @param changedAt time at which the state last changed
+ * @param reason bounded operator-provided reason, or an empty string
+ */
 public record MaintenanceView(boolean enabled, Instant changedAt, String reason) {
 
   public MaintenanceView {

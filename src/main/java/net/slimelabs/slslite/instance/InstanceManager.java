@@ -88,6 +88,7 @@ public final class InstanceManager implements ServerController {
   private final InstanceCrashRecovery crashRecovery;
   private volatile java.util.function.Consumer<InstanceLifecycle.Transition> lifecycleObserver =
       ignored -> {};
+  private volatile java.util.function.Consumer<RegisteredReady> readyObserver = ignored -> {};
   private volatile java.util.function.Consumer<InstanceFailureTransition> failureObserver =
       ignored -> {};
   private final ExecutorService finalizationExecutor;
@@ -317,6 +318,15 @@ public final class InstanceManager implements ServerController {
           "Lifecycle observer must be installed before instances exist");
     }
     lifecycleObserver = java.util.Objects.requireNonNull(observer, "observer");
+  }
+
+  /** Installs the one process-wide registered-ready observer before managed instances exist. */
+  public synchronized void installReadyObserver(
+      java.util.function.Consumer<RegisteredReady> observer) {
+    if (!instances.isEmpty()) {
+      throw new IllegalStateException("Ready observer must be installed before instances exist");
+    }
+    readyObserver = java.util.Objects.requireNonNull(observer, "observer");
   }
 
   /** Installs the one process-wide failure observer before managed instances are created. */
@@ -682,7 +692,7 @@ public final class InstanceManager implements ServerController {
         timings.provisioned();
         timingReporter.logProvisioning(
             instance.correlationId(), instance.id(), instance.timings(), "ready");
-        publishRegisteredReady(instance.id());
+        publishRegisteredReady(instance);
         instance.readyFuture().complete(instance);
         crashRecovery.ready(instance);
         logger.info(
@@ -1163,13 +1173,27 @@ public final class InstanceManager implements ServerController {
     lifecycleObserver.accept(transition);
   }
 
-  private void publishRegisteredReady(String instanceId) {
+  private void publishRegisteredReady(ManagedInstance instance) {
+    Instant occurredAt = Instant.now();
     try {
       lifecycleObserver.accept(
           new InstanceLifecycle.Transition(
-              instanceId, InstanceState.STARTING, InstanceState.READY, Instant.now()));
+              instance.id(), InstanceState.STARTING, InstanceState.READY, occurredAt));
     } catch (RuntimeException ignored) {
       // Extension observability cannot invalidate successful Velocity registration.
+    }
+    try {
+      readyObserver.accept(new RegisteredReady(instance, occurredAt));
+    } catch (RuntimeException ignored) {
+      // Extension actions cannot invalidate successful Velocity registration.
+    }
+  }
+
+  public record RegisteredReady(ManagedInstance instance, Instant occurredAt) {
+
+    public RegisteredReady {
+      instance = java.util.Objects.requireNonNull(instance, "instance");
+      occurredAt = java.util.Objects.requireNonNull(occurredAt, "occurredAt");
     }
   }
 }

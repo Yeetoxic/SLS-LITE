@@ -2,7 +2,20 @@ package net.slimelabs.slslite.api;
 
 import java.time.Instant;
 
-/** Immutable, implementation-independent managed instance view. */
+/**
+ * Immutable, implementation-independent managed instance view.
+ *
+ * @param id managed-instance identifier
+ * @param blueprintId source blueprint identifier
+ * @param blueprintType source blueprint registry/type
+ * @param status current public lifecycle status
+ * @param port allocated local backend port
+ * @param memoryLimitMiB admitted memory limit in mebibytes
+ * @param connectedPlayers current connected-player count
+ * @param persistent whether the instance survives normal proxy restarts
+ * @param createdAt instance creation time
+ * @param correlationId bounded identifier for correlated diagnostics
+ */
 public record InstanceView(
     String id,
     String blueprintId,

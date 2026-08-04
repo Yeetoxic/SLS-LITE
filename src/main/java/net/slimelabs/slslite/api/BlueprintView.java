@@ -4,7 +4,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Immutable, implementation-independent blueprint view. */
+/**
+ * Immutable, implementation-independent blueprint view.
+ *
+ * @param id stable blueprint identifier
+ * @param name operator-facing blueprint name
+ * @param type registry/type used for matchmaking
+ * @param software configured server software identifier
+ * @param version configured Minecraft/software version
+ * @param memoryLimitMiB memory admission limit in mebibytes
+ * @param maxPlayers maximum players per instance
+ * @param maxInstances maximum concurrent instances
+ * @param persistent whether instances survive normal proxy restarts
+ * @param volumes immutable configured volume mappings
+ * @param hasCopies whether the blueprint declares copy mappings
+ * @param environmentVariables names of configured environment variables; values are never exposed
+ * @param annotations deeply immutable extension-owned annotation data
+ */
 public record BlueprintView(
     String id,
     String name,
@@ -31,30 +47,12 @@ public record BlueprintView(
     }
     volumes = List.copyOf(volumes);
     environmentVariables = Set.copyOf(environmentVariables);
-    annotations = immutableMap(annotations);
+    annotations = NamespacedAnnotations.immutableValues(annotations);
   }
 
   private static String requireText(String value, String field) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException("Blueprint " + field + " must not be blank");
-    }
-    return value;
-  }
-
-  private static Map<String, Object> immutableMap(Map<String, Object> source) {
-    java.util.LinkedHashMap<String, Object> copy = new java.util.LinkedHashMap<>();
-    source.forEach((key, value) -> copy.put(key, immutableValue(value)));
-    return java.util.Collections.unmodifiableMap(copy);
-  }
-
-  private static Object immutableValue(Object value) {
-    if (value instanceof Map<?, ?> map) {
-      java.util.LinkedHashMap<Object, Object> copy = new java.util.LinkedHashMap<>();
-      map.forEach((key, nested) -> copy.put(key, immutableValue(nested)));
-      return java.util.Collections.unmodifiableMap(copy);
-    }
-    if (value instanceof List<?> list) {
-      return list.stream().map(BlueprintView::immutableValue).toList();
     }
     return value;
   }

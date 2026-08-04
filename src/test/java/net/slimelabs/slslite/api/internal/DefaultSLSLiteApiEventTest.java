@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.velocitypowered.api.proxy.ProxyServer;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.time.Instant;
 import java.util.List;
@@ -40,6 +41,7 @@ import net.slimelabs.slslite.api.event.SoftwareReleaseChannel;
 import net.slimelabs.slslite.config.DefinitionReloader;
 import net.slimelabs.slslite.install.InstallationKey;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
+import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.model.InstanceState;
@@ -387,6 +389,54 @@ class DefaultSLSLiteApiEventTest {
     assertEquals(1, received.size());
     assertTrue(received.getFirst() instanceof ApiShutdownEvent);
     assertEquals(ApiStatus.CLOSED, api.status());
+  }
+
+  @Test
+  void shutdownCallbackCanEnterSynchronizedApiWithoutStallingClose() throws Exception {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    CountDownLatch callbackCompleted = new CountDownLatch(1);
+    api.subscribe(
+        event -> {
+          if (event instanceof ApiShutdownEvent) {
+            SLSLiteApiException closed = assertThrows(SLSLiteApiException.class, api::diagnostics);
+            assertEquals(SLSLiteApiException.Code.CLOSED, closed.code());
+            callbackCompleted.countDown();
+          }
+        });
+    var closer = Executors.newSingleThreadExecutor();
+    try {
+      var closeFuture = closer.submit(api::close);
+      closeFuture.get(1, TimeUnit.SECONDS);
+      assertEquals(0L, callbackCompleted.getCount());
+    } finally {
+      closer.shutdownNow();
+    }
+  }
+
+  @Test
+  void operationFailuresExposeOnlyBoundedRedactedMessages() {
+    SLSLiteApiException failure =
+        DefaultSLSLiteApi.apiFailure(
+            new InstanceOperationException(
+                "Unknown instance from C:\\Users\\Administrator\\secret\nsecond line"));
+
+    assertEquals(SLSLiteApiException.Code.NOT_FOUND, failure.code());
+    assertTrue(failure.getMessage().length() <= 512);
+    assertTrue(!failure.getMessage().contains("Administrator"));
+    assertTrue(!failure.getMessage().contains("\n"));
+    SLSLiteApiException internal =
+        DefaultSLSLiteApi.apiFailure(new IllegalStateException("sensitive internal detail"));
+    assertEquals(SLSLiteApiException.Code.INTERNAL, internal.code());
+    assertEquals(
+        "Managed operation failed; inspect the SLS-LITE logs for correlated details",
+        internal.getMessage());
+  }
+
+  @Test
+  void diagnosticsDoesNotHoldApiMonitorWhileEnteringCoordinators() throws Exception {
+    int modifiers = DefaultSLSLiteApi.class.getDeclaredMethod("diagnostics").getModifiers();
+
+    assertTrue(!Modifier.isSynchronized(modifiers));
   }
 
   private static ProxyServer proxy() {

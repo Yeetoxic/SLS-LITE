@@ -146,6 +146,7 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
     this.installations = java.util.Objects.requireNonNull(installations, "installations");
     this.hostCapabilities = java.util.Objects.requireNonNull(hostCapabilities, "hostCapabilities");
     instances.installLifecycleObserver(this::publish);
+    instances.installReadyObserver(this::publishReady);
     instances.installFailureObserver(this::publish);
     joins.installMatchmakingObserver(this::publish);
     lobby.installStatusObserver(this::publish);
@@ -167,6 +168,9 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   public synchronized void recordReconciliation(
       InstanceReconciliationReport report, String correlationId) {
     java.util.Objects.requireNonNull(report, "report");
+    if (status.get() == ApiStatus.CLOSED) {
+      return;
+    }
     if (reconciliation != null) {
       throw new IllegalStateException("Startup reconciliation was already recorded");
     }
@@ -236,7 +240,7 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   }
 
   @Override
-  public synchronized DiagnosticsSnapshot diagnostics() {
+  public DiagnosticsSnapshot diagnostics() {
     requireReady();
     var allManaged = instances.getAll();
     List<ManagedInstance> managed = allManaged.stream().limit(256).toList();
@@ -282,7 +286,11 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
         capabilityViews,
         managed.stream().map(this::statistics).toList(),
         managed.stream().map(DefaultSLSLiteApi::logs).toList(),
-        List.copyOf(recentFailures));
+        recentFailureSnapshot());
+  }
+
+  private synchronized List<InstanceFailureEvent> recentFailureSnapshot() {
+    return List.copyOf(recentFailures);
   }
 
   @Override
@@ -322,7 +330,7 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
       ManagedInstance instance =
           instances.create(request.blueprintId(), internal(request.overrides()));
       return map(instance.readyFuture().thenApply(this::view));
-    } catch (InstanceOperationException exception) {
+    } catch (Exception exception) {
       return CompletableFuture.failedFuture(apiFailure(exception));
     }
   }
@@ -338,7 +346,7 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
               .stop(instanceId)
               .thenApply(
                   ignored -> new InstanceOperationResult(instanceId, InstanceStatus.STOPPED)));
-    } catch (InstanceOperationException exception) {
+    } catch (Exception exception) {
       return CompletableFuture.failedFuture(apiFailure(exception));
     }
   }
@@ -353,7 +361,7 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
               .delete(instanceId)
               .thenApply(
                   result -> new DeleteResult(result.instanceId(), result.tombstoneCleaned())));
-    } catch (InstanceOperationException exception) {
+    } catch (Exception exception) {
       return CompletableFuture.failedFuture(apiFailure(exception));
     }
   }
@@ -377,7 +385,7 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
           attempt
               .connection()
               .thenApply(result -> new QueueResult(ticket, attempt.created(), connected(result))));
-    } catch (InstanceOperationException exception) {
+    } catch (Exception exception) {
       return CompletableFuture.failedFuture(apiFailure(exception));
     }
   }
@@ -422,6 +430,9 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   }
 
   synchronized void publish(InstanceLifecycle.Transition transition) {
+    if (status.get() == ApiStatus.CLOSED) {
+      return;
+    }
     InstanceLifecycleEvent event =
         new InstanceLifecycleEvent(
             eventSequence.incrementAndGet(),
@@ -432,7 +443,19 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
     submit(event);
   }
 
+  synchronized void publishReady(InstanceManager.RegisteredReady ready) {
+    if (status.get() == ApiStatus.CLOSED) {
+      return;
+    }
+    if (!extensionContexts.isEmpty()) {
+      submitInstanceReadyActions(ready.instance(), ready.occurredAt());
+    }
+  }
+
   synchronized void publish(InstanceManager.InstanceFailureTransition transition) {
+    if (status.get() == ApiStatus.CLOSED) {
+      return;
+    }
     InstanceFailureEvent event =
         new InstanceFailureEvent(
             eventSequence.incrementAndGet(),
@@ -452,6 +475,9 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
 
   public synchronized void publishCatalogReload(
       DefinitionReloader.DefinitionReloadTransition transition) {
+    if (status.get() == ApiStatus.CLOSED) {
+      return;
+    }
     CatalogReloadEvent event =
         new CatalogReloadEvent(
             eventSequence.incrementAndGet(),
@@ -472,6 +498,9 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   }
 
   synchronized void publish(LobbyProvider.LobbyStatusTransition transition) {
+    if (status.get() == ApiStatus.CLOSED) {
+      return;
+    }
     LobbyProvider.LobbyStatusSnapshot snapshot = transition.snapshot();
     LobbyStatusEvent event =
         new LobbyStatusEvent(
@@ -485,6 +514,9 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   }
 
   synchronized void publish(SoftwareInstallationService.InstallationTransition transition) {
+    if (status.get() == ApiStatus.CLOSED) {
+      return;
+    }
     SoftwareInstallationEvent event =
         new SoftwareInstallationEvent(
             eventSequence.incrementAndGet(),
@@ -499,6 +531,9 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   }
 
   synchronized void publish(LocalJoinService.MatchmakingTransition transition) {
+    if (status.get() == ApiStatus.CLOSED) {
+      return;
+    }
     PlayerMatchmakingEvent event =
         new PlayerMatchmakingEvent(
             eventSequence.incrementAndGet(),
@@ -507,6 +542,76 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
             transition.instanceCreated(),
             MatchmakingStatus.valueOf(transition.status().name()));
     submit(event);
+    if (transition.playerMoved() && !extensionContexts.isEmpty()) {
+      submitPostTransferActions(
+          event.ticket(),
+          transition.instanceCreated(),
+          view(transition.blueprint()),
+          transition.occurredAt());
+    }
+  }
+
+  private void submitInstanceReadyActions(ManagedInstance instance, java.time.Instant occurredAt) {
+    InstanceView instanceView = view(instance);
+    BlueprintView blueprintView = view(instance.blueprint());
+    List<Runnable> deliveries =
+        extensionContexts.values().stream()
+            .sorted(java.util.Comparator.comparing(DefaultExtensionContext::namespace))
+            .map(
+                context -> {
+                  try {
+                    return context.captureInstanceReady(instanceView, blueprintView, occurredAt);
+                  } catch (RuntimeException exception) {
+                    logger.warn(
+                        "Skipped invalid instance-ready extension action payload for {}: {}",
+                        context.namespace(),
+                        exception.getClass().getSimpleName());
+                    return null;
+                  }
+                })
+            .filter(java.util.Objects::nonNull)
+            .toList();
+    submitActions(deliveries);
+  }
+
+  private void submitPostTransferActions(
+      QueueTicket ticket,
+      boolean instanceCreated,
+      BlueprintView blueprint,
+      java.time.Instant occurredAt) {
+    List<Runnable> deliveries =
+        extensionContexts.values().stream()
+            .sorted(java.util.Comparator.comparing(DefaultExtensionContext::namespace))
+            .map(
+                context -> {
+                  try {
+                    return context.capturePostTransfer(
+                        ticket, instanceCreated, blueprint, occurredAt);
+                  } catch (RuntimeException exception) {
+                    logger.warn(
+                        "Skipped invalid post-transfer extension action payload for {}: {}",
+                        context.namespace(),
+                        exception.getClass().getSimpleName());
+                    return null;
+                  }
+                })
+            .filter(java.util.Objects::nonNull)
+            .toList();
+    submitActions(deliveries);
+  }
+
+  private void submitActions(List<Runnable> deliveries) {
+    if (deliveries.isEmpty()) {
+      return;
+    }
+    try {
+      eventExecutor.execute(() -> deliveries.forEach(Runnable::run));
+    } catch (RejectedExecutionException exception) {
+      if (status.get() != ApiStatus.CLOSED && shouldReportOverflow()) {
+        logger.warn(
+            "SLS-LITE API event/action queue is full; slow extensions are dropping callbacks");
+      }
+    }
   }
 
   private void submit(SLSLiteEvent event) {
@@ -543,7 +648,9 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
         subscriber.accept(event);
       } catch (RuntimeException exception) {
         subscribers.remove(subscriber);
-        logger.warn("Disabled failing SLS-LITE API event subscriber: {}", exception.toString());
+        logger.warn(
+            "Disabled failing SLS-LITE API event subscriber: {}",
+            exception.getClass().getSimpleName());
       }
     }
   }
@@ -712,7 +819,10 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
     return mapped;
   }
 
-  private static SLSLiteApiException apiFailure(Throwable failure) {
+  static SLSLiteApiException apiFailure(Throwable failure) {
+    if (failure instanceof SLSLiteApiException apiException) {
+      return apiException;
+    }
     String message =
         failure.getMessage() == null || failure.getMessage().isBlank()
             ? "SLS-LITE operation failed"
@@ -732,8 +842,8 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
                         : SLSLiteApiException.Code.INTERNAL;
     String publicMessage =
         code == SLSLiteApiException.Code.INTERNAL
-            ? "Managed operation failed; inspect the SLS-LITE log using its correlation ID"
-            : message;
+            ? "Managed operation failed; inspect the SLS-LITE logs for correlated details"
+            : DiagnosticMessages.safe(message);
     return new SLSLiteApiException(code, publicMessage);
   }
 
@@ -777,20 +887,22 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   }
 
   @Override
-  public synchronized void close() {
-    ApiStatus previous = status.getAndSet(ApiStatus.CLOSED);
-    if (previous == ApiStatus.CLOSED) {
-      return;
+  public void close() {
+    synchronized (this) {
+      ApiStatus previous = status.getAndSet(ApiStatus.CLOSED);
+      if (previous == ApiStatus.CLOSED) {
+        return;
+      }
+      if (!ready.isDone()) {
+        ready.completeExceptionally(
+            new SLSLiteApiException(SLSLiteApiException.Code.CLOSED, "SLS-LITE API closed"));
+      }
+      submit(
+          new ApiShutdownEvent(eventSequence.incrementAndGet(), java.time.Instant.now()),
+          List.copyOf(subscribers),
+          true);
+      eventExecutor.shutdown();
     }
-    if (!ready.isDone()) {
-      ready.completeExceptionally(
-          new SLSLiteApiException(SLSLiteApiException.Code.CLOSED, "SLS-LITE API closed"));
-    }
-    submit(
-        new ApiShutdownEvent(eventSequence.incrementAndGet(), java.time.Instant.now()),
-        List.copyOf(subscribers),
-        true);
-    eventExecutor.shutdown();
     try {
       if (!eventExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
         eventExecutor.shutdownNow();

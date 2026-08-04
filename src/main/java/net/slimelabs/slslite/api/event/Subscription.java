@@ -4,6 +4,7 @@ package net.slimelabs.slslite.api.event;
 @FunctionalInterface
 public interface Subscription extends AutoCloseable {
 
+  /** Idempotently removes the owned registration. */
   @Override
   void close();
 }

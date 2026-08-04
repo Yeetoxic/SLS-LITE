@@ -2,7 +2,13 @@ package net.slimelabs.slslite.api;
 
 import java.util.UUID;
 
-/** Request to place an online player into SLS-LITE matchmaking. */
+/**
+ * Request to place an online player into SLS-LITE matchmaking.
+ *
+ * @param playerId online player's UUID
+ * @param registry requested blueprint registry/type
+ * @param blueprintId requested blueprint identifier
+ */
 public record QueueRequest(UUID playerId, String registry, String blueprintId) {
 
   public QueueRequest {

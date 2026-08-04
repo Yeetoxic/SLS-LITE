@@ -1,15 +1,17 @@
 # Java Extension API
 
 SLS-LITE exposes a versioned in-process Java API for trusted Velocity plugins.
-The current API `1.0` candidate supports capability discovery, immutable
+The internally frozen API `1.0` candidate supports capability discovery, immutable
 blueprint and instance inspection, asynchronous start/stop/delete and
 player-matchmaking requests, queue inspection/cancellation, and ordered
 instance lifecycle events.
 
-The implemented foundation is validated but the external 1.x contract is not
-frozen until the [Java API release gate](Java_API_Roadmap.md) passes. Extension
-authors evaluating a snapshot should expect additive work and possible
-pre-release signature adjustment.
+The accepted JVM contract is frozen by the checked signature baseline. Breaking
+changes now require a new API major version even before the first public plugin
+release. External availability remains gated on downloading and recompiling the
+example against the final artifacts from the selected release channel; local
+snapshot coordinates are development inputs, not a publication guarantee. See
+the remaining [Java API release gate](Java_API_Roadmap.md).
 
 This is not the Protocube HTTP API or an S4J endpoint. It cannot manage remote
 nodes, containers, or another SLS installation.
@@ -28,6 +30,64 @@ are already bundled in that plugin. Do not place the `-api.jar` in Velocity's
 developers, comparable to an SDK. Keeping it separate prevents extension code
 from accidentally importing SLS-LITE implementation packages and avoids using
 the large shaded runtime JAR as a development dependency.
+
+The accepted 1.0 JVM class, field, constructor, and method descriptors have a
+checked SHA-256 baseline in
+`src/test/resources/api/public-api-1.0.sha256`. The build derives the signature
+directly from compiled class files (not reflection), writes the reviewable form
+to `target/api-signature/public-api-1.0.txt`, and fails on any descriptor or
+visibility change. Updating the baseline requires an explicit compatibility
+review; a passing hash does not authorize an undocumented API change.
+
+### Developer artifacts
+
+One verified build produces four relevant JARs:
+
+| Artifact | Consumer |
+| --- | --- |
+| `sls-lite-<version>.jar` | Server operators; install this in Velocity. |
+| `sls-lite-<version>-api.jar` | Extension compilers; never install it as a plugin. |
+| `sls-lite-<version>-api-sources.jar` | IDE source attachment for the public API only. |
+| `sls-lite-<version>-api-javadoc.jar` | Offline HTML reference for the public API only. |
+
+The sources and Javadocs exclude `net.slimelabs.slslite.api.internal`. Javadoc
+generation validates references, HTML, syntax, and accessibility with doclint
+and fails the build on warnings. Successful CI
+runs upload this exact artifact set together; a release candidate must attach
+the same reviewed set to its GitHub Release. The plugin JAR is the only artifact
+an operator needs.
+
+For Maven, install or resolve the reviewed artifact set and use a provided
+classifier dependency:
+
+```xml
+<dependency>
+  <groupId>net.slimelabs</groupId>
+  <artifactId>sls-lite</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <classifier>api</classifier>
+  <scope>provided</scope>
+</dependency>
+```
+
+For Gradle Kotlin DSL, use the same classifier as a compile-only dependency:
+
+```kotlin
+repositories {
+    mavenLocal() // Replace with the published release repository when available.
+}
+
+dependencies {
+    compileOnly("net.slimelabs:sls-lite:0.1.0-SNAPSHOT:api")
+}
+```
+
+The retained example includes complete
+[Maven](../examples/velocity-extension/pom.xml) and
+[Gradle](../examples/velocity-extension/build.gradle.kts) builds. Because the
+pinned Velocity 4 snapshot advertises Java 25 Gradle metadata, its Gradle build
+selects a Java 25 compile classpath while `javac --release 21` continues to emit
+Java 21-compatible example bytecode.
 
 ```java
 import com.velocitypowered.api.event.Subscribe;
@@ -88,8 +148,8 @@ API 1.0 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
 `INSTANCE_START`, `INSTANCE_STOP`, `INSTANCE_DELETE`, `PLAYER_QUEUE`,
 `MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, `CATALOG_RELOAD_EVENTS`,
 `LOBBY_STATUS_EVENTS`, `SOFTWARE_INSTALLATION_EVENTS`, `RECONCILIATION_EVENTS`,
-`API_SHUTDOWN_EVENTS`, `DIAGNOSTICS`, `EXTENSION_CONTEXTS`, and
-`LIFECYCLE_EVENTS`.
+`API_SHUTDOWN_EVENTS`, `DIAGNOSTICS`, `EXTENSION_CONTEXTS`,
+`EXTENSION_ACTIONS`, and `LIFECYCLE_EVENTS`.
 
 ## Operations
 
@@ -146,6 +206,10 @@ to observe later changes.
 
 ## Extension Contexts
 
+A complete Velocity consumer is available in
+[`examples/velocity-extension`](../examples/velocity-extension/README.md) and
+is compiled against only the API classifier in CI.
+
 Use one `ExtensionContext` for each extension plugin and close it during that
 plugin's shutdown:
 
@@ -153,6 +217,8 @@ plugin's shutdown:
 ExtensionContext context = api.extension("example-plugin");
 context.subscribe(event -> handle(event));
 context.onComplete(api.start(request), (instance, failure) -> handle(instance, failure));
+context.onInstanceReady(action -> initializeBackend(action.instance(), action.annotations()));
+context.onPostTransfer(action -> recordArrival(action.ticket(), action.annotations()));
 
 // During extension shutdown:
 context.close();
@@ -170,6 +236,40 @@ non-blocking. Closing a context gates callbacks that have not begun but cannot
 interrupt user code already executing. SLS-LITE shutdown first delivers the
 terminal `ApiShutdownEvent`, then closes every remaining context; incomplete
 future callbacks are suppressed as soon as API shutdown begins.
+
+The owned extension-context surface selects only its namespace's top-level
+blueprint annotation object. For a context named `example-plugin`, the matching
+blueprint shape is:
+
+```yaml
+annotations:
+  example-plugin:
+    mode: ranked
+    rewards:
+      - daily
+```
+
+`context.annotations(blueprint)` returns a deeply immutable
+`NamespacedAnnotations` value. Maps and lists are limited to 256 entries, the
+tree to 16 levels and 4,096 total values, and strings to 4,096 characters.
+Only null, strings, booleans, immutable numeric values, maps, and lists cross
+the API boundary.
+
+`onInstanceReady(action)` runs after the instance is registered with Velocity
+and immediately after its public READY event is queued. `onPostTransfer(action)`
+runs only after a queued Velocity connection request actually moves the player,
+immediately after `TRANSFER_SUCCEEDED` is queued. An `ALREADY_CONNECTED` no-op
+still produces the established success event but does not invoke the action.
+Payloads capture the immutable instance or ticket, the original occurrence
+time, and the extension's annotation namespace at publication; later catalog
+reloads cannot change them. Registrations are
+included in the context's 256-registration limit, use the same bounded ordered
+dispatcher as events, run in namespace then registration order, and are disabled
+after their first callback failure.
+
+These hooks cannot replace matchmaking, lobby providers, software installers,
+storage/COW strategies, process supervision, backend registration, or resource
+admission. Those remain internal implementation boundaries.
 
 ## Lifecycle Events
 

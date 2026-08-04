@@ -3,7 +3,15 @@ package net.slimelabs.slslite.api.event;
 import java.time.Instant;
 import net.slimelabs.slslite.api.InstanceStatus;
 
-/** Ordered notification emitted after an accepted managed-instance transition. */
+/**
+ * Ordered notification emitted after an accepted managed-instance transition.
+ *
+ * @param sequence provider-lifetime event sequence number
+ * @param occurredAt transition time
+ * @param instanceId affected managed-instance identifier
+ * @param previousStatus status before the transition
+ * @param currentStatus status after the transition
+ */
 public record InstanceLifecycleEvent(
     long sequence,
     Instant occurredAt,

@@ -3,7 +3,17 @@ package net.slimelabs.slslite.api;
 import net.slimelabs.slslite.api.event.LobbyRoute;
 import net.slimelabs.slslite.api.event.LobbyServiceStatus;
 
-/** Effective primary/holding lobby health without backend or process details. */
+/**
+ * Effective primary/holding lobby health without backend or process details.
+ *
+ * @param primaryStatus configured primary lobby state
+ * @param holdingStatus built-in holding-lobby state
+ * @param route lobby tier currently selected for player routing
+ * @param limboEnabled whether the built-in holding lobby is configured
+ * @param recoveryAttempts recovery attempts used by the primary lobby
+ * @param maximumRecoveryAttempts configured recovery-attempt limit
+ * @param lastFailure bounded sanitized most-recent failure detail
+ */
 public record LobbyDiagnosticView(
     LobbyServiceStatus primaryStatus,
     LobbyServiceStatus holdingStatus,

@@ -5,7 +5,17 @@ import java.util.List;
 import java.util.Optional;
 import net.slimelabs.slslite.api.event.SoftwareInstallationStatus;
 
-/** Redacted bounded state for one recent software installation. */
+/**
+ * Redacted bounded state for one recent software installation.
+ *
+ * @param softwareId configured software identifier
+ * @param version requested software version
+ * @param status latest installation state
+ * @param startedAt installation start time
+ * @param completedAt terminal time, if the installation completed
+ * @param detail bounded operator-safe status detail
+ * @param recentLogs up to 20 recent sanitized log lines
+ */
 public record InstallationDiagnosticView(
     String softwareId,
     String version,

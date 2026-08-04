@@ -1,6 +1,13 @@
 package net.slimelabs.slslite.api;
 
-/** Immutable public description of one blueprint volume. */
+/**
+ * Immutable public description of one blueprint volume.
+ *
+ * @param name configured volume name
+ * @param source operator-relative source path
+ * @param target instance-relative target path
+ * @param mode normalized mapping mode
+ */
 public record VolumeView(String name, String source, String target, String mode) {
 
   public VolumeView {

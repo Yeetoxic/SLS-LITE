@@ -3,7 +3,18 @@ package net.slimelabs.slslite.api.event;
 import java.time.Instant;
 import java.util.Objects;
 
-/** Terminal observation of one atomic catalog reload attempt. */
+/**
+ * Terminal observation of one atomic catalog reload attempt.
+ *
+ * @param sequence provider-lifetime event sequence number
+ * @param occurredAt terminal observation time
+ * @param correlationId bounded identifier for correlated diagnostics
+ * @param scope definition families included in the reload
+ * @param status terminal reload outcome
+ * @param failureCategory sanitized rejection category, or {@code NONE}
+ * @param blueprints committed blueprint delta
+ * @param software committed software-profile delta
+ */
 public record CatalogReloadEvent(
     long sequence,
     Instant occurredAt,

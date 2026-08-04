@@ -27,16 +27,26 @@ jobs:
           java-version: "25"
           cache: maven
 
-      - name: Compile, test, package, and analyze
-        run: mvn -B --no-transfer-progress clean verify
+      - name: Compile, test, package, analyze, and install locally
+        run: mvn -B --no-transfer-progress clean install
 
       - name: Verify public API artifact boundary
         shell: bash
         run: |
           set -euo pipefail
           api_jars=(target/sls-lite-*-api.jar)
+          source_jars=(target/sls-lite-*-api-sources.jar)
+          javadoc_jars=(target/sls-lite-*-api-javadoc.jar)
           if [[ ${#api_jars[@]} -ne 1 || ! -f "${api_jars[0]}" ]]; then
             echo "Expected exactly one public API classifier JAR" >&2
+            exit 1
+          fi
+          if [[ ${#source_jars[@]} -ne 1 || ! -f "${source_jars[0]}" ]]; then
+            echo "Expected exactly one public API sources JAR" >&2
+            exit 1
+          fi
+          if [[ ${#javadoc_jars[@]} -ne 1 || ! -f "${javadoc_jars[0]}" ]]; then
+            echo "Expected exactly one public API Javadoc JAR" >&2
             exit 1
           fi
           contents="$(jar tf "${api_jars[0]}")"
@@ -50,8 +60,31 @@ jobs:
             printf '%s\n%s\n' "$leaks" "$internals" >&2
             exit 1
           fi
+          source_contents="$(jar tf "${source_jars[0]}")"
+          grep -qx 'net/slimelabs/slslite/api/package-info.java' <<<"$source_contents"
+          if grep -q '^net/slimelabs/slslite/api/internal/' <<<"$source_contents"; then
+            echo "Public API sources contain implementation classes" >&2
+            exit 1
+          fi
+          javadoc_contents="$(jar tf "${javadoc_jars[0]}")"
+          grep -qx 'index.html' <<<"$javadoc_contents"
+          if grep -q 'api/internal' <<<"$javadoc_contents"; then
+            echo "Public API Javadocs contain implementation packages" >&2
+            exit 1
+          fi
 
-      - name: Upload shaded plugin and public API
+      - name: Compile public API example extension
+        run: mvn -B --no-transfer-progress -f examples/velocity-extension/pom.xml clean verify
+
+      - name: Set up Gradle for the public API example
+        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+        with:
+          gradle-version: "9.1.0"
+
+      - name: Compile public API example extension with Gradle
+        run: gradle -p examples/velocity-extension clean build
+
+      - name: Upload plugin and public API developer artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sls-lite-java25-${{ github.sha }}

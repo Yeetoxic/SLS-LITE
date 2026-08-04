@@ -1,0 +1,16 @@
+{
+  "id": "sls-lite-example-extension",
+  "name": "SLS-LITE Example Extension",
+  "version": "1.0.0-SNAPSHOT",
+  "description": "Reviewable public API consumer for SLS-LITE",
+  "authors": [
+    "SLS-LITE Contributors"
+  ],
+  "dependencies": [
+    {
+      "id": "sls-lite",
+      "optional": false
+    }
+  ],
+  "main": "net.slimelabs.examples.slslite.ExampleExtension"
+}

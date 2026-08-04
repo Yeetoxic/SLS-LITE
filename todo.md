@@ -450,29 +450,35 @@ mutation, or silent instance corruption.
 - [x] Add an extension context/registration handle that owns subscriptions and
       future callbacks, closes idempotently, and cannot leave work registered
       after extension or SLS-LITE shutdown.
-- [ ] Define and implement only the narrow pre-release extension hooks justified
+- [x] Define and implement only the narrow pre-release extension hooks justified
       by a real example: namespaced annotation consumption plus bounded
       instance-ready and post-transfer actions. Keep matchmaking replacement,
       lobby providers, installers, storage/COW strategies, and process control
       as internal SPIs until separately designed and approved.
-- [ ] Build a reviewable example Velocity extension against only the public API
+- [x] Build a reviewable example Velocity extension against only the public API
       artifact. Exercise discovery, readiness, inspection, lifecycle and player
       events, diagnostics, and extension cleanup without importing an internal
       package.
-- [ ] Exercise public start, READY, real-player queue/transfer, stop, delete,
+- [x] Exercise public start, READY, real-player queue/transfer, stop, delete,
       expected rejection, persistent restart, and proxy-shutdown paths through
       the example extension on the local Pterodactyl/Velocity fixture.
-- [ ] Add a checked API signature/binary-compatibility baseline in addition to
+- [x] Add a checked API signature/binary-compatibility baseline in addition to
       reflection and documentation contract tests; verify immutable values,
       sanitized failures, callback bounds, ordering, overload, and shutdown
       races.
-- [ ] Publish complete Javadocs, Maven and Gradle compile-only examples, API and
-      source/Javadoc artifacts, one canonical extension guide, and a tested
-      distribution path through GitHub Releases, a Maven repository, or both.
-- [ ] Perform a focused API security, concurrency, compatibility, and usability
-      review. Resolve every blocker, decide whether the candidate remains API
-      `1.0` or is renumbered before external use, freeze the accepted 1.x
-      contract, and record its checksum and live evidence.
+- [x] Publish complete warning-free Javadocs, Maven and Gradle compile-only
+      examples, API and source/Javadoc artifacts, and one canonical extension
+      guide; enforce their public-only boundary in CI.
+- [ ] Test the final developer-artifact distribution path through a GitHub
+      Release, a Maven repository, or both. CI already assembles and uploads the
+      candidate artifact set, but a release-channel download remains part of
+      the API freeze gate.
+- [x] Perform a focused API security, concurrency, compatibility, and usability
+      review. Mutable annotation leakage, callback/operation-message exposure,
+      shutdown monitor waiting, and a diagnostics/manager lock inversion were
+      fixed. The unreleased candidate remains API `1.0`; its accepted JVM
+      signature, reproducible artifact checksums, and final live fixture health
+      are recorded and frozen.
 
 Acceptance: a third-party-style Velocity extension can depend only on the
 published API artifacts, perform the documented safe local integrations, clean

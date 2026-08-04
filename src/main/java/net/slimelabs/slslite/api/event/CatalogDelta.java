@@ -1,6 +1,12 @@
 package net.slimelabs.slslite.api.event;
 
-/** Bounded counts describing changes committed for one definition family. */
+/**
+ * Bounded counts describing changes committed for one definition family.
+ *
+ * @param added definitions newly added
+ * @param updated existing definitions changed
+ * @param removed definitions removed
+ */
 public record CatalogDelta(int added, int updated, int removed) {
 
   public CatalogDelta {

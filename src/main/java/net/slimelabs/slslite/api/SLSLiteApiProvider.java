@@ -6,9 +6,15 @@ import java.util.Optional;
 /** Implemented by the SLS-LITE Velocity plugin instance for dependency discovery. */
 public interface SLSLiteApiProvider {
 
+  /** Returns the stable facade owned by this provider instance. */
   SLSLiteApi api();
 
-  /** Finds the API through Velocity's plugin manager without depending on the main plugin class. */
+  /**
+   * Finds the API through Velocity's plugin manager without depending on the main plugin class.
+   *
+   * @param proxy Velocity proxy used for plugin discovery
+   * @return provider facade when SLS-LITE is loaded and exposes the supported interface
+   */
   static Optional<SLSLiteApi> find(ProxyServer proxy) {
     java.util.Objects.requireNonNull(proxy, "proxy");
     return proxy

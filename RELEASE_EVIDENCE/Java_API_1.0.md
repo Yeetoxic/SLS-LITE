@@ -20,15 +20,22 @@ The dedicated `sls-lite-0.1.0-SNAPSHOT-api.jar` was inspected after a clean
 build. It contained the public API/event classes and
 `META-INF/licenses/LICENSE`, contained no `api.internal`, instance, blueprint,
 or Velocity implementation classes, and had SHA-256
-`5F297C9B187BB2D949779F0E66EC974A073A2C09C52069F6EB34E4269217DA48`.
+`7A928DADA4A032A602525D0580828402890C7D34A2EFECCD2810E4875C2DD467`.
 `jdeps` found only Java base-library dependencies and Velocity's intentionally
 provided plugin/proxy API.
 
 The full shaded plugin had SHA-256
-`9817641356B0784787C54E75DCFCBAA02C6BD405D5C9A14CF60D15C94DE27F86`.
+`D8DCA064679C51825846B38693C4A95056794A8CA3057DFF976C507F1CA485A9`.
 Packaging review also exposed and corrected a pre-existing license-resource
 target mismatch; both the API classifier and full plugin now contain the
 project license at `META-INF/licenses/LICENSE`.
+
+The public source artifact had SHA-256
+`1DC6A9885C4FC24A2DDBD335B66E915583E80E9DD39ED9CEE65A99D74A2B0B00`;
+the public Javadoc artifact had SHA-256
+`D4D5C375601CC543074C469788430736B1BC6FCB0D0BE58D4162779BBA95DF56`.
+Two consecutive independent clean packages reproduced all four hashes after
+the build timestamp was fixed in the POM.
 
 ## Automated Validation
 
@@ -87,6 +94,53 @@ classifier contained 51 public API classes and no internal classes. Tests cover
 owned event removal, late-future suppression, terminal shutdown delivery,
 idempotent context and registration closure, normalized namespace conflicts and
 reuse, and the 256-registration bound.
+The namespaced-action increment raised the complete clean tree to 655 tests
+with zero failures or errors and eight environment-dependent skips. The API
+classifier contained 54 public API/event class files and no internal classes.
+Tests cover deep immutable annotation snapshots and their depth, collection,
+value, string, and registration bounds; publication-time recipient capture;
+namespace and registration ordering; callback failure isolation; registered
+READY event-before-action ordering; and suppression of post-transfer actions
+for Velocity's `ALREADY_CONNECTED` no-op. Review also replaced a READY-time
+manager lookup with a direct immutable handoff, removing a coordinator/API
+lock-order inversion. Dependency analysis, Spotless, and SpotBugs passed with
+zero findings, and `git diff --check` reported no whitespace errors.
+The binary-signature increment raised the complete tree to 656 tests. A
+class-file parser now hashes the sorted public/protected JVM class, field,
+constructor, and method descriptors into the checked API 1.0 baseline
+`35822B7250060B9AB3742D9FD773131C25A040B71AE8B500088289B087584E9E`.
+It excludes `api.internal`, writes the reviewable canonical descriptor report
+under `target/api-signature`, and fails on any unreviewed visibility or JVM
+descriptor change independently of the reflection contract tests.
+
+The developer-artifact increment added public-only API source and Javadoc JARs
+beside the binary classifier. Doclint reference/HTML/syntax/accessibility
+validation passes without warnings, and
+artifact inspection found 55 public Java source files, 123 generated HTML
+pages, and no `api.internal` entry in any developer artifact. The retained
+extension compiled independently with both Maven and Gradle 9.1.0; the Gradle
+build ran in a disposable JDK 25 container and still emitted Java 21 bytecode.
+CI now verifies all three public artifact boundaries, compiles both example
+builds, and uploads the plugin plus developer artifact set.
+
+The final focused security, concurrency, compatibility, and usability review
+kept the unreleased contract at API `1.0` and froze its checked JVM signature.
+It found and fixed four blockers: `BlueprintView` could retain unknown mutable
+annotation scalars; extension subscriber exception messages could reach the
+console and accepted-operation failures were not consistently bounded/redacted;
+API shutdown waited on callback execution while holding the API monitor; and
+`diagnostics()` held that monitor while entering `InstanceManager`, inverting
+the manager-to-API lifecycle publication order. Focused regression coverage
+was added for immutable annotation rejection, redacted failures, synchronized
+shutdown callback re-entry, and the diagnostics lock boundary.
+
+The post-review `mvn clean verify` run passed 659 tests with zero failures or
+errors and eight environment-dependent skips. Dependency analysis and
+formatting passed, strict Javadoc reference/HTML/syntax/accessibility validation
+reported no warnings, and SpotBugs reported zero findings. The API classifier
+contained 56 public API/event class files (including two package descriptors)
+and no internal classes; the checked binary-signature hash remained
+`35822B7250060B9AB3742D9FD773131C25A040B71AE8B500088289B087584E9E`.
 
 The public contract test rejects implementation-package types in API methods
 and constructors and requires every API method and advertised capability to
@@ -175,3 +229,48 @@ context before a Panel restart; the archived Velocity log recorded lobby
 `STOPPING -> STOPPED` followed by `ApiShutdownEvent` sequence 11. SLS-LITE then
 closed the context automatically. The consumer was removed before the final
 clean-fixture restart.
+
+For the namespaced-action increment, the disposable consumer was rebuilt
+strictly against the 54-class API classifier and registered owned
+instance-ready and post-transfer actions. The normal Panel startup advertised
+17 capabilities, replayed reconciliation, and restored persistent lobby
+`lobby.b5kk8m`. Its public `STARTING -> READY` event was delivered before the
+instance-ready action, whose annotation view contained only the consumer's
+empty `sls-lite-api-smoke` namespace. The deployed plugin checksum matched the
+verified shaded artifact. The consumer was removed and the allocation was
+restarted through the Panel with only `sls-lite.jar` installed.
+
+The retained `examples/velocity-extension` consumer was then built by its own
+Maven project after resolving `net.slimelabs:sls-lite:api`; its JAR contained
+only the example class and Velocity metadata. The exact example artifact loaded
+on the Panel fixture, discovered API 1.0 with 17 capabilities, inspected one
+blueprint and one instance, received the persistent lobby's ordered lifecycle
+events, and received the instance-ready action after READY. It was removed
+before a normal Panel restart, exercising its owned shutdown cleanup without a
+plugin or SLS-LITE error. CI now installs the verified artifacts locally and
+compiles this example independently on every run.
+
+The retained example's permissioned command surface then exercised the public
+operation matrix through the Panel console and one online-mode player. An
+unknown blueprint produced only public `NOT_FOUND`; disposable persistent
+instance `api-matrix.zo4d1f` reached READY, stopped with ordered lifecycle
+events, and was deleted with its reconciliation marker cleaned. A Panel restart
+preserved and remounted only the original lobby. On the next run, player
+`Yeetoxic` queued disposable instance `api-matrix.derrb9` while in SLS-Limbo;
+the example observed `QUEUED`, READY, `TRANSFER_STARTED`, the backend
+connection, `TRANSFER_SUCCEEDED`, and finally the post-transfer action with the
+owned `[mode]` annotation key. The action did not precede connection success.
+Both disposable API-matrix instances, the temporary blueprint, and the example
+plugin were then removed through their normal ownership paths. A final clean
+restart left only persistent `lobby.b5kk8m` and `sls-lite.jar`.
+
+After the freeze-review fixes, the reproducible shaded artifact with SHA-256
+`D8DCA064679C51825846B38693C4A95056794A8CA3057DFF976C507F1CA485A9`
+was deployed through the Pterodactyl Panel stop/start workflow. Velocity loaded
+its normal two plugins, the host report returned 8 pass/6 informational and no
+warnings or failures, reconciliation inspected and preserved the sole
+persistent instance, SLS-Limbo became ready on loopback, and
+`lobby.b5kk8m` registered READY. No API, shutdown, reconciliation, or extension
+error appeared. A checksum inside the allocation matched the reviewed build;
+only `sls-lite.jar` and the persistent lobby instance remained, and the
+allocation was left running normally.

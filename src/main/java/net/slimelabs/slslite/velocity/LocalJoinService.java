@@ -547,6 +547,10 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
             && result != null
             && (result.getStatus() == ConnectionRequestBuilder.Status.SUCCESS
                 || result.getStatus() == ConnectionRequestBuilder.Status.ALREADY_CONNECTED);
+    boolean playerMoved =
+        failure == null
+            && result != null
+            && result.getStatus() == ConnectionRequestBuilder.Status.SUCCESS;
     if (connected) {
       synchronized (this) {
         queueOwnedInstances.remove(entry.instance.id());
@@ -560,7 +564,8 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
             ? MatchmakingTransitionStatus.TRANSFER_SUCCEEDED
             : failure == null
                 ? MatchmakingTransitionStatus.TRANSFER_REJECTED
-                : MatchmakingTransitionStatus.TRANSFER_FAILED);
+                : MatchmakingTransitionStatus.TRANSFER_FAILED,
+        playerMoved);
     timingReporter.connection(entry.instance.id(), entry.timings, result, failure);
     if (failure == null) {
       entry.completion.complete(result);
@@ -641,10 +646,20 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   }
 
   private void publish(QueueEntry entry, MatchmakingTransitionStatus transitionStatus) {
+    publish(entry, transitionStatus, false);
+  }
+
+  private void publish(
+      QueueEntry entry, MatchmakingTransitionStatus transitionStatus, boolean playerMoved) {
     try {
       matchmakingObserver.accept(
           new MatchmakingTransition(
-              entry.ticket, entry.instanceCreated, transitionStatus, Instant.now()));
+              entry.ticket,
+              entry.instanceCreated,
+              transitionStatus,
+              playerMoved,
+              entry.instance.blueprint(),
+              Instant.now()));
     } catch (RuntimeException ignored) {
       // Extension observability cannot roll back an accepted matchmaking state change.
     }
@@ -679,12 +694,28 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       QueueTicket ticket,
       boolean instanceCreated,
       MatchmakingTransitionStatus status,
+      boolean playerMoved,
+      Blueprint blueprint,
       Instant occurredAt) {
 
     public MatchmakingTransition {
       ticket = java.util.Objects.requireNonNull(ticket, "ticket");
       status = java.util.Objects.requireNonNull(status, "status");
       occurredAt = java.util.Objects.requireNonNull(occurredAt, "occurredAt");
+      if (playerMoved && status != MatchmakingTransitionStatus.TRANSFER_SUCCEEDED) {
+        throw new IllegalArgumentException("A player move requires a successful transfer");
+      }
+      if (playerMoved) {
+        blueprint = java.util.Objects.requireNonNull(blueprint, "blueprint");
+      }
+    }
+
+    public MatchmakingTransition(
+        QueueTicket ticket,
+        boolean instanceCreated,
+        MatchmakingTransitionStatus status,
+        Instant occurredAt) {
+      this(ticket, instanceCreated, status, false, null, occurredAt);
     }
   }
 

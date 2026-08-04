@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.slimelabs.slslite.api.event.ApiShutdownEvent;
 import net.slimelabs.slslite.api.event.CatalogDelta;
 import net.slimelabs.slslite.api.event.CatalogReloadEvent;
@@ -53,6 +54,7 @@ class PublicApiContractTest {
           HostCapabilityView.class,
           InstallationDiagnosticView.class,
           InstanceLogSnapshot.class,
+          InstanceReadyAction.class,
           InstanceStatus.class,
           InstanceStatisticsView.class,
           VolumeView.class,
@@ -60,6 +62,8 @@ class PublicApiContractTest {
           InstanceView.class,
           LobbyDiagnosticView.class,
           MaintenanceView.class,
+          NamespacedAnnotations.class,
+          PostTransferAction.class,
           InstanceOverrides.class,
           StartRequest.class,
           InstanceOperationResult.class,
@@ -109,6 +113,7 @@ class PublicApiContractTest {
     assertTrue(Set.of(Capability.values()).contains(Capability.API_SHUTDOWN_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.DIAGNOSTICS));
     assertTrue(Set.of(Capability.values()).contains(Capability.EXTENSION_CONTEXTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.EXTENSION_ACTIONS));
   }
 
   @Test
@@ -180,6 +185,23 @@ class PublicApiContractTest {
     assertThrows(UnsupportedOperationException.class, () -> view.annotations().clear());
     assertThrows(
         UnsupportedOperationException.class, () -> ((List<?>) copied.get("nested")).clear());
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new BlueprintView(
+                "unsafe",
+                "Unsafe",
+                "test",
+                "paper",
+                "26.3",
+                512,
+                20,
+                1,
+                false,
+                List.of(),
+                false,
+                Set.of(),
+                Map.of("extension", new AtomicInteger(1))));
   }
 
   private static void assertPublicType(Type type, String context) {

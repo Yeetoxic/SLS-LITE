@@ -1,29 +1,38 @@
+# Build systems and generated output (at any project depth)
+target/
+build/
+out/
+.gradle/
+*.class
+*.jar
+!src/main/resources/limbo/nanolimbo-1.13.0.jar
+
 # Maven
-/target/
-/.local-fixtures/
-/tools/protocol-smoke/node_modules/
 dependency-reduced-pom.xml
 pom.xml.*.backup
 release.properties
 
-# Java
-*.class
-*.jar
-!src/main/resources/limbo/nanolimbo-1.13.0.jar
+# Java runtime diagnostics
 hs_err_pid*
 replay_pid*
+*.hprof
+*.jfr
 
-# IntelliJ IDEA
-/.idea/
+# IDEs and editors
+.idea/
+.vscode/
+.vs/
 *.iml
+.classpath
+.project
+.settings/
+*.swp
+*.swo
+*~
 
-# Visual Studio Code
-/.vscode/
-
-# Eclipse
-/.classpath
-/.project
-/.settings/
+# Local test fixtures and dependency caches
+/.local-fixtures/
+/tools/protocol-smoke/node_modules/
 
 # Local Velocity and SLS-LITE runtime
 /logs/
@@ -33,6 +42,8 @@ replay_pid*
 /velocity.toml
 /forwarding.secret
 *.log
+*.tmp
+*.temp
 
 # Local containerized Pterodactyl secrets and migration state
 /infra/pterodactyl/.env

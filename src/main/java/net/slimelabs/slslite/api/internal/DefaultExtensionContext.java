@@ -1,13 +1,21 @@
 package net.slimelabs.slslite.api.internal;
 
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import net.slimelabs.slslite.api.BlueprintView;
 import net.slimelabs.slslite.api.ExtensionContext;
+import net.slimelabs.slslite.api.InstanceReadyAction;
+import net.slimelabs.slslite.api.InstanceView;
+import net.slimelabs.slslite.api.NamespacedAnnotations;
+import net.slimelabs.slslite.api.PostTransferAction;
+import net.slimelabs.slslite.api.QueueTicket;
 import net.slimelabs.slslite.api.SLSLiteApiException;
 import net.slimelabs.slslite.api.event.SLSLiteEvent;
 import net.slimelabs.slslite.api.event.Subscription;
@@ -23,6 +31,10 @@ final class DefaultExtensionContext implements ExtensionContext {
   private final AtomicBoolean closed = new AtomicBoolean();
   private final AtomicInteger registrationCount = new AtomicInteger();
   private final Set<OwnedRegistration> registrations = ConcurrentHashMap.newKeySet();
+  private final List<OwnedActionRegistration<InstanceReadyAction>> instanceReadyActions =
+      new CopyOnWriteArrayList<>();
+  private final List<OwnedActionRegistration<PostTransferAction>> postTransferActions =
+      new CopyOnWriteArrayList<>();
 
   DefaultExtensionContext(String namespace, DefaultSLSLiteApi api, Logger logger) {
     this.namespace = namespace;
@@ -57,6 +69,41 @@ final class DefaultExtensionContext implements ExtensionContext {
   }
 
   @Override
+  public NamespacedAnnotations annotations(BlueprintView blueprint) {
+    if (closed()) {
+      throw closedFailure();
+    }
+    java.util.Objects.requireNonNull(blueprint, "blueprint");
+    Object configured = blueprint.annotations().get(namespace);
+    if (configured == null) {
+      return new NamespacedAnnotations(namespace, java.util.Map.of());
+    }
+    if (!(configured instanceof java.util.Map<?, ?> map)) {
+      throw new IllegalArgumentException(
+          "Blueprint annotation namespace " + namespace + " must be an object");
+    }
+    java.util.LinkedHashMap<String, Object> values = new java.util.LinkedHashMap<>();
+    map.forEach(
+        (key, value) -> {
+          if (!(key instanceof String stringKey)) {
+            throw new IllegalArgumentException("Blueprint annotation keys must be strings");
+          }
+          values.put(stringKey, value);
+        });
+    return new NamespacedAnnotations(namespace, values);
+  }
+
+  @Override
+  public Subscription onInstanceReady(Consumer<? super InstanceReadyAction> action) {
+    return registerAction(instanceReadyActions, action);
+  }
+
+  @Override
+  public Subscription onPostTransfer(Consumer<? super PostTransferAction> action) {
+    return registerAction(postTransferActions, action);
+  }
+
+  @Override
   public <T> Subscription onComplete(
       CompletionStage<? extends T> stage, BiConsumer<? super T, ? super Throwable> callback) {
     java.util.Objects.requireNonNull(stage, "stage");
@@ -88,6 +135,44 @@ final class DefaultExtensionContext implements ExtensionContext {
       return;
     }
     registrations.forEach(OwnedRegistration::close);
+  }
+
+  Runnable captureInstanceReady(
+      InstanceView instance, BlueprintView blueprint, java.time.Instant at) {
+    List<OwnedActionRegistration<InstanceReadyAction>> recipients =
+        List.copyOf(instanceReadyActions);
+    if (recipients.isEmpty()) {
+      return null;
+    }
+    InstanceReadyAction action = new InstanceReadyAction(instance, annotations(blueprint), at);
+    return () -> recipients.forEach(recipient -> recipient.accept(action));
+  }
+
+  Runnable capturePostTransfer(
+      QueueTicket ticket, boolean instanceCreated, BlueprintView blueprint, java.time.Instant at) {
+    List<OwnedActionRegistration<PostTransferAction>> recipients = List.copyOf(postTransferActions);
+    if (recipients.isEmpty()) {
+      return null;
+    }
+    PostTransferAction action =
+        new PostTransferAction(ticket, instanceCreated, annotations(blueprint), at);
+    return () -> recipients.forEach(recipient -> recipient.accept(action));
+  }
+
+  private <T> Subscription registerAction(
+      List<OwnedActionRegistration<T>> actions, Consumer<? super T> action) {
+    java.util.Objects.requireNonNull(action, "action");
+    reserve();
+    OwnedActionRegistration<T> registration = new OwnedActionRegistration<>(actions, action);
+    registrations.add(registration);
+    actions.add(registration);
+    try {
+      rejectIfClosed(registration);
+      return registration;
+    } catch (RuntimeException exception) {
+      registration.close();
+      throw exception;
+    }
   }
 
   private void reserve() {
@@ -211,5 +296,37 @@ final class DefaultExtensionContext implements ExtensionContext {
 
     @Override
     void releaseDelegate() {}
+  }
+
+  private final class OwnedActionRegistration<T> extends OwnedRegistration {
+
+    private final List<OwnedActionRegistration<T>> owners;
+    private final Consumer<? super T> action;
+
+    private OwnedActionRegistration(
+        List<OwnedActionRegistration<T>> owners, Consumer<? super T> action) {
+      this.owners = owners;
+      this.action = action;
+    }
+
+    private void accept(T input) {
+      if (!active()) {
+        return;
+      }
+      try {
+        action.accept(input);
+      } catch (RuntimeException exception) {
+        close();
+        logger.warn(
+            "Disabled failing SLS-LITE extension action for {}: {}",
+            namespace,
+            exception.getClass().getSimpleName());
+      }
+    }
+
+    @Override
+    void releaseDelegate() {
+      owners.remove(this);
+    }
   }
 }

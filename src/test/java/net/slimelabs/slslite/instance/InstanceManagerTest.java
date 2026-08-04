@@ -14,12 +14,14 @@ import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -65,11 +67,30 @@ class InstanceManagerTest {
   @Test
   void preparesRegistersStopsAndCleansEphemeralInstance() throws Exception {
     TestContext context = createContext(false, true);
+    List<String> readinessOrder = new CopyOnWriteArrayList<>();
+    AtomicReference<Instant> readyEventTime = new AtomicReference<>();
+    AtomicReference<InstanceManager.RegisteredReady> registeredReady = new AtomicReference<>();
+    manager.installLifecycleObserver(
+        transition -> {
+          if (transition.current() == InstanceState.READY) {
+            readyEventTime.set(transition.occurredAt());
+            readinessOrder.add("event");
+          }
+        });
+    manager.installReadyObserver(
+        ready -> {
+          registeredReady.set(ready);
+          readinessOrder.add("action");
+          throw new IllegalStateException("extension action failure");
+        });
 
     ManagedInstance instance = manager.start("fixture");
     instance.readyFuture().get(10, TimeUnit.SECONDS);
 
     assertEquals(InstanceState.READY, instance.state());
+    assertEquals(List.of("event", "action"), readinessOrder);
+    assertSame(instance, registeredReady.get().instance());
+    assertEquals(readyEventTime.get(), registeredReady.get().occurredAt());
     assertTrue(context.backends().registrations.containsKey(instance.id()));
     assertTrue(Files.isRegularFile(instance.directory().resolve("server.properties")));
     assertTrue(

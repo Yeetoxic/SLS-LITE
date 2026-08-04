@@ -1,6 +1,11 @@
 package net.slimelabs.slslite.api;
 
-/** Request to provision one managed instance and complete when it is ready. */
+/**
+ * Request to provision one managed instance and complete when it is ready.
+ *
+ * @param blueprintId source blueprint identifier
+ * @param overrides reviewed local overrides, or {@link InstanceOverrides#NONE}
+ */
 public record StartRequest(String blueprintId, InstanceOverrides overrides) {
 
   public StartRequest {

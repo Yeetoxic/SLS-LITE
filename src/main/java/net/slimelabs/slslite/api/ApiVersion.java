@@ -1,6 +1,11 @@
 package net.slimelabs.slslite.api;
 
-/** Semantic version of the public SLS-LITE Java API contract. */
+/**
+ * Semantic version of the public SLS-LITE Java API contract.
+ *
+ * @param major compatibility-breaking version component
+ * @param minor backward-compatible feature version component
+ */
 public record ApiVersion(int major, int minor) implements Comparable<ApiVersion> {
 
   public static final ApiVersion CURRENT = new ApiVersion(1, 0);

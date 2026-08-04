@@ -8,17 +8,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.velocitypowered.api.proxy.ProxyServer;
 import java.lang.reflect.Proxy;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.slimelabs.slslite.api.BlueprintView;
 import net.slimelabs.slslite.api.ExtensionContext;
+import net.slimelabs.slslite.api.InstanceReadyAction;
+import net.slimelabs.slslite.api.InstanceStatus;
+import net.slimelabs.slslite.api.InstanceView;
+import net.slimelabs.slslite.api.NamespacedAnnotations;
+import net.slimelabs.slslite.api.PostTransferAction;
+import net.slimelabs.slslite.api.QueueTicket;
 import net.slimelabs.slslite.api.SLSLiteApiException;
 import net.slimelabs.slslite.api.event.ApiShutdownEvent;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
 import net.slimelabs.slslite.instance.model.InstanceState;
+import net.slimelabs.slslite.velocity.LocalJoinService;
 import org.junit.jupiter.api.Test;
 import org.slf4j.helpers.NOPLogger;
 
@@ -126,9 +138,134 @@ class DefaultExtensionContextTest {
     api.close();
   }
 
+  @Test
+  void exposesOnlyOwnedImmutableAnnotationNamespace() {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    ExtensionContext context = api.extension("example-plugin");
+    List<String> mutable = new ArrayList<>(List.of("one"));
+    BlueprintView blueprint =
+        blueprint(
+            Map.of(
+                "example-plugin", Map.of("modes", mutable),
+                "another-plugin", Map.of("secret", "hidden")));
+
+    NamespacedAnnotations annotations = context.annotations(blueprint);
+    mutable.add("late");
+
+    assertEquals(Set.of("modes"), annotations.values().keySet());
+    assertEquals(List.of("one"), annotations.values().get("modes"));
+    assertThrows(UnsupportedOperationException.class, () -> annotations.values().clear());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new NamespacedAnnotations("example-plugin", Map.of("mutable", new AtomicInteger(1))));
+    api.close();
+  }
+
+  @Test
+  void capturesBoundedActionsAtPublicationAndDisablesFailures() {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    DefaultExtensionContext context = (DefaultExtensionContext) api.extension("example-plugin");
+    BlueprintView blueprint = blueprint(Map.of("example-plugin", Map.of("mode", "ranked")));
+    InstanceView instance =
+        new InstanceView(
+            "arena.1",
+            "arena",
+            "minigame",
+            InstanceStatus.READY,
+            25571,
+            512,
+            0,
+            false,
+            Instant.now(),
+            "instance-test");
+    List<InstanceReadyAction> ready = new CopyOnWriteArrayList<>();
+    List<String> order = new CopyOnWriteArrayList<>();
+    context.onInstanceReady(
+        action -> {
+          order.add("first");
+          ready.add(action);
+        });
+    context.onInstanceReady(action -> order.add("second"));
+    Runnable capturedReady = context.captureInstanceReady(instance, blueprint, Instant.now());
+    context.onInstanceReady(ignored -> ready.add(null));
+    capturedReady.run();
+
+    assertEquals(1, ready.size());
+    assertEquals(List.of("first", "second"), order);
+    assertEquals("ranked", ready.getFirst().annotations().values().get("mode"));
+
+    List<PostTransferAction> transferred = new CopyOnWriteArrayList<>();
+    AtomicInteger failures = new AtomicInteger();
+    context.onPostTransfer(transferred::add);
+    context.onPostTransfer(
+        ignored -> {
+          failures.incrementAndGet();
+          throw new IllegalStateException("bad action");
+        });
+    QueueTicket ticket =
+        new QueueTicket(UUID.randomUUID(), "Player", "minigame", "arena", "arena.1", Instant.now());
+    context.capturePostTransfer(ticket, false, blueprint, Instant.now()).run();
+    context.capturePostTransfer(ticket, false, blueprint, Instant.now()).run();
+
+    assertEquals(2, transferred.size());
+    assertEquals(1, failures.get());
+    api.close();
+  }
+
+  @Test
+  void alreadyConnectedSuccessEventDoesNotDispatchPostTransferAction() throws Exception {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    ExtensionContext context = api.extension("example-plugin");
+    AtomicInteger actions = new AtomicInteger();
+    CountDownLatch eventDelivered = new CountDownLatch(1);
+    context.onPostTransfer(ignored -> actions.incrementAndGet());
+    context.subscribe(
+        event -> {
+          if (event instanceof net.slimelabs.slslite.api.event.PlayerMatchmakingEvent) {
+            eventDelivered.countDown();
+          }
+        });
+    QueueTicket ticket =
+        new QueueTicket(UUID.randomUUID(), "Player", "minigame", "arena", "arena.1", Instant.now());
+
+    api.publish(
+        new LocalJoinService.MatchmakingTransition(
+            new LocalJoinService.QueueTicket(
+                ticket.playerId(),
+                ticket.playerName(),
+                ticket.registry(),
+                ticket.blueprintId(),
+                ticket.instanceId(),
+                ticket.queuedAt()),
+            false,
+            LocalJoinService.MatchmakingTransitionStatus.TRANSFER_SUCCEEDED,
+            Instant.now()));
+
+    assertTrue(eventDelivered.await(2, TimeUnit.SECONDS));
+    assertEquals(0, actions.get());
+    api.close();
+  }
+
   private static InstanceLifecycle.Transition transition(String id) {
     return new InstanceLifecycle.Transition(
         id, InstanceState.CREATED, InstanceState.PREPARING, Instant.now());
+  }
+
+  private static BlueprintView blueprint(Map<String, Object> annotations) {
+    return new BlueprintView(
+        "arena",
+        "Arena",
+        "minigame",
+        "paper",
+        "26.3",
+        512,
+        20,
+        4,
+        false,
+        List.of(),
+        false,
+        Set.of(),
+        annotations);
   }
 
   private static ProxyServer proxy() {

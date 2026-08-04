@@ -66,7 +66,34 @@ class LocalJoinServiceTest {
               LocalJoinService.MatchmakingTransitionStatus.TRANSFER_SUCCEEDED),
           events.stream().map(LocalJoinService.MatchmakingTransition::status).toList());
       assertTrue(events.stream().allMatch(LocalJoinService.MatchmakingTransition::instanceCreated));
+      assertTrue(events.getLast().playerMoved());
+      assertEquals(instance.blueprint(), events.getLast().blueprint());
       assertEquals(attempt.ticket(), events.getFirst().ticket());
+    }
+  }
+
+  @Test
+  void alreadyConnectedRemainsSuccessfulWithoutReportingAPlayerMove() throws Exception {
+    CompletableFuture<ConnectionRequestBuilder.Result> connection = new CompletableFuture<>();
+    Fixture fixture = fixture(Duration.ofSeconds(5), 0, connection);
+    List<LocalJoinService.MatchmakingTransition> events = new CopyOnWriteArrayList<>();
+    try (LocalJoinService service = fixture.service()) {
+      service.installMatchmakingObserver(events::add);
+      LocalJoinService.JoinAttempt attempt = service.join(fixture.player(), "test", "smoke");
+      ManagedInstance instance = fixture.controller().instance();
+      instance.lifecycle().transitionTo(InstanceState.STARTING);
+      instance.lifecycle().transitionTo(InstanceState.READY);
+      instance.readyFuture().complete(instance);
+      connection.complete(
+          connectionResult(registeredServer(), ConnectionRequestBuilder.Status.ALREADY_CONNECTED));
+
+      assertEquals(
+          ConnectionRequestBuilder.Status.ALREADY_CONNECTED,
+          attempt.connection().get(1, TimeUnit.SECONDS).getStatus());
+      assertEquals(
+          LocalJoinService.MatchmakingTransitionStatus.TRANSFER_SUCCEEDED,
+          events.getLast().status());
+      assertFalse(events.getLast().playerMoved());
     }
   }
 

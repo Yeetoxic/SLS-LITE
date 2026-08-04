@@ -13,7 +13,9 @@ public sealed interface SLSLiteEvent
         ReconciliationEvent,
         SoftwareInstallationEvent {
 
+  /** Returns the positive, monotonically increasing provider-lifetime event sequence. */
   long sequence();
 
+  /** Returns the instant associated with the published state transition. */
   Instant occurredAt();
 }

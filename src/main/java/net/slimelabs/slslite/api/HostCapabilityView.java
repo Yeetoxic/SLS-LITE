@@ -1,6 +1,12 @@
 package net.slimelabs.slslite.api;
 
-/** Redacted result of one startup host capability probe. */
+/**
+ * Redacted result of one startup host capability probe.
+ *
+ * @param name stable probe name
+ * @param state public probe severity/state
+ * @param detail bounded operator-safe explanation
+ */
 public record HostCapabilityView(String name, HostCapabilityState state, String detail) {
 
   public HostCapabilityView {

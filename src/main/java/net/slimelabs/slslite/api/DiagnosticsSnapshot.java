@@ -4,7 +4,19 @@ import java.time.Instant;
 import java.util.List;
 import net.slimelabs.slslite.api.event.InstanceFailureEvent;
 
-/** Immutable, redacted, and bounded operational snapshot. */
+/**
+ * Immutable, redacted, and bounded operational snapshot.
+ *
+ * @param capturedAt time at which the snapshot was assembled
+ * @param system bounded system-wide counts
+ * @param maintenance current instance-admission state
+ * @param lobby effective lobby health
+ * @param installations up to 100 recent installation states
+ * @param hostCapabilities up to 64 redacted host capability probes
+ * @param instanceStatistics up to 256 managed-instance statistics
+ * @param recentLogs up to 256 bounded instance log tails
+ * @param recentFailures up to 64 sanitized instance failures
+ */
 public record DiagnosticsSnapshot(
     Instant capturedAt,
     SystemDiagnosticView system,
