@@ -95,3 +95,12 @@ A release candidate must be built from a reviewed source revision, pass the
 complete automated and documented manual suites, contain required license and
 third-party material, and publish a checksum. Snapshot artifacts are not
 production releases.
+
+Before freezing the Java API, run the manually triggered **API distribution
+smoke** workflow from the reviewed branch. It creates a private draft GitHub
+Release, downloads the plugin, API, sources, Javadocs, and checksum file on a
+separate clean runner, and compiles the example extension with both Maven and
+Gradle against only the downloaded API classifier. Leave `cleanup_draft`
+disabled when the draft needs human inspection; enable it only when the same
+run may delete its temporary draft release and tag after testing. This internal
+draft is a delivery-path test, not a release candidate.

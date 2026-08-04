@@ -470,9 +470,10 @@ mutation, or silent instance corruption.
       examples, API and source/Javadoc artifacts, and one canonical extension
       guide; enforce their public-only boundary in CI.
 - [ ] Test the final developer-artifact distribution path through a GitHub
-      Release, a Maven repository, or both. CI already assembles and uploads the
-      candidate artifact set, but a release-channel download remains part of
-      the API freeze gate.
+      Release, a Maven repository, or both. The manual API distribution smoke
+      workflow now assembles a private draft, downloads it on a separate clean
+      runner, verifies its checksums/boundary, and builds both example consumers;
+      one successful GitHub run remains part of the API freeze gate.
 - [x] Perform a focused API security, concurrency, compatibility, and usability
       review. Mutable annotation leakage, callback/operation-message exposure,
       shutdown monitor waiting, and a diagnostics/manager lock inversion were
