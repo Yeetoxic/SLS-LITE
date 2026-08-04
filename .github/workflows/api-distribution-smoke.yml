@@ -80,11 +80,14 @@ jobs:
     needs: publish-draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # GitHub exposes draft releases only to tokens with push-level contents access.
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Temurin 25
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
