@@ -16,6 +16,9 @@ gradle -p examples/velocity-extension clean build
 
 Both builds declare the `api` classifier as a provided/compile-only dependency.
 Neither build bundles SLS-LITE or Velocity API classes in the example plugin.
+For an API JAR downloaded directly from a GitHub Release instead of a Maven
+repository, the Gradle example also accepts
+`-PslsLiteApiJar=/path/to/sls-lite-<version>-api.jar`.
 
 The resulting example JAR is
 `examples/velocity-extension/target/sls-lite-example-extension-1.0.0-SNAPSHOT.jar`.

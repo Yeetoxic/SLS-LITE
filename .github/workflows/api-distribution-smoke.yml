@@ -166,7 +166,7 @@ jobs:
           PROJECT_VERSION: ${{ needs.publish-draft.outputs.project_version }}
         run: >-
           gradle -p examples/velocity-extension
-          -PslsLiteVersion=${PROJECT_VERSION}
+          -PslsLiteApiJar=${GITHUB_WORKSPACE}/downloaded/sls-lite-${PROJECT_VERSION}-api.jar
           clean build
 
       - name: Record retained draft
