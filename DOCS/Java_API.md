@@ -387,7 +387,7 @@ within a major version.
 Extensions should test the advertised version and capability set rather than
 infer support from the SLS-LITE plugin version.
 
-There is no authenticated HTTP administration/event API in this release. That
-surface remains a separate candidate because it requires listener exposure,
-authentication, rate limits, request-size limits, and deployment-specific TLS
-or reverse-proxy guidance.
+SLS-LITE core has no authenticated HTTP administration/event API and opens no
+administration listener. A trusted extension may build a network-facing surface
+on the Java API, but that extension owns authentication, authorization, rate and
+request-size limits, privacy, TLS or reverse-proxy guidance, and shutdown.

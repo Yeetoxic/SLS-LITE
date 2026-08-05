@@ -18,7 +18,6 @@ parsers, bundled examples, software definitions, and vSLS implementation.
 - **Adapted:** accepted directly, with documented single-host behavior.
 - **Intentionally unsupported:** distributed or unsafe behavior that does not
   belong in SLS-LITE.
-- **Deferred:** useful local behavior that still needs implementation or tests.
 - **SLS-LITE extension:** local-only behavior outside the shared SLS contract.
 
 ## Scope Boundary
@@ -66,11 +65,11 @@ out of scope.
 | `server.limits.swap` | Metadata only | Validated but not enforced without a container/host boundary. |
 | `server.limits.io_weight` | Metadata only | Validated but not enforced without a container/host boundary. |
 | `server.limits.cpu_limit` | Metadata only | Validated but not enforced on portable child JVMs. |
-| `server.limits.disk_space` | Metadata only | Validated; diagnostics/admission remain deferred. |
+| `server.limits.disk_space` | Metadata only | Validated but not enforced as a local admission or filesystem quota. |
 | `server.limits.threads` | Metadata only | Validated but CPU affinity is not applied. |
 | `server.limits.oom_disabled` | Metadata only | Validated but host/container OOM policy is not controlled. |
 | `server.configs.server.properties` with `parser: properties` | Supported | Applied atomically to the private instance. |
-| Other `properties` targets | Deferred | Parser exists conceptually; safe generic target handling is not implemented. |
+| Other `properties` targets | Intentionally unsupported | Only the confined `server.properties` target is accepted. |
 | `parser: yaml` | Adapted | Nested map patches for contained `.yml`/`.yaml` files merge recursively and write atomically. |
 | `parser: file` | Adapted | Contained UTF-8 line-prefix replacement with an 8 MiB limit and atomic target swap. Missing targets become empty files; absent prefixes are not inserted. |
 | `state.volumes` mapping form with `mode: cow` | Adapted | Portable transactional private copy. |
@@ -122,7 +121,7 @@ adapter.
 | software `limits.memory_limit` | Adapted | Supplies the blueprint JVM limit and local admission reservation when the blueprint omits it. |
 | Other software `limits` | Metadata only | Validated but container-only defaults cannot be enforced by portable child JVMs. |
 | software `configs.server.properties` | Adapted | Defaults merge before blueprint patches and proxy-owned network values. |
-| Other software config parsers/targets | Deferred | Rejected until a contained structured patcher exists. |
+| Other software config parsers/targets | Intentionally unsupported | Rejected; only the documented contained targets and parsers are accepted. |
 | remote `update` | Intentionally unsupported | Metadata is validated; definitions remain operator-controlled and pinned. |
 
 SLS-LITE's provider-backed Paper/vanilla fields and manual profile schema are
@@ -143,7 +142,7 @@ configures the executable for that major locally.
 | Daemon event stream | Adapted local equivalent | The Java API publishes ordered, bounded managed-instance lifecycle transitions. It is not a distributed daemon stream. |
 | True overlay COW | Implemented on eligible Linux hosts | Exact-path probing, durable private layers, safe remount/unmount, reset/delete handling, and crash reconciliation are implemented. |
 | vSLS command surface | Partial/adapted | See `SLS_Command_Compatibility.md`. |
-| `resource_pack` annotation | Metadata only | Public serving and transfer orchestration are deferred. |
+| `resource_pack` annotation | Metadata only | SLS-LITE does not provide public serving or transfer orchestration. |
 | SlimePacks conversion | Intentionally separate | SLS-LITE should integrate with a pack service, not duplicate conversion. |
 
 ## Host Configuration
@@ -206,8 +205,8 @@ it does not emulate Protocube, daemon, or S4J endpoints.
 ## Fields Not In The Pin
 
 `allowed-client-versions` does not appear in the SLS `v0.2.0` source, models,
-examples, or vSLS implementation. It is treated as announced/deferred work and
-will be reconsidered only after an upstream schema and behavior stabilize.
+examples, or vSLS implementation. SLS-LITE does not interpret this field or
+claim automatic per-blueprint client-version admission.
 
 ## Verification Requirements
 

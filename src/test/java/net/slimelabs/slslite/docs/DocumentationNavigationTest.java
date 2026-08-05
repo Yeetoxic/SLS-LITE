@@ -99,12 +99,7 @@ final class DocumentationNavigationTest {
 
   @Test
   void developmentHandoffLanguageDoesNotReturnToPublicGuides() throws IOException {
-    StringBuilder publicGuides = new StringBuilder(Files.readString(PROJECT.resolve("README.md")));
-    try (Stream<Path> documents = Files.list(PROJECT.resolve("DOCS"))) {
-      for (Path document : documents.filter(path -> path.toString().endsWith(".md")).toList()) {
-        publicGuides.append('\n').append(Files.readString(document));
-      }
-    }
+    String publicGuides = publicGuideText();
     for (String staleClaim :
         List.of(
             "Stage 3.10 must pass",
@@ -118,9 +113,38 @@ final class DocumentationNavigationTest {
             "start-on-proxy-start` is roadmap work",
             "Java_API_Roadmap.md")) {
       assertFalse(
-          publicGuides.toString().contains(staleClaim),
+          publicGuides.contains(staleClaim),
           () -> "Public documentation contains stale status text: " + staleClaim);
     }
+  }
+
+  @Test
+  void publicGuidesDescribeCurrentBehaviorInsteadOfRoadmapWork() throws IOException {
+    String publicGuides = publicGuideText();
+    assertFalse(
+        Pattern.compile("\\bdeferred\\b", Pattern.CASE_INSENSITIVE).matcher(publicGuides).find(),
+        "Public documentation uses roadmap classification; proposed work belongs in todo.md");
+
+    for (String unavailableConfigKey :
+        List.of("storage.auto_priority", "storage.copy_parallelism", "lobby.mode: velocity")) {
+      assertFalse(
+          publicGuides.contains(unavailableConfigKey),
+          () ->
+              "Public documentation claims an unimplemented configuration key: "
+                  + unavailableConfigKey);
+    }
+  }
+
+  private static String publicGuideText() throws IOException {
+    StringBuilder publicGuides = new StringBuilder(Files.readString(PROJECT.resolve("README.md")));
+    for (String root : List.of("DOCS", "WIKI")) {
+      try (Stream<Path> documents = Files.list(PROJECT.resolve(root))) {
+        for (Path document : documents.filter(path -> path.toString().endsWith(".md")).toList()) {
+          publicGuides.append('\n').append(Files.readString(document));
+        }
+      }
+    }
+    return publicGuides.toString();
   }
 
   private static List<Path> projectDocuments() throws IOException {

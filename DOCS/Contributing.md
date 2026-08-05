@@ -86,9 +86,9 @@ security implications, and destructive behavior must be explicit.
 ## Compatibility Work
 
 Pin the upstream SLS revision before comparing behavior. Record whether each
-feature is supported, adapted, intentionally unsupported, or deferred. Do not
-copy upstream code or fixtures without checking their license and attribution
-requirements.
+feature is supported, adapted, SLS-LITE-only, or intentionally unsupported.
+Proposed work belongs only in `todo.md`. Do not copy upstream code or fixtures
+without checking their license and attribution requirements.
 
 ## Release Artifacts
 

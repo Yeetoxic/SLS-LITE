@@ -32,6 +32,16 @@ Project-wide invariants:
   detected host cannot provide.
 - Keep modern SLS compatibility local: distributed-only operations return an
   actionable local-mode response rather than partial emulation.
+- Treat SLS-LITE as a composable platform for operator-authored network
+  experiences. Prefer stable, documented, permission-aware integration
+  surfaces over hard-coded assumptions about one lobby or minigame workflow.
+- Keep the SLS-LITE core focused and make optional or unusual behavior possible
+  through separate trusted Velocity extensions. Extensions may expose their own
+  network services, integrations, UI, automation, or intentionally unconventional
+  behavior under operator control; evolve the public API additively when a real
+  extension need is not expressible, without exposing mutable internals that can
+  silently violate core lifecycle, ownership, accounting, or data-safety
+  invariants.
 - Keep ViaVersion, ViaBackwards, ViaRewind, PacketEvents, and permission plugins
   optional unless a retained feature has a proven hard requirement.
 
@@ -513,40 +523,265 @@ feedback without destabilizing the completed full stack.
 
 ### 4.1 Scope Review
 
-- [ ] Incorporate the project owner's release-candidate notes.
-- [ ] Review each candidate below and record one explicit result: include in the
+Scope posture: freeze and qualify the implemented single-host product. Add RC
+work only when this review identifies a missing release fundamental or a small
+safety/usability correction; move larger feature systems to a named
+post-release milestone.
+
+- [x] Incorporate the project owner's release-candidate notes.
+- [x] Review each candidate below and record one explicit result: include in the
       candidate, defer to a named post-release milestone, or remove from scope.
       Do not leave an unclassified optional feature:
-  - [ ] Classify provider/runtime acquisition with exact versions, checksums,
-        terms, manual paths, and explicit download/prune actions.
-  - [ ] Classify granular built-in roles beyond administrator.
-  - [ ] Classify a blueprint validation/conversion command.
-  - [ ] Classify stable-upstream-release review, experimental-feature tracking,
-        and future `allowed-client-versions` support.
-  - [ ] Classify historical `slimelabs:network` plugin-message compatibility.
-  - [ ] Classify first-class client resource-pack switching using validated
-        modern fields, client-reachable HTTP(S), SHA-1, version-aware
-        prompt/required behavior, transfer-time apply/replace/clear, and
-        `server.properties` fallback; never upload packs to an external
-        conversion service automatically, and evaluate local conversion only as
-        an optional adapter/tool.
-  - [ ] Confirm that the frozen Stage 3.10 Java extension API and its verified
-        artifact-distribution contract remain in candidate scope without
-        expanding the public provider SPI.
-  - [ ] Classify an authenticated local administration/event API and opt-in
-        privacy-safe metrics.
-  - [ ] Classify warm instance pools with strict process/memory accounting and
-        bounded, opt-in replenishment.
-  - [ ] Classify offline world optimization with dry run, separate output,
-        backup, and manual deletion approval.
-  - [ ] Classify forced-host and multiple-lobby routing.
-  - [ ] Classify hot-reload registration reconciliation if plugin hot reload
-        becomes supported.
-  - [ ] Classify a versioned shared documentation site.
-- [ ] Confirm that deferred items are absent from public availability claims.
+  - [x] Include the existing provider/runtime boundary: verified automatic
+        Paper and vanilla acquisition, operator-supplied custom software and
+        Java paths, explicit EULA/terms handling, checksums, and bounded
+        download/prune actions. Do not duplicate Pterodactyl runtime installers
+        or execute arbitrary full-SLS installer containers/scripts.
+  - [x] Retain built-in administrators and granular Velocity permission nodes
+        for the RC. Defer SLS-LITE-recognized permission bundles/role aliases to
+        **Post-release: Operator Experience**; do not add another user/group
+        database.
+  - [x] Remove blueprint conversion and a separate validation command from RC
+        scope. Never rewrite operator blueprints automatically. Include
+        fault-isolated reloads: validate every blueprint, publish unrelated
+        valid definitions in one coherent catalog revision, report the number
+        of invalid blueprints to the command sender, and record every rejected
+        blueprint with its exact validation error in the detailed SLS-LITE log.
+        An invalid definition is absent from the new catalog, even when an older
+        version was previously valid; already-running instances retain their
+        captured immutable blueprint snapshot and continue unaffected.
+  - [x] Include one final stable SLS, Velocity, Paper, and Minecraft release
+        review before the RC build, adopting relevant compatibility and
+        security corrections. Do not make experimental upstream branches an RC
+        gate. Defer per-blueprint `allowed-client-versions` enforcement to
+        **Post-release: Compatibility and Routing**.
+  - [x] Include a secure Velocity backend-to-proxy plugin-message channel for
+        operator-authored NPC, menu, and backend integrations in the RC. Do not
+        reproduce the historical Bungee `slimelabs:network` wire format or trust
+        a payload-supplied player UUID. Define a versioned, bounded SLS-LITE
+        protocol that verifies and authorizes the event source/carrier, supports
+        typed matchmaking requests plus a bounded SLS-command relay executed as
+        the carrier player, and preserves normal permissions, admission, and
+        lifecycle rules. Publish the protocol and minimal sender snippets for
+        the RC, but do not require or publish a companion backend plugin.
+  - [x] Retain backend-driven resource packs through validated,
+        version-appropriate `server.properties` fields, client-reachable
+        HTTP(S), and exact hashes for the RC. Defer proxy-managed logical pack
+        resolution and transfer-time apply/replace/clear to **Post-release:
+        Optional Integrations**. Keep pack conversion and public hosting outside
+        SLS-LITE core; never upload packs to an external service automatically.
+  - [x] Include the frozen Java API 1.0 and its verified artifact-distribution
+        contract in the RC without expanding the public provider SPI. Preserve
+        the checked compatibility signature, fix genuine defects conservatively,
+        and make future capabilities additive unless a new API major version is
+        deliberately approved.
+  - [x] Keep an HTTP administration/event API and network metrics exporter out
+        of SLS-LITE core. The Java API is the supported extension surface;
+        operators who need a web panel, bot, remote controller, or metrics
+        endpoint can install or build a separate trusted Velocity extension
+        with its own authentication, exposure, privacy, and lifecycle policy.
+        Core SLS-LITE opens no administration listener and sends no telemetry;
+        this is an example of the general core-versus-extension boundary, not a
+        prohibition on operator-chosen extension behavior.
+  - [x] Defer warm instance pools to **Post-release: Performance and Capacity**.
+        Design them as an optional, default-off configuration capability rather
+        than assuming every host is resource-constrained: operators choose which
+        blueprints/pools stay warm and accept the explicitly reported idle
+        memory/process cost.
+  - [x] Classify operator-choice gaps found during the RC scope audit:
+    - [x] Give Paper profiles an explicit build-selection policy. Preserve
+          newest-allowed selection as the default, and allow an exact build to
+          be pinned per Minecraft version for reproducible fresh installs.
+          Resolve and verify the selected artifact with Paper's published
+          SHA-256 metadata in either mode; reject unavailable or mismatched
+          pins instead of silently falling back to latest.
+    - [x] Make built-in transfer action-bar feedback host-configurable and
+          enabled by default. Support bounded MiniMessage templates for joining,
+          force-joining, and dequeue feedback plus bounded animation frames,
+          colors, and frame interval. Keep this host-wide for the RC rather than
+          expanding the blueprint schema. When disabled, SLS-LITE remains silent
+          and does not reserve or overwrite the action bar, allowing an extension
+          to provide its own transfer presentation.
+    - [x] Expose SLS-Limbo's complete player-facing presentation while preserving
+          its operational contract. Let operators configure bounded MiniMessage
+          content and enablement for the ping description, brand, join message,
+          boss bar, title/subtitle, header/footer, timings, colors/styles, and a
+          supported dimension. Encode generated YAML safely. Keep bind address,
+          allocated port, forwarding mode/secret, advertised protocol, capacity,
+          packet/resource limits, and lifecycle controls owned by SLS-LITE.
+    - [x] Add a host-level ViaVersion synchronization policy with `auto` as the
+          backward-compatible default, `on` as an explicit requirement that
+          reports a clear error when ViaVersion is unavailable, and `off` as a
+          guarantee that SLS-LITE neither inspects nor changes ViaVersion's
+          backend protocol mapping.
+    - [x] Keep the current COW order and conservative copy parallelism as the
+          defaults, while allowing a host to configure an authoritative ordered
+          `auto` strategy allowlist and bounded `auto`/numeric copy parallelism.
+          Operators may omit any strategy, including portable copy; fail with
+          capability diagnostics rather than attempting an excluded fallback.
+          Reject empty, duplicate, unknown, or structurally invalid policies.
+    - [x] Keep a host-wide queue timeout default and allow a blueprint override
+          or explicit no-expiry policy. Make console-tail size, installer-history
+          count, and retained failure-report count bounded host settings, with
+          zero disabling retention where safe. Keep persistent logging separate
+          and retain non-configurable hard byte/payload ceilings that protect
+          integrity and bounded resource use.
+  - [x] Defer offline world optimization to **Post-release: World Maintenance**.
+        Keep it planned as an opt-in core capability with extension strategies,
+        but do not expand the frozen RC API or put world-data transformation on
+        the candidate's critical path.
+  - [x] Classify forced-host and multiple-lobby routing:
+    - [x] Preserve Velocity's selected initial server, including native
+          `forced-hosts`, and use the SLS-LITE lobby only when Velocity has not
+          selected a route. Do not rewrite or duplicate `velocity.toml` routing;
+          retain SLS-Limbo only as the safety path when SLS-LITE owns the managed
+          lobby route and that lobby is unavailable.
+    - [x] Add `lobby.mode: velocity` as the recommended clean-install standard:
+          Velocity owns its initial routes, ordinary lobby set, `try` order, and
+          forced hosts. Retain explicit `external` and `managed` modes without
+          changing existing configured behavior. Keep SLS-Limbo enabled by
+          default as SLS-LITE's holding/safety backend, but allow operators to
+          disable it and disconnect cleanly when no valid route remains. Defer
+          multiple SLS-managed lobby pools to **Post-release: Compatibility and
+          Routing**.
+  - [x] Do not support binary plugin hot-reload for the RC. Support `/sls reload`
+        for configuration and catalogs, reconcile only SLS-LITE-owned dynamic
+        registrations during controlled lifecycle operations, and unregister
+        owned registrations on normal shutdown. Detect and diagnose stale or
+        duplicate names without mutating operator/other-plugin ownership. Require
+        a normal Velocity restart when replacing the SLS-LITE JAR.
+  - [x] Keep public documentation latest-release-first rather than maintaining a
+        historical versioned site. Repository `DOCS/` is the canonical current
+        source and the GitHub Wiki mirrors the latest supported release. Git tags
+        preserve old text incidentally, but do not promote a version selector or
+        maintain old manuals. Publish release notes and current migration/upgrade
+        instructions that direct outdated installations toward the latest release.
+        Defer a separate hosted documentation site until it provides a concrete
+        benefit over the repository and Wiki.
+- [x] Confirm that deferred items are absent from public availability claims.
+      Public guides describe current behavior and permanent product boundaries;
+      forward-looking classifications remain solely in `todo.md`. Documentation
+      tests reject roadmap terminology and unimplemented RC configuration keys.
 
 ### 4.2 Candidate Artifact and Documentation
 
+- [ ] Review stable SLS, Velocity, Paper, and Minecraft releases against the
+      pinned compatibility/runtime matrix immediately before the RC build;
+      incorporate applicable security or shared-contract corrections and record
+      intentional version boundaries. Experimental upstream branches are
+      informational only and cannot block the candidate.
+- [ ] Implement fault-isolated blueprint reloads: collect every parse and
+      validation failure, prevent one invalid file from rejecting unrelated
+      valid siblings, and publish the accepted definitions as one coherent
+      catalog revision. Report accepted/rejected counts to the command sender
+      and write every confined blueprint path plus exact validation error to the
+      detailed SLS-LITE log. Keep console output concise and bounded. Remove an
+      invalid definition from the newly published catalog without stopping or
+      mutating instances already running from its previous immutable snapshot;
+      reject new starts for that blueprint until a valid definition is loaded.
+- [ ] Add Paper build-selection configuration: keep newest-allowed as the
+      backward-compatible default and support exact per-Minecraft-version build
+      pins. Resolve and verify Paper's published SHA-256 for the selected build,
+      report unavailable or mismatched pins clearly, and never silently replace
+      a requested pin with a newer build. Cover parsing, selection, installation,
+      cache reuse, and failure behavior with tests and operator documentation.
+- [ ] Add host-wide transfer action-bar configuration. Keep the current feedback
+      enabled by default, accept bounded MiniMessage templates for joining,
+      force-joining, and dequeue messages, and allow bounded animation frames,
+      colors, and frame interval. Validate malformed or excessive presentation
+      input with precise diagnostics. When disabled, send no built-in transfer
+      action-bar output and leave the surface free for Java API extensions.
+- [ ] Add host-wide SLS-Limbo presentation configuration. Allow operators to
+      replace or disable its ping description, brand, join message, boss bar,
+      title/subtitle, header/footer, and other player-facing presentation; allow
+      supported dimensions and bounded timing/color/style values. Treat text as
+      bounded MiniMessage and serialize arbitrary valid operator text safely into
+      generated YAML. Retain SLS-LITE ownership of bind address, allocated port,
+      forwarding mode and secret, advertised protocol, capacity, packet/resource
+      limits, and lifecycle settings so customization cannot break the limbo's
+      required operational or security contract.
+- [ ] Add a host-level ViaVersion backend synchronization policy: `auto` keeps
+      the existing detection-based behavior, `on` requires the integration and
+      emits a precise configuration/reload error when ViaVersion is unavailable,
+      and `off` prevents SLS-LITE from inspecting or modifying ViaVersion's
+      backend protocol mapping. Document `auto` as SLS-LITE's recommended
+      standard without treating that default as mandatory operator policy.
+- [ ] Add bounded storage policy controls. Preserve the documented automatic COW
+      priority and conservative CPU-based copy parallelism as defaults; allow an
+      authoritative ordered auto-strategy allowlist and `auto` or numeric portable
+      copy parallelism. Operators may exclude every fallback, including portable
+      copy. Reject empty, duplicate, unknown, or invalid policies, diagnose host
+      capability failures per requested strategy, and never attempt an excluded
+      strategy silently. Cover selection, reload, fallback, and concurrency bounds
+      with tests and operator documentation.
+- [ ] Add bounded queue and diagnostic-retention controls. Preserve the host queue
+      timeout default while allowing each blueprint to override it or explicitly
+      disable expiry. Make the instance console-tail size, installer-history count,
+      and retained failure-report count host-configurable, accepting zero where
+      disabling retention is safe. Keep persistent per-instance/general logging
+      independent of these short in-memory histories, and do not expose hard
+      byte/payload safety ceilings as tuning knobs. Test defaults, overrides, zero
+      retention, reload behavior, bounds, and recovery/diagnostic behavior.
+- [ ] Correct initial-server routing so SLS-LITE cooperates with Velocity. When
+      `PlayerChooseInitialServerEvent` already contains a selected server,
+      preserve it—including native forced-host routing—and do not arm an
+      SLS-Limbo handoff for that unrelated route. Supply the configured SLS-LITE
+      lobby only when Velocity has not selected an initial server. Keep managed
+      lobby/limbo unavailability behavior bounded to routes SLS-LITE owns, never
+      modify `velocity.toml`, and test forced hosts, ordinary fallback order,
+      managed and external lobbies, unavailable lobbies, reconnects, and kicks.
+- [ ] Add `lobby.mode: velocity` and make it the recommended clean-install mode.
+      In this mode, leave Velocity's initial-server choice, ordinary lobby set,
+      `try` order, and forced hosts authoritative; use enabled SLS-Limbo only as
+      the bounded holding/safety route when no valid Velocity route remains.
+      Preserve explicit existing `external` and `managed` behavior, migrate or
+      diagnose older/missing configuration without silently changing an existing
+      network, and allow Limbo to be disabled with a clear disconnect when no
+      route remains. Test clean install, reload, forced hosts, several Velocity
+      lobbies, missing routes, Limbo on/off, and all three modes.
+- [ ] Formalize the supported reload boundary and registration reconciliation.
+      Ensure `/sls reload` atomically reconciles only dynamic registrations owned
+      by SLS-LITE, normal shutdown unregisters those owned entries after bounded
+      lifecycle cleanup, and conflicting/stale names receive precise diagnostics
+      without modifying registrations belonging to Velocity configuration or
+      another plugin. Document that replacing the plugin JAR requires a Velocity
+      restart; add repeat-reload, conflict, shutdown, and unsupported hot-reload
+      detection tests without claiming binary plugin-manager reload support.
+- [ ] Finalize latest-release-first documentation publication. Keep repository
+      `DOCS/` canonical, synchronize the GitHub Wiki to the latest supported
+      release, and publish current release notes plus tested migration/upgrade
+      instructions. Do not create or advertise a maintained historical manual or
+      version selector; leave old text available through Git history/tags only and
+      direct unsupported old installations toward upgrading. Add a release check
+      that prevents the Wiki/current docs from claiming a different supported
+      release than the candidate artifact.
+- [ ] Implement and document the secure SLS-LITE backend messaging channel for
+      operator-authored NPC, menu, and backend integrations. Accept messages
+      only from a source-verified, explicitly authorized server connection and
+      bind the request to its actual carrier player. Use a versioned,
+      size-bounded schema; validate action and target identifiers; apply
+      per-source/player rate limits; and reject client-originated, spoofed, or
+      malformed messages. Provide typed matchmaking through the normal
+      admission path and an opt-in bounded SLS-command relay that executes only
+      as the carrier player through the ordinary command/permission contract.
+      Allow operators to restrict permitted actions/command roots per source;
+      never provide arbitrary console execution, identity override, or a bypass
+      around permissions and lifecycle rules. Use a dedicated SLS-LITE channel,
+      mark matching messages handled before source parsing, and do not listen to
+      legacy or general command-forwarder channels by default. Deduplicate
+      request IDs in a bounded expiring cache so retransmission or overlapping
+      integrations cannot execute one request twice. Publish the protocol and a
+      maintained minimal backend sender example; allow other plugins to
+      implement that protocol without depending on the example. Treat any
+      legacy/general-forwarder adapter as a separate explicit opt-in and do not
+      claim automatic compatibility with `slimelabs:network`, `sls:vsls`, or
+      `bungeecord:main` payloads. Document that general command-forwarding
+      plugins remain usable by dispatching `/sls` normally through Velocity;
+      do not duplicate their broader proxy-command role in the RC.
+      Document that managed Paper lobbies are backend child processes, not code
+      running inside the Velocity JVM: player-issued proxy commands work
+      normally, while an NPC/menu plugin executing server-side still needs this
+      channel or a general command forwarder, just like an external lobby.
 - [ ] Evolve the proven Stage 3.10 API distribution smoke into one reusable
       Build Release workflow with explicit `distribution-smoke`,
       `release-candidate`, and `release` modes. Reuse the clean-runner download,
@@ -602,6 +837,69 @@ Goal: approve and publish the first public SLS-LITE release.
 
 Acceptance: the published artifact, checksum, source, documentation, and tag all
 refer to the same approved revision and passed release evidence.
+
+## Post-release: Operator Experience
+
+- [ ] Design stable permission bundles/role aliases over the existing granular
+      Velocity nodes (for example inspection, matchmaking, lifecycle, and
+      software administration). Keep membership in the operator's permission
+      provider, retain the built-in SLS-LITE administrator, and define child
+      grant/deny precedence before implementation.
+
+## Post-release: Compatibility and Routing
+
+- [ ] Design optional per-blueprint `allowed-client-versions` admission using
+      explicit protocol ranges, ViaVersion-aware capability checks, actionable
+      rejection messages, and tests that never imply support from translation
+      plugin detection alone.
+- [ ] Design multiple SLS-managed lobby pools with stable identities,
+      health/capacity-aware selection, bounded startup and recovery, safe cycling,
+      deterministic SLS-Limbo handoff, and explicit interaction with Velocity's
+      native forced-host and fallback routing. Do not replace ordinary Velocity
+      lobby pools that need no SLS-LITE lifecycle ownership.
+
+## Post-release: Optional Integrations
+
+- [ ] Design optional proxy-managed resource-pack switching with validated
+      logical IDs, client-reachable HTTP(S), exact hashes, version-aware
+      prompt/required behavior, and deterministic apply/replace/clear semantics
+      across transfers. Integrate with operator-selected hosting/conversion
+      services without making SLS-LITE a pack host or automatically uploading
+      operator data.
+- [ ] Evaluate an optional official Paper/Spigot SLS-LITE bridge JAR built on
+      the versioned backend messaging protocol. Keep it independent from the
+      core plugin, support general command forwarders through normal Velocity
+      dispatch, and either license/rework the historical SL-JoinForward project
+      or implement the companion cleanly under the current project license.
+
+## Post-release: Performance and Capacity
+
+- [ ] Add default-off configurable warm instance pools with per-blueprint or
+      matchmaking-pool minimum/maximum ready counts, strict memory/process/port
+      reservations, bounded asynchronous replenishment, startup backoff,
+      maintenance/shutdown integration, crash reconciliation, idle-cost
+      diagnostics, and hard protection against unbounded start loops. Preserve
+      ordinary on-demand behavior when disabled.
+
+## Post-release: World Maintenance
+
+- [ ] Implement opt-in offline world optimization. First establish and document
+      the exact full-SLS behavior being retained, the built-in transformation,
+      supported world formats/versions, and measured benefit. Default the feature
+      off; support host policy and per-blueprint enable/strategy overrides. Never
+      rewrite a source world in place: provide a dry run, build into confined
+      separate output, verify it, and atomically select it for subsequent instance
+      preparation. Bound CPU, memory, I/O, output size, concurrency, and duration;
+      support cancellation, crash reconciliation, stale-output cleanup, and an
+      explicit safe reset path. Refuse unsafe active-world operations and report
+      partial or unsupported data precisely. Add a narrow namespaced Java API
+      strategy registration for trusted extensions, with capability metadata,
+      lifecycle cancellation, bounded progress/diagnostics, deterministic conflict
+      handling, and no exposure of mutable core lifecycle internals. Test corrupt
+      input, interrupted work, extension failure, cache identity/invalidation,
+      atomic publication, COW interaction, reload, shutdown, and recovery on the
+      local Linux/WSL fixture. Document which results affect disk, I/O, startup,
+      or runtime memory rather than promising generic memory savings.
 
 ## Coverage Audit
 

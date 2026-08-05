@@ -8,8 +8,8 @@ Compatibility statements use four meanings:
 - **Supported:** same usable contract in SLS-LITE.
 - **Adapted:** same intent with documented single-host behavior.
 - **SLS-LITE only:** local functionality without a full-SLS equivalent.
-- **Intentionally unsupported or deferred:** unavailable and never silently
-  treated as enforced.
+- **Unsupported by SLS-LITE:** unavailable and never silently treated as
+  enforced.
 
 Distributed nodes, daemon/container administration, arbitrary host mounts,
 container resource enforcement, and the Protocube/S4J HTTP surfaces are not

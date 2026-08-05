@@ -33,8 +33,8 @@ scope decisions are in the
 | Node/daemon administration | Intentionally unsupported | No distributed nodes exist in local mode. |
 | Container isolation/limits | Intentionally unsupported | JVM arguments and local admission are not container enforcement. |
 | Java extension API | Supported | Versioned capability discovery, immutable inspection, asynchronous local requests, queues, and ordered lifecycle subscriptions. |
-| Authenticated HTTP/event API | Deferred | No public network listener or distributed event service exists. |
-| Resource-pack hosting | Deferred | Public URL properties work; built-in serving and transfer orchestration do not. |
+| Authenticated HTTP/event API | Outside SLS-LITE core | No public network listener or distributed event service exists. Trusted extensions may expose their own authenticated integration surface. |
+| Resource-pack hosting | Outside SLS-LITE core | Public URL properties work; built-in serving and transfer orchestration are not provided. |
 | True filesystem COW | Supported when the host/path qualifies | Reflink, eligible Btrfs subvolume snapshots, kernel OverlayFS, fuse-overlayfs, and an explicit bounded operator snapshot-helper protocol are implemented. Portable copy remains the universal fallback. |
 
 ## Complete Current SLS Project Map
@@ -55,7 +55,7 @@ imply that SLS-LITE provides the distributed or container boundary around it.
 | COW volumes and reusable software state | Locally adapted | Exact-path selection chooses reflink, eligible Btrfs, kernel OverlayFS, rootless fuse-overlayfs, or portable copy. Full SLS uses daemon-managed OverlayFS/container mounts. |
 | `ro`, `rw`, and `state.copy` data intentions | Locally adapted | `ro` is a source-protecting private snapshot; `rw` is an explicit verified shared directory link; copy sources stay below the SLS-LITE data root. |
 | Arbitrary host `state.mounts` | Intentionally outside scope | Rejected because a portable plugin cannot safely authorize host paths or reproduce daemon/container mount isolation. |
-| Protocube HTTP API, API keys/scopes, SSE/WebSocket events, request IDs, and S4J clients | Distributed API outside scope; authenticated local HTTP API deferred | SLS-LITE has no public network control plane. Its separate versioned Java API exposes local immutable views and safe service requests. |
+| Protocube HTTP API, API keys/scopes, SSE/WebSocket events, request IDs, and S4J clients | Outside SLS-LITE core | SLS-LITE has no public network control plane. Its separate versioned Java API exposes local immutable views and safe service requests; trusted extensions own any network listener they add. |
 | Nodes, registration, heartbeats, draining, load balancing, allocations, and horizontal scaling | Intentionally outside scope | A SLS-LITE installation owns one Velocity allocation. Local maintenance mode blocks new creation without pretending to be node draining. |
 | Docker images, cgroups, CPU/swap/I/O/disk/affinity/OOM enforcement, container networking, and daemon file/archive APIs | Intentionally outside scope | Container-only fields are validated or retained as visible metadata but never reported as enforced. SLS-LITE stays inside the hosting provider's existing security boundary. |
 | Protocube/daemon SQLite controller state | Locally adapted | Versioned instance metadata, administrator properties, durable storage manifests, and startup reconciliation replace distributed controller databases. |
@@ -64,7 +64,7 @@ imply that SLS-LITE provides the distributed or container boundary around it.
 | System information, status, stats, console/log access, crash reports, and operational diagnostics | Locally adapted | Bounded in-game output, concise console milestones, rotating detailed logs, correlation IDs, timing phases, host probes, and resource admission replace controller/daemon observability. |
 | Protocube bearer keys, daemon tokens, TLS/CORS, and plugin API trust | Intentionally outside scope | Velocity permissions plus a short-lived administrator claim secure local commands. Secrets and paths are confined/redacted; no external listener exists to authenticate. |
 | Protocube Go `.so` extensions | Intentionally outside scope | Native controller plugins cannot run inside a JVM Velocity plugin. Blueprint annotations remain available for external integrations. |
-| SlimePacks discovery, conversion, cache, and HTTP serving | Deferred integration, not duplicated | SLS-LITE preserves resource-pack annotations and supports normal Minecraft pack URLs. Conversion/hosting remains a separate service. |
+| SlimePacks discovery, conversion, cache, and HTTP serving | Separate integration, not duplicated | SLS-LITE preserves resource-pack annotations and supports normal Minecraft pack URLs. Conversion/hosting remains a separate service. |
 | Non-Minecraft game processes advertised by full SLS | Intentionally outside scope | The first SLS-LITE product is a Velocity/Minecraft network manager and launches reviewed Java server profiles only. |
 | SLS-LITE lobby, SLS-Limbo, provider installers, administrator claims, join-test, maintenance mode, and multi-backend COW selection | SLS-LITE extensions | These replace infrastructure unavailable in a constrained single-allocation deployment; they do not claim full-SLS compatibility. |
 
@@ -143,8 +143,8 @@ The compatibility work must:
 - pin the modern SLS revision used for the run;
 - compare configuration, blueprints, commands, permissions, lifecycle,
   installation, storage, observability, and integrations;
-- classify every feature as supported, adapted, intentionally unsupported, or
-  deferred;
+- classify every feature as supported, adapted, SLS-LITE-only, or intentionally
+  unsupported;
 - load representative modern definitions without manual conversion;
 - document every accepted, translated, and rejected field;
 - identify both missing shared functionality and unnecessary SLS-LITE scope.
