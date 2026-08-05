@@ -665,7 +665,7 @@ post-release milestone.
 
 ### 4.2 Candidate Artifact and Documentation
 
-- [ ] Review stable SLS, Velocity, Paper, and Minecraft releases against the
+- [x] Review stable SLS, Velocity, Paper, and Minecraft releases against the
       pinned compatibility/runtime matrix immediately before the RC build;
       incorporate applicable security or shared-contract corrections and record
       intentional version boundaries. Experimental upstream branches are
@@ -782,30 +782,30 @@ post-release milestone.
       running inside the Velocity JVM: player-issued proxy commands work
       normally, while an NPC/menu plugin executing server-side still needs this
       channel or a general command forwarder, just like an external lobby.
-- [ ] Evolve the proven Stage 3.10 API distribution smoke into one reusable
+- [x] Evolve the proven Stage 3.10 API distribution smoke into one reusable
       Build Release workflow with explicit `distribution-smoke`,
       `release-candidate`, and `release` modes. Reuse the clean-runner download,
       checksum, artifact-boundary, and Maven/Gradle consumer verification in
       every mode; keep smoke releases private drafts, require an approved
       environment before publishing a candidate or final release, and prevent
       a mode or rerun from silently promoting an artifact.
-- [ ] Produce one versioned plugin JAR and one canonical commented configuration.
-- [ ] Publish installation, update, backup, uninstall, host-capability, runtime,
+- [x] Produce one versioned plugin JAR and one canonical commented configuration.
+- [x] Publish installation, update, backup, uninstall, host-capability, runtime,
       storage, compatibility, command, lifecycle, recovery, and troubleshooting
       documentation.
-- [ ] Publish a release compatibility matrix for Velocity, Java, Paper,
+- [x] Publish a release compatibility matrix for Velocity, Java, Paper,
       Minecraft protocols, bundled NanoLimbo-derived runtime, and optional
       ViaVersion.
-- [ ] Label shared material as `SLS and SLS-LITE`, `Full SLS only`,
+- [x] Label shared material as `SLS and SLS-LITE`, `Full SLS only`,
       `SLS-LITE only`, or `Adapted for local mode`; keep shared text in one place
       where practical.
-- [ ] Complete the documentation drift, security, privacy, dependency, source,
+- [x] Complete the documentation drift, security, privacy, dependency, source,
       license, third-party notice, and migration audits.
 - [ ] Mirror the exact corresponding bundled NanoLimbo-derived source in an
       SLS-LITE-controlled release location.
-- [ ] Verify the shaded JAR contains all required licenses/notices and no
+- [x] Verify the shaded JAR contains all required licenses/notices and no
       unfinished feature is documented as available.
-- [ ] Perform clean-install and upgrade tests on supported Windows/Pterodactyl
+- [x] Perform clean-install and upgrade tests on supported Windows/Pterodactyl
       and native-Linux profiles.
 - [ ] Publish the candidate artifact and checksums to the selected external
       testers.

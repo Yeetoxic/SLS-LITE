@@ -203,8 +203,11 @@ SLS-LITE can advertise an explicitly configured, validated NanoLimbo protocol
 baseline for a proxy-installed ViaVersion. Native per-client advertisement
 remains the default. See
 [the protocol compatibility matrix](Protocol_Compatibility.md) for tested
-versions and the translated-path acceptance criteria. Neither ViaVersion
-detection nor a newly released client is treated as automatic compatibility.
+versions and the translated-path acceptance criteria. With ViaVersion, the
+documented current client is a minimum rather than a hard ceiling: a newer
+client is eligible when the installed ViaVersion build reports support for it
+and the backend baseline. That dynamic eligibility is not a guarantee about
+gameplay or backend plugins.
 
 ## Recovery
 
@@ -225,8 +228,9 @@ one actionable error and disconnects players who have no usable backend.
 - External-primary failure is detected reactively after a failed player
   connection; once detected, recovery is checked with background pings.
 - Native client compatibility has an automated representative matrix.
-  ViaVersion-translated compatibility is limited to the exact client,
-  ViaVersion, baseline, and handoff combinations in the published matrix.
+  ViaVersion may admit newer clients above the documented floor when it reports
+  a supported translation path; only exact published rows carry SLS-LITE's
+  end-to-end regression-test status.
 - If both the primary lobby and SLS-Limbo fail, SLS-LITE enters a degraded
   no-lobby state. Players without a usable backend are disconnected with a clear
   lobby-unavailable message, while Velocity, console administration, diagnostics,

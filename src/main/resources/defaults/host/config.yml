@@ -275,8 +275,10 @@ lobby:
     # Keep -1 unless the selected protocol is listed as tested in
     # DOCS/Protocol_Compatibility.md. When ViaVersion is present, native mode is
     # exposed to ViaVersion as the safe 1.21.5 baseline instead of its internal
-    # -1 sentinel. This does not install ViaVersion or make an unknown Minecraft
-    # release compatible by itself.
+    # -1 sentinel. SLS-LITE does not impose a maximum client version: a newer
+    # client may use this baseline when the installed ViaVersion build reports
+    # support for both protocols. Exact tested paths remain listed in
+    # DOCS/Protocol_Compatibility.md.
     advertised_protocol: -1
 
     # Player-facing NanoLimbo presentation. Text fields use bounded MiniMessage.

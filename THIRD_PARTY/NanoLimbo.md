@@ -1,7 +1,7 @@
 # NanoLimbo Runtime Notice
 
-SLS-LITE currently bundles an unmodified NanoLimbo runtime for its experimental
-SLS-Limbo virtual lobby.
+SLS-LITE bundles an unmodified NanoLimbo runtime for its optional SLS-Limbo
+virtual lobby.
 
 ## Pinned Component
 

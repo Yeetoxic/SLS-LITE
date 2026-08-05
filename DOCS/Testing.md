@@ -8,7 +8,7 @@ synthetic Velocity fixture, and the local Pterodactyl historical-world network.
 ## Automated Suite
 
 ```powershell
-mvn verify
+mvn clean verify
 ```
 
 Run this release's build with JDK 25 because the pinned Velocity API itself
@@ -20,6 +20,11 @@ Tests cover parsing, validation,
 lifecycle, concurrency, resource accounting, installation, reconciliation,
 commands, lobbies, SLS-Limbo, protocol integration boundaries, and Velocity
 registration.
+
+Use `clean` for every artifact that may be distributed or checksummed. The
+shading phase transforms packaging output; rerunning `package`, `verify`, or
+`install` against an already shaded `target/` directory is suitable only for
+local iteration and must not define a release checksum.
 
 Documentation tests verify that the command/permission and configuration
 references match runtime contracts, every top-level guide returns to the

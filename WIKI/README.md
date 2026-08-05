@@ -24,6 +24,7 @@ review removals individually.
 The publishable source set is:
 
 - `Home.md`
+- `Release-Notes.md`
 - `_Sidebar.md`
 - `_Footer.md`
 - `Installation-and-First-Run.md`
@@ -33,6 +34,7 @@ The publishable source set is:
 - `Lobby-and-Matchmaking.md`
 - `Operations.md`
 - `Troubleshooting.md`
+- `Security-and-Privacy.md`
 - `Compatibility.md`
 - `Java-Extension-Development.md`
 - `Backend-Integrations.md`

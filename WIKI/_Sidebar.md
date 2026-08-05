@@ -1,6 +1,7 @@
 **SLS-LITE**
 
 - [Home](Home)
+- [Current Release](Release-Notes)
 - [Installation and First Run](Installation-and-First-Run)
 - [Configuration](Configuration)
 - [Commands and Permissions](Commands-and-Permissions)
@@ -8,6 +9,7 @@
 - [Lobby and Matchmaking](Lobby-and-Matchmaking)
 - [Operations](Operations)
 - [Troubleshooting](Troubleshooting)
+- [Security and Privacy](Security-and-Privacy)
 - [Compatibility](Compatibility)
 - [Java Extension Development](Java-Extension-Development)
 - [Backend Integrations](Backend-Integrations)

@@ -1,5 +1,8 @@
 # SLS-LITE Wiki
 
+Current candidate: **SLS-LITE 0.1.0-rc.1**. See the
+[current release notes](Release-Notes).
+
 SLS-LITE runs a small, dynamic Minecraft network inside one Velocity hosting
 allocation. It launches local Java server processes, registers ready backends,
 queues and transfers players, and provides a lightweight SLS-Limbo fallback.

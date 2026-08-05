@@ -1,5 +1,6 @@
 package net.slimelabs.slslite.docs;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,6 +24,7 @@ final class DocumentationNavigationTest {
   private static final Set<String> WIKI_PAGES =
       Set.of(
           "Home.md",
+          "Release-Notes.md",
           "_Sidebar.md",
           "_Footer.md",
           "Installation-and-First-Run.md",
@@ -32,6 +34,7 @@ final class DocumentationNavigationTest {
           "Lobby-and-Matchmaking.md",
           "Operations.md",
           "Troubleshooting.md",
+          "Security-and-Privacy.md",
           "Compatibility.md",
           "Java-Extension-Development.md",
           "Backend-Integrations.md",
@@ -127,6 +130,39 @@ final class DocumentationNavigationTest {
         "Public documentation uses roadmap classification; proposed work belongs in todo.md");
   }
 
+  @Test
+  void candidateVersionAndReleaseWorkflowStayConsistent() throws IOException {
+    Matcher versionMatcher =
+        Pattern.compile(
+                "<artifactId>sls-lite</artifactId>\\s*<version>([^<]+)</version>",
+                Pattern.MULTILINE)
+            .matcher(Files.readString(PROJECT.resolve("pom.xml")));
+    assertTrue(versionMatcher.find(), "Project version is missing from pom.xml");
+    String version = versionMatcher.group(1);
+    assertEquals("0.1.0-rc.1", version, "Unexpected release-candidate version");
+
+    assertContains(
+        "src/main/java/net/slimelabs/slslite/BuildInfo.java",
+        "public static final String VERSION = \"" + version + "\";");
+    assertContains("src/main/resources/velocity-plugin.json", "\"version\": \"" + version + "\"");
+    assertContains("DOCS/Compatibility.md", "SLS-LITE candidate: `" + version + "`");
+    assertContains("DOCS/Protocol_Compatibility.md", "| SLS-LITE | `" + version + "` |");
+    assertContains("RELEASE_NOTES.md", "# SLS-LITE " + version);
+    assertContains("WIKI/Home.md", "SLS-LITE " + version);
+
+    Path workflow = PROJECT.resolve(".github/workflows/build-release.yml");
+    assertTrue(Files.isRegularFile(workflow), "Build Release workflow is missing");
+    String releaseWorkflow = Files.readString(workflow);
+    for (String mode : List.of("distribution-smoke", "release-candidate", "release")) {
+      assertTrue(releaseWorkflow.contains("- " + mode), () -> "Missing release mode: " + mode);
+    }
+    assertTrue(releaseWorkflow.contains("environment: ${{ inputs.mode }}"));
+    assertTrue(releaseWorkflow.contains("Refusing to replace or promote existing release"));
+    assertFalse(
+        Files.exists(PROJECT.resolve(".github/workflows/api-distribution-smoke.yml")),
+        "Obsolete standalone distribution workflow still exists");
+  }
+
   private static String publicGuideText() throws IOException {
     StringBuilder publicGuides = new StringBuilder(Files.readString(PROJECT.resolve("README.md")));
     for (String root : List.of("DOCS", "WIKI")) {
@@ -142,6 +178,7 @@ final class DocumentationNavigationTest {
   private static List<Path> projectDocuments() throws IOException {
     List<Path> documents = new ArrayList<>();
     documents.add(PROJECT.resolve("README.md"));
+    documents.add(PROJECT.resolve("RELEASE_NOTES.md"));
     documents.add(PROJECT.resolve("examples/velocity-extension/README.md"));
     documents.add(PROJECT.resolve("examples/paper-backend-sender/README.md"));
     documents.add(PROJECT.resolve("infra/pterodactyl/README.md"));
@@ -162,5 +199,11 @@ final class DocumentationNavigationTest {
 
   private static String relative(Path path) {
     return PROJECT.relativize(path).toString().replace('\\', '/');
+  }
+
+  private static void assertContains(String relativePath, String expected) throws IOException {
+    assertTrue(
+        Files.readString(PROJECT.resolve(relativePath)).contains(expected),
+        () -> relativePath + " does not contain: " + expected);
   }
 }

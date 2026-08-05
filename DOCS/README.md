@@ -9,11 +9,12 @@ summaries.
 
 ### New operator
 
-1. [Getting Started](Getting_Started.md)
-2. [Configuration](Configuration.md)
-3. [Blueprints](Blueprints.md)
-4. [Commands and Permissions](Commands.md)
-5. [Operations and Recovery](Operations.md)
+1. [Current Release Notes](../RELEASE_NOTES.md)
+2. [Getting Started](Getting_Started.md)
+3. [Configuration](Configuration.md)
+4. [Blueprints](Blueprints.md)
+5. [Commands and Permissions](Commands.md)
+6. [Operations and Recovery](Operations.md)
 
 ### Existing SLS or SLS-LITE operator
 
@@ -46,6 +47,7 @@ summaries.
 | Commands and permissions | [Commands](Commands.md) | [vSLS command comparison](SLS_Command_Compatibility.md) |
 | Daily operation, logs, lifecycle, recovery | [Operations](Operations.md) | [Lifecycle concurrency](Lifecycle_Concurrency.md) |
 | Failure diagnosis and problem reports | [Troubleshooting](Troubleshooting.md) | [Software Installation](Software_Installation.md), [Resource Packs](Resource_Packs.md) |
+| Security and privacy | [Security and Privacy](Security_and_Privacy.md) | [Backend Messaging](Backend_Messaging.md) |
 | Software profiles and installation | [Software Installation](Software_Installation.md) | Generated Paper and vanilla profiles |
 | Lobby and player fallback behavior | [SLS-Limbo](SLS_Limbo.md) | [Protocol Compatibility](Protocol_Compatibility.md) |
 | SLS and platform compatibility | [Compatibility](Compatibility.md) | [SLS v0.2.0 matrix](SLS_v0.2.0_Compatibility.md) |
@@ -54,6 +56,7 @@ summaries.
 | Paper backend, NPC, and menu integrations | [Backend Messaging](Backend_Messaging.md) | [Paper sender example](../examples/paper-backend-sender/README.md) |
 | Architecture and internal contracts | [Architecture](ARCHITECTURE.md) | [Contributor architecture](Contributor_Architecture.md), [internal invariants](Internal_Invariants.md) |
 | Test selection and fixtures | [Testing](Testing.md) | [Velocity fixture](Velocity_Testing.md), [Pterodactyl fixture](Pterodactyl_Local_Testing.md) |
+| Candidate and release procedure | [Release Process](Release_Process.md) | [Current release notes](../RELEASE_NOTES.md) |
 
 The generated commented files are canonical schema examples:
 

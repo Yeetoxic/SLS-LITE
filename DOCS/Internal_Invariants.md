@@ -159,9 +159,10 @@ Compatibility is intentional and bounded:
   Migration never invents ownership for an unknown directory.
 - Modern software invocation is adapted to a shell-free argv model. Unsupported
   configuration targets and shell syntax are rejected instead of approximated.
-- Protocol support is derived from the checksum-pinned NanoLimbo runtime.
-  ViaVersion synchronization is optional integration, not proof that an
-  untested client path is supported.
+- Native protocol support is derived from the checksum-pinned NanoLimbo runtime.
+  ViaVersion may provide a forward-compatible path above the documented client
+  floor when its API reports support; that eligibility is distinct from an
+  exact SLS-LITE regression-tested path.
 - Automatic COW selection chooses only a strategy that passed its capability
   and isolation probe. Snapshot helpers are never auto-selected, and safe
   portable copy remains the universal fallback.

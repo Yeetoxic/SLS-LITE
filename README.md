@@ -46,6 +46,7 @@ and translated paths.
 - A current compatible Velocity 4.x server.
 - JDK 25 to build and run the pinned Velocity generation used by this release.
   SLS-LITE itself is emitted as Java 21 bytecode for plugin compatibility.
+- Maven 3.9.6 or newer when building from source.
 - Any additional Java majors required by the Minecraft versions you launch.
 - Permission to create files, bind loopback ports, and launch child Java
   processes inside the hosting allocation.
@@ -58,7 +59,7 @@ restrictions.
 
 ## Install
 
-1. Build with `mvn verify` or obtain a reviewed release artifact.
+1. Build with `mvn clean verify` or obtain a reviewed release artifact.
 2. Place `sls-lite-<version>.jar` in Velocity's `plugins/` directory.
 3. Start Velocity once to generate `plugins/sls-lite/`.
 4. Review `config.yml`, especially memory, ports, forwarding, lobby mode, and
@@ -118,18 +119,24 @@ the blueprint's `blueprint.type`.
 - [Java extension API](DOCS/Java_API.md)
 - [Java API scope and compatibility policy](DOCS/Java_API_Compatibility.md)
 - [Paper backend messaging](DOCS/Backend_Messaging.md)
+- [Security and privacy](DOCS/Security_and_Privacy.md)
+- [Current release notes](RELEASE_NOTES.md)
 - [Reviewable GitHub Wiki source](WIKI/README.md)
 
 ## Build
 
 ```shell
-mvn verify
+mvn clean verify
 ```
 
 The shaded plugin is written to `target/sls-lite-<version>.jar`; the compile-only
 public extension contract is written to `target/sls-lite-<version>-api.jar`. The plugin build embeds
 SLS-LITE's AGPL license, third-party notices, SnakeYAML, and the pinned
 NanoLimbo runtime used by SLS-Limbo.
+
+Always begin a distributable build with `clean`. The shading phase relocates
+packaged dependency references, so a second package/install invocation against
+the same `target/` directory is not a canonical release build.
 
 Only the shaded plugin JAR is installed on Velocity. It already contains the
 public API classes. The smaller `-api.jar` is an SDK/classifier for extension

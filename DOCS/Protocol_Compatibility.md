@@ -16,17 +16,25 @@ through Velocity.
 
 | Component | Version |
 | --- | --- |
-| SLS-LITE | `0.1.0-SNAPSHOT` |
+| SLS-LITE | `0.1.0-rc.1` |
 | Velocity | `4.0.0` build `6` |
 | Java | Temurin `25.0.3` |
 | NanoLimbo runtime | `1.13.0` at `d192d57d` |
 | ViaVersion fixture | `5.11.0` |
-| Supported stable ViaVersion ceiling | Minecraft `26.2`, protocol `776` |
+| Forward-compatible ViaVersion client floor | Minecraft `26.2`, protocol `776` |
 | Fixed translation baseline | Minecraft `1.21.5`, protocol `770` |
 
-Development snapshots are outside the release matrix. Snapshot support must be
-opted into and qualified separately; it is never inferred from support for the
-preceding stable release.
+Minecraft `26.2` is a minimum, not a frozen maximum, for the forward-compatible
+ViaVersion client policy. SLS-LITE does not reject a newer client merely because
+it postdates this document: when the installed ViaVersion build reports support
+for that client and the configured backend baseline, the proxy may translate
+it without an SLS-LITE update. The exact rows below remain the regression-tested
+release paths; a successful translation does not certify unrelated gameplay,
+world, mod, or backend-plugin behavior.
+
+Development snapshots are not individually release-qualified. Operators may
+test them through a ViaVersion build that explicitly supports them, but snapshot
+behavior cannot block or expand the stable candidate matrix.
 
 ViaVersion test artifacts must come from its
 [official releases](https://github.com/ViaVersion/ViaVersion/releases). The
@@ -93,6 +101,7 @@ compatible. A translated release passes only after:
 | `1.21.5` | `1.21.5` (`770`) | Full managed-lobby/SLS-Limbo handoff |
 | `1.21.11` | `1.21.5` (`770`) | Full managed-lobby/SLS-Limbo handoff |
 | `26.2` | `1.21.5` (`770`) | Full managed-lobby/SLS-Limbo handoff |
+| Newer than `26.2` | `1.21.5` (`770`) | Forward-compatible when the installed ViaVersion build reports both protocols as supported; exact newer versions remain operator-qualified until added as regression-tested rows. |
 
 When ViaVersion is present, SLS-LITE synchronizes every dynamic backend through
 ViaVersion's public `ProtocolDetectorService` before publishing it as ready.

@@ -1,0 +1,432 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Build intent; artifacts are never promoted between modes
+        required: true
+        default: distribution-smoke
+        type: choice
+        options:
+          - distribution-smoke
+          - release-candidate
+          - release
+      release_tag:
+        description: Exact v-prefixed tag for candidate/release modes; empty for smoke
+        required: false
+        default: ""
+        type: string
+      cleanup_smoke:
+        description: Delete the temporary smoke draft and tag after verification
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-release-${{ inputs.mode }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build immutable distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      project_version: ${{ steps.metadata.outputs.project_version }}
+      release_tag: ${{ steps.metadata.outputs.release_tag }}
+    steps:
+      - name: Check out requested source revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Temurin 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Compile, test, analyze, and package
+        run: mvn -B --no-transfer-progress clean verify
+
+      - name: Compile maintained Paper backend sender
+        run: >-
+          mvn -B --no-transfer-progress
+          -f examples/paper-backend-sender/pom.xml
+          clean verify
+
+      - name: Validate mode, version, and source identity
+        id: metadata
+        env:
+          REQUESTED_MODE: ${{ inputs.mode }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B --no-transfer-progress help:evaluate \
+            -Dexpression=project.version \
+            -Doutput=target/project-version.txt \
+            -q
+          version="$(<target/project-version.txt)"
+          case "$REQUESTED_MODE" in
+            distribution-smoke)
+              if [[ -n "$REQUESTED_TAG" ]]; then
+                echo "distribution-smoke does not accept release_tag" >&2
+                exit 1
+              fi
+              tag="distribution-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              ;;
+            release-candidate)
+              if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]; then
+                echo "release-candidate requires an x.y.z-rc.N project version" >&2
+                exit 1
+              fi
+              tag="v${version}"
+              if [[ "$REQUESTED_TAG" != "$tag" ]]; then
+                echo "release_tag must be exactly $tag" >&2
+                exit 1
+              fi
+              ;;
+            release)
+              if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "release requires a stable x.y.z project version" >&2
+                exit 1
+              fi
+              tag="v${version}"
+              if [[ "$REQUESTED_TAG" != "$tag" ]]; then
+                echo "release_tag must be exactly $tag" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unknown build mode: $REQUESTED_MODE" >&2
+              exit 1
+              ;;
+          esac
+
+          grep -Fqx "  public static final String VERSION = \"${version}\";" \
+            src/main/java/net/slimelabs/slslite/BuildInfo.java
+          grep -Fq "\"version\": \"${version}\"" src/main/resources/velocity-plugin.json
+          grep -Fq "SLS-LITE candidate: \`${version}\`" DOCS/Compatibility.md
+          grep -Fq "| SLS-LITE | \`${version}\` |" DOCS/Protocol_Compatibility.md
+          grep -Fq "# SLS-LITE ${version}" RELEASE_NOTES.md
+
+          printf 'project_version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'release_tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Stage canonical artifacts and corresponding source
+        env:
+          PROJECT_VERSION: ${{ steps.metadata.outputs.project_version }}
+          GH_TOKEN: ${{ github.token }}
+          NANOLIMBO_REVISION: d192d57d1d4a5fdc7b87643f453d82cb7b9b4242
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir distribution
+          cp "target/sls-lite-${PROJECT_VERSION}.jar" distribution/
+          cp "target/sls-lite-${PROJECT_VERSION}-api.jar" distribution/
+          cp "target/sls-lite-${PROJECT_VERSION}-api-sources.jar" distribution/
+          cp "target/sls-lite-${PROJECT_VERSION}-api-javadoc.jar" distribution/
+          cp src/main/resources/defaults/host/config.yml \
+            "distribution/sls-lite-${PROJECT_VERSION}-config.yml"
+          cp RELEASE_NOTES.md distribution/
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/Nan1t/NanoLimbo/tarball/${NANOLIMBO_REVISION}" \
+            > "distribution/NanoLimbo-1.13.0-source-${NANOLIMBO_REVISION}.tar.gz"
+          printf '%s  %s\n' \
+            '4811d42364287913c6ef601016f77049989d875d4741f7ce4c2b8d5364106de1' \
+            'src/main/resources/limbo/nanolimbo-1.13.0.jar' \
+            | sha256sum --check --strict
+          (cd distribution && sha256sum -- * > SHA256SUMS)
+
+      - name: Audit plugin artifact contents
+        env:
+          PROJECT_VERSION: ${{ steps.metadata.outputs.project_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin="distribution/sls-lite-${PROJECT_VERSION}.jar"
+          contents="$(jar tf "$plugin")"
+          for required in \
+            'velocity-plugin.json' \
+            'defaults/host/config.yml' \
+            'limbo/nanolimbo-1.13.0.jar' \
+            'META-INF/licenses/LICENSE' \
+            'META-INF/licenses/NanoLimbo-LICENSE.txt' \
+            'META-INF/licenses/SnakeYAML-LICENSE.txt' \
+            'META-INF/THIRD-PARTY-NOTICES.txt'; do
+            grep -Fqx "$required" <<<"$contents"
+          done
+          metadata="$(unzip -p "$plugin" velocity-plugin.json)"
+          grep -Fq "\"version\": \"${PROJECT_VERSION}\"" <<<"$metadata"
+          test "$(find distribution -maxdepth 1 -name "sls-lite-${PROJECT_VERSION}.jar" | wc -l)" -eq 1
+
+      - name: Upload immutable workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sls-lite-${{ inputs.mode }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: distribution/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-smoke:
+    name: Publish private smoke draft
+    if: ${{ inputs.mode == 'distribution-smoke' }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download immutable workflow artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v8
+        with:
+          name: sls-lite-${{ inputs.mode }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: distribution
+
+      - name: Create private draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Refusing to replace existing release $RELEASE_TAG" >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" distribution/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Internal distribution smoke ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}" \
+            --notes "Private distribution verification only; not a release candidate." \
+            --draft \
+            --prerelease
+
+  publish-approved:
+    name: Publish approved candidate or release
+    if: ${{ inputs.mode != 'distribution-smoke' }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.mode }}
+    permissions:
+      contents: write
+    steps:
+      - name: Download immutable workflow artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v8
+        with:
+          name: sls-lite-${{ inputs.mode }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: distribution
+
+      - name: Reject an existing tag or release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Refusing to replace or promote existing release $RELEASE_TAG" >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags \
+            "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Refusing to attach a new release to existing tag $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: Publish selected mode as a verification draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          REQUESTED_MODE: ${{ inputs.mode }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(
+            "$RELEASE_TAG"
+            distribution/*
+            --repo "$GITHUB_REPOSITORY"
+            --target "$GITHUB_SHA"
+            --title "SLS-LITE $RELEASE_TAG"
+            --notes-file distribution/RELEASE_NOTES.md
+            --draft
+          )
+          if [[ "$REQUESTED_MODE" == 'release-candidate' ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}"
+
+  consume:
+    name: Verify published distribution on a clean runner
+    if: >-
+      ${{ always() && needs.build.result == 'success' &&
+          (needs.publish-smoke.result == 'success' || needs.publish-approved.result == 'success') }}
+    needs:
+      - build
+      - publish-smoke
+      - publish-approved
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out consumer examples
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Temurin 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Download published artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir downloaded
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir downloaded
+
+      - name: Verify checksums and public API boundary
+        env:
+          PROJECT_VERSION: ${{ needs.build.outputs.project_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd downloaded && sha256sum --check --strict SHA256SUMS)
+          api_jar="downloaded/sls-lite-${PROJECT_VERSION}-api.jar"
+          test -f "downloaded/sls-lite-${PROJECT_VERSION}.jar"
+          test -f "downloaded/sls-lite-${PROJECT_VERSION}-config.yml"
+          test -f "downloaded/sls-lite-${PROJECT_VERSION}-api-sources.jar"
+          test -f "downloaded/sls-lite-${PROJECT_VERSION}-api-javadoc.jar"
+          api_contents="$(jar tf "$api_jar")"
+          grep -qx 'net/slimelabs/slslite/api/SLSLiteApi.class' <<<"$api_contents"
+          if grep -q '^net/slimelabs/slslite/api/internal/' <<<"$api_contents"; then
+            echo "Downloaded public API JAR contains implementation classes" >&2
+            exit 1
+          fi
+
+      - name: Install only the downloaded API JAR
+        env:
+          PROJECT_VERSION: ${{ needs.build.outputs.project_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B --no-transfer-progress \
+            org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file \
+            -Dfile="downloaded/sls-lite-${PROJECT_VERSION}-api.jar" \
+            -DgroupId=net.slimelabs \
+            -DartifactId=sls-lite \
+            -Dversion="${PROJECT_VERSION}" \
+            -Dclassifier=api \
+            -Dpackaging=jar \
+            -DgeneratePom=true
+          test -f "$HOME/.m2/repository/net/slimelabs/sls-lite/${PROJECT_VERSION}/sls-lite-${PROJECT_VERSION}-api.jar"
+          test ! -f "$HOME/.m2/repository/net/slimelabs/sls-lite/${PROJECT_VERSION}/sls-lite-${PROJECT_VERSION}.jar"
+
+      - name: Compile Maven consumer against downloaded API
+        env:
+          PROJECT_VERSION: ${{ needs.build.outputs.project_version }}
+        run: >-
+          mvn -B --no-transfer-progress
+          -f examples/velocity-extension/pom.xml
+          "-Dsls-lite.version=${PROJECT_VERSION}"
+          clean verify
+
+      - name: Set up Gradle for consumer verification
+        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+        with:
+          gradle-version: "9.1.0"
+          cache-disabled: true
+
+      - name: Compile Gradle consumer against downloaded API
+        env:
+          PROJECT_VERSION: ${{ needs.build.outputs.project_version }}
+        run: >-
+          gradle -p examples/velocity-extension
+          "-PslsLiteApiJar=${GITHUB_WORKSPACE}/downloaded/sls-lite-${PROJECT_VERSION}-api.jar"
+          clean build
+
+      - name: Summarize immutable source and artifact
+        env:
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          REQUESTED_MODE: ${{ inputs.mode }}
+        shell: bash
+        run: |
+          {
+            printf '### Distribution verification passed\n\n'
+            printf 'Mode: %s  \n' "$REQUESTED_MODE"
+            printf 'Tag: %s  \n' "$RELEASE_TAG"
+            printf 'Source: %s\n' "$GITHUB_SHA"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup-smoke:
+    name: Delete temporary smoke draft
+    if: >-
+      ${{ always() && inputs.mode == 'distribution-smoke' && inputs.cleanup_smoke &&
+          needs.publish-smoke.result == 'success' }}
+    needs:
+      - build
+      - publish-smoke
+      - consume
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Delete smoke release and temporary tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+        run: >-
+          gh release delete "$RELEASE_TAG"
+          --repo "$GITHUB_REPOSITORY"
+          --cleanup-tag
+          --yes
+
+  finalize-approved:
+    name: Publish verified candidate or release
+    if: ${{ inputs.mode != 'distribution-smoke' && needs.consume.result == 'success' }}
+    needs:
+      - build
+      - publish-approved
+      - consume
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: ${{ inputs.mode }}
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the already verified draft without changing artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$(gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isDraft \
+            --jq '.isDraft')"
+          if [[ "$state" != 'true' ]]; then
+            echo "Refusing to promote a release that is not this run's verification draft" >&2
+            exit 1
+          fi
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false

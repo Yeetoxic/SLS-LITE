@@ -33,6 +33,12 @@ try {
     Pop-Location
 }
 
+[xml]$projectModel = Get-Content -LiteralPath (Join-Path $repository "pom.xml")
+$projectVersion = [string]$projectModel.project.version
+if ([string]::IsNullOrWhiteSpace($projectVersion)) {
+    throw "The SLS-LITE project version could not be read from pom.xml."
+}
+
 New-Item -ItemType Directory -Force -Path (Join-Path $testServer "plugins") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $pluginData "blueprints") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $pluginData "software-profiles") | Out-Null
@@ -48,7 +54,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $paperDirectory "paper.jar"))) {
     Invoke-WebRequest -Uri $paperUrl -Headers $headers `
         -OutFile (Join-Path $paperDirectory "paper.jar")
 }
-Copy-Item -LiteralPath (Join-Path $repository "target\sls-lite-0.1.0-SNAPSHOT.jar") `
+Copy-Item -LiteralPath (Join-Path $repository "target\sls-lite-$projectVersion.jar") `
     -Destination (Join-Path $testServer "plugins\sls-lite.jar") -Force
 
 Set-Content -LiteralPath (Join-Path $pluginData "config.yml") -Encoding utf8 -Value @'

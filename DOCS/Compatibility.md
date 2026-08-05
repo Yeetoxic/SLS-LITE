@@ -13,29 +13,38 @@ scope decisions are in the
 
 ## Current Feature Matrix
 
+Shared-product material uses these permanent scope labels:
+
+- **SLS and SLS-LITE:** the operator intent and usable contract exist in both.
+- **Full SLS only:** distributed/controller/container behavior that SLS-LITE
+  intentionally does not claim.
+- **SLS-LITE only:** functionality created for the local single-host product.
+- **Adapted for local mode:** shared intent implemented with a documented local
+  process, filesystem, or Velocity boundary.
+
 | Area | Status | SLS-LITE behavior |
 | --- | --- | --- |
-| Dynamic registries | Supported | `blueprint.type` defines the registry. |
-| Blueprint identity and limits | Supported | Modern names for ID, name, type, software, version, memory, players, and instances. |
+| Dynamic registries | SLS and SLS-LITE | `blueprint.type` defines the registry. |
+| Blueprint identity and limits | SLS and SLS-LITE | Modern names for ID, name, type, software, version, memory, players, and instances. |
 | `state.volumes` | Adapted for local mode | Transactional `cow` merge, private-snapshot `ro`, and explicit persistent single-instance `rw` through a verified shared directory link. |
-| Blueprint annotations | Adapted | Unknown annotation trees and nulls are preserved; local lifecycle keys plus vSLS lifecycle, capacity, `gameType`, and bounded `on-join` keys are interpreted. |
-| Structured config patches | Partial | `server.properties`, contained nested YAML maps, and atomic text line-prefix patches are supported; JSON, XML, INI, and arbitrary properties targets are rejected. |
-| Software definitions | Adapted | Local profiles and constrained modern SLS definitions with shell-free Java invocation. |
+| Blueprint annotations | Adapted for local mode | Unknown annotation trees and nulls are preserved; local lifecycle keys plus vSLS lifecycle, capacity, `gameType`, and bounded `on-join` keys are interpreted. |
+| Structured config patches | Adapted for local mode | `server.properties`, contained nested YAML maps, and atomic text line-prefix patches are supported; JSON, XML, INI, and arbitrary properties targets are rejected. |
+| Software definitions | Adapted for local mode | Local profiles and constrained modern SLS definitions with shell-free Java invocation. |
 | Exact Paper/vanilla install | SLS-LITE only | Verified local cache and provider download after explicit EULA acceptance. |
-| Instance IDs | Supported | Human-readable `<blueprint>.<short-id>`. |
-| Matchmaking and capacity | Supported | Ready-instance preference, queued slots, bounded new-instance creation, and vSLS `gameType` pools. |
-| Local lifecycle | Supported | Start, readiness, graceful stop, cancellation, idle cleanup, restart, and reset. |
-| Persistent instances | Adapted | Local ownership metadata, definition fingerprint, and startup reconciliation. |
-| Managed/external lobby | SLS-LITE only/adapted | Primary lobby can be local or pre-registered. |
+| Instance IDs | SLS and SLS-LITE | Human-readable `<blueprint>.<short-id>`. |
+| Matchmaking and capacity | Adapted for local mode | Ready-instance preference, queued slots, bounded new-instance creation, and vSLS `gameType` pools. |
+| Local lifecycle | Adapted for local mode | Start, readiness, graceful stop, cancellation, idle cleanup, restart, and reset. |
+| Persistent instances | Adapted for local mode | Local ownership metadata, definition fingerprint, and startup reconciliation. |
+| Managed/external lobby | Adapted for local mode | Primary lobby can be Velocity-owned, locally managed, or pre-registered. |
 | SLS-Limbo | SLS-LITE only | Bundled local fallback when no normal backend is safe. |
-| vSLS command tree | Partial/adapted | Implemented local commands retain upstream names; unsupported roots respond explicitly. |
-| Velocity permissions | Supported | Umbrella and granular nodes, plus built-in administrator bootstrap. |
-| Node/daemon administration | Intentionally unsupported | No distributed nodes exist in local mode. |
-| Container isolation/limits | Intentionally unsupported | JVM arguments and local admission are not container enforcement. |
-| Java extension API | Supported | Versioned capability discovery, immutable inspection, asynchronous local requests, queues, and ordered lifecycle subscriptions. |
-| Authenticated HTTP/event API | Outside SLS-LITE core | No public network listener or distributed event service exists. Trusted extensions may expose their own authenticated integration surface. |
-| Resource-pack hosting | Outside SLS-LITE core | Public URL properties work; built-in serving and transfer orchestration are not provided. |
-| True filesystem COW | Supported when the host/path qualifies | Reflink, eligible Btrfs subvolume snapshots, kernel OverlayFS, fuse-overlayfs, and an explicit bounded operator snapshot-helper protocol are implemented. Portable copy remains the universal fallback. |
+| vSLS command tree | Adapted for local mode | Implemented local commands retain upstream names; unsupported roots respond explicitly. |
+| Velocity permissions | Adapted for local mode | Umbrella and granular nodes, plus built-in administrator bootstrap. |
+| Node/daemon administration | Full SLS only | No distributed nodes exist in local mode. |
+| Container isolation/limits | Full SLS only | JVM arguments and local admission are not container enforcement. |
+| Java extension API | SLS-LITE only | Versioned capability discovery, immutable inspection, asynchronous local requests, queues, and ordered lifecycle subscriptions. |
+| Authenticated HTTP/event API | Full SLS only | No public network listener or distributed event service exists. Trusted extensions may expose their own authenticated integration surface. |
+| Resource-pack hosting | Full SLS only | Public URL properties work; built-in serving and transfer orchestration are not provided. |
+| True filesystem COW | Adapted for local mode | Reflink, eligible Btrfs subvolume snapshots, kernel OverlayFS, fuse-overlayfs, and an explicit bounded operator snapshot-helper protocol are implemented. Portable copy remains the universal fallback. |
 
 ## Complete Current SLS Project Map
 
@@ -92,7 +101,19 @@ boundaries, not silent parser acceptance or incomplete runtime behavior.
   `8e8b1e3cf7d2157887764c16f11b8901f8241121`.
 - Historical single-host behavior: SLS `2.1.2`, commit
   `4f9b7ca7f6d857d43253076f1627ad4087f663ab`.
-- Current SLS-LITE build: `0.1.0-SNAPSHOT`.
+- Current SLS-LITE candidate: `0.1.0-rc.1`.
+
+The pre-candidate release-line review on 2026-08-04 retained these boundaries:
+
+- full SLS remains pinned to `v0.2.0`/`8e8b1e3c` because no newer stable shared
+  contract supersedes it;
+- Minecraft and Paper 26.2 remain the stable server baseline; Minecraft 26.3 is
+  still a snapshot line and is handled only by the documented forward-client
+  ViaVersion policy;
+- Velocity 4.1.0 remains a snapshot line. SLS-LITE retains the exact API build
+  in `pom.xml` and the exercised 4.0.0 runtime rather than changing the proxy
+  boundary immediately before the candidate;
+- ViaVersion 5.11.0 remains the optional exercised integration.
 
 See [SLS Command Compatibility](SLS_Command_Compatibility.md). Historical
 single-host migration behavior is summarized in [Migration](Migration.md).
@@ -108,13 +129,17 @@ single-host migration behavior is summarized in [Migration](Migration.md).
 | ViaVersion fixture | 5.11.0, optional |
 | SLS-Limbo | NanoLimbo 1.13.0 at `d192d57d` |
 | Historical managed servers | Exact Paper versions from 1.11.2 through 1.18.2 in the preserved historical-world fixture |
-| Newer protocol smoke coverage | See `Protocol_Compatibility.md` |
+| Forward-client policy | Minecraft 26.2 minimum with compatible ViaVersion; no hard maximum imposed by SLS-LITE |
+| Exact protocol regression coverage | See `Protocol_Compatibility.md` |
 | Host environment | Local Docker Desktop/Pterodactyl on Windows-backed storage |
 
 Paper or vanilla provider availability for an exact version does not by itself
 mean every world, plugin, Java combination, forwarding mode, or client protocol
-is supported. Only the documented host and protocol profiles belong to the
-current support matrix.
+is supported. With ViaVersion installed, SLS-LITE treats the documented current
+client release as a forward-compatible minimum and does not impose a maximum;
+the installed ViaVersion build must report support for each newer client and
+backend baseline. The protocol matrix distinguishes that allowed forward path
+from exact combinations regression-tested by SLS-LITE.
 
 ## Named Host Capability Profiles
 
