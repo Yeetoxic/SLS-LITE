@@ -27,6 +27,7 @@ summaries.
 1. [Java Extension API](Java_API.md)
 2. [API Scope and Compatibility Policy](Java_API_Compatibility.md)
 3. [Example Velocity Extension](../examples/velocity-extension/README.md)
+4. [Backend Messaging](Backend_Messaging.md)
 
 ### Contributor or tester
 
@@ -50,6 +51,7 @@ summaries.
 | SLS and platform compatibility | [Compatibility](Compatibility.md) | [SLS v0.2.0 matrix](SLS_v0.2.0_Compatibility.md) |
 | Migration | [Migration](Migration.md) | Historical fixtures under `DOCS/HISTORICAL/` |
 | Java extension development | [Java Extension API](Java_API.md) | [API scope policy](Java_API_Compatibility.md), [example extension](../examples/velocity-extension/README.md) |
+| Paper backend, NPC, and menu integrations | [Backend Messaging](Backend_Messaging.md) | [Paper sender example](../examples/paper-backend-sender/README.md) |
 | Architecture and internal contracts | [Architecture](ARCHITECTURE.md) | [Contributor architecture](Contributor_Architecture.md), [internal invariants](Internal_Invariants.md) |
 | Test selection and fixtures | [Testing](Testing.md) | [Velocity fixture](Velocity_Testing.md), [Pterodactyl fixture](Pterodactyl_Local_Testing.md) |
 

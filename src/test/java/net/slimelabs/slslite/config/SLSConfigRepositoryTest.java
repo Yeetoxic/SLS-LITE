@@ -745,6 +745,76 @@ class SLSConfigRepositoryTest {
   }
 
   @Test
+  void loadsSecureBackendMessagingPolicy() throws Exception {
+    writeConfig(
+        """
+                security:
+                  backend_messaging:
+                    enabled: true
+                    command_relay_enabled: true
+                    requests_per_window: 7
+                    window_seconds: 12
+                    sources:
+                      external-lobby:
+                        server: lobby
+                        actions: [matchmake, command]
+                        command_roots: [sls join, sls list]
+                      managed-lobbies:
+                        blueprint: production/lobby
+                        actions: [matchmake]
+                """);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.reload();
+
+    BackendMessagingConfig messaging = repository.get().security().backendMessaging();
+    assertEquals(true, messaging.enabled());
+    assertEquals(true, messaging.commandRelayEnabled());
+    assertEquals(7, messaging.requestsPerWindow());
+    assertEquals(12, messaging.windowSeconds());
+    assertEquals(2, messaging.sources().size());
+    assertEquals("lobby", messaging.sources().get(0).server());
+    assertEquals("production/lobby", messaging.sources().get(1).blueprint());
+  }
+
+  @Test
+  void rejectsUnsafeBackendMessagingPolicies() throws Exception {
+    List<InvalidConfig> invalidConfigurations =
+        List.of(
+            invalid("enabled without source", "security:\n  backend_messaging:\n    enabled: true"),
+            invalid(
+                "unknown action",
+                """
+                security:
+                  backend_messaging:
+                    sources:
+                      lobby:
+                        server: lobby
+                        actions: [execute]
+                """),
+            invalid(
+                "relay without global opt-in",
+                """
+                security:
+                  backend_messaging:
+                    enabled: true
+                    sources:
+                      lobby:
+                        server: lobby
+                        actions: [command]
+                        command_roots: [sls]
+                """));
+
+    for (InvalidConfig invalid : invalidConfigurations) {
+      writeConfig(invalid.yaml());
+      assertThrows(
+          ConfigurationException.class,
+          () -> new SLSConfigRepository(temporaryDirectory).reload(),
+          () -> "Expected repository rejection for " + invalid.description());
+    }
+  }
+
+  @Test
   void rejectsLobbyMaximumBackoffBelowInitialBackoff() throws Exception {
     writeConfig(
         """

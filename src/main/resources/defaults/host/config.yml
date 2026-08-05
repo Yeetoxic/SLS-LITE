@@ -174,6 +174,35 @@ security:
   # after one successful claim. Default: 600 seconds (10 minutes).
   claim_code_expiry_seconds: 600
 
+  # Dedicated source-verified backend-to-proxy integration channel for NPC,
+  # menu, and other operator-authored Paper plugins. It is disabled by default;
+  # enabling it requires at least one exact server or managed blueprint source.
+  backend_messaging:
+    enabled: false
+
+    # Second opt-in for relaying allowlisted /sls commands as the carrier
+    # player. This never grants console execution or bypasses permissions.
+    command_relay_enabled: false
+
+    # Per authorized source/player fixed-window limit. Integers: requests 1-100,
+    # window 1-60 seconds. Malformed and duplicate traffic is also bounded.
+    requests_per_window: 10
+    window_seconds: 10
+
+    # Source keys are operator labels. Each source sets exactly one selector:
+    # an exact Velocity server name or a managed registry/blueprint identity.
+    # Actions are matchmake and/or command. Command roots must begin with sls.
+    sources: {}
+    # sources:
+    #   lobby-npcs:
+    #     server: lobby
+    #     actions: [matchmake]
+    #     command_roots: []
+    #   managed-lobby-menus:
+    #     blueprint: lobby/main
+    #     actions: [matchmake, command]
+    #     command_roots: ["sls join", "sls list"]
+
 presentation:
   transfer_action_bar:
     # Disable this entire surface when an extension supplies its own transfer

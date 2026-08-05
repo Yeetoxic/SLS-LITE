@@ -37,6 +37,10 @@ public final class SLSConfigRepository {
   private static final String DEFAULT_FORWARDING_SECRET_FILE = "forwarding.secret";
   private static final boolean DEFAULT_ALLOW_INSECURE_OFFLINE_ADMINISTRATORS = false;
   private static final int DEFAULT_CLAIM_CODE_EXPIRY_SECONDS = 600;
+  private static final boolean DEFAULT_BACKEND_MESSAGING_ENABLED = false;
+  private static final boolean DEFAULT_BACKEND_COMMAND_RELAY_ENABLED = false;
+  private static final int DEFAULT_BACKEND_REQUESTS_PER_WINDOW = 10;
+  private static final int DEFAULT_BACKEND_WINDOW_SECONDS = 10;
   private static final String DEFAULT_VIAVERSION_BACKEND_SYNC = "auto";
   private static final boolean DEFAULT_LIMBO_ENABLED = true;
   private static final int DEFAULT_LIMBO_MEMORY_MIB = 96;
@@ -114,6 +118,11 @@ public final class SLSConfigRepository {
       Map<String, Object> diagnostics = YamlValues.optionalMap(root, "diagnostics", configPath);
       Map<String, Object> forwarding = YamlValues.optionalMap(root, "forwarding", configPath);
       Map<String, Object> security = YamlValues.optionalMap(root, "security", configPath);
+      Map<String, Object> backendMessaging =
+          YamlValues.optionalMap(security, "backend_messaging", "security", configPath);
+      Map<String, Object> backendSources =
+          YamlValues.optionalMap(
+              backendMessaging, "sources", "security.backend_messaging", configPath);
       Map<String, Object> compatibility = YamlValues.optionalMap(root, "compatibility", configPath);
       Map<String, Object> presentation = YamlValues.optionalMap(root, "presentation", configPath);
       Map<String, Object> transferActionBar =
@@ -194,7 +203,17 @@ public final class SLSConfigRepository {
           "security",
           configPath,
           "allow_insecure_offline_administrators",
-          "claim_code_expiry_seconds");
+          "claim_code_expiry_seconds",
+          "backend_messaging");
+      YamlValues.requireOnlyKeys(
+          backendMessaging,
+          "security.backend_messaging",
+          configPath,
+          "enabled",
+          "command_relay_enabled",
+          "requests_per_window",
+          "window_seconds",
+          "sources");
       YamlValues.requireOnlyKeys(
           compatibility, "compatibility", configPath, "viaversion_backend_sync");
       YamlValues.requireOnlyKeys(presentation, "presentation", configPath, "transfer_action_bar");
@@ -335,6 +354,26 @@ public final class SLSConfigRepository {
       int claimCodeExpirySeconds =
           YamlValues.optionalPositiveInt(
               security, "claim_code_expiry_seconds", DEFAULT_CLAIM_CODE_EXPIRY_SECONDS, configPath);
+      boolean backendMessagingEnabled =
+          YamlValues.optionalBoolean(
+              backendMessaging, "enabled", DEFAULT_BACKEND_MESSAGING_ENABLED, configPath);
+      boolean backendCommandRelayEnabled =
+          YamlValues.optionalBoolean(
+              backendMessaging,
+              "command_relay_enabled",
+              DEFAULT_BACKEND_COMMAND_RELAY_ENABLED,
+              configPath);
+      int backendRequestsPerWindow =
+          YamlValues.optionalPositiveInt(
+              backendMessaging,
+              "requests_per_window",
+              DEFAULT_BACKEND_REQUESTS_PER_WINDOW,
+              configPath);
+      int backendWindowSeconds =
+          YamlValues.optionalPositiveInt(
+              backendMessaging, "window_seconds", DEFAULT_BACKEND_WINDOW_SECONDS, configPath);
+      java.util.List<BackendMessageSourceConfig> backendMessageSources =
+          backendMessageSources(backendSources, configPath);
       String viaVersionBackendSync = viaVersionSyncPolicy(compatibility, configPath);
       TransferActionBarConfig defaultActionBar = TransferActionBarConfig.defaults();
       boolean actionBarEnabled =
@@ -454,7 +493,15 @@ public final class SLSConfigRepository {
                 ForwardingMode.parse(forwardingMode),
                 forwardingOnlineMode,
                 resolveProxyPath(forwardingSecretFile, "forwarding.secret_file")),
-            new SecurityConfig(allowInsecureOfflineAdministrators, claimCodeExpirySeconds),
+            new SecurityConfig(
+                allowInsecureOfflineAdministrators,
+                claimCodeExpirySeconds,
+                new BackendMessagingConfig(
+                    backendMessagingEnabled,
+                    backendCommandRelayEnabled,
+                    backendRequestsPerWindow,
+                    backendWindowSeconds,
+                    backendMessageSources)),
             new SLSLimboConfig(
                 limboEnabled,
                 limboMemory,
@@ -515,6 +562,28 @@ public final class SLSConfigRepository {
       throw new ConfigurationException(
           "Invalid YAML in " + configPath + ": " + exception.getMessage(), exception);
     }
+  }
+
+  private static java.util.List<BackendMessageSourceConfig> backendMessageSources(
+      Map<String, Object> sources, Path path) throws ConfigurationException {
+    java.util.List<BackendMessageSourceConfig> parsed = new java.util.ArrayList<>();
+    for (Map.Entry<String, Object> entry : sources.entrySet()) {
+      String section = "security.backend_messaging.sources." + entry.getKey();
+      Map<String, Object> source = YamlValues.asMap(entry.getValue(), section, path);
+      YamlValues.requireOnlyKeys(
+          source, section, path, "server", "blueprint", "actions", "command_roots");
+      String server = YamlValues.optionalString(source, "server", "", path);
+      String blueprint = YamlValues.optionalString(source, "blueprint", "", path);
+      java.util.Set<BackendMessageAction> actions =
+          YamlValues.optionalStringList(source, "actions", java.util.List.of(), path).stream()
+              .map(BackendMessageAction::parse)
+              .collect(java.util.stream.Collectors.toUnmodifiableSet());
+      java.util.List<String> commandRoots =
+          YamlValues.optionalStringList(source, "command_roots", java.util.List.of(), path);
+      parsed.add(
+          new BackendMessageSourceConfig(entry.getKey(), server, blueprint, actions, commandRoots));
+    }
+    return java.util.List.copyOf(parsed);
   }
 
   private static SLSLimboPresentationConfig limboPresentation(

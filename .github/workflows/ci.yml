@@ -84,6 +84,9 @@ jobs:
       - name: Compile public API example extension with Gradle
         run: gradle -p examples/velocity-extension clean build
 
+      - name: Compile Paper backend messaging example
+        run: mvn -B --no-transfer-progress -f examples/paper-backend-sender/pom.xml clean verify
+
       - name: Upload plugin and public API developer artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

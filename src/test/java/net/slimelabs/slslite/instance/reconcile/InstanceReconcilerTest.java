@@ -55,7 +55,7 @@ final class InstanceReconcilerTest {
       report =
           new InstanceReconciler(preparer, LoggerFactory.getLogger(InstanceReconcilerTest.class))
               .reconcile();
-      process.onExit().get(2, java.util.concurrent.TimeUnit.SECONDS);
+      assertTrue(process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS));
     } finally {
       if (process.isAlive()) {
         process.destroyForcibly();

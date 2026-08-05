@@ -10,4 +10,5 @@
 - [Troubleshooting](Troubleshooting)
 - [Compatibility](Compatibility)
 - [Java Extension Development](Java-Extension-Development)
+- [Backend Integrations](Backend-Integrations)
 - [Contributing](Contributing)

@@ -17,8 +17,18 @@ if ($command === '') {
     exit(2);
 }
 
+$externalId = getenv('SLS_TEST_SERVER_EXTERNAL_ID') ?: 'sls-lite-local-velocity';
+$allowedServers = [
+    'sls-lite-local-velocity',
+    'sls-lite-local-external-lobby',
+];
+if (!in_array($externalId, $allowedServers, true)) {
+    fwrite(STDERR, "SLS_TEST_SERVER_EXTERNAL_ID is not an allowed local fixture server.\n");
+    exit(2);
+}
+
 $server = Server::query()
-    ->where('external_id', 'sls-lite-local-velocity')
+    ->where('external_id', $externalId)
     ->firstOrFail();
 
 $app->make(DaemonCommandRepository::class)
@@ -26,4 +36,3 @@ $app->make(DaemonCommandRepository::class)
     ->send($command);
 
 printf("Sent to %s: %s\n", $server->uuid, $command);
-

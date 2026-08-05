@@ -14,6 +14,7 @@ daemon, container, or HTTP APIs.
 - Existing installation: [Operations](Operations)
 - Moving from SLS or an older installation: [Compatibility](Compatibility)
 - Writing a trusted Velocity extension: [Java Extension Development](Java-Extension-Development)
+- Connecting a Paper NPC or menu: [Backend Integrations](Backend-Integrations)
 - Working on SLS-LITE itself: [Contributing](Contributing)
 
 The complete, version-controlled documentation index is the canonical source:

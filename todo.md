@@ -755,7 +755,7 @@ post-release milestone.
       direct unsupported old installations toward upgrading. Add a release check
       that prevents the Wiki/current docs from claiming a different supported
       release than the candidate artifact.
-- [ ] Implement and document the secure SLS-LITE backend messaging channel for
+- [x] Implement and document the secure SLS-LITE backend messaging channel for
       operator-authored NPC, menu, and backend integrations. Accept messages
       only from a source-verified, explicitly authorized server connection and
       bind the request to its actual carrier player. Use a versioned,

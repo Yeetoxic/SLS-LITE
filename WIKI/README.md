@@ -35,6 +35,7 @@ The publishable source set is:
 - `Troubleshooting.md`
 - `Compatibility.md`
 - `Java-Extension-Development.md`
+- `Backend-Integrations.md`
 - `Contributing.md`
 
 After publication, open every sidebar entry from the rendered wiki and confirm

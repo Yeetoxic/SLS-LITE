@@ -29,6 +29,8 @@ product: full SLS is not a runtime dependency or operating mode.
 - Versioned Java extension API 1.0 for capability discovery, immutable
   inspection, asynchronous lifecycle/matchmaking requests, and lifecycle
   subscriptions.
+- Default-off, source-verified Paper backend messaging for player-bound NPC,
+  menu, matchmaking, and narrowly allowlisted SLS command integrations.
 
 The exact current scope and intentional limitations are listed in
 [Compatibility](DOCS/Compatibility.md).
@@ -115,6 +117,7 @@ the blueprint's `blueprint.type`.
 - [Architecture and contributor map](DOCS/ARCHITECTURE.md)
 - [Java extension API](DOCS/Java_API.md)
 - [Java API scope and compatibility policy](DOCS/Java_API_Compatibility.md)
+- [Paper backend messaging](DOCS/Backend_Messaging.md)
 - [Reviewable GitHub Wiki source](WIKI/README.md)
 
 ## Build

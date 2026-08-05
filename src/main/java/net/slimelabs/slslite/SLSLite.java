@@ -5,6 +5,7 @@ import com.velocitypowered.api.command.CommandMeta;
 import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
+import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.player.ServerConnectedEvent;
@@ -49,6 +50,7 @@ import net.slimelabs.slslite.lobby.SLSLimboProvider;
 import net.slimelabs.slslite.log.ConsoleBanner;
 import net.slimelabs.slslite.log.CorrelationIds;
 import net.slimelabs.slslite.log.SLSDetailLog;
+import net.slimelabs.slslite.messaging.BackendMessagingService;
 import net.slimelabs.slslite.network.LoopbackPortAllocator;
 import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.process.ProcessSupervisor;
@@ -95,6 +97,7 @@ public final class SLSLite implements SLSLiteApiProvider {
   private VelocityBackendRegistry backendRegistry;
   private SLSCommand slsCommand;
   private SLSDetailLog detailLog;
+  private BackendMessagingService backendMessaging;
 
   @Inject
   public SLSLite(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -266,6 +269,14 @@ public final class SLSLite implements SLSLiteApiProvider {
               net.slimelabs.slslite.velocity.BlueprintSelectionStrategy.forMode(
                   configuration.get().blueprintSelectionMode()),
               configuration.get().transferActionBar());
+      backendMessaging =
+          new BackendMessagingService(
+              proxy,
+              joinService,
+              instanceManager,
+              configuration.get().security().backendMessaging(),
+              logger,
+              detailLog);
       joinActions = new BlueprintJoinActionService(instanceManager, logger);
       LobbyProvider primaryLobby =
           new LocalLobbyProvider(
@@ -334,6 +345,7 @@ public final class SLSLite implements SLSLiteApiProvider {
             backendRegistry,
             logger);
     proxy.getCommandManager().register(commandMeta, slsCommand);
+    backendMessaging.start();
     issueInitialAdministratorCode();
     lobbyProvider.addPrimaryReadyListener(
         server ->
@@ -537,8 +549,18 @@ public final class SLSLite implements SLSLiteApiProvider {
     }
   }
 
+  @Subscribe(order = PostOrder.FIRST)
+  public void onPluginMessage(PluginMessageEvent event) {
+    if (backendMessaging != null) {
+      backendMessaging.handle(event);
+    }
+  }
+
   @Subscribe
   public void onProxyShutdown(ProxyShutdownEvent event) {
+    if (backendMessaging != null) {
+      backendMessaging.close();
+    }
     if (slsCommand != null) {
       slsCommand.close();
     }

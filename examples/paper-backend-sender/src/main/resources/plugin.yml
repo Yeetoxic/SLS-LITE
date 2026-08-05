@@ -1,0 +1,14 @@
+name: SLSLiteBackendSenderExample
+version: 1.0.0-SNAPSHOT
+main: net.slimelabs.examples.slslite.paper.SLSLiteBackendSenderExample
+api-version: '1.21'
+description: Minimal SLS-LITE backend messaging protocol example
+commands:
+  slsbridge:
+    description: Send a protocol-v1 SLS-LITE request through the carrier player
+    usage: /slsbridge <join <registry> <target>|command <sls command...>>
+    permission: slslite.bridge.example
+permissions:
+  slslite.bridge.example:
+    description: Allows use of the SLS-LITE backend sender example command
+    default: true

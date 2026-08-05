@@ -34,6 +34,7 @@ final class DocumentationNavigationTest {
           "Troubleshooting.md",
           "Compatibility.md",
           "Java-Extension-Development.md",
+          "Backend-Integrations.md",
           "Contributing.md");
 
   @Test
@@ -142,6 +143,7 @@ final class DocumentationNavigationTest {
     List<Path> documents = new ArrayList<>();
     documents.add(PROJECT.resolve("README.md"));
     documents.add(PROJECT.resolve("examples/velocity-extension/README.md"));
+    documents.add(PROJECT.resolve("examples/paper-backend-sender/README.md"));
     documents.add(PROJECT.resolve("infra/pterodactyl/README.md"));
     for (String root : List.of("DOCS", "WIKI", "RELEASE_EVIDENCE", "THIRD_PARTY")) {
       Path directory = PROJECT.resolve(root);

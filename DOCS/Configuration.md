@@ -60,6 +60,10 @@ fixture scripts rather than in these product defaults.
 | `forwarding.secret_file` | `forwarding.secret` | Non-blank relative path from the Velocity working directory. |
 | `security.allow_insecure_offline_administrators` | `false` | Permit UUID-based built-in admins on an offline proxy. Unsafe for public use. |
 | `security.claim_code_expiry_seconds` | `600` | Positive one-time administrator-code lifetime. |
+| `security.backend_messaging.enabled` | `false` | Enables the dedicated source-verified `slslite:request` backend channel. Requires at least one source. See [Backend Messaging](Backend_Messaging.md). |
+| `security.backend_messaging.command_relay_enabled` | `false` | Second global opt-in for allowlisted SLS command relay as the carrier player. Never executes as console. |
+| `security.backend_messaging.requests_per_window` | `10` | Per-authorized-source/player request limit from `1..100`. |
+| `security.backend_messaging.window_seconds` | `10` | Fixed rate window from `1..60` seconds. |
 | `presentation.transfer_action_bar.enabled` | `true` | Enables built-in preparation, joining, force-joining, and dequeue feedback. Disable it to leave the action bar entirely to an extension. |
 | `presentation.transfer_action_bar.joining` | `<green>Joining <server>` | Bounded MiniMessage template; `<server>` is inserted as unparsed text. |
 | `presentation.transfer_action_bar.force_joining` | `<yellow>Force joining <server>` | Bounded MiniMessage template for forced transfers. |
@@ -124,6 +128,12 @@ is also active only after
 its exact-path mount/isolation/unmount probe succeeds; `/dev/fuse` and the
 binary alone are insufficient. Snapshot helpers are active only when explicitly
 configured and never participate in `auto`.
+
+`security.backend_messaging.sources` is an empty mapping by default. It accepts
+at most 64 named trust entries; each selects exactly one exact `server` or
+managed `blueprint`, permits one or more actions, and declares command roots
+when applicable. See [Backend Messaging](Backend_Messaging.md) for its schema
+and trust model.
 
 ## Resource Accounting
 
