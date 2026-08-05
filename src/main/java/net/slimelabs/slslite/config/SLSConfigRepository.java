@@ -37,6 +37,7 @@ public final class SLSConfigRepository {
   private static final String DEFAULT_FORWARDING_SECRET_FILE = "forwarding.secret";
   private static final boolean DEFAULT_ALLOW_INSECURE_OFFLINE_ADMINISTRATORS = false;
   private static final int DEFAULT_CLAIM_CODE_EXPIRY_SECONDS = 600;
+  private static final String DEFAULT_VIAVERSION_BACKEND_SYNC = "auto";
   private static final boolean DEFAULT_LIMBO_ENABLED = true;
   private static final int DEFAULT_LIMBO_MEMORY_MIB = 96;
   private static final int DEFAULT_LIMBO_STARTUP_TIMEOUT_SECONDS = 30;
@@ -110,8 +111,10 @@ public final class SLSConfigRepository {
           YamlValues.optionalMap(root, "managed_output", configPath);
       Map<String, Object> detailedLogging =
           YamlValues.optionalMap(root, "detailed_logging", configPath);
+      Map<String, Object> diagnostics = YamlValues.optionalMap(root, "diagnostics", configPath);
       Map<String, Object> forwarding = YamlValues.optionalMap(root, "forwarding", configPath);
       Map<String, Object> security = YamlValues.optionalMap(root, "security", configPath);
+      Map<String, Object> compatibility = YamlValues.optionalMap(root, "compatibility", configPath);
       Map<String, Object> presentation = YamlValues.optionalMap(root, "presentation", configPath);
       Map<String, Object> transferActionBar =
           YamlValues.optionalMap(presentation, "transfer_action_bar", "presentation", configPath);
@@ -145,8 +148,10 @@ public final class SLSConfigRepository {
           "lifecycle",
           "managed_output",
           "detailed_logging",
+          "diagnostics",
           "forwarding",
           "security",
+          "compatibility",
           "presentation",
           "lobby",
           "storage",
@@ -176,6 +181,13 @@ public final class SLSConfigRepository {
           "queue_capacity",
           "redact_paths");
       YamlValues.requireOnlyKeys(
+          diagnostics,
+          "diagnostics",
+          configPath,
+          "console_tail_lines",
+          "installer_history_entries",
+          "failure_reports");
+      YamlValues.requireOnlyKeys(
           forwarding, "forwarding", configPath, "mode", "online_mode", "secret_file");
       YamlValues.requireOnlyKeys(
           security,
@@ -183,6 +195,8 @@ public final class SLSConfigRepository {
           configPath,
           "allow_insecure_offline_administrators",
           "claim_code_expiry_seconds");
+      YamlValues.requireOnlyKeys(
+          compatibility, "compatibility", configPath, "viaversion_backend_sync");
       YamlValues.requireOnlyKeys(presentation, "presentation", configPath, "transfer_action_bar");
       YamlValues.requireOnlyKeys(
           transferActionBar,
@@ -221,6 +235,7 @@ public final class SLSConfigRepository {
           "memory_mib",
           "startup_timeout_seconds",
           "advertised_protocol",
+          "presentation",
           "recovery");
       YamlValues.requireOnlyKeys(
           limboRecovery,
@@ -230,7 +245,14 @@ public final class SLSConfigRepository {
           "initial_backoff_seconds",
           "max_backoff_seconds",
           "stable_after_seconds");
-      YamlValues.requireOnlyKeys(storage, "storage", configPath, "strategy", "snapshot_hook");
+      YamlValues.requireOnlyKeys(
+          storage,
+          "storage",
+          configPath,
+          "strategy",
+          "auto_priority",
+          "copy_parallelism",
+          "snapshot_hook");
       YamlValues.requireOnlyKeys(
           snapshotHook, "storage.snapshot_hook", configPath, "executable", "timeout_seconds");
       YamlValues.requireOnlyKeys(paths, "paths", configPath, "instances");
@@ -283,6 +305,19 @@ public final class SLSConfigRepository {
       boolean detailLogRedactPaths =
           YamlValues.optionalBoolean(
               detailedLogging, "redact_paths", DEFAULT_DETAIL_LOG_REDACT_PATHS, configPath);
+      DiagnosticRetentionConfig defaultRetention = DiagnosticRetentionConfig.defaults();
+      int consoleTailLines =
+          YamlValues.optionalNonNegativeInt(
+              diagnostics, "console_tail_lines", defaultRetention.consoleTailLines(), configPath);
+      int installerHistoryEntries =
+          YamlValues.optionalNonNegativeInt(
+              diagnostics,
+              "installer_history_entries",
+              defaultRetention.installerHistoryEntries(),
+              configPath);
+      int failureReports =
+          YamlValues.optionalNonNegativeInt(
+              diagnostics, "failure_reports", defaultRetention.failureReports(), configPath);
       String forwardingMode =
           YamlValues.optionalString(forwarding, "mode", DEFAULT_FORWARDING_MODE, configPath);
       boolean forwardingOnlineMode =
@@ -300,6 +335,7 @@ public final class SLSConfigRepository {
       int claimCodeExpirySeconds =
           YamlValues.optionalPositiveInt(
               security, "claim_code_expiry_seconds", DEFAULT_CLAIM_CODE_EXPIRY_SECONDS, configPath);
+      String viaVersionBackendSync = viaVersionSyncPolicy(compatibility, configPath);
       TransferActionBarConfig defaultActionBar = TransferActionBarConfig.defaults();
       boolean actionBarEnabled =
           YamlValues.optionalBoolean(
@@ -375,8 +411,19 @@ public final class SLSConfigRepository {
               "stable_after_seconds",
               DEFAULT_LIMBO_STABLE_AFTER_SECONDS,
               configPath);
+      SLSLimboPresentationConfig limboPresentation =
+          limboPresentation(limbo, limboSection, configPath);
       String storageStrategy =
           YamlValues.optionalString(storage, "strategy", DEFAULT_STORAGE_STRATEGY, configPath);
+      java.util.List<String> storageAutoPriority =
+          YamlValues.optionalStringList(
+              storage,
+              "auto_priority",
+              StorageConfig.DEFAULT_AUTO_PRIORITY.stream()
+                  .map(StorageStrategy::configValue)
+                  .toList(),
+              configPath);
+      int storageCopyParallelism = copyParallelism(storage, configPath);
       String snapshotHookExecutable =
           YamlValues.optionalString(snapshotHook, "executable", "", configPath);
       int snapshotHookTimeoutSeconds =
@@ -416,7 +463,8 @@ public final class SLSConfigRepository {
                 limboMaxRestartAttempts,
                 limboInitialBackoff,
                 limboMaxBackoff,
-                limboStableAfter),
+                limboStableAfter,
+                limboPresentation),
             new LobbyConfig(
                 LobbyMode.parse(lobbyMode),
                 lobbyRegistry,
@@ -432,7 +480,9 @@ public final class SLSConfigRepository {
                     ? null
                     : resolveManagedPath(
                         snapshotHookExecutable, "storage.snapshot_hook.executable"),
-                snapshotHookTimeoutSeconds),
+                snapshotHookTimeoutSeconds,
+                storageAutoPriority.stream().map(StorageStrategy::parse).toList(),
+                storageCopyParallelism),
             new DetailedLoggingConfig(
                 DetailLogLevel.parse(detailLogLevel),
                 detailConsoleMirror,
@@ -447,6 +497,9 @@ public final class SLSConfigRepository {
                 actionBarDequeued,
                 actionBarFrames,
                 actionBarFrameInterval),
+            ViaVersionSyncPolicy.parse(viaVersionBackendSync),
+            new DiagnosticRetentionConfig(
+                consoleTailLines, installerHistoryEntries, failureReports),
             instancesDirectory);
       } catch (IllegalArgumentException exception) {
         throw YamlValues.error(configPath, exception.getMessage());
@@ -462,6 +515,167 @@ public final class SLSConfigRepository {
       throw new ConfigurationException(
           "Invalid YAML in " + configPath + ": " + exception.getMessage(), exception);
     }
+  }
+
+  private static SLSLimboPresentationConfig limboPresentation(
+      Map<String, Object> limbo, String limboSection, Path path) throws ConfigurationException {
+    String section = limboSection + ".presentation";
+    Map<String, Object> presentation =
+        YamlValues.optionalMap(limbo, "presentation", limboSection, path);
+    Map<String, Object> ping = YamlValues.optionalMap(presentation, "ping", section, path);
+    Map<String, Object> playerList =
+        YamlValues.optionalMap(presentation, "player_list", section, path);
+    Map<String, Object> brand = YamlValues.optionalMap(presentation, "brand", section, path);
+    Map<String, Object> joinMessage =
+        YamlValues.optionalMap(presentation, "join_message", section, path);
+    Map<String, Object> bossBar = YamlValues.optionalMap(presentation, "boss_bar", section, path);
+    Map<String, Object> title = YamlValues.optionalMap(presentation, "title", section, path);
+    Map<String, Object> headerFooter =
+        YamlValues.optionalMap(presentation, "header_footer", section, path);
+
+    YamlValues.requireOnlyKeys(
+        presentation,
+        section,
+        path,
+        "dimension",
+        "ping",
+        "player_list",
+        "brand",
+        "join_message",
+        "boss_bar",
+        "title",
+        "header_footer");
+    YamlValues.requireOnlyKeys(ping, section + ".ping", path, "enabled", "description", "version");
+    YamlValues.requireOnlyKeys(playerList, section + ".player_list", path, "enabled", "username");
+    YamlValues.requireOnlyKeys(brand, section + ".brand", path, "enabled", "text");
+    YamlValues.requireOnlyKeys(joinMessage, section + ".join_message", path, "enabled", "text");
+    YamlValues.requireOnlyKeys(
+        bossBar, section + ".boss_bar", path, "enabled", "text", "health", "color", "division");
+    YamlValues.requireOnlyKeys(
+        title,
+        section + ".title",
+        path,
+        "enabled",
+        "title",
+        "subtitle",
+        "fade_in_ticks",
+        "stay_ticks",
+        "fade_out_ticks");
+    YamlValues.requireOnlyKeys(
+        headerFooter, section + ".header_footer", path, "enabled", "header", "footer");
+
+    SLSLimboPresentationConfig defaults = SLSLimboPresentationConfig.defaults();
+    SLSLimboPresentationConfig.Ping defaultPing = defaults.ping();
+    SLSLimboPresentationConfig.PlayerList defaultPlayerList = defaults.playerList();
+    SLSLimboPresentationConfig.TextElement defaultBrand = defaults.brand();
+    SLSLimboPresentationConfig.TextElement defaultJoin = defaults.joinMessage();
+    SLSLimboPresentationConfig.BossBar defaultBoss = defaults.bossBar();
+    SLSLimboPresentationConfig.Title defaultTitle = defaults.title();
+    SLSLimboPresentationConfig.HeaderFooter defaultHeaderFooter = defaults.headerFooter();
+    String dimension =
+        YamlValues.optionalString(presentation, "dimension", defaults.dimension().name(), path);
+    try {
+      return new SLSLimboPresentationConfig(
+          SLSLimboPresentationConfig.Dimension.parse(dimension),
+          new SLSLimboPresentationConfig.Ping(
+              YamlValues.optionalBoolean(ping, "enabled", defaultPing.enabled(), path),
+              optionalText(ping, "description", defaultPing.description(), path),
+              optionalText(ping, "version", defaultPing.version(), path)),
+          new SLSLimboPresentationConfig.PlayerList(
+              YamlValues.optionalBoolean(playerList, "enabled", defaultPlayerList.enabled(), path),
+              optionalText(playerList, "username", defaultPlayerList.username(), path)),
+          new SLSLimboPresentationConfig.TextElement(
+              YamlValues.optionalBoolean(brand, "enabled", defaultBrand.enabled(), path),
+              optionalText(brand, "text", defaultBrand.text(), path)),
+          new SLSLimboPresentationConfig.TextElement(
+              YamlValues.optionalBoolean(joinMessage, "enabled", defaultJoin.enabled(), path),
+              optionalText(joinMessage, "text", defaultJoin.text(), path)),
+          new SLSLimboPresentationConfig.BossBar(
+              YamlValues.optionalBoolean(bossBar, "enabled", defaultBoss.enabled(), path),
+              optionalText(bossBar, "text", defaultBoss.text(), path),
+              optionalDouble(bossBar, "health", defaultBoss.health(), path),
+              optionalText(bossBar, "color", defaultBoss.color(), path),
+              optionalText(bossBar, "division", defaultBoss.division(), path)),
+          new SLSLimboPresentationConfig.Title(
+              YamlValues.optionalBoolean(title, "enabled", defaultTitle.enabled(), path),
+              optionalText(title, "title", defaultTitle.title(), path),
+              optionalText(title, "subtitle", defaultTitle.subtitle(), path),
+              YamlValues.optionalNonNegativeInt(
+                  title, "fade_in_ticks", defaultTitle.fadeInTicks(), path),
+              YamlValues.optionalNonNegativeInt(
+                  title, "stay_ticks", defaultTitle.stayTicks(), path),
+              YamlValues.optionalNonNegativeInt(
+                  title, "fade_out_ticks", defaultTitle.fadeOutTicks(), path)),
+          new SLSLimboPresentationConfig.HeaderFooter(
+              YamlValues.optionalBoolean(
+                  headerFooter, "enabled", defaultHeaderFooter.enabled(), path),
+              optionalText(headerFooter, "header", defaultHeaderFooter.header(), path),
+              optionalText(headerFooter, "footer", defaultHeaderFooter.footer(), path)));
+    } catch (IllegalArgumentException exception) {
+      throw YamlValues.error(path, exception.getMessage());
+    }
+  }
+
+  private static String viaVersionSyncPolicy(Map<String, Object> section, Path path)
+      throws ConfigurationException {
+    Object configured = section.get("viaversion_backend_sync");
+    if (configured == null) {
+      return DEFAULT_VIAVERSION_BACKEND_SYNC;
+    }
+    if (configured instanceof Boolean enabled) {
+      // YAML 1.1 resolves unquoted `on` and `off` as booleans.
+      return enabled ? "on" : "off";
+    }
+    if (configured instanceof String value && !value.isBlank()) {
+      return value;
+    }
+    throw YamlValues.error(
+        path, "'compatibility.viaversion_backend_sync' must be auto, on, or off");
+  }
+
+  private static int copyParallelism(Map<String, Object> section, Path path)
+      throws ConfigurationException {
+    Object configured = section.get("copy_parallelism");
+    if (configured == null
+        || (configured instanceof String value && value.equalsIgnoreCase("auto"))) {
+      return StorageConfig.AUTO_COPY_PARALLELISM;
+    }
+    if (configured instanceof Number number) {
+      long value = number.longValue();
+      if (number.doubleValue() == value && value >= 1 && value <= Integer.MAX_VALUE) {
+        return (int) value;
+      }
+    }
+    throw YamlValues.error(
+        path,
+        "'storage.copy_parallelism' must be auto or an integer from 1 to "
+            + StorageConfig.MAX_COPY_PARALLELISM);
+  }
+
+  private static String optionalText(
+      Map<String, Object> values, String key, String defaultValue, Path path)
+      throws ConfigurationException {
+    if (!values.containsKey(key)) {
+      return defaultValue;
+    }
+    Object value = values.get(key);
+    if (!(value instanceof String text)) {
+      throw YamlValues.error(path, "'" + key + "' must be a string");
+    }
+    return text;
+  }
+
+  private static double optionalDouble(
+      Map<String, Object> values, String key, double defaultValue, Path path)
+      throws ConfigurationException {
+    Object value = values.get(key);
+    if (value == null) {
+      return defaultValue;
+    }
+    if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())) {
+      throw YamlValues.error(path, "'" + key + "' must be a finite number");
+    }
+    return number.doubleValue();
   }
 
   private Path resolveManagedPath(String value, String key) throws ConfigurationException {

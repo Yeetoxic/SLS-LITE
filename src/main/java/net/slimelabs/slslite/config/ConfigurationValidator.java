@@ -74,6 +74,8 @@ public final class ConfigurationValidator {
     BlueprintCrashRecoveryPolicy crashRecovery;
     try {
       BlueprintLifecyclePolicy.from(blueprint, config.idleShutdownSeconds());
+      net.slimelabs.slslite.blueprint.BlueprintQueuePolicy.from(
+          blueprint, java.time.Duration.ofSeconds(config.queueTimeoutSeconds()));
       crashRecovery = BlueprintCrashRecoveryPolicy.from(blueprint);
     } catch (IllegalArgumentException exception) {
       throw new ConfigurationException(

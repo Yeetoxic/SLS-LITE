@@ -84,6 +84,7 @@ class SLSConfigRepositoryTest {
     assertEquals(2, config.limbo().initialBackoffSeconds());
     assertEquals(30, config.limbo().maxBackoffSeconds());
     assertEquals(120, config.limbo().stableAfterSeconds());
+    assertEquals(SLSLimboPresentationConfig.defaults(), config.limbo().presentation());
     assertEquals(LobbyMode.VELOCITY, config.lobby().mode());
     assertEquals(true, config.lobby().autoStart());
     assertEquals("lobby", config.lobby().registry());
@@ -93,6 +94,8 @@ class SLSConfigRepositoryTest {
     assertEquals(60, config.lobby().maxBackoffSeconds());
     assertEquals(120, config.lobby().stableAfterSeconds());
     assertEquals(StorageStrategy.AUTO, config.storage().strategy());
+    assertEquals(StorageConfig.DEFAULT_AUTO_PRIORITY, config.storage().autoPriority());
+    assertEquals(StorageConfig.AUTO_COPY_PARALLELISM, config.storage().copyParallelism());
     assertEquals(DetailLogLevel.NORMAL, config.detailedLogging().level());
     assertEquals(false, config.detailedLogging().mirrorToProxyConsole());
     assertEquals(4096, config.detailedLogging().maxFileKiB());
@@ -100,11 +103,110 @@ class SLSConfigRepositoryTest {
     assertEquals(1024, config.detailedLogging().queueCapacity());
     assertEquals(true, config.detailedLogging().redactPaths());
     assertEquals(TransferActionBarConfig.defaults(), config.transferActionBar());
+    assertEquals(ViaVersionSyncPolicy.AUTO, config.viaVersionSyncPolicy());
+    assertEquals(DiagnosticRetentionConfig.defaults(), config.diagnosticRetention());
     assertEquals(
         temporaryDirectory.resolve("instances").toAbsolutePath().normalize(),
         config.instancesDirectory());
     assertTrue(Files.isRegularFile(temporaryDirectory.resolve("config.yml")));
     assertTrue(Files.isDirectory(config.instancesDirectory()));
+  }
+
+  @Test
+  void loadsViaVersionBackendSynchronizationPolicy() throws Exception {
+    writeConfig(
+        """
+                compatibility:
+                  viaversion_backend_sync: off
+                """);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.reload();
+
+    assertEquals(ViaVersionSyncPolicy.OFF, repository.get().viaVersionSyncPolicy());
+  }
+
+  @Test
+  void loadsOrderedStoragePolicyAndNumericCopyParallelism() throws Exception {
+    writeConfig(
+        """
+                storage:
+                  strategy: auto
+                  auto_priority: [overlay, reflink]
+                  copy_parallelism: 7
+                """);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.reload();
+
+    assertEquals(
+        List.of(StorageStrategy.OVERLAY, StorageStrategy.REFLINK),
+        repository.get().storage().autoPriority());
+    assertEquals(7, repository.get().storage().copyParallelism());
+    assertEquals(false, repository.get().storage().permitsPortableFallback());
+  }
+
+  @Test
+  void loadsZeroDiagnosticRetention() throws Exception {
+    writeConfig(
+        """
+                diagnostics:
+                  console_tail_lines: 0
+                  installer_history_entries: 0
+                  failure_reports: 0
+                """);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.reload();
+
+    assertEquals(new DiagnosticRetentionConfig(0, 0, 0), repository.get().diagnosticRetention());
+  }
+
+  @Test
+  void rejectsExcessiveDiagnosticRetention() throws Exception {
+    writeConfig(
+        """
+                diagnostics:
+                  console_tail_lines: 10001
+                """);
+
+    assertThrows(
+        ConfigurationException.class, () -> new SLSConfigRepository(temporaryDirectory).reload());
+  }
+
+  @Test
+  void rejectsInvalidStoragePolicyShapes() throws Exception {
+    for (String policy :
+        List.of(
+            "auto_priority: []",
+            "auto_priority: [copy, copy]",
+            "auto_priority: [snapshot-hook]",
+            "auto_priority: [unknown]",
+            "copy_parallelism: 17",
+            "copy_parallelism: many")) {
+      Path directory =
+          Files.createDirectories(temporaryDirectory.resolve(Integer.toString(policy.hashCode())));
+      Files.writeString(directory.resolve("config.yml"), "storage:\n  " + policy + "\n");
+
+      assertThrows(
+          ConfigurationException.class, () -> new SLSConfigRepository(directory).reload(), policy);
+    }
+  }
+
+  @Test
+  void rejectsUnknownViaVersionBackendSynchronizationPolicy() throws Exception {
+    writeConfig(
+        """
+                compatibility:
+                  viaversion_backend_sync: sometimes
+                """);
+
+    ConfigurationException failure =
+        assertThrows(
+            ConfigurationException.class,
+            () -> new SLSConfigRepository(temporaryDirectory).reload());
+
+    assertTrue(failure.getMessage().contains("must be auto, on, or off"));
   }
 
   @Test
@@ -154,6 +256,80 @@ class SLSConfigRepositoryTest {
             () -> new SLSConfigRepository(temporaryDirectory).reload());
 
     assertTrue(exception.getMessage().contains("frame interval"));
+  }
+
+  @Test
+  void loadsSlsLimboPresentation() throws Exception {
+    writeConfig(
+        """
+                lobby:
+                  limbo:
+                    presentation:
+                      dimension: OVERWORLD
+                      ping:
+                        enabled: false
+                        description: "custom: ping"
+                        version: "<aqua>Network"
+                      player_list:
+                        enabled: true
+                        username: Holder
+                      brand:
+                        enabled: false
+                        text: "hidden brand"
+                      join_message:
+                        enabled: true
+                        text: "line one\nline two: safe"
+                      boss_bar:
+                        enabled: true
+                        text: "<blue>Waiting"
+                        health: 0.5
+                        color: BLUE
+                        division: NOTCHED_10
+                      title:
+                        enabled: false
+                        title: "Title"
+                        subtitle: "Subtitle"
+                        fade_in_ticks: 0
+                        stay_ticks: 40
+                        fade_out_ticks: 5
+                      header_footer:
+                        enabled: true
+                        header: "Header"
+                        footer: "Footer"
+                """);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.reload();
+
+    SLSLimboPresentationConfig presentation = repository.get().limbo().presentation();
+    assertEquals(SLSLimboPresentationConfig.Dimension.OVERWORLD, presentation.dimension());
+    assertEquals(false, presentation.ping().enabled());
+    assertEquals("custom: ping", presentation.ping().description());
+    assertEquals(true, presentation.playerList().enabled());
+    assertEquals("line one line two: safe", presentation.joinMessage().text());
+    assertEquals(0.5, presentation.bossBar().health());
+    assertEquals("NOTCHED_10", presentation.bossBar().division());
+    assertEquals(0, presentation.title().fadeInTicks());
+    assertEquals(true, presentation.headerFooter().enabled());
+  }
+
+  @Test
+  void rejectsInvalidSlsLimboPresentationBounds() throws Exception {
+    writeConfig(
+        """
+                lobby:
+                  limbo:
+                    presentation:
+                      boss_bar:
+                        health: 1.1
+                """);
+
+    ConfigurationException exception =
+        assertThrows(
+            ConfigurationException.class,
+            () -> new SLSConfigRepository(temporaryDirectory).reload());
+
+    assertTrue(exception.getMessage().contains("boss-bar health"));
   }
 
   @Test

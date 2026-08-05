@@ -2,6 +2,7 @@ package net.slimelabs.slslite;
 
 import com.google.inject.Inject;
 import com.velocitypowered.api.command.CommandMeta;
+import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
@@ -119,6 +120,8 @@ public final class SLSLite implements SLSLiteApiProvider {
     try {
       SLSDataLayout.initialize(dataDirectory);
       configuration.initialize();
+      publicApi.configureFailureRetention(
+          configuration.get().diagnosticRetention().failureReports());
       detailLog =
           new SLSDetailLog(
               dataDirectory,
@@ -230,9 +233,11 @@ public final class SLSLite implements SLSLiteApiProvider {
           new SoftwareInstallationService(
               processSpecFactory,
               List.of(new PaperInstallationProvider(), new VanillaInstallationProvider()),
+              configuration.get().diagnosticRetention().installerHistoryEntries(),
               logger);
       BackendProtocolSynchronizer protocolSynchronizer =
-          ViaVersionProtocolSynchronizer.create(proxy, logger);
+          ViaVersionProtocolSynchronizer.create(
+              proxy, logger, configuration.get().viaVersionSyncPolicy());
       backendRegistry = new VelocityBackendRegistry(proxy, protocolSynchronizer);
       instanceManager =
           new InstanceManager(
@@ -248,6 +253,7 @@ public final class SLSLite implements SLSLiteApiProvider {
               backendRegistry,
               installationService,
               detailLog,
+              configuration.get().diagnosticRetention().consoleTailLines(),
               logger);
       joinService =
           new LocalJoinService(
@@ -442,12 +448,13 @@ public final class SLSLite implements SLSLiteApiProvider {
     }
   }
 
-  @Subscribe
+  @Subscribe(order = PostOrder.LAST)
   public void onKickedFromServer(KickedFromServerEvent event) {
     if (lobbyProvider == null) {
       return;
     }
     if (lobbyProvider.preservesVelocityRouting()) {
+      rescueVelocityDisconnect(event);
       return;
     }
     if (lobbyProvider.isLobby(event.getServer().getServerInfo().getName())) {
@@ -477,6 +484,28 @@ public final class SLSLite implements SLSLiteApiProvider {
     } else {
       event.setResult(KickedFromServerEvent.DisconnectPlayer.create(lobbyUnavailableMessage()));
     }
+  }
+
+  private void rescueVelocityDisconnect(KickedFromServerEvent event) {
+    if (!(event.getResult() instanceof KickedFromServerEvent.DisconnectPlayer)) {
+      return;
+    }
+    String failedServer = event.getServer().getServerInfo().getName();
+    if (lobbyProvider.isHoldingLobby(failedServer)) {
+      return;
+    }
+    var holdingLobby =
+        lobbyProvider
+            .server()
+            .filter(server -> lobbyProvider.isHoldingLobby(server.getServerInfo().getName()));
+    if (holdingLobby.isEmpty()) {
+      return;
+    }
+    var selected = holdingLobby.orElseThrow();
+    limboHandoff.awaitDestination(event.getPlayer(), event.getServer());
+    event.setResult(
+        KickedFromServerEvent.RedirectPlayer.create(
+            selected, Component.text("Waiting in SLS-Limbo for the destination to recover.")));
   }
 
   @Subscribe

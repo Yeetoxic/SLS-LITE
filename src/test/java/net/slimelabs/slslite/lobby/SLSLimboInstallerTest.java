@@ -10,10 +10,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.Map;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ForwardingMode;
+import net.slimelabs.slslite.config.SLSLimboPresentationConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.yaml.snakeyaml.Yaml;
 
 class SLSLimboInstallerTest {
 
@@ -33,13 +36,13 @@ class SLSLimboInstallerTest {
 
     assertTrue(Files.isRegularFile(installation.runtimeJar()));
     assertEquals(SLSLimboInstaller.RUNTIME_SHA256, sha256(installation.runtimeJar()));
-    String settings = Files.readString(installation.workingDirectory().resolve("settings.yml"));
-    assertTrue(settings.contains("ip: \"127.0.0.1\""));
-    assertTrue(settings.contains("port: 25580"));
-    assertTrue(settings.contains("protocol: -1"));
-    assertTrue(settings.contains("maxPlayers: 250"));
-    assertTrue(settings.contains("type: NONE"));
-    assertTrue(settings.contains("secret: \"<UNUSED>\""));
+    Map<String, Object> settings = settings(installation.workingDirectory());
+    assertEquals("127.0.0.1", map(settings.get("bind")).get("ip"));
+    assertEquals(25580, map(settings.get("bind")).get("port"));
+    assertEquals(-1, map(settings.get("ping")).get("protocol"));
+    assertEquals(250, settings.get("maxPlayers"));
+    assertEquals("NONE", map(settings.get("infoForwarding")).get("type"));
+    assertEquals("<UNUSED>", map(settings.get("infoForwarding")).get("secret"));
     assertFalse(Files.exists(installation.workingDirectory().resolve("forwarding.secret")));
   }
 
@@ -55,11 +58,47 @@ class SLSLimboInstallerTest {
 
     Path copiedSecret = installation.workingDirectory().resolve("forwarding.secret");
     assertEquals("test-secret", Files.readString(copiedSecret));
-    String settings = Files.readString(installation.workingDirectory().resolve("settings.yml"));
-    assertTrue(settings.contains("type: MODERN"));
-    assertTrue(settings.contains("protocol: 770"));
-    assertTrue(settings.contains("secret: \"@forwarding.secret\""));
-    assertFalse(settings.contains("test-secret"));
+    Map<String, Object> settings = settings(installation.workingDirectory());
+    assertEquals("MODERN", map(settings.get("infoForwarding")).get("type"));
+    assertEquals(770, map(settings.get("ping")).get("protocol"));
+    assertEquals("@forwarding.secret", map(settings.get("infoForwarding")).get("secret"));
+    assertFalse(
+        Files.readString(installation.workingDirectory().resolve("settings.yml"))
+            .contains("test-secret"));
+  }
+
+  @Test
+  void safelySerializesCustomizedPresentation() throws Exception {
+    SLSLimboPresentationConfig defaults = SLSLimboPresentationConfig.defaults();
+    SLSLimboPresentationConfig presentation =
+        new SLSLimboPresentationConfig(
+            SLSLimboPresentationConfig.Dimension.OVERWORLD,
+            new SLSLimboPresentationConfig.Ping(false, "quoted: \"value\"\nnext", "<aqua>Custom"),
+            new SLSLimboPresentationConfig.PlayerList(true, "Holder"),
+            new SLSLimboPresentationConfig.TextElement(false, "brand: hidden"),
+            new SLSLimboPresentationConfig.TextElement(true, "line one\nline two: yes"),
+            new SLSLimboPresentationConfig.BossBar(
+                false, defaults.bossBar().text(), 0.5, "BLUE", "NOTCHED_10"),
+            new SLSLimboPresentationConfig.Title(
+                true, "<gold>Title: safe", "subtitle\nnext", 0, 40, 5),
+            new SLSLimboPresentationConfig.HeaderFooter(true, "header: value", "footer\nvalue"));
+    SLSLimboInstaller installer = new SLSLimboInstaller(temporaryDirectory);
+
+    SLSLimboInstaller.SLSLimboInstallation installation =
+        installer.install(
+            25586,
+            new ForwardingConfig(
+                ForwardingMode.NONE, true, temporaryDirectory.resolve("unused.secret")),
+            -1,
+            100,
+            presentation);
+
+    Map<String, Object> settings = settings(installation.workingDirectory());
+    assertEquals("OVERWORLD", settings.get("dimension"));
+    assertEquals("", map(settings.get("ping")).get("description"));
+    assertEquals("line one\nline two: yes", map(settings.get("joinMessage")).get("text"));
+    assertEquals("header: value", map(settings.get("headerAndFooter")).get("header"));
+    assertEquals(false, map(settings.get("brandName")).get("enable"));
   }
 
   @Test
@@ -118,5 +157,14 @@ class SLSLimboInstallerTest {
     MessageDigest digest = MessageDigest.getInstance("SHA-256");
     digest.update(Files.readAllBytes(path));
     return HexFormat.of().formatHex(digest.digest());
+  }
+
+  private static Map<String, Object> settings(Path directory) throws Exception {
+    return map(new Yaml().load(Files.readString(directory.resolve("settings.yml"))));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> map(Object value) {
+    return (Map<String, Object>) value;
   }
 }

@@ -76,6 +76,40 @@ class SoftwareInstallationServiceTest {
   }
 
   @Test
+  void zeroInstallerHistoryDoesNotAffectSuccessfulInstallation() {
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile profile,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log)
+              throws Exception {
+            Path jar = stagingDirectory.resolve("server.jar");
+            Files.writeString(jar, "fixture");
+            return artifact(jar);
+          }
+        };
+    try (SoftwareInstallationService service =
+        new SoftwareInstallationService(
+            new JavaJarProcessSpecFactory(temporaryDirectory),
+            List.of(provider),
+            0,
+            LoggerFactory.getLogger(getClass()))) {
+      service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0").join();
+      service.ensureInstalled(profile(SoftwareSource.PAPER), "1.0").join();
+
+      assertEquals(List.of(), service.snapshots());
+    }
+  }
+
+  @Test
   void replacesProviderCacheWhoseJarChangedAfterInstallation() throws Exception {
     AtomicInteger installs = new AtomicInteger();
     SoftwareInstallationProvider provider =

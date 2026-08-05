@@ -6,21 +6,40 @@ import java.util.List;
 
 final class InstanceLogBuffer {
 
-  static final int CAPACITY = 1_000;
+  static final int DEFAULT_CAPACITY = 1_000;
+  static final int CAPACITY = DEFAULT_CAPACITY;
   static final int MAX_LINE_LENGTH = 1_024;
 
-  private final ArrayDeque<Entry> lines = new ArrayDeque<>(CAPACITY);
+  private final int capacity;
+  private final ArrayDeque<Entry> lines;
   private long cursor;
+
+  InstanceLogBuffer() {
+    this(DEFAULT_CAPACITY);
+  }
+
+  InstanceLogBuffer(int capacity) {
+    if (capacity < 0) {
+      throw new IllegalArgumentException("capacity must not be negative");
+    }
+    this.capacity = capacity;
+    this.lines = new ArrayDeque<>(Math.max(1, capacity));
+  }
 
   synchronized void append(String line) {
     String retained =
         line.length() <= MAX_LINE_LENGTH
             ? line
             : line.substring(0, MAX_LINE_LENGTH) + "... [truncated]";
-    if (lines.size() == CAPACITY) {
+    ++cursor;
+    if (capacity == 0) {
+      notifyAll();
+      return;
+    }
+    if (lines.size() == capacity) {
       lines.removeFirst();
     }
-    lines.addLast(new Entry(++cursor, retained));
+    lines.addLast(new Entry(cursor, retained));
     notifyAll();
   }
 
@@ -38,7 +57,7 @@ final class InstanceLogBuffer {
     int end = (int) Math.max(0L, total - offset);
     int start = Math.max(0, end - linesPerPage);
     List<String> selected = end == 0 ? List.of() : List.copyOf(snapshot.subList(start, end));
-    return new InstanceLogPage(selected, total, CAPACITY);
+    return new InstanceLogPage(selected, total, capacity);
   }
 
   synchronized int size() {
@@ -47,6 +66,10 @@ final class InstanceLogBuffer {
 
   synchronized long cursor() {
     return cursor;
+  }
+
+  int capacity() {
+    return capacity;
   }
 
   synchronized InstanceOutputBatch awaitAfter(

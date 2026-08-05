@@ -123,10 +123,23 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   private volatile LobbyStatusEvent latestLobbyStatus;
   private final java.util.ArrayDeque<InstanceFailureEvent> recentFailures =
       new java.util.ArrayDeque<>(64);
+  private int recentFailureCapacity = 64;
 
   public DefaultSLSLiteApi(ProxyServer proxy, Logger logger) {
     this.proxy = java.util.Objects.requireNonNull(proxy, "proxy");
     this.logger = java.util.Objects.requireNonNull(logger, "logger");
+  }
+
+  public synchronized void configureFailureRetention(int capacity) {
+    if (status.get() != ApiStatus.STARTING || !recentFailures.isEmpty()) {
+      throw new IllegalStateException(
+          "Failure retention must be configured before the API becomes active");
+    }
+    if (capacity < 0
+        || capacity > net.slimelabs.slslite.config.DiagnosticRetentionConfig.MAX_FAILURE_REPORTS) {
+      throw new IllegalArgumentException("Failure retention is outside the configured bounds");
+    }
+    recentFailureCapacity = capacity;
   }
 
   public synchronized void activate(
@@ -291,6 +304,10 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
 
   private synchronized List<InstanceFailureEvent> recentFailureSnapshot() {
     return List.copyOf(recentFailures);
+  }
+
+  synchronized int retainedFailureCount() {
+    return recentFailures.size();
   }
 
   @Override
@@ -466,10 +483,12 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
             transition.correlationId(),
             InstanceFailurePhase.valueOf(transition.phase().name()),
             InstanceFailureCategory.valueOf(transition.category().name()));
-    if (recentFailures.size() == 64) {
-      recentFailures.removeFirst();
+    if (recentFailureCapacity > 0) {
+      if (recentFailures.size() == recentFailureCapacity) {
+        recentFailures.removeFirst();
+      }
+      recentFailures.addLast(event);
     }
-    recentFailures.addLast(event);
     submit(event);
   }
 

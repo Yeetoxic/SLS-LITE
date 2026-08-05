@@ -124,15 +124,6 @@ final class DocumentationNavigationTest {
     assertFalse(
         Pattern.compile("\\bdeferred\\b", Pattern.CASE_INSENSITIVE).matcher(publicGuides).find(),
         "Public documentation uses roadmap classification; proposed work belongs in todo.md");
-
-    for (String unavailableConfigKey :
-        List.of("storage.auto_priority", "storage.copy_parallelism")) {
-      assertFalse(
-          publicGuides.contains(unavailableConfigKey),
-          () ->
-              "Public documentation claims an unimplemented configuration key: "
-                  + unavailableConfigKey);
-    }
   }
 
   private static String publicGuideText() throws IOException {

@@ -18,8 +18,6 @@ import net.slimelabs.slslite.io.ConfinedFiles;
 
 public final class InstanceDirectoryPreparer {
 
-  private static final int MAX_COPY_PARALLELISM = 4;
-
   private final Path instancesRoot;
   private final BlueprintContentResolver contentResolver;
   private final DirectoryCopyEngine copyEngine;
@@ -52,7 +50,8 @@ public final class InstanceDirectoryPreparer {
     this(
         instancesRoot,
         contentRoot,
-        fileCopyOperation(requestedStrategy, selectedStrategy),
+        fileCopyOperation(
+            requestedStrategy, selectedStrategy, requestedStrategy == StorageStrategy.AUTO),
         Thread::sleep,
         selectedStrategy,
         overlayLayerManager(instancesRoot, contentRoot, selectedStrategy),
@@ -69,13 +68,13 @@ public final class InstanceDirectoryPreparer {
     this(
         instancesRoot,
         contentRoot,
-        fileCopyOperation(storage.strategy(), selectedStrategy),
+        fileCopyOperation(storage.strategy(), selectedStrategy, storage.permitsPortableFallback()),
         Thread::sleep,
         selectedStrategy,
         overlayLayerManager(instancesRoot, contentRoot, selectedStrategy),
         new BtrfsSnapshotManager(instancesRoot, contentRoot),
-        storage.strategy() == StorageStrategy.AUTO,
-        productionCopyParallelism(),
+        storage.permitsPortableFallback(),
+        storage.resolvedCopyParallelism(),
         selectedStrategy == StorageStrategy.SNAPSHOT_HOOK
             ? new SnapshotHookLayerManager(
                 instancesRoot,
@@ -172,9 +171,9 @@ public final class InstanceDirectoryPreparer {
       boolean btrfsPortableFallbackAllowed,
       int copyParallelism,
       SnapshotHookLayerManager snapshotHooks) {
-    if (copyParallelism < 1 || copyParallelism > MAX_COPY_PARALLELISM) {
+    if (copyParallelism < 1 || copyParallelism > StorageConfig.MAX_COPY_PARALLELISM) {
       throw new IllegalArgumentException(
-          "Copy parallelism must be between 1 and " + MAX_COPY_PARALLELISM);
+          "Copy parallelism must be between 1 and " + StorageConfig.MAX_COPY_PARALLELISM);
     }
     this.instancesRoot = instancesRoot.toAbsolutePath().normalize();
     this.contentResolver = new BlueprintContentResolver(this.instancesRoot, contentRoot);
@@ -200,16 +199,18 @@ public final class InstanceDirectoryPreparer {
   }
 
   private static int productionCopyParallelism() {
-    return Math.max(1, Math.min(MAX_COPY_PARALLELISM, Runtime.getRuntime().availableProcessors()));
+    return new StorageConfig(StorageStrategy.AUTO).resolvedCopyParallelism();
   }
 
   private static FileCopyOperation fileCopyOperation(
-      StorageStrategy requestedStrategy, StorageStrategy selectedStrategy) {
+      StorageStrategy requestedStrategy,
+      StorageStrategy selectedStrategy,
+      boolean portableFallbackAllowed) {
     java.util.Objects.requireNonNull(requestedStrategy, "requestedStrategy");
     java.util.Objects.requireNonNull(selectedStrategy, "selectedStrategy");
     return switch (selectedStrategy) {
       case COPY -> new PortableFileCopyOperation();
-      case REFLINK -> new ReflinkFileCopyOperation(requestedStrategy == StorageStrategy.AUTO);
+      case REFLINK -> new ReflinkFileCopyOperation(portableFallbackAllowed);
       case OVERLAY, FUSE_OVERLAY, BTRFS, SNAPSHOT_HOOK -> new PortableFileCopyOperation();
       case AUTO ->
           throw new IllegalArgumentException(

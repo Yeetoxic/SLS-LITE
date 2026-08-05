@@ -16,11 +16,13 @@ import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import net.kyori.adventure.text.Component;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.LobbyStatus;
+import net.slimelabs.slslite.lobby.SLSLimboHandoffService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
@@ -75,9 +77,51 @@ class SLSLiteLobbyRoutingTest {
   }
 
   @Test
-  void velocityModeLeavesKickFallbackDecisionUntouched() throws Exception {
+  void velocityModeRescuesFinalDisconnectToSLSLimbo() throws Exception {
     RegisteredServer limbo = server("sls-limbo");
-    KickedFromServerEvent event = kickEvent(server("game"));
+    RegisteredServer game = server("game");
+    KickedFromServerEvent event = connectionKickEvent(game);
+    SLSLite plugin = plugin(provider(limbo, LobbyStatus.READY, "sls-limbo", true));
+
+    plugin.onKickedFromServer(event);
+
+    KickedFromServerEvent.RedirectPlayer redirect =
+        assertInstanceOf(KickedFromServerEvent.RedirectPlayer.class, event.getResult());
+    assertSame(limbo, redirect.getServer());
+  }
+
+  @Test
+  void velocityModeRescuesConnectedBackendOutageToSLSLimbo() throws Exception {
+    RegisteredServer limbo = server("sls-limbo");
+    KickedFromServerEvent event = kickEvent(server("lobby"));
+    SLSLite plugin = plugin(provider(limbo, LobbyStatus.READY, "sls-limbo", true));
+
+    plugin.onKickedFromServer(event);
+
+    KickedFromServerEvent.RedirectPlayer redirect =
+        assertInstanceOf(KickedFromServerEvent.RedirectPlayer.class, event.getResult());
+    assertSame(limbo, redirect.getServer());
+  }
+
+  @Test
+  void velocityModePreservesExistingFallbackRedirect() throws Exception {
+    RegisteredServer limbo = server("sls-limbo");
+    RegisteredServer velocityFallback = server("velocity-fallback");
+    KickedFromServerEvent.RedirectPlayer original =
+        KickedFromServerEvent.RedirectPlayer.create(
+            velocityFallback, Component.text("Velocity fallback"));
+    KickedFromServerEvent event = kickEvent(server("game"), original);
+    SLSLite plugin = plugin(provider(limbo, LobbyStatus.READY, "sls-limbo", true));
+
+    plugin.onKickedFromServer(event);
+
+    assertSame(original, event.getResult());
+  }
+
+  @Test
+  void velocityModeDoesNotRedirectFailedSLSLimboToItself() throws Exception {
+    RegisteredServer limbo = server("sls-limbo");
+    KickedFromServerEvent event = kickEvent(limbo);
     KickedFromServerEvent.ServerKickResult original = event.getResult();
     SLSLite plugin = plugin(provider(limbo, LobbyStatus.READY, "sls-limbo", true));
 
@@ -162,16 +206,40 @@ class SLSLiteLobbyRoutingTest {
     Field field = SLSLite.class.getDeclaredField("lobbyProvider");
     field.setAccessible(true);
     field.set(plugin, lobbyProvider);
+    Field handoffField = SLSLite.class.getDeclaredField("limboHandoff");
+    handoffField.setAccessible(true);
+    handoffField.set(
+        plugin,
+        new SLSLimboHandoffService(
+            lobbyProvider, LoggerFactory.getLogger(SLSLiteLobbyRoutingTest.class)));
     return plugin;
   }
 
   private static KickedFromServerEvent kickEvent(RegisteredServer source) {
-    return new KickedFromServerEvent(
-        player(),
+    return kickEvent(
         source,
-        Component.text("Test kick"),
         false,
         KickedFromServerEvent.DisconnectPlayer.create(Component.text("Original result")));
+  }
+
+  private static KickedFromServerEvent connectionKickEvent(RegisteredServer source) {
+    return kickEvent(
+        source,
+        true,
+        KickedFromServerEvent.DisconnectPlayer.create(Component.text("Original result")));
+  }
+
+  private static KickedFromServerEvent kickEvent(
+      RegisteredServer source, KickedFromServerEvent.ServerKickResult result) {
+    return kickEvent(source, false, result);
+  }
+
+  private static KickedFromServerEvent kickEvent(
+      RegisteredServer source,
+      boolean kickedDuringServerConnect,
+      KickedFromServerEvent.ServerKickResult result) {
+    return new KickedFromServerEvent(
+        player(), source, Component.text("Test kick"), kickedDuringServerConnect, result);
   }
 
   private static LobbyProvider provider(
@@ -210,6 +278,11 @@ class SLSLiteLobbyRoutingTest {
       @Override
       public boolean preservesVelocityRouting() {
         return preservesVelocity;
+      }
+
+      @Override
+      public boolean isHoldingLobby(String serverName) {
+        return "sls-limbo".equals(serverName);
       }
 
       @Override
@@ -276,11 +349,18 @@ class SLSLiteLobbyRoutingTest {
   }
 
   private static Player player(AtomicReference<Component> disconnectReason) {
+    UUID playerId = UUID.randomUUID();
     return (Player)
         Proxy.newProxyInstance(
             Player.class.getClassLoader(),
             new Class<?>[] {Player.class},
             (proxy, method, arguments) -> {
+              if ("getUniqueId".equals(method.getName())) {
+                return playerId;
+              }
+              if ("getUsername".equals(method.getName())) {
+                return "Tester";
+              }
               if ("disconnect".equals(method.getName())) {
                 disconnectReason.set((Component) arguments[0]);
                 return null;

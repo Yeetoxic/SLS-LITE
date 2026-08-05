@@ -288,7 +288,8 @@ public final class SLSLimboProvider implements LobbyProvider {
               port,
               forwarding,
               config.advertisedProtocol(),
-              Math.max(1, proxy.getConfiguration().getShowMaxPlayers()));
+              Math.max(1, proxy.getConfiguration().getShowMaxPlayers()),
+              config.presentation());
     }
   }
 

@@ -12,7 +12,7 @@ public final class InstanceOutput {
   public static final String TEMPORARY_RELATIVE_PATH = TemporaryInstanceLog.RELATIVE_PATH;
 
   private final Path instanceDirectory;
-  private final InstanceLogBuffer logs = new InstanceLogBuffer();
+  private final InstanceLogBuffer logs;
 
   private volatile ManagedOutputConfig config = new ManagedOutputConfig(false, false, 4096);
   private volatile TemporaryInstanceLog temporaryLog;
@@ -20,7 +20,12 @@ public final class InstanceOutput {
   private volatile boolean temporaryOutputDisabled;
 
   public InstanceOutput(Path instanceDirectory) {
+    this(instanceDirectory, InstanceLogBuffer.DEFAULT_CAPACITY);
+  }
+
+  public InstanceOutput(Path instanceDirectory, int consoleTailLines) {
     this.instanceDirectory = instanceDirectory.toAbsolutePath().normalize();
+    this.logs = new InstanceLogBuffer(consoleTailLines);
   }
 
   public void configure(ManagedOutputConfig nextConfig) throws IOException {
@@ -61,7 +66,7 @@ public final class InstanceOutput {
   }
 
   public int retentionCapacity() {
-    return InstanceLogBuffer.CAPACITY;
+    return logs.capacity();
   }
 
   public boolean mirrorsToProxyConsole() {

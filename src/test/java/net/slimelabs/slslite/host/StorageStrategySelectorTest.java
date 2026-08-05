@@ -72,6 +72,31 @@ class StorageStrategySelectorTest {
   }
 
   @Test
+  void autoHonorsConfiguredOrder() {
+    StorageStrategySelection selection =
+        selector.select(
+            StorageStrategy.AUTO,
+            List.of(StorageStrategy.OVERLAY, StorageStrategy.REFLINK),
+            EnumSet.of(StorageStrategy.COPY, StorageStrategy.REFLINK, StorageStrategy.OVERLAY),
+            EnumSet.allOf(StorageStrategy.class));
+
+    assertEquals(StorageStrategy.OVERLAY, selection.selected().orElseThrow());
+  }
+
+  @Test
+  void autoDoesNotInventExcludedPortableFallback() {
+    StorageStrategySelection selection =
+        selector.select(
+            StorageStrategy.AUTO,
+            List.of(StorageStrategy.REFLINK),
+            EnumSet.of(StorageStrategy.COPY),
+            EnumSet.allOf(StorageStrategy.class));
+
+    assertFalse(selection.available());
+    assertTrue(selection.detail().contains("none of the strategies"));
+  }
+
+  @Test
   void snapshotHookIsNeverSelectedAutomatically() {
     StorageStrategySelection selection =
         selector.select(

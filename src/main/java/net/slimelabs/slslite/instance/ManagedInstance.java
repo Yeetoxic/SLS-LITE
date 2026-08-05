@@ -75,16 +75,38 @@ public final class ManagedInstance {
       int port,
       Path directory,
       InstanceLifecycle lifecycle,
-      Instant createdAt) {
+      Instant createdAt,
+      int consoleTailLines) {
     this.id = id;
     this.blueprint = blueprint;
     this.definitionIdentity = definitionIdentity;
     this.launchOverrides = java.util.Objects.requireNonNull(launchOverrides, "launchOverrides");
     this.port = port;
     this.directory = directory;
-    this.output = new InstanceOutput(directory);
+    this.output = new InstanceOutput(directory, consoleTailLines);
     this.lifecycle = lifecycle;
     this.createdAt = java.util.Objects.requireNonNull(createdAt, "createdAt");
+  }
+
+  ManagedInstance(
+      String id,
+      Blueprint blueprint,
+      InstanceDefinitionIdentity definitionIdentity,
+      InstanceLaunchOverrides launchOverrides,
+      int port,
+      Path directory,
+      InstanceLifecycle lifecycle,
+      Instant createdAt) {
+    this(
+        id,
+        blueprint,
+        definitionIdentity,
+        launchOverrides,
+        port,
+        directory,
+        lifecycle,
+        createdAt,
+        net.slimelabs.slslite.config.DiagnosticRetentionConfig.defaults().consoleTailLines());
   }
 
   ManagedInstance(

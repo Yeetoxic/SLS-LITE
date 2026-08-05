@@ -42,7 +42,7 @@ import org.slf4j.Logger;
 public final class SoftwareInstallationService implements AutoCloseable {
 
   private static final int MAX_LOG_LINES = 200;
-  private static final int MAX_HISTORY = 100;
+  private static final int DEFAULT_MAX_HISTORY = 100;
   private static final Duration DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(30);
   private static final String INSTALL_METADATA = ".sls-install.properties";
   private static final String STAGING_METADATA = ".sls-staging.properties";
@@ -58,6 +58,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
   private final Map<InstallationKey, MutableInstallation> history = new ConcurrentHashMap<>();
   private final ExecutorService executor;
   private final Logger logger;
+  private final int maximumHistory;
   private final AtomicBoolean closed = new AtomicBoolean();
   private final Object lifecycleLock = new Object();
   private volatile Consumer<InstallationTransition> installationObserver = ignored -> {};
@@ -66,8 +67,23 @@ public final class SoftwareInstallationService implements AutoCloseable {
       JavaJarProcessSpecFactory paths,
       Collection<SoftwareInstallationProvider> providers,
       Logger logger) {
+    this(paths, providers, DEFAULT_MAX_HISTORY, logger);
+  }
+
+  public SoftwareInstallationService(
+      JavaJarProcessSpecFactory paths,
+      Collection<SoftwareInstallationProvider> providers,
+      int maximumHistory,
+      Logger logger) {
     this.paths = paths;
     this.logger = logger;
+    if (maximumHistory < 0
+        || maximumHistory
+            > net.slimelabs.slslite.config.DiagnosticRetentionConfig
+                .MAX_INSTALLER_HISTORY_ENTRIES) {
+      throw new IllegalArgumentException("maximumHistory is outside the configured bounds");
+    }
+    this.maximumHistory = maximumHistory;
     EnumMap<SoftwareSource, SoftwareInstallationProvider> indexed =
         new EnumMap<>(SoftwareSource.class);
     for (SoftwareInstallationProvider provider : providers) {
@@ -711,13 +727,13 @@ public final class SoftwareInstallationService implements AutoCloseable {
   }
 
   private void pruneHistory() {
-    if (history.size() <= MAX_HISTORY) {
+    if (history.size() <= maximumHistory) {
       return;
     }
     history.values().stream()
         .filter(value -> value.snapshot().state() != InstallationState.INSTALLING)
         .sorted(Comparator.comparing(value -> value.snapshot().startedAt()))
-        .limit(history.size() - MAX_HISTORY)
+        .limit(history.size() - maximumHistory)
         .forEach(value -> history.remove(value.key, value));
   }
 

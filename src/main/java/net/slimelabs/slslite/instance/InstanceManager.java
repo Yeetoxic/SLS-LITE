@@ -68,6 +68,7 @@ public final class InstanceManager implements ServerController {
   private final SoftwareProfileRepository softwareProfiles;
   private final ResourceBudget resourceBudget;
   private final ManagedOutputConfig outputConfig;
+  private final int consoleTailLines;
   private final LoopbackPortAllocator portAllocator;
   private final InstanceDirectoryPreparer directoryPreparer;
   private final InstanceMetadataService metadata;
@@ -169,10 +170,46 @@ public final class InstanceManager implements ServerController {
       SoftwareInstallationService installationService,
       SLSDetailLog detailLog,
       Logger logger) {
+    this(
+        blueprints,
+        softwareProfiles,
+        resourceBudget,
+        outputConfig,
+        forwardingConfig,
+        portAllocator,
+        directoryPreparer,
+        processSpecFactory,
+        processSupervisor,
+        backendRegistry,
+        installationService,
+        detailLog,
+        net.slimelabs.slslite.config.DiagnosticRetentionConfig.defaults().consoleTailLines(),
+        logger);
+  }
+
+  public InstanceManager(
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository softwareProfiles,
+      ResourceBudget resourceBudget,
+      ManagedOutputConfig outputConfig,
+      ForwardingConfig forwardingConfig,
+      LoopbackPortAllocator portAllocator,
+      InstanceDirectoryPreparer directoryPreparer,
+      JavaJarProcessSpecFactory processSpecFactory,
+      ProcessSupervisor processSupervisor,
+      BackendRegistry backendRegistry,
+      SoftwareInstallationService installationService,
+      SLSDetailLog detailLog,
+      int consoleTailLines,
+      Logger logger) {
     this.blueprints = blueprints;
     this.softwareProfiles = softwareProfiles;
     this.resourceBudget = resourceBudget;
     this.outputConfig = outputConfig;
+    if (consoleTailLines < 0) {
+      throw new IllegalArgumentException("consoleTailLines must not be negative");
+    }
+    this.consoleTailLines = consoleTailLines;
     this.portAllocator = portAllocator;
     this.directoryPreparer = directoryPreparer;
     this.metadata = new InstanceMetadataService(directoryPreparer.root(), logger);
@@ -277,7 +314,8 @@ public final class InstanceManager implements ServerController {
               port,
               directory,
               lifecycle,
-              Instant.now());
+              Instant.now(),
+              consoleTailLines);
       instances.put(instanceId, instance);
       lifecycle.transitionTo(InstanceState.PREPARING);
       logger.info(
@@ -1028,7 +1066,8 @@ public final class InstanceManager implements ServerController {
               port,
               directoryPreparer.root().resolve(instanceId),
               lifecycle,
-              metadata.createdAt());
+              metadata.createdAt(),
+              consoleTailLines);
       instances.put(instanceId, instance);
       lifecycle.transitionTo(InstanceState.PREPARING);
       try {

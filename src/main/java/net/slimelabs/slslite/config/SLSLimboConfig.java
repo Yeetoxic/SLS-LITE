@@ -8,9 +8,31 @@ public record SLSLimboConfig(
     int maxRestartAttempts,
     int initialBackoffSeconds,
     int maxBackoffSeconds,
-    int stableAfterSeconds) {
+    int stableAfterSeconds,
+    SLSLimboPresentationConfig presentation) {
 
   public static final int MINIMUM_FIXED_PROTOCOL = 770;
+
+  public SLSLimboConfig(
+      boolean enabled,
+      int memoryMiB,
+      int startupTimeoutSeconds,
+      int advertisedProtocol,
+      int maxRestartAttempts,
+      int initialBackoffSeconds,
+      int maxBackoffSeconds,
+      int stableAfterSeconds) {
+    this(
+        enabled,
+        memoryMiB,
+        startupTimeoutSeconds,
+        advertisedProtocol,
+        maxRestartAttempts,
+        initialBackoffSeconds,
+        maxBackoffSeconds,
+        stableAfterSeconds,
+        SLSLimboPresentationConfig.defaults());
+  }
 
   public SLSLimboConfig {
     if (memoryMiB < 64) {
@@ -35,6 +57,9 @@ public record SLSLimboConfig(
     }
     if (stableAfterSeconds <= 0) {
       throw new IllegalArgumentException("SLS-Limbo stable period must be positive");
+    }
+    if (presentation == null) {
+      throw new IllegalArgumentException("SLS-Limbo presentation configuration is required");
     }
   }
 

@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
+import net.slimelabs.slslite.config.ViaVersionSyncPolicy;
 import org.slf4j.Logger;
 
 public final class ViaVersionProtocolSynchronizer implements BackendProtocolSynchronizer {
@@ -30,14 +31,38 @@ public final class ViaVersionProtocolSynchronizer implements BackendProtocolSync
   }
 
   public static BackendProtocolSynchronizer create(ProxyServer proxy, Logger logger) {
+    return create(proxy, logger, ViaVersionSyncPolicy.AUTO);
+  }
+
+  public static BackendProtocolSynchronizer create(
+      ProxyServer proxy, Logger logger, ViaVersionSyncPolicy policy) {
+    java.util.Objects.requireNonNull(proxy, "proxy");
+    java.util.Objects.requireNonNull(logger, "logger");
+    java.util.Objects.requireNonNull(policy, "policy");
+    if (policy == ViaVersionSyncPolicy.OFF) {
+      logger.info("ViaVersion backend protocol synchronization is disabled by host policy");
+      return BackendProtocolSynchronizer.disabled();
+    }
     if (proxy.getPluginManager().getPlugin("viaversion").isEmpty()) {
+      if (policy == ViaVersionSyncPolicy.ON) {
+        throw new IllegalStateException(
+            "compatibility.viaversion_backend_sync=on requires ViaVersion to be installed and enabled");
+      }
       return BackendProtocolSynchronizer.disabled();
     }
     try {
-      logger.info(
-          "ViaVersion integration enabled for dynamic backend " + "protocol synchronization");
-      return new ViaVersionProtocolSynchronizer(logger);
+      ViaVersionProtocolSynchronizer synchronizer = new ViaVersionProtocolSynchronizer(logger);
+      if (policy == ViaVersionSyncPolicy.ON) {
+        synchronizer = new ViaVersionProtocolSynchronizer(synchronizer.protocols(), logger);
+      }
+      logger.info("ViaVersion integration enabled for dynamic backend protocol synchronization");
+      return synchronizer;
     } catch (LinkageError | RuntimeException exception) {
+      if (policy == ViaVersionSyncPolicy.ON) {
+        throw new IllegalStateException(
+            "compatibility.viaversion_backend_sync=on requires a compatible ViaVersion protocol API",
+            exception);
+      }
       logger.warn(
           "ViaVersion is installed but its protocol API is "
               + "incompatible; dynamic synchronization is disabled: {}",

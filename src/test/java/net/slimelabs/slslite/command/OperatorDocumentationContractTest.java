@@ -144,7 +144,8 @@ final class OperatorDocumentationContractTest {
           } else if (value instanceof java.util.List<?> list) {
             flattened.put(path, list.size() + " entries");
           } else {
-            flattened.put(path, String.valueOf(value));
+            String scalar = String.valueOf(value);
+            flattened.put(path, scalar.isEmpty() ? "empty" : scalar);
           }
         });
   }

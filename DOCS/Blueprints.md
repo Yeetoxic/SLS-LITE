@@ -322,6 +322,7 @@ SLS-LITE reads these values under `annotations.sls-lite`:
 | `keep-alive` | boolean | `true` excludes the blueprint from idle cleanup. |
 | `stop-when-empty` | boolean | `false` is also treated as keep-alive. |
 | `idle-shutdown-seconds` | non-negative integer | Overrides the host idle delay; `0` disables it for this blueprint. |
+| `queue-timeout-seconds` | non-negative integer | Overrides the host matchmaking queue lifetime; `0` explicitly disables expiry for this blueprint. |
 | `startup-timeout-seconds` | integer `1-3600` | Overrides the software profile readiness deadline for this blueprint. |
 | `stop-timeout-seconds` | integer `1-600` | Overrides the software profile graceful-stop deadline for this blueprint. |
 | `restart-on-crash` | boolean | Opts a persistent non-lobby instance into bounded automatic recovery. Default: `false`. |

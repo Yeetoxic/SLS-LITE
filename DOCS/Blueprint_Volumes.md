@@ -75,8 +75,9 @@ strategy may change blueprint behavior:
 - same-target sources keep declaration-order, first-source precedence;
 - reset reconstructs the view from clean sources;
 - failed preparation and cleanup do not leave an instance presented as ready;
-- unsupported native capabilities fall back to portable copying unless an
-  operator explicitly requires a native strategy.
+- unsupported native capabilities fall back to portable copying under the
+  default automatic policy; an explicit native strategy or an automatic
+  allowlist without `copy` fails instead.
 
 Every native COW implementation requires storage-location support, write
 isolation, unclean-shutdown recovery, cleanup, and real disk savings before it
@@ -87,12 +88,15 @@ not merely `/dev/fuse` and a binary. Snapshot helpers are never auto-discovered
 and must obey the bounded process, response, rollback, lifecycle, and
 reconciliation contract.
 
-The current `auto` priority is `reflink`, Btrfs snapshot, kernel OverlayFS,
-rootless fuse-overlayfs, then portable copy. An operator `snapshot-hook` is
-never part of automatic selection. This is the conservative general-purpose
-order: reflinks provide block-level COW in ordinary directories without a
-mount lifecycle, while overlays require managed mounts and FUSE adds a
-userspace process.
+The default `auto` priority is `reflink`, Btrfs snapshot, kernel OverlayFS,
+rootless fuse-overlayfs, then portable copy. `storage.auto_priority` is an
+authoritative ordered allowlist: omitted strategies are not probed or selected,
+and omitting `copy` forbids portable fallback. Startup fails with capability
+diagnostics when no listed strategy qualifies. An operator `snapshot-hook` is
+never part of automatic selection. The default is the conservative
+general-purpose order: reflinks provide block-level COW in ordinary directories
+without a mount lifecycle, while overlays require managed mounts and FUSE adds
+a userspace process.
 
 Reflink remains ahead of Btrfs in the general priority. If Btrfs is selected,
 an eligible `cow` source uses an instant writable snapshot. Ordinary
@@ -170,16 +174,18 @@ the previous instance directory.
 
 ## Current Limits
 
-- Native COW is path- and host-dependent. `auto` falls back per source to
-  portable copy whenever the selected native strategy cannot safely represent
-  that source.
+- Native COW is path- and host-dependent. The default `auto` policy falls back
+  per source to portable copy whenever the selected native strategy cannot
+  safely represent that source; excluding `copy` converts that condition into
+  a preparation failure.
 - `ro` uses the same source-protecting private writable semantics as `cow`; it
   is not a strict read-only bind mount.
 - `rw` requires a persistent, single-instance blueprint and host directory
   symbolic-link support.
 - Volume sources must already exist before the blueprint is started.
-- Operators must budget for a complete copy per instance because portable
-  fallback can be selected even on a host that supports a native strategy.
+- Operators using the default automatic policy must budget for a complete copy
+  per instance because portable fallback can be selected even on a host that
+  supports a native strategy.
 - Do not modify a source directory while an instance is being prepared.
 
 The portable engine uses bounded parallel copying for independent files and
@@ -187,3 +193,5 @@ preserves eligible large sparse extents on non-Windows hosts. Same-target
 first-wins merges remain sequential. Valid persistent instances reuse their
 existing prepared directory on restart; reset is the explicit reconstruction
 operation. Mutable world data is never hard-linked or implicitly shared.
+`storage.copy_parallelism: auto` retains the conservative CPU-based limit of at
+most four workers; operators may choose an explicit bounded value from 1 to 16.

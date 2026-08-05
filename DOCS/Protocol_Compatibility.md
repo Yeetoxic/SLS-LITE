@@ -101,6 +101,12 @@ instances are pinged after their readiness marker and before their ready future
 completes. The mapping is removed when the backend is unregistered, so recovered
 composite IDs never wait for ViaVersion's periodic probe.
 
+Host policy `compatibility.viaversion_backend_sync` controls this integration.
+`auto` is the recommended default and uses ViaVersion when installed, `on`
+makes a compatible ViaVersion installation a startup requirement, and `off`
+leaves ViaVersion's backend protocol map entirely alone. The setting does not
+install a translation plugin or expand the tested compatibility matrix.
+
 NanoLimbo 1.13.0 wraps pre-1.21.5 NBT heightmaps in an extra `root` compound.
 ViaVersion reports that malformed key while translating the chunk into the
 1.21.5+ heightmap format. SLS-LITE therefore rejects fixed translation

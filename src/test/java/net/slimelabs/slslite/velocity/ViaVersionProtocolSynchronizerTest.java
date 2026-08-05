@@ -1,7 +1,12 @@
 package net.slimelabs.slslite.velocity;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.velocitypowered.api.plugin.PluginManager;
+import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.server.ServerPing;
 import com.viaversion.viaversion.api.platform.ProtocolDetectorService;
@@ -12,10 +17,53 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.kyori.adventure.text.Component;
+import net.slimelabs.slslite.config.ViaVersionSyncPolicy;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 class ViaVersionProtocolSynchronizerTest {
+
+  @Test
+  void offDoesNotInspectViaVersionAvailability() {
+    AtomicInteger pluginManagerInspections = new AtomicInteger();
+    ProxyServer proxy = proxy(Optional.empty(), pluginManagerInspections);
+
+    assertDoesNotThrow(
+        () ->
+            ViaVersionProtocolSynchronizer.create(
+                proxy, LoggerFactory.getLogger(getClass()), ViaVersionSyncPolicy.OFF));
+
+    assertEquals(0, pluginManagerInspections.get());
+  }
+
+  @Test
+  void autoRemainsDisabledWhenViaVersionIsAbsent() {
+    AtomicInteger pluginManagerInspections = new AtomicInteger();
+
+    assertDoesNotThrow(
+        () ->
+            ViaVersionProtocolSynchronizer.create(
+                proxy(Optional.empty(), pluginManagerInspections),
+                LoggerFactory.getLogger(getClass()),
+                ViaVersionSyncPolicy.AUTO));
+
+    assertEquals(1, pluginManagerInspections.get());
+  }
+
+  @Test
+  void onRejectsMissingViaVersionPrecisely() {
+    IllegalStateException failure =
+        assertThrows(
+            IllegalStateException.class,
+            () ->
+                ViaVersionProtocolSynchronizer.create(
+                    proxy(Optional.empty(), new AtomicInteger()),
+                    LoggerFactory.getLogger(getClass()),
+                    ViaVersionSyncPolicy.ON));
+
+    assertTrue(failure.getMessage().contains("viaversion_backend_sync=on"));
+    assertTrue(failure.getMessage().contains("requires ViaVersion"));
+  }
 
   @Test
   void publishesKnownProtocolWithoutPingingBackend() {
@@ -139,5 +187,31 @@ class ViaVersionProtocolSynchronizerTest {
       return 0L;
     }
     return null;
+  }
+
+  private static ProxyServer proxy(
+      Optional<?> viaVersionPlugin, AtomicInteger pluginManagerInspections) {
+    PluginManager plugins =
+        (PluginManager)
+            Proxy.newProxyInstance(
+                PluginManager.class.getClassLoader(),
+                new Class<?>[] {PluginManager.class},
+                (proxy, method, arguments) -> {
+                  if (method.getName().equals("getPlugin")) {
+                    return viaVersionPlugin;
+                  }
+                  return defaultValue(method.getReturnType());
+                });
+    return (ProxyServer)
+        Proxy.newProxyInstance(
+            ProxyServer.class.getClassLoader(),
+            new Class<?>[] {ProxyServer.class},
+            (proxy, method, arguments) -> {
+              if (method.getName().equals("getPluginManager")) {
+                pluginManagerInspections.incrementAndGet();
+                return plugins;
+              }
+              return defaultValue(method.getReturnType());
+            });
   }
 }

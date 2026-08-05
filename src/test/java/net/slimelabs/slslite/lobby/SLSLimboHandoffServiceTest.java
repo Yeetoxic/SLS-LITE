@@ -74,6 +74,44 @@ class SLSLimboHandoffServiceTest {
   }
 
   @Test
+  void retriesFailedVelocityDestinationWithoutConfiguredPrimaryLobby() {
+    RegisteredServer limbo = server("sls-limbo");
+    RegisteredServer forcedHost = server("forced-host");
+    AtomicReference<Optional<ServerConnection>> current =
+        new AtomicReference<>(Optional.of(connection(limbo)));
+    AtomicInteger transfers = new AtomicInteger();
+    Player player = player(current, transfers, forcedHost);
+    TestLobbyProvider lobbies = new TestLobbyProvider(limbo);
+    SLSLimboHandoffService handoff = service(lobbies);
+
+    handoff.awaitDestination(player, forcedHost);
+    handoff.connected(player, limbo);
+
+    assertEquals(1, transfers.get());
+    assertEquals(0, handoff.waitingCount());
+    handoff.close();
+  }
+
+  @Test
+  void doesNotTrackPlayerWhoChoosesSLSLimboDeliberatelyInVelocityMode() {
+    RegisteredServer limbo = server("sls-limbo");
+    RegisteredServer lobby = server("lobby");
+    AtomicReference<Optional<ServerConnection>> current =
+        new AtomicReference<>(Optional.of(connection(limbo)));
+    AtomicInteger transfers = new AtomicInteger();
+    Player player = player(current, transfers, lobby);
+    TestLobbyProvider lobbies = new TestLobbyProvider(limbo, true);
+    SLSLimboHandoffService handoff = service(lobbies);
+
+    handoff.connected(player, limbo);
+    lobbies.publishPrimary(lobby);
+
+    assertEquals(0, transfers.get());
+    assertEquals(0, handoff.waitingCount());
+    handoff.close();
+  }
+
+  @Test
   void doesNotMoveTrackedPlayerStillOnHealthyBackend() {
     RegisteredServer limbo = server("sls-limbo");
     RegisteredServer game = server("survival.abc123");
@@ -120,6 +158,33 @@ class SLSLimboHandoffServiceTest {
 
     assertEquals(1, transfers.get());
     assertEquals(1, messages.get());
+    assertEquals(1, handoff.waitingCount());
+    handoff.close();
+  }
+
+  @Test
+  void connectionAlreadyInProgressRetriesWithoutReportingDestinationFailure() {
+    RegisteredServer limbo = server("sls-limbo");
+    RegisteredServer primary = server("lobby");
+    AtomicReference<Optional<ServerConnection>> current =
+        new AtomicReference<>(Optional.of(connection(limbo)));
+    AtomicInteger transfers = new AtomicInteger();
+    AtomicInteger messages = new AtomicInteger();
+    Player player =
+        player(
+            current,
+            transfers,
+            primary,
+            ConnectionRequestBuilder.Status.CONNECTION_IN_PROGRESS,
+            messages);
+    TestLobbyProvider lobbies = new TestLobbyProvider(limbo);
+    SLSLimboHandoffService handoff = service(lobbies);
+
+    handoff.awaitDestination(player, primary);
+    handoff.connected(player, limbo);
+
+    assertEquals(1, transfers.get());
+    assertEquals(0, messages.get());
     assertEquals(1, handoff.waitingCount());
     handoff.close();
   }
@@ -292,10 +357,16 @@ class SLSLimboHandoffServiceTest {
 
     private final RegisteredServer limbo;
     private final List<Consumer<RegisteredServer>> listeners = new ArrayList<>();
+    private final boolean preservesVelocityRouting;
     private RegisteredServer primary;
 
     private TestLobbyProvider(RegisteredServer limbo) {
+      this(limbo, false);
+    }
+
+    private TestLobbyProvider(RegisteredServer limbo, boolean preservesVelocityRouting) {
       this.limbo = limbo;
+      this.preservesVelocityRouting = preservesVelocityRouting;
     }
 
     void publishPrimary(RegisteredServer server) {
@@ -329,6 +400,11 @@ class SLSLimboHandoffServiceTest {
     @Override
     public boolean isHoldingLobby(String serverName) {
       return "sls-limbo".equals(serverName);
+    }
+
+    @Override
+    public boolean preservesVelocityRouting() {
+      return preservesVelocityRouting;
     }
 
     @Override

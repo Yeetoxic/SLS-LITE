@@ -167,7 +167,7 @@ characters per line. A quiet command receives a concise no-output response.
 `--follow` is an additive operator mode and does not alter the pinned
 `console <server> <command...>` form. It uses the same cursor-backed buffer in
 bounded 16-line batches without blocking the managed process's output reader.
-If output outruns the 1,000-line retention buffer, the operator is told how many
+If output outruns the configured in-memory retention buffer, the operator is told how many
 expired lines were skipped. Each source can follow one instance at a time.
 Follow ends on `--unfollow`, instance stop, player disconnect, replacement by a
 different follow, or proxy shutdown.

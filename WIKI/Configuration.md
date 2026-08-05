@@ -9,6 +9,7 @@ Review these areas on every host:
 - Managed memory and process admission budgets
 - Loopback port range
 - Storage strategy and optional snapshot-helper settings
+- Matchmaking defaults, per-blueprint queue expiry, and bounded diagnostic retention
 - Java runtime mapping
 - Forwarding mode and secret
 - Velocity-native, external, or managed lobby policy

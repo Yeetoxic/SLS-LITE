@@ -691,7 +691,7 @@ post-release milestone.
       colors, and frame interval. Validate malformed or excessive presentation
       input with precise diagnostics. When disabled, send no built-in transfer
       action-bar output and leave the surface free for Java API extensions.
-- [ ] Add host-wide SLS-Limbo presentation configuration. Allow operators to
+- [x] Add host-wide SLS-Limbo presentation configuration. Allow operators to
       replace or disable its ping description, brand, join message, boss bar,
       title/subtitle, header/footer, and other player-facing presentation; allow
       supported dimensions and bounded timing/color/style values. Treat text as
@@ -700,13 +700,13 @@ post-release milestone.
       forwarding mode and secret, advertised protocol, capacity, packet/resource
       limits, and lifecycle settings so customization cannot break the limbo's
       required operational or security contract.
-- [ ] Add a host-level ViaVersion backend synchronization policy: `auto` keeps
+- [x] Add a host-level ViaVersion backend synchronization policy: `auto` keeps
       the existing detection-based behavior, `on` requires the integration and
       emits a precise configuration/reload error when ViaVersion is unavailable,
       and `off` prevents SLS-LITE from inspecting or modifying ViaVersion's
       backend protocol mapping. Document `auto` as SLS-LITE's recommended
       standard without treating that default as mandatory operator policy.
-- [ ] Add bounded storage policy controls. Preserve the documented automatic COW
+- [x] Add bounded storage policy controls. Preserve the documented automatic COW
       priority and conservative CPU-based copy parallelism as defaults; allow an
       authoritative ordered auto-strategy allowlist and `auto` or numeric portable
       copy parallelism. Operators may exclude every fallback, including portable
@@ -714,7 +714,7 @@ post-release milestone.
       capability failures per requested strategy, and never attempt an excluded
       strategy silently. Cover selection, reload, fallback, and concurrency bounds
       with tests and operator documentation.
-- [ ] Add bounded queue and diagnostic-retention controls. Preserve the host queue
+- [x] Add bounded queue and diagnostic-retention controls. Preserve the host queue
       timeout default while allowing each blueprint to override it or explicitly
       disable expiry. Make the instance console-tail size, installer-history count,
       and retained failure-report count host-configurable, accepting zero where

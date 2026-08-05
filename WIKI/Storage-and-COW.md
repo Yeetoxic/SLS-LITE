@@ -16,6 +16,12 @@ With `storage.strategy: auto`, SLS-LITE prefers:
 4. Rootless fuse-overlayfs
 5. Portable copy
 
+`storage.auto_priority` can replace that order with any non-empty unique subset.
+It is authoritative: omitted strategies are not probed or selected, and
+omitting `copy` disables portable fallback. `storage.copy_parallelism` retains
+the conservative CPU-based automatic limit by default or accepts a bounded
+explicit worker count.
+
 Each native choice requires a successful probe on the actual configured path.
 An operator snapshot helper is explicit-only and never auto-discovered. Missing
 privileges, `/dev/fuse`, filesystem support, or helper access do not justify

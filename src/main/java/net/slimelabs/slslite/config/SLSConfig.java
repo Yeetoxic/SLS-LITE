@@ -18,7 +18,86 @@ public record SLSConfig(
     StorageConfig storage,
     DetailedLoggingConfig detailedLogging,
     TransferActionBarConfig transferActionBar,
+    ViaVersionSyncPolicy viaVersionSyncPolicy,
+    DiagnosticRetentionConfig diagnosticRetention,
     Path instancesDirectory) {
+
+  public SLSConfig(
+      int totalMemoryMiB,
+      int maxManagedProcesses,
+      int portRangeStart,
+      int portRangeEnd,
+      int queueTimeoutSeconds,
+      BlueprintSelectionMode blueprintSelectionMode,
+      int idleShutdownSeconds,
+      ManagedOutputConfig managedOutput,
+      ForwardingConfig forwarding,
+      SecurityConfig security,
+      SLSLimboConfig limbo,
+      LobbyConfig lobby,
+      StorageConfig storage,
+      DetailedLoggingConfig detailedLogging,
+      TransferActionBarConfig transferActionBar,
+      ViaVersionSyncPolicy viaVersionSyncPolicy,
+      Path instancesDirectory) {
+    this(
+        totalMemoryMiB,
+        maxManagedProcesses,
+        portRangeStart,
+        portRangeEnd,
+        queueTimeoutSeconds,
+        blueprintSelectionMode,
+        idleShutdownSeconds,
+        managedOutput,
+        forwarding,
+        security,
+        limbo,
+        lobby,
+        storage,
+        detailedLogging,
+        transferActionBar,
+        viaVersionSyncPolicy,
+        DiagnosticRetentionConfig.defaults(),
+        instancesDirectory);
+  }
+
+  public SLSConfig(
+      int totalMemoryMiB,
+      int maxManagedProcesses,
+      int portRangeStart,
+      int portRangeEnd,
+      int queueTimeoutSeconds,
+      BlueprintSelectionMode blueprintSelectionMode,
+      int idleShutdownSeconds,
+      ManagedOutputConfig managedOutput,
+      ForwardingConfig forwarding,
+      SecurityConfig security,
+      SLSLimboConfig limbo,
+      LobbyConfig lobby,
+      StorageConfig storage,
+      DetailedLoggingConfig detailedLogging,
+      TransferActionBarConfig transferActionBar,
+      Path instancesDirectory) {
+    this(
+        totalMemoryMiB,
+        maxManagedProcesses,
+        portRangeStart,
+        portRangeEnd,
+        queueTimeoutSeconds,
+        blueprintSelectionMode,
+        idleShutdownSeconds,
+        managedOutput,
+        forwarding,
+        security,
+        limbo,
+        lobby,
+        storage,
+        detailedLogging,
+        transferActionBar,
+        ViaVersionSyncPolicy.AUTO,
+        DiagnosticRetentionConfig.defaults(),
+        instancesDirectory);
+  }
 
   public SLSConfig(
       int totalMemoryMiB,
@@ -52,6 +131,8 @@ public record SLSConfig(
         storage,
         detailedLogging,
         TransferActionBarConfig.defaults(),
+        ViaVersionSyncPolicy.AUTO,
+        DiagnosticRetentionConfig.defaults(),
         instancesDirectory);
   }
 
@@ -86,6 +167,8 @@ public record SLSConfig(
         storage,
         detailedLogging,
         TransferActionBarConfig.defaults(),
+        ViaVersionSyncPolicy.AUTO,
+        DiagnosticRetentionConfig.defaults(),
         instancesDirectory);
   }
 
@@ -119,6 +202,8 @@ public record SLSConfig(
         storage,
         DetailedLoggingConfig.defaults(),
         TransferActionBarConfig.defaults(),
+        ViaVersionSyncPolicy.AUTO,
+        DiagnosticRetentionConfig.defaults(),
         instancesDirectory);
   }
 
@@ -151,6 +236,8 @@ public record SLSConfig(
         new StorageConfig(StorageStrategy.AUTO),
         DetailedLoggingConfig.defaults(),
         TransferActionBarConfig.defaults(),
+        ViaVersionSyncPolicy.AUTO,
+        DiagnosticRetentionConfig.defaults(),
         instancesDirectory);
   }
 
@@ -204,6 +291,12 @@ public record SLSConfig(
     }
     if (transferActionBar == null) {
       throw new IllegalArgumentException("transfer action-bar configuration is required");
+    }
+    if (viaVersionSyncPolicy == null) {
+      throw new IllegalArgumentException("ViaVersion synchronization policy is required");
+    }
+    if (diagnosticRetention == null) {
+      throw new IllegalArgumentException("diagnostic retention configuration is required");
     }
     instancesDirectory = instancesDirectory.toAbsolutePath().normalize();
   }

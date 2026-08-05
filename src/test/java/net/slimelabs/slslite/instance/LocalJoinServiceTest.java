@@ -148,6 +148,29 @@ class LocalJoinServiceTest {
   }
 
   @Test
+  void blueprintCanExplicitlyDisableQueueExpiry() throws Exception {
+    Fixture fixture =
+        fixture(
+            Duration.ofMillis(25),
+            0,
+            null,
+            """
+                    annotations:
+                      sls-lite:
+                        queue-timeout-seconds: 0
+                    """);
+    try (LocalJoinService service = fixture.service()) {
+      LocalJoinService.JoinAttempt attempt = service.join(fixture.player(), "test", "smoke");
+
+      assertThrows(
+          TimeoutException.class, () -> attempt.connection().get(100, TimeUnit.MILLISECONDS));
+      assertTrue(service.queued(fixture.playerId()).isPresent());
+      assertEquals(0, service.queueTimeoutSeconds(attempt.instance().blueprint()));
+      service.dequeue(fixture.playerId());
+    }
+  }
+
+  @Test
   void observerFailureCannotRollBackAcceptedQueueState() throws Exception {
     Fixture fixture = fixture(Duration.ofSeconds(5));
     try (LocalJoinService service = fixture.service()) {
@@ -577,6 +600,15 @@ class LocalJoinServiceTest {
       int connectedPlayers,
       CompletableFuture<ConnectionRequestBuilder.Result> pendingConnection)
       throws Exception {
+    return fixture(timeout, connectedPlayers, pendingConnection, "");
+  }
+
+  private Fixture fixture(
+      Duration timeout,
+      int connectedPlayers,
+      CompletableFuture<ConnectionRequestBuilder.Result> pendingConnection,
+      String annotations)
+      throws Exception {
     Path blueprintDirectory = temporaryDirectory.resolve("blueprints");
     BlueprintRepository blueprints = new BlueprintRepository(blueprintDirectory);
     Files.createDirectories(blueprintDirectory);
@@ -594,7 +626,9 @@ class LocalJoinServiceTest {
                     memory_limit: 512
                     max_players: 1
                     max_instances: 2
-                """);
+                %s
+                """
+            .formatted(annotations));
     blueprints.reload();
 
     Blueprint blueprint = blueprints.get("test", "smoke").orElseThrow();

@@ -172,6 +172,28 @@ class DefaultSLSLiteApiEventTest {
   }
 
   @Test
+  void zeroFailureRetentionStillPublishesFailureEvents() throws Exception {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    api.configureFailureRetention(0);
+    CountDownLatch delivered = new CountDownLatch(1);
+    api.subscribe(event -> delivered.countDown());
+
+    api.publish(
+        new net.slimelabs.slslite.instance.InstanceManager.InstanceFailureTransition(
+            "arena.123",
+            "arena",
+            "minigame",
+            "instance-test",
+            FailurePhase.RUNTIME,
+            net.slimelabs.slslite.instance.InstanceManager.FailureCategory.PROCESS,
+            Instant.now()));
+
+    assertTrue(delivered.await(2, TimeUnit.SECONDS));
+    assertEquals(0, api.retainedFailureCount());
+    api.close();
+  }
+
+  @Test
   void mapsBoundedCatalogReloadResultIntoTheGlobalOrderedEventStream() throws Exception {
     DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
     List<net.slimelabs.slslite.api.event.SLSLiteEvent> received = new CopyOnWriteArrayList<>();

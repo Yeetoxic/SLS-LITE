@@ -60,36 +60,34 @@ final class HostStorageCapabilityChecker {
     EnumMap<StorageStrategy, HostCapability> successful = new EnumMap<>(StorageStrategy.class);
     EnumSet<StorageStrategy> detected = EnumSet.of(StorageStrategy.COPY);
     ProbeResult reflink =
-        cachedOrProbe(cached, StorageStrategy.REFLINK, () -> checkReflink(instancesDirectory));
+        considered(storage, StorageStrategy.REFLINK)
+            ? cachedOrProbe(cached, StorageStrategy.REFLINK, () -> checkReflink(instancesDirectory))
+            : excluded("Reflink COW");
     results.add(capabilityForRequest(reflink, requestedStrategy, StorageStrategy.REFLINK));
     addWhenSupported(detected, StorageStrategy.REFLINK, reflink);
     remember(successful, StorageStrategy.REFLINK, reflink);
     ProbeResult btrfs =
-        cachedOrProbe(cached, StorageStrategy.BTRFS, () -> checkBtrfs(instancesDirectory));
+        considered(storage, StorageStrategy.BTRFS)
+            ? cachedOrProbe(cached, StorageStrategy.BTRFS, () -> checkBtrfs(instancesDirectory))
+            : excluded("Btrfs snapshot COW");
     results.add(capabilityForRequest(btrfs, requestedStrategy, StorageStrategy.BTRFS));
     addWhenSupported(detected, StorageStrategy.BTRFS, btrfs);
     remember(successful, StorageStrategy.BTRFS, btrfs);
     ProbeResult overlay =
-        cachedOrProbe(
-            cached,
-            StorageStrategy.OVERLAY,
-            () ->
-                checkOverlayFs(
-                    instancesDirectory,
-                    requestedStrategy == StorageStrategy.AUTO
-                        || requestedStrategy == StorageStrategy.OVERLAY));
+        considered(storage, StorageStrategy.OVERLAY)
+            ? cachedOrProbe(
+                cached, StorageStrategy.OVERLAY, () -> checkOverlayFs(instancesDirectory, true))
+            : excluded("OverlayFS COW");
     results.add(capabilityForRequest(overlay, requestedStrategy, StorageStrategy.OVERLAY));
     addWhenSupported(detected, StorageStrategy.OVERLAY, overlay);
     remember(successful, StorageStrategy.OVERLAY, overlay);
     ProbeResult fuseOverlay =
-        cachedOrProbe(
-            cached,
-            StorageStrategy.FUSE_OVERLAY,
-            () ->
-                checkFuseOverlayFs(
-                    instancesDirectory,
-                    requestedStrategy == StorageStrategy.AUTO
-                        || requestedStrategy == StorageStrategy.FUSE_OVERLAY));
+        considered(storage, StorageStrategy.FUSE_OVERLAY)
+            ? cachedOrProbe(
+                cached,
+                StorageStrategy.FUSE_OVERLAY,
+                () -> checkFuseOverlayFs(instancesDirectory, true))
+            : excluded("fuse-overlayfs COW");
     results.add(capabilityForRequest(fuseOverlay, requestedStrategy, StorageStrategy.FUSE_OVERLAY));
     addWhenSupported(detected, StorageStrategy.FUSE_OVERLAY, fuseOverlay);
     remember(successful, StorageStrategy.FUSE_OVERLAY, fuseOverlay);
@@ -101,7 +99,8 @@ final class HostStorageCapabilityChecker {
         capabilityForRequest(snapshotHook, requestedStrategy, StorageStrategy.SNAPSHOT_HOOK));
     addWhenSupported(detected, StorageStrategy.SNAPSHOT_HOOK, snapshotHook);
     StorageStrategySelection selection =
-        new StorageStrategySelector().select(requestedStrategy, detected, IMPLEMENTED_STRATEGIES);
+        new StorageStrategySelector()
+            .select(requestedStrategy, storage.autoPriority(), detected, IMPLEMENTED_STRATEGIES);
     results.add(selectionCapability(instancesDirectory, selection));
     return new StorageCheck(List.copyOf(results), selection);
   }
@@ -430,6 +429,20 @@ final class HostStorageCapabilityChecker {
 
   private static ProbeResult unsupported(HostCapability capability) {
     return new ProbeResult(capability, false);
+  }
+
+  private static ProbeResult excluded(String name) {
+    return unsupported(
+        new HostCapability(
+            name,
+            HostCapabilityStatus.INFO,
+            "excluded from host probing by storage.auto_priority"));
+  }
+
+  private static boolean considered(StorageConfig storage, StorageStrategy strategy) {
+    return storage.strategy() == strategy
+        || (storage.strategy() == StorageStrategy.AUTO
+            && storage.autoPriority().contains(strategy));
   }
 
   static boolean supportsFileSystem(String fileSystems, String expected) {

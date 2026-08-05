@@ -38,12 +38,22 @@ SLS-Limbo is appropriate when:
 Automatic handoff from SLS-Limbo applies only to players who had to enter it for
 one of these reasons.
 
-SLS-LITE tracks those players only until they reach the primary lobby or
-disconnect. Managed primaries publish lifecycle readiness after startup or
-recovery. Failed external primaries are checked with a lightweight Velocity
-server ping; SLS-LITE does not attempt the handoff until that probe succeeds.
-If the connection still fails, the player remains in SLS-Limbo and health
-checking resumes.
+In `velocity` mode, SLS-LITE evaluates the final kick-routing result after other
+Velocity listeners. An existing redirect remains untouched. If the result would
+disconnect the player and SLS-Limbo is ready, SLS-LITE redirects them there
+instead. A failed initial or forced-host connection retains its exact selected
+destination and is retried from SLS-Limbo. The same tracking returns a player
+whose connected backend becomes unavailable. A player who deliberately selects
+SLS-Limbo, such as with `/server sls-limbo`, has no fallback tracking record and
+remains there until they choose another route. A failed SLS-Limbo connection is
+never redirected back to itself.
+
+In `external` and `managed` modes, SLS-LITE tracks waiting players only until
+they reach the primary lobby or disconnect. Managed primaries publish lifecycle
+readiness after startup or recovery. Failed external primaries are checked with
+a lightweight Velocity server ping; SLS-LITE does not attempt the handoff until
+that probe succeeds. If the connection still fails, the player remains in
+SLS-Limbo and health checking resumes.
 
 Per-player handoff failures use exponential retry delays of 10, 20, 40, and
 then 60 seconds. The player receives one chat explanation per SLS-Limbo waiting
@@ -90,6 +100,38 @@ lobby:
     enabled: true
     memory_mib: 96
     startup_timeout_seconds: 30
+    presentation:
+      dimension: THE_END
+      ping:
+        enabled: true
+        description: "<gold>SLS-Limbo"
+        version: "<gold>SLS-LITE"
+      player_list:
+        enabled: false
+        username: SLS-LITE
+      brand:
+        enabled: true
+        text: "<gold>SLS-Limbo"
+      join_message:
+        enabled: true
+        text: "<yellow>You are in SLS-Limbo while your destination gets ready."
+      boss_bar:
+        enabled: true
+        text: "<yellow>Waiting for your destination..."
+        health: 1.0
+        color: YELLOW
+        division: SOLID
+      title:
+        enabled: true
+        title: "<gold>SLS-LITE"
+        subtitle: "<yellow>SLS-Limbo"
+        fade_in_ticks: 10
+        stay_ticks: 100
+        fade_out_ticks: 10
+      header_footer:
+        enabled: false
+        header: ""
+        footer: ""
     recovery:
       max_attempts: 5
       initial_backoff_seconds: 2
@@ -100,12 +142,23 @@ lobby:
 - `enabled`: starts the bundled fallback when `true`.
 - `memory_mib`: SLS-Limbo runtime heap reservation. Minimum: 64 MiB.
 - `startup_timeout_seconds`: maximum time allowed for its readiness message.
+- `presentation`: controls the generated static environment and messages. Text
+  accepts MiniMessage formatting. Individual elements can be disabled without
+  disabling SLS-Limbo. Supported dimensions are `OVERWORLD`, `NETHER`, and
+  `THE_END`; boss-bar colors and divisions are listed in the canonical
+  [configuration reference](Configuration.md).
 - `recovery.max_attempts`: bounded retries after an unexpected failure. Set to
   `0` to leave SLS-Limbo offline after the first failure.
 - `recovery.initial_backoff_seconds`: delay before the first retry.
 - `recovery.max_backoff_seconds`: cap for exponential retry delays.
 - `recovery.stable_after_seconds`: healthy period required to reset the used
-  retry budget.
+retry budget.
+
+Presentation settings deliberately do not expose SLS-Limbo's bind address,
+allocated port, forwarding credentials, player capacity, protocol baseline,
+traffic limits, process supervision, or recovery behavior. SLS-LITE continues
+to generate and own those values so customization cannot accidentally weaken
+the fallback's network boundary or escape the declared host resource budget.
 
 The SLS-Limbo reservation is included in `resources.total_memory_mib`. It also
 uses one port from `network.ports` and one slot from

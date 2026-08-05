@@ -73,6 +73,9 @@ annotations:
     keep-alive: false
     # Optional per-blueprint override; omit to use config.yml.
     # idle-shutdown-seconds: 180
+    # Queue expiry for this blueprint. Omit to inherit the host default; use 0
+    # for an explicit no-expiry queue.
+    # queue-timeout-seconds: 180
     # Set false to disable empty-server shutdown for this blueprint.
     stop-when-empty: true
     # Optional bounded overrides for unusually slow startup or shutdown.

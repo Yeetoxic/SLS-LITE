@@ -34,10 +34,13 @@ fixture scripts rather than in these product defaults.
 | `resources.max_managed_processes` | `20` | Positive process count no greater than the configured port count. When omitted manually, it follows that port count. SLS-Limbo consumes one slot. |
 | `network.ports.start` | `25570` | Integer `1024..65535`; first managed loopback port. |
 | `network.ports.end` | `25589` | Integer from `start..65535`; last managed loopback port. The default range contains 20 slots. |
-| `matchmaking.queue_timeout_seconds` | `180` | Positive queue lifetime in seconds. |
+| `matchmaking.queue_timeout_seconds` | `180` | Positive host-default queue lifetime in seconds. A blueprint may override it or select explicit no-expiry with `sls-lite.queue-timeout-seconds`. |
 | `matchmaking.blueprint_selection` | `first-available` | `first-available` prefers the requested blueprint and then stable ID order; `random` uniformly selects from eligible pool definitions. Existing ready instances with capacity are always preferred before either provisioning policy. |
 | `lifecycle.idle_shutdown_seconds` | `180` | Non-negative seconds. `0` disables global idle cleanup. |
+| `compatibility.viaversion_backend_sync` | `auto` | `auto` integrates with ViaVersion's dynamic-backend protocol map when ViaVersion is installed and is the recommended standard; `on` makes a compatible ViaVersion installation mandatory at startup; `off` prevents SLS-LITE from inspecting or changing that map. |
 | `storage.strategy` | `auto` | `auto`, `copy`, `reflink`, `btrfs`, `overlay`, `fuse-overlay`, or `snapshot-hook`. `auto` uses reflink, eligible Btrfs snapshots, kernel OverlayFS, or fuse-overlayfs after a successful per-path isolation probe and otherwise uses portable copy. Explicitly requesting an unavailable strategy fails startup. |
+| `storage.auto_priority` | `5 entries` | Authoritative non-empty ordered allowlist containing unique `reflink`, `btrfs`, `overlay`, `fuse-overlay`, and/or `copy` entries. Applies only to `strategy: auto`; omitted strategies are neither probed nor selected. |
+| `storage.copy_parallelism` | `auto` | `auto` uses the smaller of four workers and the JVM's available processor count; an explicit integer from `1..16` selects the bounded worker count. |
 | `storage.snapshot_hook.executable` | unset | Required only for `snapshot-hook`; relative executable below the SLS-LITE data directory. Never auto-discovered. |
 | `storage.snapshot_hook.timeout_seconds` | `30` | Per-operation helper timeout from 1 through 300 seconds. |
 | `managed_output.mirror_to_proxy_console` | `false` | Mirror every child output line into the Velocity console. |
@@ -49,6 +52,9 @@ fixture scripts rather than in these product defaults.
 | `detailed_logging.retained_files` | `3` | `1..32`; includes the active file. Older rotations are replaced. |
 | `detailed_logging.queue_capacity` | `1024` | Bounded asynchronous queue, `128..65536`. Overflow drops detail rather than blocking lifecycle threads and emits sparse warnings. |
 | `detailed_logging.redact_paths` | `true` | Redact known roots and absolute path-shaped values. Credential redaction is mandatory regardless of this option. |
+| `diagnostics.console_tail_lines` | `1000` | In-memory retained child-output lines per instance, `0..10000`; `0` disables the tail without disabling persistent instance logs. |
+| `diagnostics.installer_history_entries` | `100` | Completed in-memory software-installation records, `0..1000`; active installation ownership is retained independently. |
+| `diagnostics.failure_reports` | `64` | Recent in-memory instance-failure events exposed in diagnostics, `0..1000`; event delivery and persistent detail logs remain active at `0`. |
 | `forwarding.mode` | `none` | `none` or `modern`. |
 | `forwarding.online_mode` | `true` | Must match Velocity online mode when forwarding is `modern`. |
 | `forwarding.secret_file` | `forwarding.secret` | Non-blank relative path from the Velocity working directory. |
@@ -68,6 +74,30 @@ fixture scripts rather than in these product defaults.
 | `lobby.limbo.memory_mib` | `96` | At least `64` MiB; included in managed admission. |
 | `lobby.limbo.startup_timeout_seconds` | `30` | Positive readiness timeout. |
 | `lobby.limbo.advertised_protocol` | `-1` | `-1` for native behavior, or a tested protocol at least `770`. ViaVersion sees native mode as the safe `770` integration baseline because its detector cannot represent the `-1` sentinel. |
+| `lobby.limbo.presentation.dimension` | `THE_END` | `OVERWORLD`, `NETHER`, or `THE_END`; all are supported by the pinned NanoLimbo runtime. |
+| `lobby.limbo.presentation.ping.enabled` | `true` | When false, emits an empty ping description without changing the required protocol response. |
+| `lobby.limbo.presentation.ping.description` | `<gold>SLS-Limbo` | Bounded MiniMessage server-list description. |
+| `lobby.limbo.presentation.ping.version` | `<gold>SLS-LITE` | Bounded MiniMessage server-list version label. |
+| `lobby.limbo.presentation.player_list.enabled` | `false` | Enables NanoLimbo's virtual player-list sample. |
+| `lobby.limbo.presentation.player_list.username` | `SLS-LITE` | Non-blank virtual sample username, at most 64 characters. |
+| `lobby.limbo.presentation.brand.enabled` | `true` | Enables the client brand response. |
+| `lobby.limbo.presentation.brand.text` | `<gold>SLS-Limbo` | Bounded MiniMessage brand text. |
+| `lobby.limbo.presentation.join_message.enabled` | `true` | Enables the message sent when a player enters SLS-Limbo. |
+| `lobby.limbo.presentation.join_message.text` | `<yellow>You are in SLS-Limbo while your destination gets ready.` | Bounded MiniMessage join text. |
+| `lobby.limbo.presentation.boss_bar.enabled` | `true` | Enables the holding boss bar. |
+| `lobby.limbo.presentation.boss_bar.text` | `<yellow>Waiting for your destination...` | Bounded MiniMessage boss-bar text. |
+| `lobby.limbo.presentation.boss_bar.health` | `1.0` | Finite value from `0.0..1.0`. |
+| `lobby.limbo.presentation.boss_bar.color` | `YELLOW` | NanoLimbo-supported boss-bar color. |
+| `lobby.limbo.presentation.boss_bar.division` | `SOLID` | `SOLID`, `NOTCHED_6`, `NOTCHED_10`, `NOTCHED_12`, or `NOTCHED_20`. |
+| `lobby.limbo.presentation.title.enabled` | `true` | Enables the entry title and subtitle. |
+| `lobby.limbo.presentation.title.title` | `<gold>SLS-LITE` | Bounded MiniMessage title. |
+| `lobby.limbo.presentation.title.subtitle` | `<yellow>SLS-Limbo` | Bounded MiniMessage subtitle. |
+| `lobby.limbo.presentation.title.fade_in_ticks` | `10` | Non-negative tick count through `12000`. |
+| `lobby.limbo.presentation.title.stay_ticks` | `100` | Non-negative tick count through `12000`. |
+| `lobby.limbo.presentation.title.fade_out_ticks` | `10` | Non-negative tick count through `12000`. |
+| `lobby.limbo.presentation.header_footer.enabled` | `false` | Enables the virtual tab-list header and footer. |
+| `lobby.limbo.presentation.header_footer.header` | `empty` | Bounded MiniMessage header; empty is allowed. |
+| `lobby.limbo.presentation.header_footer.footer` | `empty` | Bounded MiniMessage footer; empty is allowed. |
 | `lobby.limbo.recovery.max_attempts` | `5` | Non-negative restart attempts; `0` disables recovery. |
 | `lobby.limbo.recovery.initial_backoff_seconds` | `2` | Positive first delay. |
 | `lobby.limbo.recovery.max_backoff_seconds` | `30` | At least the initial delay. |
@@ -78,8 +108,11 @@ fixture scripts rather than in these product defaults.
 | `lobby.recovery.stable_after_seconds` | `120` | Positive healthy period before retry-budget reset. |
 | `paths.instances` | `instances` | Non-blank relative path below the SLS-LITE data directory. |
 
-For `storage.strategy: auto`, the current general priority is reflink, Btrfs
-snapshot, kernel OverlayFS, rootless fuse-overlayfs, then portable copy.
+For `storage.strategy: auto`, the default priority is reflink, Btrfs snapshot,
+kernel OverlayFS, rootless fuse-overlayfs, then portable copy. The configured
+`storage.auto_priority` replaces that order rather than extending it. Removing
+`copy` forbids portable fallback; startup fails if none of the remaining
+allowlisted strategies passes its exact-path capability probe.
 `snapshot-hook` is explicit-only and requires its configured helper to pass the
 bounded `sls-snapshot-helper-v1` handshake. When Btrfs is selected, eligible `cow`
 subvolumes without nested subvolumes use snapshots; other sources retain

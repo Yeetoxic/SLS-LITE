@@ -46,4 +46,26 @@ class InstanceOutputTest {
 
     assertEquals(1, consumers.get());
   }
+
+  @Test
+  void zeroConsoleTailRetentionStillAdvancesOutputCursor() {
+    InstanceOutput output = new InstanceOutput(temporaryDirectory, 0);
+
+    output.append("not retained");
+
+    assertEquals(0, output.retainedLines());
+    assertEquals(0, output.retentionCapacity());
+    assertEquals(1, output.cursor());
+  }
+
+  @Test
+  void customConsoleTailRetentionEvictsOldestLines() {
+    InstanceOutput output = new InstanceOutput(temporaryDirectory, 2);
+    output.append("one");
+    output.append("two");
+    output.append("three");
+
+    assertEquals(List.of("two", "three"), output.page(1, 10).lines());
+    assertEquals(2, output.retentionCapacity());
+  }
 }

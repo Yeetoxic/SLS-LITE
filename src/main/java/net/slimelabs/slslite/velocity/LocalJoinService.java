@@ -23,6 +23,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.BlueprintQueuePolicy;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.blueprint.VSLSBlueprintAnnotations;
 import net.slimelabs.slslite.config.TransferActionBarConfig;
@@ -285,10 +286,15 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
               server,
               instance.id(),
               Instant.now());
-      entry = new QueueEntry(ticket, instance, created);
+      Duration effectiveTimeout =
+          BlueprintQueuePolicy.from(instance.blueprint(), queueTimeout).timeout();
+      entry = new QueueEntry(ticket, instance, created, effectiveTimeout);
       queue.put(ticket.playerId(), entry);
-      entry.timeout =
-          scheduler.schedule(() -> timeout(entry), queueTimeout.toMillis(), TimeUnit.MILLISECONDS);
+      if (!effectiveTimeout.isZero()) {
+        entry.timeout =
+            scheduler.schedule(
+                () -> timeout(entry), effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS);
+      }
       actionBar.start(player);
       publish(entry, MatchmakingTransitionStatus.QUEUED);
     }
@@ -310,6 +316,10 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
 
   public long queueTimeoutSeconds() {
     return queueTimeout.toSeconds();
+  }
+
+  public long queueTimeoutSeconds(Blueprint blueprint) {
+    return BlueprintQueuePolicy.from(blueprint, queueTimeout).timeout().toSeconds();
   }
 
   public synchronized Optional<QueueTicket> queued(UUID playerId) {
@@ -627,7 +637,8 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     stopOrphaned(entry.instance);
     publish(entry, MatchmakingTransitionStatus.TIMED_OUT);
     entry.completion.completeExceptionally(
-        new TimeoutException("Queue timed out after " + queueTimeout.toSeconds() + " seconds"));
+        new TimeoutException(
+            "Queue timed out after " + entry.queueTimeout.toSeconds() + " seconds"));
   }
 
   private void fail(QueueEntry entry, Throwable failure) {
@@ -782,15 +793,21 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     private final ManagedInstance instance;
     private final JoinPhaseTimings timings = new JoinPhaseTimings();
     private final boolean instanceCreated;
+    private final Duration queueTimeout;
     private final CompletableFuture<ConnectionRequestBuilder.Result> completion =
         new CompletableFuture<>();
     private volatile ScheduledFuture<?> timeout;
     private QueueState state = QueueState.QUEUED;
 
-    private QueueEntry(QueueTicket ticket, ManagedInstance instance, boolean instanceCreated) {
+    private QueueEntry(
+        QueueTicket ticket,
+        ManagedInstance instance,
+        boolean instanceCreated,
+        Duration queueTimeout) {
       this.ticket = ticket;
       this.instance = instance;
       this.instanceCreated = instanceCreated;
+      this.queueTimeout = queueTimeout;
     }
 
     private void cancelTimeout() {

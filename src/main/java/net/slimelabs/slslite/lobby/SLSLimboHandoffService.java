@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.slimelabs.slslite.velocity.TransferActionBar;
@@ -52,21 +53,51 @@ public final class SLSLimboHandoffService implements AutoCloseable {
     if (closed) {
       return;
     }
-    waiting.computeIfAbsent(player.getUniqueId(), ignored -> new WaitingPlayer(player));
+    waiting.computeIfAbsent(player.getUniqueId(), ignored -> new WaitingPlayer(player, null));
+  }
+
+  /**
+   * Holds a player in SLS-Limbo while retrying a Velocity-selected destination that failed.
+   *
+   * <p>This is used only after Velocity and other plugins have left a disconnect result in place;
+   * it does not replace a valid native redirect.
+   */
+  public void awaitDestination(Player player, RegisteredServer destination) {
+    if (closed) {
+      return;
+    }
+    waiting.compute(
+        player.getUniqueId(),
+        (ignored, existing) -> {
+          if (existing == null) {
+            return new WaitingPlayer(player, destination);
+          }
+          existing.destination().set(destination);
+          return existing;
+        });
   }
 
   public void connected(Player player, RegisteredServer server) {
     UUID playerId = player.getUniqueId();
     String serverName = server.getServerInfo().getName();
     if (!lobbies.isHoldingLobby(serverName)) {
-      if (lobbies.isLobby(serverName)) {
-        remove(playerId);
-      }
+      remove(playerId);
       return;
     }
-    WaitingPlayer entry = waiting.computeIfAbsent(playerId, ignored -> new WaitingPlayer(player));
+    WaitingPlayer entry = waiting.get(playerId);
+    if (entry == null && lobbies.preservesVelocityRouting()) {
+      return;
+    }
+    if (entry == null) {
+      entry = new WaitingPlayer(player, null);
+      WaitingPlayer raced = waiting.putIfAbsent(playerId, entry);
+      if (raced != null) {
+        entry = raced;
+      }
+    }
+    WaitingPlayer selectedEntry = entry;
     player.sendActionBar(Component.text("Waiting for a safe destination...", NamedTextColor.GOLD));
-    lobbies.primaryServer().ifPresent(primary -> transfer(entry, primary));
+    destination(selectedEntry).ifPresent(target -> transfer(selectedEntry, target));
   }
 
   public void disconnect(UUID playerId) {
@@ -102,7 +133,8 @@ public final class SLSLimboHandoffService implements AutoCloseable {
                       .map(lobbies::isHoldingLobby)
                       .orElse(false);
               if (inLimbo) {
-                transfer(entry, primary);
+                RegisteredServer target = entry.destination().get();
+                transfer(entry, target == null ? primary : target);
               }
             });
   }
@@ -135,6 +167,10 @@ public final class SLSLimboHandoffService implements AutoCloseable {
                 remove(player.getUniqueId());
                 return;
               }
+              if (result.getStatus() == ConnectionRequestBuilder.Status.CONNECTION_IN_PROGRESS) {
+                scheduleRetry(entry, 1L);
+                return;
+              }
               transferFailed(
                   entry,
                   primary,
@@ -163,10 +199,11 @@ public final class SLSLimboHandoffService implements AutoCloseable {
     scheduleRetry(entry, retrySeconds);
     if (failures == 1) {
       logger.warn(
-          "Unable to hand {} from SLS-Limbo to the primary lobby: {}. "
+          "Unable to hand {} from SLS-Limbo to destination {}: {}. "
               + "Retrying in {} seconds; repeated failures are "
               + "logged at debug level.",
           player.getUsername(),
+          primary.getServerInfo().getName(),
           detail,
           retrySeconds);
     } else {
@@ -226,7 +263,7 @@ public final class SLSLimboHandoffService implements AutoCloseable {
         scheduler.schedule(
             () -> {
               if (!closed && waiting.get(entry.player().getUniqueId()) == entry) {
-                lobbies.primaryServer().ifPresent(primary -> transfer(entry, primary));
+                destination(entry).ifPresent(target -> transfer(entry, target));
               }
             },
             delaySeconds,
@@ -241,6 +278,11 @@ public final class SLSLimboHandoffService implements AutoCloseable {
     actionBar.stop(playerId);
   }
 
+  private Optional<RegisteredServer> destination(WaitingPlayer entry) {
+    RegisteredServer selected = entry.destination().get();
+    return selected == null ? lobbies.primaryServer() : Optional.of(selected);
+  }
+
   private static final class WaitingPlayer {
 
     private final Player player;
@@ -248,10 +290,12 @@ public final class SLSLimboHandoffService implements AutoCloseable {
     private final AtomicBoolean playerNotified = new AtomicBoolean();
     private final AtomicInteger failures = new AtomicInteger();
     private final AtomicLong nextAttemptNanos = new AtomicLong();
+    private final AtomicReference<RegisteredServer> destination;
     private volatile ScheduledFuture<?> retryTask;
 
-    private WaitingPlayer(Player player) {
+    private WaitingPlayer(Player player, RegisteredServer destination) {
       this.player = player;
+      this.destination = new AtomicReference<>(destination);
     }
 
     private Player player() {
@@ -272,6 +316,10 @@ public final class SLSLimboHandoffService implements AutoCloseable {
 
     private AtomicLong nextAttemptNanos() {
       return nextAttemptNanos;
+    }
+
+    private AtomicReference<RegisteredServer> destination() {
+      return destination;
     }
 
     private ScheduledFuture<?> retryTask() {

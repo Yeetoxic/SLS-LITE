@@ -7,32 +7,36 @@ import net.slimelabs.slslite.config.StorageStrategy;
 
 final class StorageStrategySelector {
 
-  private static final List<StorageStrategy> AUTO_PRIORITY =
-      List.of(
-          StorageStrategy.REFLINK,
-          StorageStrategy.BTRFS,
-          StorageStrategy.OVERLAY,
-          StorageStrategy.FUSE_OVERLAY,
-          StorageStrategy.COPY);
-
   StorageStrategySelection select(
       StorageStrategy requested, Set<StorageStrategy> detected, Set<StorageStrategy> implemented) {
-    if (requested == null || detected == null || implemented == null) {
+    return select(
+        requested,
+        net.slimelabs.slslite.config.StorageConfig.DEFAULT_AUTO_PRIORITY,
+        detected,
+        implemented);
+  }
+
+  StorageStrategySelection select(
+      StorageStrategy requested,
+      List<StorageStrategy> autoPriority,
+      Set<StorageStrategy> detected,
+      Set<StorageStrategy> implemented) {
+    if (requested == null || autoPriority == null || detected == null || implemented == null) {
       throw new IllegalArgumentException(
-          "Requested, detected, and implemented strategies are required");
+          "Requested, automatic priority, detected, and implemented strategies are required");
     }
     if (requested == StorageStrategy.AUTO) {
-      StorageStrategy selected =
-          AUTO_PRIORITY.stream()
+      Optional<StorageStrategy> selected =
+          autoPriority.stream()
               .filter(detected::contains)
               .filter(implemented::contains)
-              .findFirst()
-              .orElse(StorageStrategy.COPY);
+              .findFirst();
       return new StorageStrategySelection(
           requested,
-          Optional.of(selected),
-          "automatic selection chose the fastest safe implemented "
-              + "strategy detected for this storage location");
+          selected,
+          selected.isPresent()
+              ? "automatic selection chose the first safe implemented strategy in the configured order"
+              : "none of the strategies in storage.auto_priority are available for this storage location");
     }
     if (!implemented.contains(requested)) {
       return unavailable(requested, "the strategy is not implemented in this build");

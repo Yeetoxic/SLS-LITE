@@ -83,15 +83,16 @@ public final class PlayerRoutingCommandHandler {
         LocalJoinService.JoinAttempt attempt = joinService.join(target, arguments[1], arguments[2]);
         ManagedInstance instance = attempt.instance();
         logger.info(
-            "Join requested by {} for player {} to {}/{} via {} "
-                + "({}, queue timeout {} seconds)",
+            "Join requested by {} for player {} to {}/{} via {} " + "({}, queue expiry {})",
             commandSourceName(source),
             target.getUsername(),
             arguments[1],
             arguments[2],
             instance.id(),
             attempt.created() ? "created" : "existing",
-            joinService.queueTimeoutSeconds());
+            joinService.queueTimeoutSeconds(instance.blueprint()) == 0
+                ? "disabled"
+                : joinService.queueTimeoutSeconds(instance.blueprint()) + " seconds");
         String action = attempt.created() ? "Preparing" : "Queued for";
         source.sendMessage(
             CommandMessages.prefix()

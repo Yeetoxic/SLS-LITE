@@ -55,6 +55,14 @@ lifecycle:
   # Blueprints may override this policy with SLS-LITE lifecycle annotations.
   idle_shutdown_seconds: 180
 
+compatibility:
+  # Controls SLS-LITE's integration with ViaVersion's dynamic-backend protocol
+  # map. auto is recommended: integrate when ViaVersion is installed and remain
+  # native otherwise. on makes ViaVersion a startup requirement. off guarantees
+  # SLS-LITE does not inspect or modify ViaVersion's backend protocol map.
+  # Valid values: auto, on, off.
+  viaversion_backend_sync: auto
+
 storage:
   # Instance-directory preparation strategy. auto selects the first safe
   # exact-path capability in this order: reflink, eligible Btrfs snapshot,
@@ -65,6 +73,19 @@ storage:
   # Valid values: auto, copy, reflink, btrfs, overlay, fuse-overlay,
   # snapshot-hook.
   strategy: auto
+
+  # Authoritative priority used only when strategy is auto. SLS-LITE probes and
+  # selects only entries listed here, in this order. Remove a strategy to forbid
+  # its use. Removing copy also forbids portable fallback; startup fails with
+  # capability diagnostics if no listed strategy is available.
+  # Valid entries: reflink, btrfs, overlay, fuse-overlay, copy. Do not use auto
+  # or snapshot-hook here, and do not repeat entries.
+  auto_priority: [reflink, btrfs, overlay, fuse-overlay, copy]
+
+  # auto uses the conservative minimum of four and the JVM's available CPU
+  # count. An explicit integer from 1 through 16 overrides that worker count.
+  copy_parallelism: auto
+
   snapshot_hook:
     # Explicit-only, shell-free helper below the SLS-LITE data directory.
     # Required only when strategy is snapshot-hook.
@@ -111,6 +132,15 @@ detailed_logging:
   # Replace known host/data roots and absolute path-shaped values. Secret and
   # credential patterns are always redacted regardless of this option.
   redact_paths: true
+
+diagnostics:
+  # Short in-memory histories used by commands and the Java API. These are
+  # independent from persistent per-instance and general SLS-LITE log files.
+  # Zero disables the corresponding in-memory history. Hard line/byte/event
+  # payload ceilings remain fixed safety limits and are not configurable.
+  console_tail_lines: 1000
+  installer_history_entries: 100
+  failure_reports: 64
 
 forwarding:
   # Player-information forwarding mode. Valid values:
@@ -219,6 +249,49 @@ lobby:
     # -1 sentinel. This does not install ViaVersion or make an unknown Minecraft
     # release compatible by itself.
     advertised_protocol: -1
+
+    # Player-facing NanoLimbo presentation. Text fields use bounded MiniMessage.
+    # Networking, forwarding, capacity, protocol, traffic, and lifecycle values
+    # remain owned by SLS-LITE and are intentionally not exposed here.
+    presentation:
+      # Supported values: OVERWORLD, NETHER, THE_END.
+      dimension: THE_END
+      ping:
+        # When false, the description is emitted as an empty string. The version
+        # label remains configurable because the protocol response requires it.
+        enabled: true
+        description: "<gold>SLS-Limbo"
+        version: "<gold>SLS-LITE"
+      player_list:
+        enabled: false
+        username: "SLS-LITE"
+      brand:
+        enabled: true
+        text: "<gold>SLS-Limbo"
+      join_message:
+        enabled: true
+        text: "<yellow>You are in SLS-Limbo while your destination gets ready."
+      boss_bar:
+        enabled: true
+        text: "<yellow>Waiting for your destination..."
+        # Health is 0.0-1.0. Colors: PINK, BLUE, RED, GREEN, YELLOW,
+        # PURPLE, WHITE. Divisions: SOLID, NOTCHED_6, NOTCHED_10,
+        # NOTCHED_12, NOTCHED_20.
+        health: 1.0
+        color: YELLOW
+        division: SOLID
+      title:
+        enabled: true
+        title: "<gold>SLS-LITE"
+        subtitle: "<yellow>SLS-Limbo"
+        # Non-negative tick counts, each capped at 12000.
+        fade_in_ticks: 10
+        stay_ticks: 100
+        fade_out_ticks: 10
+      header_footer:
+        enabled: false
+        header: ""
+        footer: ""
 
     recovery:
       # Non-negative integer. Maximum automatic restart attempts after an
