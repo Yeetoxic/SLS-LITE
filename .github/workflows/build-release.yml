@@ -411,7 +411,9 @@ jobs:
 
   finalize-approved:
     name: Publish verified candidate or release
-    if: ${{ inputs.mode != 'distribution-smoke' && needs.consume.result == 'success' }}
+    if: >-
+      ${{ always() && inputs.mode != 'distribution-smoke' &&
+          needs.publish-approved.result == 'success' && needs.consume.result == 'success' }}
     needs:
       - build
       - publish-approved

@@ -747,7 +747,7 @@ post-release milestone.
       another plugin. Document that replacing the plugin JAR requires a Velocity
       restart; add repeat-reload, conflict, shutdown, and unsupported hot-reload
       detection tests without claiming binary plugin-manager reload support.
-- [ ] Finalize latest-release-first documentation publication. Keep repository
+- [x] Finalize latest-release-first documentation publication. Keep repository
       `DOCS/` canonical, synchronize the GitHub Wiki to the latest supported
       release, and publish current release notes plus tested migration/upgrade
       instructions. Do not create or advertise a maintained historical manual or
@@ -801,13 +801,13 @@ post-release milestone.
       where practical.
 - [x] Complete the documentation drift, security, privacy, dependency, source,
       license, third-party notice, and migration audits.
-- [ ] Mirror the exact corresponding bundled NanoLimbo-derived source in an
+- [x] Mirror the exact corresponding bundled NanoLimbo-derived source in an
       SLS-LITE-controlled release location.
 - [x] Verify the shaded JAR contains all required licenses/notices and no
       unfinished feature is documented as available.
 - [x] Perform clean-install and upgrade tests on supported Windows/Pterodactyl
       and native-Linux profiles.
-- [ ] Publish the candidate artifact and checksums to the selected external
+- [x] Publish the candidate artifact and checksums to the selected external
       testers.
 
 ### 4.3 Candidate Feedback
