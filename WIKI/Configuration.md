@@ -11,7 +11,7 @@ Review these areas on every host:
 - Storage strategy and optional snapshot-helper settings
 - Java runtime mapping
 - Forwarding mode and secret
-- External or managed lobby identity
+- Velocity-native, external, or managed lobby policy
 - SLS-Limbo memory and recovery limits
 - Queue, lifecycle, readiness, and shutdown timeouts
 - Detailed log level and proxy-console mirroring

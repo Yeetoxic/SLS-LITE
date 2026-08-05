@@ -33,11 +33,13 @@ import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.instance.lifecycle.MaintenanceStatus;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.log.CorrelationIds;
+import net.slimelabs.slslite.log.SLSDetailLog;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.security.AdminClaimService;
 import net.slimelabs.slslite.security.AdministratorStore;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
+import net.slimelabs.slslite.velocity.BackendRegistry;
 import net.slimelabs.slslite.velocity.LocalJoinService;
 import org.slf4j.Logger;
 
@@ -59,6 +61,8 @@ public final class SLSCommand implements SimpleCommand {
   private final ConsoleOutputSessions consoleOutput;
   private final OperatorJoinProbeService joinProbes;
   private final Logger logger;
+  private final SLSDetailLog detailLog;
+  private final BackendRegistry backendRegistry;
   private final Consumer<DefinitionReloader.DefinitionReloadTransition> reloadObserver;
 
   public SLSCommand(
@@ -146,6 +150,84 @@ public final class SLSCommand implements SimpleCommand {
       SoftwareInstallationService installationService,
       Consumer<DefinitionReloader.DefinitionReloadTransition> reloadObserver,
       Logger logger) {
+    this(
+        proxy,
+        blueprints,
+        softwareProfiles,
+        resourceBudget,
+        processSupervisor,
+        instances,
+        joinService,
+        lobbyProvider,
+        outputConfig,
+        activeConfig,
+        hostCapabilities,
+        administrators,
+        adminClaims,
+        installationService,
+        reloadObserver,
+        SLSDetailLog.disabled(),
+        logger);
+  }
+
+  public SLSCommand(
+      ProxyServer proxy,
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository softwareProfiles,
+      ResourceBudget resourceBudget,
+      ProcessSupervisor processSupervisor,
+      ServerController instances,
+      LocalJoinService joinService,
+      LobbyProvider lobbyProvider,
+      ManagedOutputConfig outputConfig,
+      SLSConfig activeConfig,
+      HostCapabilityReport hostCapabilities,
+      AdministratorStore administrators,
+      AdminClaimService adminClaims,
+      SoftwareInstallationService installationService,
+      Consumer<DefinitionReloader.DefinitionReloadTransition> reloadObserver,
+      SLSDetailLog detailLog,
+      Logger logger) {
+    this(
+        proxy,
+        blueprints,
+        softwareProfiles,
+        resourceBudget,
+        processSupervisor,
+        instances,
+        joinService,
+        lobbyProvider,
+        outputConfig,
+        activeConfig,
+        hostCapabilities,
+        administrators,
+        adminClaims,
+        installationService,
+        reloadObserver,
+        detailLog,
+        null,
+        logger);
+  }
+
+  public SLSCommand(
+      ProxyServer proxy,
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository softwareProfiles,
+      ResourceBudget resourceBudget,
+      ProcessSupervisor processSupervisor,
+      ServerController instances,
+      LocalJoinService joinService,
+      LobbyProvider lobbyProvider,
+      ManagedOutputConfig outputConfig,
+      SLSConfig activeConfig,
+      HostCapabilityReport hostCapabilities,
+      AdministratorStore administrators,
+      AdminClaimService adminClaims,
+      SoftwareInstallationService installationService,
+      Consumer<DefinitionReloader.DefinitionReloadTransition> reloadObserver,
+      SLSDetailLog detailLog,
+      BackendRegistry backendRegistry,
+      Logger logger) {
     this.proxy = proxy;
     this.blueprints = blueprints;
     this.softwareProfiles = softwareProfiles;
@@ -181,6 +263,8 @@ public final class SLSCommand implements SimpleCommand {
     this.consoleOutput = new ConsoleOutputSessions();
     this.joinProbes = new OperatorJoinProbeService();
     this.reloadObserver = java.util.Objects.requireNonNull(reloadObserver, "reloadObserver");
+    this.detailLog = java.util.Objects.requireNonNull(detailLog, "detailLog");
+    this.backendRegistry = backendRegistry;
     this.logger = logger;
   }
 
@@ -569,12 +653,18 @@ public final class SLSCommand implements SimpleCommand {
           CommandMessages.message(
               "Reloaded "
                   + mode
-                  + " atomically: blueprints "
+                  + " atomically: blueprints accepted="
+                  + report.acceptedBlueprints()
+                  + ", rejected="
+                  + report.rejectedBlueprints().size()
+                  + "; changes "
                   + report.blueprints().summary()
                   + "; software "
                   + report.software().summary()
                   + ".",
-              NamedTextColor.GREEN));
+              report.rejectedBlueprints().isEmpty()
+                  ? NamedTextColor.GREEN
+                  : NamedTextColor.YELLOW));
       logger.info(
           "Definition reload [{}] {} committed: blueprint added={} updated={} removed={}; "
               + "software added={} updated={} removed={}",
@@ -586,6 +676,52 @@ public final class SLSCommand implements SimpleCommand {
           report.software().added(),
           report.software().updated(),
           report.software().removed());
+      report
+          .rejectedBlueprints()
+          .forEach(
+              rejection ->
+                  detailLog.normal(
+                      correlationId,
+                      "blueprint-reload",
+                      "Rejected {}: {}",
+                      rejection.path(),
+                      rejection.error()));
+      if (!report.rejectedBlueprints().isEmpty()) {
+        logger.warn(
+            "Definition reload [{}] committed with {} rejected blueprint(s); "
+                + "accepted siblings remain available and rejection details are in the "
+                + "SLS-LITE detail log",
+            correlationId,
+            report.rejectedBlueprints().size());
+      }
+      if (backendRegistry != null) {
+        BackendRegistry.ReconciliationReport registrations = backendRegistry.reconcile();
+        NamedTextColor registrationColor =
+            registrations.conflicts().isEmpty() ? NamedTextColor.GRAY : NamedTextColor.YELLOW;
+        source.sendMessage(
+            CommandMessages.message(
+                "Dynamic registrations: healthy="
+                    + registrations.healthy()
+                    + ", restored="
+                    + registrations.restored()
+                    + ", conflicts="
+                    + registrations.conflicts().size()
+                    + ".",
+                registrationColor));
+        registrations
+            .conflicts()
+            .forEach(
+                conflict ->
+                    detailLog.normal(
+                        correlationId, "registration-reload", "Conflict: {}", conflict));
+        if (!registrations.conflicts().isEmpty()) {
+          logger.warn(
+              "Definition reload [{}] left {} conflicting dynamic registration(s) untouched; "
+                  + "details are in the SLS-LITE detail log",
+              correlationId,
+              registrations.conflicts().size());
+        }
+      }
       source.sendMessage(
           CommandMessages.message(
               "Host config changes require a Velocity restart.", NamedTextColor.GRAY));

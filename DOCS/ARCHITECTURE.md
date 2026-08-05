@@ -152,8 +152,9 @@ the host selects deterministic first-available or random behavior.
 `JoinTimingReporter` owns first-player and connection timing presentation.
 
 The lobby providers keep separate lifecycle ownership:
-`LocalLobbyProvider` owns a managed primary but treats an external primary as a
-routing target only,
+`LocalLobbyProvider` owns a managed primary, treats an external primary as a
+routing target only, and deliberately supplies no primary in Velocity-native
+routing mode,
 `SLSLimboProvider` owns the isolated fallback process and its reserved
 resources, and `FallbackLobbyProvider` coordinates routing and evacuation
 between them. `LobbyRecoveryPolicy` is the only shared recovery abstraction;

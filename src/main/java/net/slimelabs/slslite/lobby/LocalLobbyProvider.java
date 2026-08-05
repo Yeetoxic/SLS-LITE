@@ -90,6 +90,10 @@ public final class LocalLobbyProvider implements LobbyProvider {
       }
       started = true;
     }
+    if (config.mode() == LobbyMode.VELOCITY) {
+      disableConfiguredPrimary();
+      return;
+    }
     if (config.mode() == LobbyMode.EXTERNAL) {
       startExternal();
       return;
@@ -103,6 +107,9 @@ public final class LocalLobbyProvider implements LobbyProvider {
 
   @Override
   public Optional<RegisteredServer> server() {
+    if (config.mode() == LobbyMode.VELOCITY) {
+      return Optional.empty();
+    }
     if (config.mode() == LobbyMode.EXTERNAL) {
       return proxy.getServer(config.server());
     }
@@ -125,12 +132,20 @@ public final class LocalLobbyProvider implements LobbyProvider {
 
   @Override
   public boolean isLobby(String serverName) {
+    if (config.mode() == LobbyMode.VELOCITY) {
+      return false;
+    }
     if (config.mode() == LobbyMode.EXTERNAL) {
       return config.server().equals(serverName);
     }
     ManagedInstance instance = managedInstance;
     return (instance != null && instance.id().equals(serverName))
         || serverName.equals(managedServerName);
+  }
+
+  @Override
+  public boolean preservesVelocityRouting() {
+    return config.mode() == LobbyMode.VELOCITY;
   }
 
   @Override
@@ -290,6 +305,14 @@ public final class LocalLobbyProvider implements LobbyProvider {
     status = LobbyStatus.EXTERNAL;
     ready.complete(external);
     logger.info("Using external lobby {}", config.server());
+  }
+
+  private void disableConfiguredPrimary() {
+    status = LobbyStatus.OFFLINE;
+    ready.completeExceptionally(
+        new IllegalStateException("Velocity owns initial and fallback lobby routing"));
+    logger.info(
+        "Using Velocity-native lobby routing; SLS-LITE will not select or manage a primary lobby");
   }
 
   private void disableManagedPrimary() {

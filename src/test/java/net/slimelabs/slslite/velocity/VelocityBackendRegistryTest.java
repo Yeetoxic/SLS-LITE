@@ -1,6 +1,7 @@
 package net.slimelabs.slslite.velocity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -13,6 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -77,6 +79,94 @@ class VelocityBackendRegistryTest {
     assertTrue(registered.isEmpty());
   }
 
+  @Test
+  void restoresOnlyMissingOwnedRegistrationsDuringReconciliation() {
+    Map<String, ServerInfo> registered = new HashMap<>();
+    Map<String, RegisteredServer> servers = new HashMap<>();
+    VelocityBackendRegistry registry =
+        new VelocityBackendRegistry(
+            proxy(registered, servers),
+            synchronizer(
+                new AtomicReference<>(), new AtomicReference<>(), new AtomicReference<>(), false));
+    registry.register("game.owned", new InetSocketAddress("127.0.0.1", 25603), 775);
+    registered.clear();
+    servers.clear();
+
+    BackendRegistry.ReconciliationReport report = registry.reconcile();
+
+    assertEquals(0, report.healthy());
+    assertEquals(1, report.restored());
+    assertTrue(report.conflicts().isEmpty());
+    assertTrue(registered.containsKey("game.owned"));
+  }
+
+  @Test
+  void leavesConflictingForeignRegistrationUntouched() {
+    Map<String, ServerInfo> registered = new HashMap<>();
+    Map<String, RegisteredServer> servers = new HashMap<>();
+    VelocityBackendRegistry registry = new VelocityBackendRegistry(proxy(registered, servers));
+    registry.register("game.shared", new InetSocketAddress("127.0.0.1", 25604));
+    ServerInfo foreign = new ServerInfo("game.shared", new InetSocketAddress("127.0.0.1", 25999));
+    RegisteredServer foreignServer = registeredServer(foreign);
+    registered.put(foreign.getName(), foreign);
+    servers.put(foreign.getName(), foreignServer);
+
+    BackendRegistry.ReconciliationReport report = registry.reconcile();
+    registry.close();
+
+    assertEquals(1, report.conflicts().size());
+    assertSame(foreignServer, servers.get("game.shared"));
+    assertEquals(foreign, registered.get("game.shared"));
+  }
+
+  @Test
+  void rollsBackMissingRegistrationWhenProtocolReconciliationFails() {
+    Map<String, ServerInfo> registered = new HashMap<>();
+    Map<String, RegisteredServer> servers = new HashMap<>();
+    AtomicBoolean fail = new AtomicBoolean();
+    BackendProtocolSynchronizer protocols =
+        new BackendProtocolSynchronizer() {
+          @Override
+          public void synchronize(
+              String name,
+              RegisteredServer server,
+              OptionalInt protocol,
+              Optional<String> minecraftVersion) {
+            if (fail.get()) {
+              throw new IllegalStateException("protocol failure");
+            }
+          }
+
+          @Override
+          public void remove(String name) {}
+        };
+    VelocityBackendRegistry registry =
+        new VelocityBackendRegistry(proxy(registered, servers), protocols);
+    registry.register("game.protocol", new InetSocketAddress("127.0.0.1", 25607), 775);
+    registered.clear();
+    servers.clear();
+    fail.set(true);
+
+    BackendRegistry.ReconciliationReport report = registry.reconcile();
+
+    assertEquals(0, report.restored());
+    assertEquals(1, report.conflicts().size());
+    assertTrue(registered.isEmpty());
+    assertTrue(servers.isEmpty());
+  }
+
+  @Test
+  void closeUnregistersEveryRemainingOwnedBackend() {
+    Map<String, ServerInfo> registered = new HashMap<>();
+    VelocityBackendRegistry registry = new VelocityBackendRegistry(proxy(registered));
+    registry.register("game.one", new InetSocketAddress("127.0.0.1", 25605));
+    registry.register("game.two", new InetSocketAddress("127.0.0.1", 25606));
+
+    registry.close();
+
+    assertTrue(registered.isEmpty());
+  }
+
   private static BackendProtocolSynchronizer synchronizer(
       AtomicReference<String> synchronizedName,
       AtomicReference<OptionalInt> synchronizedProtocol,
@@ -104,7 +194,11 @@ class VelocityBackendRegistryTest {
   }
 
   private static ProxyServer proxy(Map<String, ServerInfo> registered) {
-    Map<String, RegisteredServer> servers = new HashMap<>();
+    return proxy(registered, new HashMap<>());
+  }
+
+  private static ProxyServer proxy(
+      Map<String, ServerInfo> registered, Map<String, RegisteredServer> servers) {
     return (ProxyServer)
         Proxy.newProxyInstance(
             ProxyServer.class.getClassLoader(),

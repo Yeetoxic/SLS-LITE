@@ -2,6 +2,10 @@ package net.slimelabs.slslite.config;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import net.slimelabs.slslite.blueprint.BlueprintException;
@@ -89,22 +93,71 @@ public final class DefinitionReloader {
     synchronized (catalog) {
       BlueprintRepository.Snapshot blueprintBefore = blueprints.snapshot();
       SoftwareProfileRepository.Snapshot softwareBefore = softwareProfiles.snapshot();
-      BlueprintRepository.Snapshot blueprintCandidate =
-          reloadBlueprints ? blueprints.loadSnapshot() : blueprintBefore;
       SoftwareProfileRepository.Snapshot softwareCandidate =
           reloadSoftware ? softwareProfiles.loadSnapshot() : softwareBefore;
+      BlueprintCandidate blueprintCandidate =
+          reloadBlueprints
+              ? loadBlueprintCandidate(config, blueprints, softwareCandidate)
+              : new BlueprintCandidate(blueprintBefore.values(), List.of());
 
-      java.util.Map<String, net.slimelabs.slslite.blueprint.Blueprint> resolvedBlueprints =
-          DefinitionCatalog.resolveBlueprints(
-              blueprintCandidate.values(), softwareCandidate.values());
-
-      ConfigurationValidator.validate(
-          config, resolvedBlueprints.values(), softwareCandidate.getAll());
+      Map<String, net.slimelabs.slslite.blueprint.Blueprint> resolvedBlueprints =
+          blueprintCandidate.values();
+      if (reloadBlueprints) {
+        ConfigurationValidator.validateHost(config, resolvedBlueprints, false);
+      } else {
+        ConfigurationValidator.validate(
+            config, resolvedBlueprints.values(), softwareCandidate.getAll());
+      }
 
       catalog.install(resolvedBlueprints, softwareCandidate.values());
       return new DefinitionReloadReport(
           DefinitionReloadReport.delta(blueprintBefore.values(), resolvedBlueprints),
-          DefinitionReloadReport.delta(softwareBefore.values(), softwareCandidate.values()));
+          DefinitionReloadReport.delta(softwareBefore.values(), softwareCandidate.values()),
+          resolvedBlueprints.size(),
+          blueprintCandidate.rejections());
+    }
+  }
+
+  private static BlueprintCandidate loadBlueprintCandidate(
+      SLSConfig config,
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository.Snapshot softwareCandidate)
+      throws IOException {
+    BlueprintRepository.LoadResult loaded = blueprints.loadIsolated();
+    Map<String, net.slimelabs.slslite.blueprint.Blueprint> parsed = new LinkedHashMap<>();
+    loaded.accepted().forEach((id, candidate) -> parsed.put(id, candidate.blueprint()));
+    Map<String, net.slimelabs.slslite.blueprint.Blueprint> resolved =
+        DefinitionCatalog.resolveBlueprints(parsed, softwareCandidate.values());
+    List<DefinitionReloadReport.BlueprintRejection> rejections = new ArrayList<>();
+    loaded.rejections().stream()
+        .map(
+            rejection ->
+                new DefinitionReloadReport.BlueprintRejection(rejection.path(), rejection.error()))
+        .forEach(rejections::add);
+
+    Map<String, net.slimelabs.slslite.blueprint.Blueprint> accepted = new LinkedHashMap<>();
+    for (Map.Entry<String, net.slimelabs.slslite.blueprint.Blueprint> entry : resolved.entrySet()) {
+      try {
+        ConfigurationValidator.validateBlueprint(
+            config, entry.getValue(), softwareCandidate.values());
+        accepted.put(entry.getKey(), entry.getValue());
+      } catch (ConfigurationException exception) {
+        String path = loaded.accepted().get(entry.getKey()).path();
+        rejections.add(new DefinitionReloadReport.BlueprintRejection(path, exception.getMessage()));
+      }
+    }
+    rejections.sort(
+        java.util.Comparator.comparing(DefinitionReloadReport.BlueprintRejection::path));
+    return new BlueprintCandidate(Map.copyOf(accepted), rejections);
+  }
+
+  private record BlueprintCandidate(
+      Map<String, net.slimelabs.slslite.blueprint.Blueprint> values,
+      List<DefinitionReloadReport.BlueprintRejection> rejections) {
+
+    private BlueprintCandidate {
+      values = Map.copyOf(values);
+      rejections = List.copyOf(rejections);
     }
   }
 

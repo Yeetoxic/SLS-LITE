@@ -4,7 +4,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public record DefinitionReloadReport(CatalogDelta blueprints, CatalogDelta software) {
+public record DefinitionReloadReport(
+    CatalogDelta blueprints,
+    CatalogDelta software,
+    int acceptedBlueprints,
+    List<BlueprintRejection> rejectedBlueprints) {
+
+  public DefinitionReloadReport {
+    if (acceptedBlueprints < 0) {
+      throw new IllegalArgumentException("accepted blueprint count must not be negative");
+    }
+    rejectedBlueprints = List.copyOf(rejectedBlueprints);
+  }
+
+  public record BlueprintRejection(String path, String error) {
+    public BlueprintRejection {
+      java.util.Objects.requireNonNull(path, "path");
+      java.util.Objects.requireNonNull(error, "error");
+    }
+  }
 
   public record CatalogDelta(List<String> added, List<String> updated, List<String> removed) {
 

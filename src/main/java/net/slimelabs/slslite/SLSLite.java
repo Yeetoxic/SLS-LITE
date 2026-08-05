@@ -24,6 +24,7 @@ import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.command.SLSCommand;
 import net.slimelabs.slslite.config.ConfigurationValidator;
 import net.slimelabs.slslite.config.DefinitionCatalog;
+import net.slimelabs.slslite.config.DefinitionReloader;
 import net.slimelabs.slslite.config.ForwardingMode;
 import net.slimelabs.slslite.config.SLSConfigRepository;
 import net.slimelabs.slslite.host.HostCapability;
@@ -90,6 +91,7 @@ public final class SLSLite implements SLSLiteApiProvider {
   private AdministratorStore administrators;
   private AdminClaimService adminClaims;
   private SoftwareInstallationService installationService;
+  private VelocityBackendRegistry backendRegistry;
   private SLSCommand slsCommand;
   private SLSDetailLog detailLog;
 
@@ -138,11 +140,38 @@ public final class SLSLite implements SLSLiteApiProvider {
               configuration.get().security().allowInsecureOfflineAdministrators(),
               Duration.ofSeconds(configuration.get().security().claimCodeExpirySeconds()));
       softwareProfiles.initialize();
-      blueprints.initialize();
-      ConfigurationValidator.validate(
+      blueprints.prepare();
+      net.slimelabs.slslite.config.DefinitionReloadReport startupDefinitions =
+          DefinitionReloader.reload(
+              configuration.get(),
+              blueprints,
+              softwareProfiles,
+              true,
+              false,
+              startupCorrelation,
+              ignored -> {});
+      startupDefinitions
+          .rejectedBlueprints()
+          .forEach(
+              rejection ->
+                  detailLog.normal(
+                      startupCorrelation,
+                      "blueprint-startup",
+                      "Rejected {}: {}",
+                      rejection.path(),
+                      rejection.error()));
+      if (!startupDefinitions.rejectedBlueprints().isEmpty()) {
+        logger.warn(
+            "Loaded {} blueprint(s) and rejected {} invalid blueprint file(s) [{}]; "
+                + "valid siblings remain available and details are in the SLS-LITE detail log",
+            startupDefinitions.acceptedBlueprints(),
+            startupDefinitions.rejectedBlueprints().size(),
+            startupCorrelation);
+      }
+      ConfigurationValidator.validateFaultIsolated(
           configuration.get(),
-          blueprints,
-          softwareProfiles,
+          blueprints.getAll(),
+          softwareProfiles.getAll(),
           proxy.getConfiguration().isOnlineMode());
       if (configuration.get().forwarding().mode() == ForwardingMode.NONE) {
         logger.warn(
@@ -204,6 +233,7 @@ public final class SLSLite implements SLSLiteApiProvider {
               logger);
       BackendProtocolSynchronizer protocolSynchronizer =
           ViaVersionProtocolSynchronizer.create(proxy, logger);
+      backendRegistry = new VelocityBackendRegistry(proxy, protocolSynchronizer);
       instanceManager =
           new InstanceManager(
               blueprints,
@@ -215,7 +245,7 @@ public final class SLSLite implements SLSLiteApiProvider {
               directoryPreparer,
               processSpecFactory,
               processSupervisor,
-              new VelocityBackendRegistry(proxy, protocolSynchronizer),
+              backendRegistry,
               installationService,
               detailLog,
               logger);
@@ -242,7 +272,7 @@ public final class SLSLite implements SLSLiteApiProvider {
               resourceBudget,
               portAllocator,
               processSupervisor,
-              new VelocityBackendRegistry(proxy, protocolSynchronizer),
+              backendRegistry,
               logger,
               detailLog);
       lobbyProvider = new FallbackLobbyProvider(proxy, primaryLobby, slsLimbo, logger);
@@ -293,6 +323,8 @@ public final class SLSLite implements SLSLiteApiProvider {
             adminClaims,
             installationService,
             publicApi::publishCatalogReload,
+            detailLog,
+            backendRegistry,
             logger);
     proxy.getCommandManager().register(commandMeta, slsCommand);
     issueInitialAdministratorCode();
@@ -387,11 +419,15 @@ public final class SLSLite implements SLSLiteApiProvider {
 
   @Subscribe
   public void onPlayerChooseInitialServer(PlayerChooseInitialServerEvent event) {
+    if (event.getInitialServer().isPresent()) {
+      return;
+    }
     if (lobbyProvider != null) {
       var lobby = lobbyProvider.server();
       if (lobby.isPresent()) {
         var selected = lobby.orElseThrow();
-        if (lobbyProvider.isHoldingLobby(selected.getServerInfo().getName())) {
+        if (lobbyProvider.isHoldingLobby(selected.getServerInfo().getName())
+            && !lobbyProvider.preservesVelocityRouting()) {
           limboHandoff.awaitPrimary(event.getPlayer());
         }
         event.setInitialServer(selected);
@@ -408,6 +444,9 @@ public final class SLSLite implements SLSLiteApiProvider {
   @Subscribe
   public void onKickedFromServer(KickedFromServerEvent event) {
     if (lobbyProvider == null) {
+      return;
+    }
+    if (lobbyProvider.preservesVelocityRouting()) {
       return;
     }
     if (lobbyProvider.isLobby(event.getServer().getServerInfo().getName())) {
@@ -491,6 +530,9 @@ public final class SLSLite implements SLSLiteApiProvider {
     }
     if (installationService != null) {
       installationService.close();
+    }
+    if (backendRegistry != null) {
+      backendRegistry.close();
     }
     if (detailLog != null) {
       detailLog.normal("shutdown", "shutdown", "SLS-LITE shutdown completed");

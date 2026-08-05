@@ -108,6 +108,11 @@ public final class FallbackLobbyProvider implements LobbyProvider {
   }
 
   @Override
+  public boolean preservesVelocityRouting() {
+    return primary.preservesVelocityRouting();
+  }
+
+  @Override
   public boolean ownsPrimaryLifecycle(String serverName) {
     return primary.ownsPrimaryLifecycle(serverName);
   }

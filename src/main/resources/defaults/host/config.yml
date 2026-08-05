@@ -146,19 +146,22 @@ security:
 
 lobby:
   # Lobby implementation. Valid values:
+  #   velocity - preserve Velocity's native try/forced-host routing. SLS-Limbo
+  #              is used only when Velocity has no initial destination.
   #   external - use an existing backend already registered in velocity.toml.
   #   managed  - start the configured SLS-LITE blueprint as a local child.
-  mode: external
+  mode: velocity
   # Managed mode only. When false, SLS-LITE does not prepare, resume, or recover
   # the configured primary. SLS-Limbo must remain enabled and handles all lobby
   # routing until this is set true and Velocity is restarted.
   auto_start: true
 
   # Non-blank registry/type name containing the managed lobby blueprint.
-  # This value is ignored in external mode.
+  # This value is ignored in velocity and external modes.
   registry: lobby
 
   # Non-blank server name.
+  #   velocity mode: ignored; Velocity chooses from velocity.toml.
   #   external mode: exact Velocity registered-server name.
   #   managed mode: blueprint ID inside the registry above.
   server: lobby

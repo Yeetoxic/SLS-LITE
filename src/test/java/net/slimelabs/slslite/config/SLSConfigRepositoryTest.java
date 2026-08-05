@@ -84,7 +84,7 @@ class SLSConfigRepositoryTest {
     assertEquals(2, config.limbo().initialBackoffSeconds());
     assertEquals(30, config.limbo().maxBackoffSeconds());
     assertEquals(120, config.limbo().stableAfterSeconds());
-    assertEquals(LobbyMode.EXTERNAL, config.lobby().mode());
+    assertEquals(LobbyMode.VELOCITY, config.lobby().mode());
     assertEquals(true, config.lobby().autoStart());
     assertEquals("lobby", config.lobby().registry());
     assertEquals("lobby", config.lobby().server());

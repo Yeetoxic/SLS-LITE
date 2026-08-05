@@ -24,9 +24,10 @@ accounting.
 ## Install
 
 1. Stop Velocity.
-2. Remove Velocity's example `lobby`, `factions`, and `minigames` entries from
-   `[servers]` and `[forced-hosts]`, then set `try = []`. Add only real,
-   reachable external servers; SLS-LITE registers managed servers itself.
+2. Remove or replace Velocity's unreachable example servers. With the default
+   `lobby.mode: velocity`, keep the real `[servers]`, `try`, and `[forced-hosts]`
+   routes you want Velocity to own. SLS-LITE registers its managed instances
+   itself and never rewrites `velocity.toml`.
 3. Place the shaded SLS-LITE JAR in Velocity's `plugins/` directory.
 4. Start Velocity and wait for `SLS-LITE initialized`.
 5. Stop Velocity before making the first host-wide configuration changes.

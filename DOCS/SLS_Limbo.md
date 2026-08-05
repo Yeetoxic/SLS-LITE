@@ -12,7 +12,9 @@ Supported native and translated client versions are listed in the
 [protocol compatibility matrix](Protocol_Compatibility.md).
 
 SLS-Limbo complements the configured lobby rather than becoming a third primary
-lobby mode. `lobby.mode` remains either `external` or `managed`.
+lobby mode. In `velocity` mode, native Velocity `try` and forced-host routing
+remains authoritative; `external` selects one named backend and `managed`
+starts one blueprint-backed primary.
 
 ## Routing Rule
 

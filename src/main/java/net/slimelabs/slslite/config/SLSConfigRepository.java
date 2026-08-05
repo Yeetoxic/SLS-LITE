@@ -45,7 +45,7 @@ public final class SLSConfigRepository {
   private static final int DEFAULT_LIMBO_INITIAL_BACKOFF_SECONDS = 2;
   private static final int DEFAULT_LIMBO_MAX_BACKOFF_SECONDS = 30;
   private static final int DEFAULT_LIMBO_STABLE_AFTER_SECONDS = 120;
-  private static final String DEFAULT_LOBBY_MODE = "external";
+  private static final String DEFAULT_LOBBY_MODE = "velocity";
   private static final String DEFAULT_LOBBY_REGISTRY = "lobby";
   private static final String DEFAULT_LOBBY_SERVER = "lobby";
   private static final boolean DEFAULT_LOBBY_AUTO_START = true;

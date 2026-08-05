@@ -126,7 +126,7 @@ final class DocumentationNavigationTest {
         "Public documentation uses roadmap classification; proposed work belongs in todo.md");
 
     for (String unavailableConfigKey :
-        List.of("storage.auto_priority", "storage.copy_parallelism", "lobby.mode: velocity")) {
+        List.of("storage.auto_priority", "storage.copy_parallelism")) {
       assertFalse(
           publicGuides.contains(unavailableConfigKey),
           () ->

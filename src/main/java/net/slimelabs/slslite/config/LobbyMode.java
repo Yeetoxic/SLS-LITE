@@ -3,6 +3,7 @@ package net.slimelabs.slslite.config;
 import java.util.Locale;
 
 public enum LobbyMode {
+  VELOCITY,
   EXTERNAL,
   MANAGED;
 
@@ -10,7 +11,8 @@ public enum LobbyMode {
     try {
       return valueOf(value.toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException exception) {
-      throw new IllegalArgumentException("lobby.mode must be 'external' or 'managed'", exception);
+      throw new IllegalArgumentException(
+          "lobby.mode must be 'velocity', 'external', or 'managed'", exception);
     }
   }
 }

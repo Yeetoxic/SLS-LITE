@@ -6,6 +6,13 @@ SLS-LITE owns local child processes, loopback registrations, admission
 reservations, instance directories, and queued transfers. Use SLS-LITE commands
 or normal Velocity shutdown so those resources are released coherently.
 
+`/sls reload` reconciles only dynamic registrations created by the active
+SLS-LITE process. Missing owned entries are restored; a same-name registration
+with another address is reported and left untouched. Normal shutdown removes
+remaining owned entries after bounded child cleanup. Replacing the SLS-LITE JAR
+requires a normal Velocity restart; binary plugin-manager hot reload is not a
+supported lifecycle boundary.
+
 ## Lifecycle
 
 Managed instances move through explicit states:

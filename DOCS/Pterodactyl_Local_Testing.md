@@ -58,6 +58,20 @@ the Windows snapshot for translated-filesystem regression coverage.
 
 ## Lobby Modes
 
+Exercise the recommended Velocity-native routing with:
+
+```powershell
+.\scripts\set-pterodactyl-lobby-mode.ps1 -Mode velocity
+```
+
+The helper creates or reuses the separately hosted Paper lobby, keeps it in
+Velocity's native `try` order, selects `lobby.mode: velocity`, and restarts the
+affected allocations. It discovers an installed Paper artifact from the active
+fixture instead of requiring one hard-coded Minecraft version. It also waits for
+Paper's generated configuration and enables modern forwarding with the fixture's
+existing Velocity secret; the secret is never printed. SLS-LITE must preserve
+Velocity's initial and kick fallback decisions in this mode.
+
 Switch to the separately hosted Paper lobby with:
 
 ```powershell

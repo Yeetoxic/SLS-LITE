@@ -670,7 +670,7 @@ post-release milestone.
       incorporate applicable security or shared-contract corrections and record
       intentional version boundaries. Experimental upstream branches are
       informational only and cannot block the candidate.
-- [ ] Implement fault-isolated blueprint reloads: collect every parse and
+- [x] Implement fault-isolated blueprint reloads: collect every parse and
       validation failure, prevent one invalid file from rejecting unrelated
       valid siblings, and publish the accepted definitions as one coherent
       catalog revision. Report accepted/rejected counts to the command sender
@@ -722,7 +722,7 @@ post-release milestone.
       independent of these short in-memory histories, and do not expose hard
       byte/payload safety ceilings as tuning knobs. Test defaults, overrides, zero
       retention, reload behavior, bounds, and recovery/diagnostic behavior.
-- [ ] Correct initial-server routing so SLS-LITE cooperates with Velocity. When
+- [x] Correct initial-server routing so SLS-LITE cooperates with Velocity. When
       `PlayerChooseInitialServerEvent` already contains a selected server,
       preserve it—including native forced-host routing—and do not arm an
       SLS-Limbo handoff for that unrelated route. Supply the configured SLS-LITE
@@ -730,7 +730,7 @@ post-release milestone.
       lobby/limbo unavailability behavior bounded to routes SLS-LITE owns, never
       modify `velocity.toml`, and test forced hosts, ordinary fallback order,
       managed and external lobbies, unavailable lobbies, reconnects, and kicks.
-- [ ] Add `lobby.mode: velocity` and make it the recommended clean-install mode.
+- [x] Add `lobby.mode: velocity` and make it the recommended clean-install mode.
       In this mode, leave Velocity's initial-server choice, ordinary lobby set,
       `try` order, and forced hosts authoritative; use enabled SLS-Limbo only as
       the bounded holding/safety route when no valid Velocity route remains.
@@ -739,7 +739,7 @@ post-release milestone.
       network, and allow Limbo to be disabled with a clear disconnect when no
       route remains. Test clean install, reload, forced hosts, several Velocity
       lobbies, missing routes, Limbo on/off, and all three modes.
-- [ ] Formalize the supported reload boundary and registration reconciliation.
+- [x] Formalize the supported reload boundary and registration reconciliation.
       Ensure `/sls reload` atomically reconciles only dynamic registrations owned
       by SLS-LITE, normal shutdown unregisters those owned entries after bounded
       lifecycle cleanup, and conflicting/stale names receive precise diagnostics

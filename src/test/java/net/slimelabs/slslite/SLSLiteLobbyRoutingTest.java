@@ -52,6 +52,41 @@ class SLSLiteLobbyRoutingTest {
   }
 
   @Test
+  void preservesVelocitySelectedInitialServer() throws Exception {
+    RegisteredServer forcedHost = server("forced-host");
+    RegisteredServer configuredLobby = server("lobby");
+    PlayerChooseInitialServerEvent event = new PlayerChooseInitialServerEvent(player(), forcedHost);
+    SLSLite plugin = plugin(provider(configuredLobby, LobbyStatus.EXTERNAL, "lobby"));
+
+    plugin.onPlayerChooseInitialServer(event);
+
+    assertSame(forcedHost, event.getInitialServer().orElseThrow());
+  }
+
+  @Test
+  void velocityModeUsesLimboOnlyWhenVelocityHasNoInitialRoute() throws Exception {
+    RegisteredServer limbo = server("sls-limbo");
+    PlayerChooseInitialServerEvent event = new PlayerChooseInitialServerEvent(player(), null);
+    SLSLite plugin = plugin(provider(limbo, LobbyStatus.READY, "sls-limbo", true));
+
+    plugin.onPlayerChooseInitialServer(event);
+
+    assertSame(limbo, event.getInitialServer().orElseThrow());
+  }
+
+  @Test
+  void velocityModeLeavesKickFallbackDecisionUntouched() throws Exception {
+    RegisteredServer limbo = server("sls-limbo");
+    KickedFromServerEvent event = kickEvent(server("game"));
+    KickedFromServerEvent.ServerKickResult original = event.getResult();
+    SLSLite plugin = plugin(provider(limbo, LobbyStatus.READY, "sls-limbo", true));
+
+    plugin.onKickedFromServer(event);
+
+    assertSame(original, event.getResult());
+  }
+
+  @Test
   void redirectsBackendKickToActiveLobby() throws Exception {
     RegisteredServer lobby = server("lobby");
     RegisteredServer game = server("game.abc001");
@@ -141,6 +176,11 @@ class SLSLiteLobbyRoutingTest {
 
   private static LobbyProvider provider(
       RegisteredServer lobby, LobbyStatus status, String lobbyName) {
+    return provider(lobby, status, lobbyName, false);
+  }
+
+  private static LobbyProvider provider(
+      RegisteredServer lobby, LobbyStatus status, String lobbyName, boolean preservesVelocity) {
     return new LobbyProvider() {
       @Override
       public void start() {}
@@ -165,6 +205,11 @@ class SLSLiteLobbyRoutingTest {
       @Override
       public boolean isLobby(String serverName) {
         return lobbyName.equals(serverName);
+      }
+
+      @Override
+      public boolean preservesVelocityRouting() {
+        return preservesVelocity;
       }
 
       @Override

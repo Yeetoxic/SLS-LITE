@@ -31,7 +31,7 @@ class DefinitionReloaderTest {
                 repositories.config(),
                 repositories.blueprints(),
                 repositories.profiles(),
-                true,
+                false,
                 true,
                 "reload-rejected",
                 transitions::add));
@@ -44,6 +44,77 @@ class DefinitionReloaderTest {
         DefinitionReloader.ReloadFailureCategory.VALIDATION,
         transitions.getFirst().failureCategory());
     assertEquals(0, transitions.getFirst().blueprintsUpdated());
+  }
+
+  @Test
+  void commitsValidSiblingsAndRemovesEveryRejectedBlueprint() throws Exception {
+    Repositories repositories = repositories();
+    Files.writeString(
+        repositories.blueprintsPath().resolve("second.yml"),
+        """
+                blueprint:
+                  id: second
+                  name: Second
+                  type: game
+                server:
+                  software: paper
+                  version: "1.21.5"
+                  limits:
+                    memory_limit: 256
+                """);
+    repositories.blueprints().reload();
+
+    writeBlueprint(repositories.blueprintsPath(), "paper");
+    Files.writeString(
+        repositories.blueprintsPath().resolve("second.yml"),
+        """
+                blueprint:
+                  id: second
+                  name: Broken
+                  type: game
+                server:
+                  software: missing
+                  version: "1.21.5"
+                """);
+    Files.writeString(
+        repositories.blueprintsPath().resolve("malformed.yml"), "blueprint: [not-a-map]\n");
+
+    DefinitionReloadReport report =
+        DefinitionReloader.reload(
+            repositories.config(), repositories.blueprints(), repositories.profiles(), true, false);
+
+    assertEquals(java.util.Set.of("test"), repositories.blueprints().snapshot().values().keySet());
+    assertEquals(1, report.acceptedBlueprints());
+    assertEquals(2, report.rejectedBlueprints().size());
+    assertEquals(
+        java.util.List.of("malformed.yml", "second.yml"),
+        report.rejectedBlueprints().stream()
+            .map(DefinitionReloadReport.BlueprintRejection::path)
+            .toList());
+    assertEquals(java.util.List.of("second"), report.blueprints().removed());
+  }
+
+  @Test
+  void rejectsEveryFileSharingADuplicateBlueprintId() throws Exception {
+    Repositories repositories = repositories();
+    Files.copy(
+        repositories.blueprintsPath().resolve("test.yml"),
+        repositories.blueprintsPath().resolve("duplicate.yml"));
+
+    DefinitionReloadReport report =
+        DefinitionReloader.reload(
+            repositories.config(), repositories.blueprints(), repositories.profiles(), true, false);
+
+    assertEquals(java.util.Map.of(), repositories.blueprints().snapshot().values());
+    assertEquals(0, report.acceptedBlueprints());
+    assertEquals(2, report.rejectedBlueprints().size());
+    assertEquals(java.util.List.of("test"), report.blueprints().removed());
+    report
+        .rejectedBlueprints()
+        .forEach(
+            rejection ->
+                org.junit.jupiter.api.Assertions.assertTrue(
+                    rejection.error().contains("Duplicate blueprint id 'test'")));
   }
 
   @Test

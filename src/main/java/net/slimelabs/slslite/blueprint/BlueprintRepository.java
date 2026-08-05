@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,9 +38,13 @@ public final class BlueprintRepository {
   }
 
   public void initialize() throws IOException, BlueprintException {
+    prepare();
+    reload();
+  }
+
+  public void prepare() throws IOException {
     ConfinedFiles.ensureDirectory(directory);
     installTemplateWhenEmpty();
-    reload();
   }
 
   public synchronized void reload() throws IOException, BlueprintException {
@@ -47,16 +52,44 @@ public final class BlueprintRepository {
   }
 
   public Snapshot loadSnapshot() throws IOException, BlueprintException {
-    Map<String, Blueprint> loaded = new LinkedHashMap<>();
+    LoadResult result = loadIsolated();
+    if (!result.rejections().isEmpty()) {
+      Rejection rejection = result.rejections().getFirst();
+      throw new BlueprintException(rejection.path() + ": " + rejection.error());
+    }
+    return result.snapshot();
+  }
 
+  public LoadResult loadIsolated() throws IOException {
+    Map<String, List<LoadedBlueprint>> byId = new LinkedHashMap<>();
+    List<Rejection> rejections = new ArrayList<>();
     for (Path path : blueprintFiles()) {
-      Blueprint blueprint = parser.parse(path);
-      Blueprint previous = loaded.putIfAbsent(blueprint.id(), blueprint);
-      if (previous != null) {
-        throw new BlueprintException("Duplicate blueprint id '" + blueprint.id() + "'");
+      String relativePath = relativePath(path);
+      try {
+        Blueprint blueprint = parser.parse(path);
+        byId.computeIfAbsent(blueprint.id(), ignored -> new ArrayList<>())
+            .add(new LoadedBlueprint(relativePath, blueprint));
+      } catch (BlueprintException exception) {
+        rejections.add(new Rejection(relativePath, exception.getMessage()));
       }
     }
-    return new Snapshot(loaded);
+
+    Map<String, LoadedBlueprint> accepted = new LinkedHashMap<>();
+    byId.forEach(
+        (id, candidates) -> {
+          if (candidates.size() == 1) {
+            accepted.put(id, candidates.getFirst());
+            return;
+          }
+          candidates.forEach(
+              candidate ->
+                  rejections.add(
+                      new Rejection(
+                          candidate.path(),
+                          "Duplicate blueprint id '" + id + "' is declared by multiple files")));
+        });
+    rejections.sort(java.util.Comparator.comparing(Rejection::path));
+    return new LoadResult(accepted, rejections);
   }
 
   public Snapshot snapshot() {
@@ -128,6 +161,37 @@ public final class BlueprintRepository {
   private static boolean isYaml(Path path) {
     String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
     return name.endsWith(".yml") || name.endsWith(".yaml");
+  }
+
+  private String relativePath(Path path) {
+    return directory.relativize(path.toAbsolutePath().normalize()).toString().replace('\\', '/');
+  }
+
+  public record LoadedBlueprint(String path, Blueprint blueprint) {
+    public LoadedBlueprint {
+      java.util.Objects.requireNonNull(path, "path");
+      java.util.Objects.requireNonNull(blueprint, "blueprint");
+    }
+  }
+
+  public record Rejection(String path, String error) {
+    public Rejection {
+      java.util.Objects.requireNonNull(path, "path");
+      java.util.Objects.requireNonNull(error, "error");
+    }
+  }
+
+  public record LoadResult(Map<String, LoadedBlueprint> accepted, List<Rejection> rejections) {
+    public LoadResult {
+      accepted = Map.copyOf(accepted);
+      rejections = List.copyOf(rejections);
+    }
+
+    public Snapshot snapshot() {
+      Map<String, Blueprint> values = new LinkedHashMap<>();
+      accepted.forEach((id, loaded) -> values.put(id, loaded.blueprint()));
+      return new Snapshot(values);
+    }
   }
 
   public record Snapshot(Map<String, Blueprint> values) {

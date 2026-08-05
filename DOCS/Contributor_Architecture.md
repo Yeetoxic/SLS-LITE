@@ -180,7 +180,7 @@ pass on hosts without mount privileges. Update [Blueprint Volumes](Blueprint_Vol
 Start at:
 
 - `lobby/LobbyProvider` for the primary-lobby abstraction;
-- `LocalLobbyProvider` for the managed or external primary;
+- `LocalLobbyProvider` for Velocity-native, managed, or external primary policy;
 - `SLSLimboProvider` for the isolated fallback process;
 - `FallbackLobbyProvider` for fallback routing and evacuation;
 - `LobbyRecoveryPolicy` for bounded recovery behavior;

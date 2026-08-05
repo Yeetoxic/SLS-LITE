@@ -1,12 +1,14 @@
 # Lobby and Matchmaking
 
-The primary lobby is either:
+Lobby routing has three modes:
 
-- `external`: an operator-managed backend already registered with Velocity; or
-- `managed`: a persistent SLS-LITE blueprint instance.
+- `velocity`: preserve Velocity's native `try` and forced-host choice;
+- `external`: target one operator-managed backend already registered with
+  Velocity; or
+- `managed`: own one persistent SLS-LITE blueprint instance.
 
 SLS-Limbo is the lightweight fallback for players who otherwise have no safe
-backend. It is not a third primary mode and is not the normal queue destination.
+backend. It is not a primary mode and is not the normal queue destination.
 Players who request a cold game from a healthy backend stay there while the
 destination starts, then transfer directly when it becomes ready.
 

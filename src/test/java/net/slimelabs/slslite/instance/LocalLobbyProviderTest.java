@@ -243,6 +243,35 @@ class LocalLobbyProviderTest {
   }
 
   @Test
+  void velocityModeOwnsNoPrimaryLobbyOrLifecycle() throws Exception {
+    BlueprintRepository blueprints = blueprints();
+    FakeController controller =
+        new FakeController(blueprints.get("lobby", "lobby").orElseThrow(), temporaryDirectory);
+    LocalLobbyProvider provider =
+        new LocalLobbyProvider(
+            proxy(new LinkedHashMap<>()),
+            blueprints,
+            controller,
+            new LobbyConfig(LobbyMode.VELOCITY, "ignored", "ignored"),
+            LoggerFactory.getLogger(LocalLobbyProviderTest.class));
+
+    provider.start();
+
+    assertTrue(provider.preservesVelocityRouting());
+    assertTrue(provider.server().isEmpty());
+    assertEquals(LobbyStatus.OFFLINE, provider.status());
+    assertFalse(provider.isLobby("lobby"));
+    assertFalse(provider.ownsPrimaryLifecycle("lobby"));
+    assertTrue(provider.readyFuture().isCompletedExceptionally());
+
+    provider.close();
+    assertEquals(0, controller.starts());
+    assertEquals(0, controller.restarts);
+    assertEquals(0, controller.resets);
+    assertEquals(0, controller.stops);
+  }
+
+  @Test
   void evacuatesBackendPlayersToManagedLobby() throws Exception {
     BlueprintRepository blueprints = blueprints();
     FakeController controller =

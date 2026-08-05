@@ -54,10 +54,10 @@ fixture scripts rather than in these product defaults.
 | `forwarding.secret_file` | `forwarding.secret` | Non-blank relative path from the Velocity working directory. |
 | `security.allow_insecure_offline_administrators` | `false` | Permit UUID-based built-in admins on an offline proxy. Unsafe for public use. |
 | `security.claim_code_expiry_seconds` | `600` | Positive one-time administrator-code lifetime. |
-| `lobby.mode` | `external` | `external` or `managed`. |
+| `lobby.mode` | `velocity` | `velocity`, `external`, or `managed`. `velocity` preserves native `try` and forced-host routing. |
 | `lobby.auto_start` | `true` | Managed mode only. `false` prevents preparation, resume, and recovery of the primary; enabled SLS-Limbo handles lobby routing until the option is restored and Velocity restarts. |
-| `lobby.registry` | `lobby` | Managed-lobby blueprint type. Ignored by external mode. |
-| `lobby.server` | `lobby` | External Velocity server name or managed blueprint ID. |
+| `lobby.registry` | `lobby` | Managed-lobby blueprint type. Ignored by velocity and external modes. |
+| `lobby.server` | `lobby` | External Velocity server name or managed blueprint ID; ignored by velocity mode. |
 | `lobby.limbo.enabled` | `true` | Start bundled SLS-Limbo. |
 | `lobby.limbo.memory_mib` | `96` | At least `64` MiB; included in managed admission. |
 | `lobby.limbo.startup_timeout_seconds` | `30` | Positive readiness timeout. |
@@ -124,10 +124,14 @@ diagnosis where possible.
 /sls reload all
 ```
 
-Reload candidates are parsed and cross-validated before replacing the active
-catalog. Running instances keep the definitions with which they were created.
-Successful commands report added, updated, and removed IDs separately for
-blueprints and software. A failure publishes none of either candidate, and its
-diagnostic identifies the source definition/path where validation failed.
+Reload examines every blueprint file. Invalid definitions are omitted while
+valid siblings are resolved together and published as one catalog revision;
+running instances keep the immutable definitions with which they were created.
+The command reports accepted/rejected counts plus added, updated, and removed
+IDs. Every rejected relative path and exact error is written to the SLS-LITE
+detail log. A software-profile, catalog I/O, or global transaction failure still
+rejects the transaction rather than publishing a structurally inconsistent
+catalog. Reload also verifies SLS-LITE-owned dynamic Velocity registrations,
+restores missing owned entries, and leaves same-name foreign conflicts untouched.
 Host configuration, storage strategy, output and detailed-log policy,
 forwarding, lobby mode, ports, memory, and security require a Velocity restart.
