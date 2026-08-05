@@ -21,6 +21,10 @@ software:
   accept_eula: false
   base_directory: software/paper/{version}
   server_jar: paper.jar
+
+paper:
+  build_pins:
+    "26.2": 92
 ```
 
 - `runtime` is `java-jar`. SLS-LITE launches argument lists directly
@@ -39,6 +43,9 @@ software:
   `{source}`, and `{channel}` placeholders. Include `{channel}` when one profile
   may switch channels while retaining older caches.
 - `server_jar` is relative to that directory.
+- `paper.build_pins` optionally maps an exact Minecraft version to an exact
+  positive Paper build number. Versions absent from the map retain the
+  newest-allowed channel policy.
 
 `launch.java` is the fallback executable. Optional `launch.java_versions`
 entries select an executable by required Java major:
@@ -118,10 +125,12 @@ EULA.
 
 ## Providers
 
-The Paper provider requests the newest build allowed by the selected channel
+The Paper provider requests the newest numeric build allowed by the selected channel
 for the exact blueprint Minecraft version from PaperMC's Downloads Service. A
 more stable build is preferred when it is the newest compatible result. It
-never substitutes another game version. It identifies SLS-LITE,
+never trusts API ordering or substitutes another game version. An exact
+`paper.build_pins` entry selects only that build; unavailable and
+channel-incompatible pins fail rather than falling forward. It identifies SLS-LITE,
 accepts only HTTPS PaperMC hosts, enforces a 256 MiB limit, and verifies artifact
 size and SHA-256 metadata. Missing version/channel combinations fail explicitly.
 
@@ -151,7 +160,8 @@ operator inspection. Cache cleanup ignores these unverified quarantines.
 Failed staging directories are removed.
 
 Provider-backed caches include an SLS-LITE metadata file. On every proxy
-startup, SLS-LITE checks the configured source, channel, version, JAR path,
+startup, SLS-LITE checks the configured source, channel, build-selection policy,
+version, JAR path,
 size, and digest before reusing the download. Manual caches intentionally
 remain under operator control and only require the configured JAR.
 

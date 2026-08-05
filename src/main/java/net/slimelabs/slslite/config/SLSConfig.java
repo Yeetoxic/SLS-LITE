@@ -17,7 +17,43 @@ public record SLSConfig(
     LobbyConfig lobby,
     StorageConfig storage,
     DetailedLoggingConfig detailedLogging,
+    TransferActionBarConfig transferActionBar,
     Path instancesDirectory) {
+
+  public SLSConfig(
+      int totalMemoryMiB,
+      int maxManagedProcesses,
+      int portRangeStart,
+      int portRangeEnd,
+      int queueTimeoutSeconds,
+      BlueprintSelectionMode blueprintSelectionMode,
+      int idleShutdownSeconds,
+      ManagedOutputConfig managedOutput,
+      ForwardingConfig forwarding,
+      SecurityConfig security,
+      SLSLimboConfig limbo,
+      LobbyConfig lobby,
+      StorageConfig storage,
+      DetailedLoggingConfig detailedLogging,
+      Path instancesDirectory) {
+    this(
+        totalMemoryMiB,
+        maxManagedProcesses,
+        portRangeStart,
+        portRangeEnd,
+        queueTimeoutSeconds,
+        blueprintSelectionMode,
+        idleShutdownSeconds,
+        managedOutput,
+        forwarding,
+        security,
+        limbo,
+        lobby,
+        storage,
+        detailedLogging,
+        TransferActionBarConfig.defaults(),
+        instancesDirectory);
+  }
 
   public SLSConfig(
       int totalMemoryMiB,
@@ -49,6 +85,7 @@ public record SLSConfig(
         lobby,
         storage,
         detailedLogging,
+        TransferActionBarConfig.defaults(),
         instancesDirectory);
   }
 
@@ -81,6 +118,7 @@ public record SLSConfig(
         lobby,
         storage,
         DetailedLoggingConfig.defaults(),
+        TransferActionBarConfig.defaults(),
         instancesDirectory);
   }
 
@@ -112,6 +150,7 @@ public record SLSConfig(
         lobby,
         new StorageConfig(StorageStrategy.AUTO),
         DetailedLoggingConfig.defaults(),
+        TransferActionBarConfig.defaults(),
         instancesDirectory);
   }
 
@@ -162,6 +201,9 @@ public record SLSConfig(
     }
     if (detailedLogging == null) {
       throw new IllegalArgumentException("detailed logging configuration is required");
+    }
+    if (transferActionBar == null) {
+      throw new IllegalArgumentException("transfer action-bar configuration is required");
     }
     instancesDirectory = instancesDirectory.toAbsolutePath().normalize();
   }

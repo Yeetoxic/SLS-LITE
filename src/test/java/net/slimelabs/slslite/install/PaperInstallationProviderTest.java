@@ -1,6 +1,7 @@
 package net.slimelabs.slslite.install;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.net.httpserver.HttpServer;
@@ -14,6 +15,7 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import net.slimelabs.slslite.software.SoftwareConfigurator;
 import net.slimelabs.slslite.software.SoftwareProfile;
 import net.slimelabs.slslite.software.SoftwareRuntime;
@@ -202,13 +204,109 @@ class PaperInstallationProviderTest {
     }
   }
 
+  @Test
+  void downloadsExactPinnedBuildWithoutFallingForward() throws Exception {
+    byte[] artifact = "pinned-paper".getBytes(StandardCharsets.UTF_8);
+    String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(artifact));
+    HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext(
+        "/pinned.jar",
+        exchange -> {
+          exchange.sendResponseHeaders(200, artifact.length);
+          exchange.getResponseBody().write(artifact);
+          exchange.close();
+        });
+    server.createContext(
+        "/v3/projects/paper/versions/1.0/builds",
+        exchange -> {
+          String base = "http://127.0.0.1:" + server.getAddress().getPort();
+          byte[] body =
+              ("""
+                    [
+                      {
+                        "id": 42,
+                        "channel": "STABLE",
+                        "downloads": {
+                          "server:default": {
+                            "url": "%s/newest.jar",
+                            "size": %d,
+                            "checksums": {"sha256": "%s"}
+                          }
+                        }
+                      },
+                      {
+                        "id": 41,
+                        "channel": "STABLE",
+                        "downloads": {
+                          "server:default": {
+                            "url": "%s/pinned.jar",
+                            "size": %d,
+                            "checksums": {"sha256": "%s"}
+                          }
+                        }
+                      }
+                    ]
+                    """)
+                  .formatted(base, artifact.length, hash, base, artifact.length, hash)
+                  .getBytes(StandardCharsets.UTF_8);
+          exchange.sendResponseHeaders(200, body.length);
+          exchange.getResponseBody().write(body);
+          exchange.close();
+        });
+    server.start();
+    try {
+      PaperInstallationProvider provider = provider(server);
+      List<String> logs = new ArrayList<>();
+
+      provider.install(
+          profile(net.slimelabs.slslite.software.SoftwareReleaseChannel.STABLE, Map.of("1.0", 41L)),
+          "1.0",
+          temporaryDirectory,
+          logs::add);
+
+      assertArrayEquals(artifact, Files.readAllBytes(temporaryDirectory.resolve("paper.jar")));
+      assertTrue(logs.stream().anyMatch(line -> line.contains("pinned stable Paper build 41")));
+
+      Path unavailable = temporaryDirectory.resolve("unavailable");
+      Files.createDirectories(unavailable);
+      Exception exception =
+          assertThrows(
+              Exception.class,
+              () ->
+                  provider.install(
+                      profile(
+                          net.slimelabs.slslite.software.SoftwareReleaseChannel.STABLE,
+                          Map.of("1.0", 99L)),
+                      "1.0",
+                      unavailable,
+                      ignored -> {}));
+      assertTrue(exception.getMessage().contains("Pinned Paper build 99 is unavailable"));
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  private PaperInstallationProvider provider(HttpServer server) {
+    return new PaperInstallationProvider(
+        HttpClient.newHttpClient(),
+        URI.create(
+            "http://127.0.0.1:" + server.getAddress().getPort() + "/v3/projects/paper/versions/"),
+        false);
+  }
+
   private SoftwareProfile profile() {
     return profile(net.slimelabs.slslite.software.SoftwareReleaseChannel.STABLE);
   }
 
   private SoftwareProfile profile(net.slimelabs.slslite.software.SoftwareReleaseChannel channel) {
+    return profile(channel, Map.of());
+  }
+
+  private SoftwareProfile profile(
+      net.slimelabs.slslite.software.SoftwareReleaseChannel channel, Map<String, Long> buildPins) {
     return new SoftwareProfile(
         "paper",
+        "Paper",
         SoftwareRuntime.JAVA_JAR,
         SoftwareConfigurator.PAPER,
         SoftwareSource.PAPER,
@@ -220,9 +318,15 @@ class PaperInstallationProviderTest {
         "paper.jar",
         List.of(),
         List.of(),
+        Map.of(),
         "Done",
         30,
         "stop",
-        10);
+        10,
+        0,
+        Map.of(),
+        List.of(),
+        null,
+        buildPins);
   }
 }

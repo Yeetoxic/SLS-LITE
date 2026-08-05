@@ -142,7 +142,13 @@ public final class SoftwareInstallationService implements AutoCloseable {
                         CompletableFuture.supplyAsync(
                             () -> install(profile, version, target, record), executor);
                     return new ActiveInstallation(
-                        profile.id(), version, profile.source(), profile.channel(), record, future);
+                        profile.id(),
+                        version,
+                        profile.source(),
+                        profile.channel(),
+                        profile.installationSelection(version),
+                        record,
+                        future);
                   } catch (java.util.concurrent.RejectedExecutionException exception) {
                     failRecord(record, profile.source(), profile.channel(), exception);
                     throw exception;
@@ -496,6 +502,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
           || !version.equals(metadata.getProperty("version"))
           || !profile.source().name().equals(metadata.getProperty("source"))
           || !profile.channel().name().equals(metadata.getProperty("channel"))
+          || !selectionMatches(profile, version, metadata.getProperty("selection"))
           || !profile.serverJar().equals(metadata.getProperty("jar"))) {
         return false;
       }
@@ -525,6 +532,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
     metadata.setProperty("version", version);
     metadata.setProperty("source", profile.source().name());
     metadata.setProperty("channel", profile.channel().name());
+    metadata.setProperty("selection", profile.installationSelection(version));
     metadata.setProperty("jar", profile.serverJar());
     metadata.setProperty("size", Long.toString(artifact.size()));
     metadata.setProperty("digest", artifact.digestAlgorithm());
@@ -545,6 +553,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
     metadata.setProperty("version", version);
     metadata.setProperty("source", profile.source().name());
     metadata.setProperty("channel", profile.channel().name());
+    metadata.setProperty("selection", profile.installationSelection(version));
     ConfinedFiles.atomicWriteProperties(
         directory,
         STAGING_METADATA,
@@ -682,6 +691,15 @@ public final class SoftwareInstallationService implements AutoCloseable {
       }
     }
     return HexFormat.of().formatHex(digest.digest()).toLowerCase(Locale.ROOT);
+  }
+
+  private static boolean selectionMatches(
+      SoftwareProfile profile, String version, String cachedSelection) {
+    if (cachedSelection != null) {
+      return profile.installationSelection(version).equals(cachedSelection);
+    }
+    // Format-1 caches created before build pins existed used the same newest-allowed policy.
+    return profile.paperBuildForVersion(version).isEmpty();
   }
 
   private static void moveDirectory(Path source, Path target) throws IOException {
@@ -870,13 +888,15 @@ public final class SoftwareInstallationService implements AutoCloseable {
       String version,
       SoftwareSource source,
       SoftwareReleaseChannel channel,
+      String selection,
       MutableInstallation record,
       CompletableFuture<Path> future) {
     private boolean matches(SoftwareProfile profile, String requestedVersion) {
       return softwareId.equals(profile.id())
           && version.equals(requestedVersion)
           && source == profile.source()
-          && channel == profile.channel();
+          && channel == profile.channel()
+          && selection.equals(profile.installationSelection(requestedVersion));
     }
   }
 

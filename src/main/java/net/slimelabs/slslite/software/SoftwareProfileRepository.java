@@ -31,6 +31,9 @@ public final class SoftwareProfileRepository {
   private static final String DEFAULT_VANILLA_RESOURCE = "defaults/software/vanilla-software.yml";
 
   private static final Pattern VALID_ID = Pattern.compile("[a-z0-9][a-z0-9_-]{0,63}");
+  private static final Pattern VALID_PAPER_VERSION =
+      Pattern.compile("[A-Za-z0-9][A-Za-z0-9._+-]{0,63}");
+  private static final int MAX_PAPER_BUILD_PINS = 512;
   private static final List<String> DEFAULT_JVM_ARGUMENTS =
       List.of("-Xms128M", "-Xmx{memory_mib}M");
   private static final List<String> DEFAULT_SERVER_ARGUMENTS = List.of();
@@ -110,10 +113,12 @@ public final class SoftwareProfileRepository {
       Map<String, Object> launch = YamlValues.optionalMap(root, "launch", path);
       Map<String, Object> readiness = YamlValues.optionalMap(root, "readiness", path);
       Map<String, Object> shutdown = YamlValues.optionalMap(root, "shutdown", path);
+      Map<String, Object> paper = YamlValues.optionalMap(root, "paper", path);
       if (ModernSLSSoftwareAdapter.supports(software)) {
         return ModernSLSSoftwareAdapter.adapt(root, software, path);
       }
-      YamlValues.requireOnlyKeys(root, "", path, "software", "launch", "readiness", "shutdown");
+      YamlValues.requireOnlyKeys(
+          root, "", path, "software", "launch", "readiness", "shutdown", "paper");
       YamlValues.requireOnlyKeys(
           software,
           "software",
@@ -131,6 +136,7 @@ public final class SoftwareProfileRepository {
           launch, "launch", path, "java", "java_versions", "jvm_arguments", "server_arguments");
       YamlValues.requireOnlyKeys(readiness, "readiness", path, "pattern", "timeout_seconds");
       YamlValues.requireOnlyKeys(shutdown, "shutdown", path, "command", "timeout_seconds");
+      YamlValues.requireOnlyKeys(paper, "paper", path, "build_pins");
 
       String id = YamlValues.requiredString(software, "id", path);
       if (!VALID_ID.matcher(id).matches()) {
@@ -168,6 +174,11 @@ public final class SoftwareProfileRepository {
       if (source != SoftwareSource.PAPER && channel != SoftwareReleaseChannel.STABLE) {
         throw YamlValues.error(path, "software.channel is only configurable for source: paper");
       }
+      if (source != SoftwareSource.PAPER && root.containsKey("paper")) {
+        throw YamlValues.error(path, "paper settings require software.source: paper");
+      }
+      Map<String, Long> paperBuildPins =
+          paperBuildPins(YamlValues.optionalMap(paper, "build_pins", "paper", path), path);
       boolean acceptEula = YamlValues.optionalBoolean(software, "accept_eula", false, path);
       String baseDirectory = YamlValues.requiredString(software, "base_directory", path);
       String serverJar = YamlValues.requiredString(software, "server_jar", path);
@@ -208,7 +219,12 @@ public final class SoftwareProfileRepository {
             readinessPattern,
             startupTimeout,
             stopCommand,
-            stopTimeout);
+            stopTimeout,
+            0,
+            Map.of(),
+            List.of(),
+            null,
+            paperBuildPins);
       } catch (PatternSyntaxException exception) {
         throw YamlValues.error(path, "readiness.pattern is not a valid regular expression");
       }
@@ -264,6 +280,37 @@ public final class SoftwareProfileRepository {
             "launch.java_versions." + entry.getKey() + " must be a non-empty Java executable");
       }
       result.put(major, executable);
+    }
+    return Map.copyOf(result);
+  }
+
+  private static Map<String, Long> paperBuildPins(Map<String, Object> values, Path path)
+      throws ConfigurationException {
+    if (values.size() > MAX_PAPER_BUILD_PINS) {
+      throw YamlValues.error(
+          path, "paper.build_pins may contain at most " + MAX_PAPER_BUILD_PINS + " entries");
+    }
+    Map<String, Long> result = new LinkedHashMap<>();
+    for (Map.Entry<String, Object> entry : values.entrySet()) {
+      String version = entry.getKey();
+      if (!VALID_PAPER_VERSION.matcher(version).matches()) {
+        throw YamlValues.error(
+            path,
+            "paper.build_pins version '"
+                + version
+                + "' must match "
+                + VALID_PAPER_VERSION.pattern());
+      }
+      long build;
+      try {
+        build = Long.parseLong(String.valueOf(entry.getValue()));
+      } catch (NumberFormatException exception) {
+        throw YamlValues.error(path, "paper.build_pins." + version + " must be a positive integer");
+      }
+      if (build <= 0) {
+        throw YamlValues.error(path, "paper.build_pins." + version + " must be a positive integer");
+      }
+      result.put(version, build);
     }
     return Map.copyOf(result);
   }

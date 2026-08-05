@@ -155,6 +155,43 @@ class SoftwareInstallationServiceTest {
   }
 
   @Test
+  void paperPinInvalidatesUnpinnedCacheAndPinnedCacheIsReused() {
+    AtomicInteger installs = new AtomicInteger();
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile profile,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log)
+              throws Exception {
+            installs.incrementAndGet();
+            Path jar = stagingDirectory.resolve("server.jar");
+            Files.writeString(jar, profile.installationSelection(version));
+            return artifact(jar);
+          }
+        };
+    SoftwareProfile newest = profile(SoftwareSource.PAPER);
+    SoftwareProfile pinned = withPaperPin(newest, "1.0", 41L);
+
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      Path installed = service.ensureInstalled(newest, "1.0").join();
+      assertEquals("paper-build:newest", read(installed.resolve("server.jar")));
+
+      Path replaced = service.ensureInstalled(pinned, "1.0").join();
+      assertEquals("paper-build:41", read(replaced.resolve("server.jar")));
+      assertEquals(replaced, service.ensureInstalled(pinned, "1.0").join());
+      assertEquals(2, installs.get());
+    }
+  }
+
+  @Test
   void retriesFailedProviderInstallation() {
     AtomicInteger installs = new AtomicInteger();
     SoftwareInstallationProvider provider =
@@ -680,6 +717,33 @@ class SoftwareInstallationServiceTest {
         30,
         "stop",
         10);
+  }
+
+  private static SoftwareProfile withPaperPin(SoftwareProfile profile, String version, long build) {
+    return new SoftwareProfile(
+        profile.id(),
+        profile.name(),
+        profile.runtime(),
+        profile.configurator(),
+        profile.source(),
+        profile.channel(),
+        profile.acceptEula(),
+        profile.javaExecutable(),
+        profile.javaExecutables(),
+        profile.baseDirectory(),
+        profile.serverJar(),
+        profile.jvmArguments(),
+        profile.serverArguments(),
+        profile.serverProperties(),
+        profile.readinessPattern(),
+        profile.startupTimeoutSeconds(),
+        profile.stopCommand(),
+        profile.stopTimeoutSeconds(),
+        profile.defaultMemoryLimitMiB(),
+        profile.images(),
+        profile.versionMappings(),
+        profile.defaultImage(),
+        java.util.Map.of(version, build));
   }
 
   private static String read(Path path) {

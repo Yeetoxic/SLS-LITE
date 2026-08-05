@@ -141,6 +141,8 @@ final class OperatorDocumentationContractTest {
           String path = prefix.isEmpty() ? key : prefix + "." + key;
           if (value instanceof Map<?, ?> nested) {
             flatten(path, castMap(nested), flattened);
+          } else if (value instanceof java.util.List<?> list) {
+            flattened.put(path, list.size() + " entries");
           } else {
             flattened.put(path, String.valueOf(value));
           }

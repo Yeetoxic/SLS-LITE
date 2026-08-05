@@ -16,6 +16,15 @@ software:
   base_directory: software/paper/{version}
   server_jar: paper.jar
 
+# Fresh installations select the numerically newest build permitted by channel.
+# Pin individual Minecraft versions when reproducible rebuilds matter. A missing,
+# unavailable, or channel-incompatible pin fails instead of selecting another
+# build. Existing verified unpinned caches remain reusable.
+paper:
+  build_pins: {}
+  # build_pins:
+  #   "26.2": 92
+
 launch:
   java: java
   # Optional exact Java-major overrides, for example:

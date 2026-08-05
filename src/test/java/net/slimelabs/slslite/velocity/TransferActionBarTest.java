@@ -14,6 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.slimelabs.slslite.config.TransferActionBarConfig;
 import org.junit.jupiter.api.Test;
 
 class TransferActionBarTest {
@@ -64,6 +65,35 @@ class TransferActionBarTest {
       assertFalse(actionBar.isRunning(playerId));
       assertEquals(
           Component.text("You have been dequeued.", NamedTextColor.RED), messages.getLast());
+    } finally {
+      scheduler.shutdownNow();
+    }
+  }
+
+  @Test
+  void disabledConfigurationSendsNothingAndSchedulesNothing() throws Exception {
+    ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    List<Component> messages = new CopyOnWriteArrayList<>();
+    UUID playerId = UUID.randomUUID();
+    TransferActionBarConfig defaults = TransferActionBarConfig.defaults();
+    TransferActionBarConfig disabled =
+        new TransferActionBarConfig(
+            false,
+            defaults.joining(),
+            defaults.forceJoining(),
+            defaults.dequeued(),
+            defaults.frames(),
+            defaults.frameIntervalMillis());
+    try (TransferActionBar actionBar = new TransferActionBar(scheduler, disabled)) {
+      Player player = player(playerId, messages);
+      actionBar.start(player);
+      actionBar.joining(player, "Hidden");
+      actionBar.forceJoining(player, "Hidden");
+      actionBar.dequeued(player);
+      Thread.sleep(100);
+
+      assertFalse(actionBar.isRunning(playerId));
+      assertTrue(messages.isEmpty());
     } finally {
       scheduler.shutdownNow();
     }

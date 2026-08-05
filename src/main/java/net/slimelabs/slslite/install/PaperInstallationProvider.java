@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.function.Consumer;
 import net.slimelabs.slslite.BuildInfo;
 import net.slimelabs.slslite.software.SoftwareProfile;
@@ -61,9 +62,10 @@ public final class PaperInstallationProvider implements SoftwareInstallationProv
   public InstallationArtifact install(
       SoftwareProfile profile, String version, Path stagingDirectory, Consumer<String> log)
       throws Exception {
-    PaperDownload download = resolve(version, profile.channel().name());
+    OptionalLong requestedBuild = profile.paperBuildForVersion(version);
+    PaperDownload download = resolve(version, profile.channel().name(), requestedBuild);
     log.accept(
-        "Selected "
+        (requestedBuild.isPresent() ? "Selected pinned " : "Selected newest allowed ")
             + download.channel().toLowerCase()
             + " Paper build "
             + download.build()
@@ -100,7 +102,8 @@ public final class PaperInstallationProvider implements SoftwareInstallationProv
     return new InstallationArtifact(actualSize, "SHA-256", actualHash);
   }
 
-  private PaperDownload resolve(String version, String channel) throws Exception {
+  private PaperDownload resolve(String version, String channel, OptionalLong requestedBuild)
+      throws Exception {
     String encoded = URLEncoder.encode(version, StandardCharsets.UTF_8);
     URI endpoint = api.resolve(encoded + "/builds");
     HttpResponse<InputStream> response =
@@ -122,14 +125,12 @@ public final class PaperInstallationProvider implements SoftwareInstallationProv
     Map<?, ?> selected = null;
     String selectedChannel = null;
     long selectedBuild = -1;
+    boolean pinnedBuildExistsOutsideChannel = false;
     for (Object value : builds) {
       if (!(value instanceof Map<?, ?> build)) {
         continue;
       }
       String buildChannel = String.valueOf(build.get("channel"));
-      if (!channelAllowed(channel, buildChannel)) {
-        continue;
-      }
       String buildId = required(build, "id");
       long buildNumber;
       try {
@@ -140,6 +141,15 @@ public final class PaperInstallationProvider implements SoftwareInstallationProv
       }
       if (buildNumber < 0) {
         throw new SoftwareInstallationException("Paper build has a negative ID: " + buildId);
+      }
+      if (requestedBuild.isPresent() && buildNumber != requestedBuild.getAsLong()) {
+        continue;
+      }
+      if (!channelAllowed(channel, buildChannel)) {
+        if (requestedBuild.isPresent()) {
+          pinnedBuildExistsOutsideChannel = true;
+        }
+        continue;
       }
       if (selected == null || buildNumber > selectedBuild) {
         selectedBuild = buildNumber;
@@ -159,6 +169,21 @@ public final class PaperInstallationProvider implements SoftwareInstallationProv
           url,
           Long.parseLong(String.valueOf(artifact.get("size"))),
           required(checksums, "sha256").toLowerCase());
+    }
+    if (requestedBuild.isPresent()) {
+      String requested = Long.toString(requestedBuild.getAsLong());
+      if (pinnedBuildExistsOutsideChannel) {
+        throw new SoftwareInstallationException(
+            "Pinned Paper build "
+                + requested
+                + " for exact version "
+                + version
+                + " is outside the configured "
+                + channel.toLowerCase()
+                + " channel");
+      }
+      throw new SoftwareInstallationException(
+          "Pinned Paper build " + requested + " is unavailable for exact version " + version);
     }
     throw new SoftwareInstallationException(
         "No Paper build compatible with the "

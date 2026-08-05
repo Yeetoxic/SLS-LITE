@@ -25,6 +25,7 @@ import java.util.concurrent.TimeoutException;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.blueprint.VSLSBlueprintAnnotations;
+import net.slimelabs.slslite.config.TransferActionBarConfig;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
@@ -116,10 +117,31 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         blueprints,
         instances,
         queueTimeout,
+        logger,
+        detailLog,
+        blueprintSelection,
+        TransferActionBarConfig.defaults());
+  }
+
+  public LocalJoinService(
+      ProxyServer proxy,
+      BlueprintRepository blueprints,
+      ServerController instances,
+      Duration queueTimeout,
+      Logger logger,
+      SLSDetailLog detailLog,
+      BlueprintSelectionStrategy blueprintSelection,
+      TransferActionBarConfig actionBarConfig) {
+    this(
+        proxy,
+        blueprints,
+        instances,
+        queueTimeout,
         Executors.newSingleThreadScheduledExecutor(threadFactory()),
         logger,
         detailLog,
-        blueprintSelection);
+        blueprintSelection,
+        actionBarConfig);
   }
 
   LocalJoinService(
@@ -168,6 +190,28 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       Logger logger,
       SLSDetailLog detailLog,
       BlueprintSelectionStrategy blueprintSelection) {
+    this(
+        proxy,
+        blueprints,
+        instances,
+        queueTimeout,
+        scheduler,
+        logger,
+        detailLog,
+        blueprintSelection,
+        TransferActionBarConfig.defaults());
+  }
+
+  LocalJoinService(
+      ProxyServer proxy,
+      BlueprintRepository blueprints,
+      ServerController instances,
+      Duration queueTimeout,
+      ScheduledExecutorService scheduler,
+      Logger logger,
+      SLSDetailLog detailLog,
+      BlueprintSelectionStrategy blueprintSelection,
+      TransferActionBarConfig actionBarConfig) {
     if (queueTimeout.isZero() || queueTimeout.isNegative()) {
       throw new IllegalArgumentException("queueTimeout must be positive");
     }
@@ -176,7 +220,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     this.instances = instances;
     this.queueTimeout = queueTimeout;
     this.scheduler = scheduler;
-    this.actionBar = new TransferActionBar(scheduler);
+    this.actionBar = new TransferActionBar(scheduler, actionBarConfig);
     this.timingReporter = new JoinTimingReporter(instances, logger, detailLog);
     this.blueprintSelection =
         java.util.Objects.requireNonNull(blueprintSelection, "blueprintSelection");

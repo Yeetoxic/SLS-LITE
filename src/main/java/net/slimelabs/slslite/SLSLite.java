@@ -258,7 +258,8 @@ public final class SLSLite implements SLSLiteApiProvider {
               logger,
               detailLog,
               net.slimelabs.slslite.velocity.BlueprintSelectionStrategy.forMode(
-                  configuration.get().blueprintSelectionMode()));
+                  configuration.get().blueprintSelectionMode()),
+              configuration.get().transferActionBar());
       joinActions = new BlueprintJoinActionService(instanceManager, logger);
       LobbyProvider primaryLobby =
           new LocalLobbyProvider(

@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import net.slimelabs.slslite.config.ConfigurationException;
 import org.junit.jupiter.api.Test;
@@ -74,7 +75,78 @@ class SoftwareProfileRepositoryTest {
     assertEquals(List.of("-Xms128M", "-Xmx{memory_mib}M"), profile.jvmArguments());
     assertEquals(List.of(), profile.serverArguments());
     assertEquals("stop", profile.stopCommand());
+    assertEquals(Map.of(), profile.paperBuildPins());
     assertTrue(Files.isRegularFile(temporaryDirectory.resolve("paper.yml")));
+  }
+
+  @Test
+  void loadsExactPaperBuildPins() throws Exception {
+    write(
+        "paper.yml",
+        """
+                software:
+                  id: paper
+                  source: paper
+                  base_directory: software/paper/{version}
+                  server_jar: paper.jar
+                paper:
+                  build_pins:
+                    "26.2": 92
+                    "1.21.11": 127
+                """);
+
+    SoftwareProfileRepository repository = new SoftwareProfileRepository(temporaryDirectory);
+    repository.reload();
+
+    SoftwareProfile profile = repository.get("paper").orElseThrow();
+    assertEquals(Map.of("26.2", 92L, "1.21.11", 127L), profile.paperBuildPins());
+    assertEquals(92L, profile.paperBuildForVersion("26.2").orElseThrow());
+    assertTrue(profile.paperBuildForVersion("26.1").isEmpty());
+  }
+
+  @Test
+  void rejectsPaperPinsForNonPaperSource() throws Exception {
+    write(
+        "vanilla.yml",
+        """
+                software:
+                  id: vanilla
+                  source: vanilla
+                  base_directory: software/vanilla/{version}
+                  server_jar: server.jar
+                paper:
+                  build_pins: {}
+                """);
+
+    ConfigurationException exception =
+        assertThrows(
+            ConfigurationException.class,
+            () -> new SoftwareProfileRepository(temporaryDirectory).reload());
+
+    assertTrue(exception.getMessage().contains("paper settings require software.source: paper"));
+  }
+
+  @Test
+  void rejectsInvalidPaperBuildPin() throws Exception {
+    write(
+        "paper.yml",
+        """
+                software:
+                  id: paper
+                  source: paper
+                  base_directory: software/paper/{version}
+                  server_jar: paper.jar
+                paper:
+                  build_pins:
+                    "26.2": 0
+                """);
+
+    ConfigurationException exception =
+        assertThrows(
+            ConfigurationException.class,
+            () -> new SoftwareProfileRepository(temporaryDirectory).reload());
+
+    assertTrue(exception.getMessage().contains("paper.build_pins.26.2"));
   }
 
   @Test

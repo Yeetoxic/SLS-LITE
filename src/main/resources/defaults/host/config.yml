@@ -144,6 +144,34 @@ security:
   # after one successful claim. Default: 600 seconds (10 minutes).
   claim_code_expiry_seconds: 600
 
+presentation:
+  transfer_action_bar:
+    # Disable this entire surface when an extension supplies its own transfer
+    # feedback. Text uses bounded MiniMessage; <server> is replaced safely.
+    enabled: true
+    joining: "<green>Joining <server>"
+    force_joining: "<yellow>Force joining <server>"
+    dequeued: "<red>You have been dequeued."
+    # 1-32 bounded MiniMessage frames, cycled while a destination prepares.
+    frames:
+      - "<gold>▇▆▅▃▂▂▂▂▂"
+      - "<gold>▆▇▆▅▃▂▂▂▂"
+      - "<gold>▅▆▇▆▅▃▂▂▂"
+      - "<gold>▃▅▆▇▆▅▃▂▂"
+      - "<gold>▂▃▅▆▇▆▅▃▂"
+      - "<gold>▂▂▃▅▆▇▆▅▃"
+      - "<gold>▂▂▂▃▅▆▇▆▅"
+      - "<gold>▂▂▂▂▃▅▆▇▆"
+      - "<gold>▂▂▂▂▂▃▅▆▇"
+      - "<gold>▂▂▂▂▃▅▆▇▆"
+      - "<gold>▂▂▂▃▅▆▇▆▅"
+      - "<gold>▂▃▅▆▇▆▅▃▂"
+      - "<gold>▃▅▆▇▆▅▃▂▂"
+      - "<gold>▅▆▇▆▅▃▂▂▂"
+      - "<gold>▆▇▆▅▃▂▂▂▂"
+    # Integer from 25 through 2000 milliseconds.
+    frame_interval_millis: 72
+
 lobby:
   # Lobby implementation. Valid values:
   #   velocity - preserve Velocity's native try/forced-host routing. SLS-Limbo

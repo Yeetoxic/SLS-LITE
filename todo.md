@@ -679,13 +679,13 @@ post-release milestone.
       invalid definition from the newly published catalog without stopping or
       mutating instances already running from its previous immutable snapshot;
       reject new starts for that blueprint until a valid definition is loaded.
-- [ ] Add Paper build-selection configuration: keep newest-allowed as the
+- [x] Add Paper build-selection configuration: keep newest-allowed as the
       backward-compatible default and support exact per-Minecraft-version build
       pins. Resolve and verify Paper's published SHA-256 for the selected build,
       report unavailable or mismatched pins clearly, and never silently replace
       a requested pin with a newer build. Cover parsing, selection, installation,
       cache reuse, and failure behavior with tests and operator documentation.
-- [ ] Add host-wide transfer action-bar configuration. Keep the current feedback
+- [x] Add host-wide transfer action-bar configuration. Keep the current feedback
       enabled by default, accept bounded MiniMessage templates for joining,
       force-joining, and dequeue messages, and allow bounded animation frames,
       colors, and frame interval. Validate malformed or excessive presentation

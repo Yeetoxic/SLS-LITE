@@ -112,6 +112,9 @@ public final class SLSConfigRepository {
           YamlValues.optionalMap(root, "detailed_logging", configPath);
       Map<String, Object> forwarding = YamlValues.optionalMap(root, "forwarding", configPath);
       Map<String, Object> security = YamlValues.optionalMap(root, "security", configPath);
+      Map<String, Object> presentation = YamlValues.optionalMap(root, "presentation", configPath);
+      Map<String, Object> transferActionBar =
+          YamlValues.optionalMap(presentation, "transfer_action_bar", "presentation", configPath);
       Map<String, Object> lobby = YamlValues.optionalMap(root, "lobby", configPath);
       Map<String, Object> lobbyRecovery =
           YamlValues.optionalMap(lobby, "recovery", "lobby", configPath);
@@ -144,6 +147,7 @@ public final class SLSConfigRepository {
           "detailed_logging",
           "forwarding",
           "security",
+          "presentation",
           "lobby",
           "storage",
           "paths");
@@ -179,6 +183,17 @@ public final class SLSConfigRepository {
           configPath,
           "allow_insecure_offline_administrators",
           "claim_code_expiry_seconds");
+      YamlValues.requireOnlyKeys(presentation, "presentation", configPath, "transfer_action_bar");
+      YamlValues.requireOnlyKeys(
+          transferActionBar,
+          "presentation.transfer_action_bar",
+          configPath,
+          "enabled",
+          "joining",
+          "force_joining",
+          "dequeued",
+          "frames",
+          "frame_interval_millis");
       YamlValues.requireOnlyKeys(
           lobby,
           "lobby",
@@ -285,6 +300,28 @@ public final class SLSConfigRepository {
       int claimCodeExpirySeconds =
           YamlValues.optionalPositiveInt(
               security, "claim_code_expiry_seconds", DEFAULT_CLAIM_CODE_EXPIRY_SECONDS, configPath);
+      TransferActionBarConfig defaultActionBar = TransferActionBarConfig.defaults();
+      boolean actionBarEnabled =
+          YamlValues.optionalBoolean(
+              transferActionBar, "enabled", defaultActionBar.enabled(), configPath);
+      String actionBarJoining =
+          YamlValues.optionalString(
+              transferActionBar, "joining", defaultActionBar.joining(), configPath);
+      String actionBarForceJoining =
+          YamlValues.optionalString(
+              transferActionBar, "force_joining", defaultActionBar.forceJoining(), configPath);
+      String actionBarDequeued =
+          YamlValues.optionalString(
+              transferActionBar, "dequeued", defaultActionBar.dequeued(), configPath);
+      java.util.List<String> actionBarFrames =
+          YamlValues.optionalStringList(
+              transferActionBar, "frames", defaultActionBar.frames(), configPath);
+      int actionBarFrameInterval =
+          YamlValues.optionalPositiveInt(
+              transferActionBar,
+              "frame_interval_millis",
+              defaultActionBar.frameIntervalMillis(),
+              configPath);
       String lobbyMode = YamlValues.optionalString(lobby, "mode", DEFAULT_LOBBY_MODE, configPath);
       String lobbyRegistry =
           YamlValues.optionalString(lobby, "registry", DEFAULT_LOBBY_REGISTRY, configPath);
@@ -403,6 +440,13 @@ public final class SLSConfigRepository {
                 detailLogRetainedFiles,
                 detailLogQueueCapacity,
                 detailLogRedactPaths),
+            new TransferActionBarConfig(
+                actionBarEnabled,
+                actionBarJoining,
+                actionBarForceJoining,
+                actionBarDequeued,
+                actionBarFrames,
+                actionBarFrameInterval),
             instancesDirectory);
       } catch (IllegalArgumentException exception) {
         throw YamlValues.error(configPath, exception.getMessage());

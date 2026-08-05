@@ -99,6 +99,7 @@ class SLSConfigRepositoryTest {
     assertEquals(3, config.detailedLogging().retainedFiles());
     assertEquals(1024, config.detailedLogging().queueCapacity());
     assertEquals(true, config.detailedLogging().redactPaths());
+    assertEquals(TransferActionBarConfig.defaults(), config.transferActionBar());
     assertEquals(
         temporaryDirectory.resolve("instances").toAbsolutePath().normalize(),
         config.instancesDirectory());
@@ -112,6 +113,47 @@ class SLSConfigRepositoryTest {
     repository.initialize();
 
     assertEquals(DetailedLoggingConfig.defaults(), repository.get().detailedLogging());
+  }
+
+  @Test
+  void loadsBoundedTransferActionBarPresentation() throws Exception {
+    writeConfig(
+        """
+                presentation:
+                  transfer_action_bar:
+                    enabled: false
+                    joining: "<aqua>To <server>"
+                    force_joining: "<yellow>Forced <server>"
+                    dequeued: "<gray>Cancelled"
+                    frames: ["<red>A", "<blue>B"]
+                    frame_interval_millis: 250
+                """);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.reload();
+
+    TransferActionBarConfig actionBar = repository.get().transferActionBar();
+    assertEquals(false, actionBar.enabled());
+    assertEquals("<aqua>To <server>", actionBar.joining());
+    assertEquals(List.of("<red>A", "<blue>B"), actionBar.frames());
+    assertEquals(250, actionBar.frameIntervalMillis());
+  }
+
+  @Test
+  void rejectsExcessiveTransferActionBarInterval() throws Exception {
+    writeConfig(
+        """
+                presentation:
+                  transfer_action_bar:
+                    frame_interval_millis: 2001
+                """);
+
+    ConfigurationException exception =
+        assertThrows(
+            ConfigurationException.class,
+            () -> new SLSConfigRepository(temporaryDirectory).reload());
+
+    assertTrue(exception.getMessage().contains("frame interval"));
   }
 
   @Test

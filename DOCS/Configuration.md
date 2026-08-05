@@ -54,6 +54,12 @@ fixture scripts rather than in these product defaults.
 | `forwarding.secret_file` | `forwarding.secret` | Non-blank relative path from the Velocity working directory. |
 | `security.allow_insecure_offline_administrators` | `false` | Permit UUID-based built-in admins on an offline proxy. Unsafe for public use. |
 | `security.claim_code_expiry_seconds` | `600` | Positive one-time administrator-code lifetime. |
+| `presentation.transfer_action_bar.enabled` | `true` | Enables built-in preparation, joining, force-joining, and dequeue feedback. Disable it to leave the action bar entirely to an extension. |
+| `presentation.transfer_action_bar.joining` | `<green>Joining <server>` | Bounded MiniMessage template; `<server>` is inserted as unparsed text. |
+| `presentation.transfer_action_bar.force_joining` | `<yellow>Force joining <server>` | Bounded MiniMessage template for forced transfers. |
+| `presentation.transfer_action_bar.dequeued` | `<red>You have been dequeued.` | Bounded MiniMessage dequeue template. |
+| `presentation.transfer_action_bar.frames` | `15 entries` | The canonical SLS animation; accepts `1..32` bounded MiniMessage frames. |
+| `presentation.transfer_action_bar.frame_interval_millis` | `72` | Animation interval from `25..2000` milliseconds. |
 | `lobby.mode` | `velocity` | `velocity`, `external`, or `managed`. `velocity` preserves native `try` and forced-host routing. |
 | `lobby.auto_start` | `true` | Managed mode only. `false` prevents preparation, resume, and recovery of the primary; enabled SLS-Limbo handles lobby routing until the option is restored and Velocity restarts. |
 | `lobby.registry` | `lobby` | Managed-lobby blueprint type. Ignored by velocity and external modes. |
