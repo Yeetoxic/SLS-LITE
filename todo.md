@@ -810,23 +810,34 @@ post-release milestone.
 - [x] Publish the candidate artifact and checksums to the selected external
       testers.
 
-### 4.3 Candidate Feedback and `v0.1.0-rc.2`
+### 4.3 Release-Candidate Feedback and Stabilization
 
-- [ ] Triage external findings as release-blocking, scheduled follow-up, or
-      rejected with rationale.
+Treat this as the umbrella testing period between the first candidate and the
+final release. Give every candidate its own `#### v0.1.0-rc.N` subsection with a
+bounded scope, implementation tasks, verification, publication, and observed
+feedback. Preserve every earlier tag, artifact, source revision, and checksum as
+an immutable baseline. If testing finds work after a candidate is published,
+add a new peer subsection for `rc.3`, `rc.4`, or the next candidate rather than
+editing the published candidate's scope or evidence. Publishing or completing
+any single candidate does not complete Stage 4.3.
+
+#### `v0.1.0-rc.2`
+
+Scope is frozen to the checklist below. Add work to this candidate only for a
+release-blocking regression, security or data-loss defect, or a major external
+tester complaint that the maintainer explicitly approves as an RC.2 amendment.
+Record every amendment and its rationale. Route all other newly accepted feedback
+to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
+
+- [ ] Triage external findings received since `v0.1.0-rc.1` as blocking for
+      `rc.2`, scheduled for a later candidate or post-release milestone, or
+      rejected with a recorded rationale.
 - [ ] Preserve published `v0.1.0-rc.1` as the immutable first-candidate
-      baseline. Implement the accepted Stage 4.3 tester feedback below for
+      baseline. Implement the accepted tester feedback below for
       `v0.1.0-rc.2`, update versioned artifacts and release notes only after the
       batch passes its required regression and clean-install checks, and publish
       it through the approved release-candidate workflow with matching source
       and checksums.
-- [ ] Continue the same immutable candidate cycle for `rc.3`, `rc.4`, and later
-      candidates whenever additional accepted feedback or blockers require
-      changes. Give each candidate a bounded documented scope, preserve every
-      prior tag/artifact/checksum, repeat affected regression and clean-install
-      evidence, and return it to testers. Advance to Stage 5 only after the
-      current candidate has no known release blockers and the maintainer
-      explicitly approves promotion; `rc.2` is not presumed final.
 - [ ] Add the tester-requested host-wide `software.auto_accept_eula` convenience
       setting to `config.yml`, defaulting to `false`. Treat `true` as the
       operator's explicit acceptance for automatic Paper/vanilla installation
@@ -856,6 +867,22 @@ post-release milestone.
       malformed/future versions, reference-file collision and symlink handling,
       atomic reference installation, deprecated aliases, conflicts, and fresh
       `rc.2` generation.
+- [ ] Complete and verify vSLS-compatible administrator force joining. Preserve
+      `/sls join player <player> --force` as a direct join to that player's exact
+      managed instance, require administrator join access, and make the feedback
+      unambiguously identify the command sender as the player being transferred.
+      Capacity bypass must apply to both SLS-LITE's blueprint admission limit and
+      the managed backend's matching `max-players` enforcement; it must not bypass
+      permissions, protocol compatibility, instance readiness, registration,
+      draining/stopping state, process or memory admission, or connection
+      failures. Do not depend on the proxy administrator also being a Paper
+      operator, do not expose managed backends, and do not silently increase the
+      blueprint's ordinary public capacity. First pin the exact full-SLS/vSLS
+      behavior and choose a bounded backend-safe mechanism, then test it on the
+      real local Velocity/Pterodactyl/Paper fixture with a one-player blueprint:
+      ordinary joining must reject the second player, an authorized administrator
+      must enter the same full instance, an unauthorized player must fail, and
+      the backend must still enforce the public limit for every normal route.
 - [ ] Replace the scattered first-run forwarding instructions with one
       copy-and-paste onboarding path for a real Velocity/Paper network and one
       explicitly insecure isolated-development path. Show the matching
@@ -923,6 +950,20 @@ post-release milestone.
       become another wall of text. Test clean production, isolated development,
       incomplete first-run, malformed definition, offline optional provider,
       and restricted Pterodactyl configurations.
+- [ ] Add a bounded, non-mutating readiness preflight for every loaded blueprint
+      so obvious first-start failures are visible before a player waits in the
+      queue. Check referenced base/software identity, provider availability and
+      effective EULA acceptance, selected Java executable, volume/copy source
+      existence and expected file type, path confinement, and required storage
+      capability without downloading software, assembling an instance, mounting,
+      hashing or recursively sizing large trees. Keep valid definitions loaded
+      when a missing external input may be supplied later, but classify them as
+      ready, action-needed, or temporarily unavailable; show bounded aggregate
+      counts in the startup checklist and exact per-blueprint reasons through
+      blueprint inspection and the detailed log. Recompute after definition
+      reload and verify that symlinks, inaccessible paths, offline providers,
+      missing runtimes, optional strategies, and large catalogs remain safe and
+      bounded.
 - [ ] Make the change-application model explicit wherever operators edit or
       reload definitions. Document and report that blueprint/software reloads
       affect future assembly, persistent restart reuses the existing instance,
@@ -934,6 +975,38 @@ post-release milestone.
       plugin-JAR replacement, source-world changes, running-instance isolation,
       persistent restart, reset, rejected sibling definitions, and restart-only
       host configuration.
+- [ ] Give players and operators bounded phase feedback during slow first-time
+      joins and starts. Distinguish queueing, software installation, instance
+      assembly, process startup, backend readiness, transfer, and failure without
+      exposing paths or flooding chat/console; do not invent completion estimates.
+      Reuse the existing configurable/disableable transfer presentation where it
+      is suitable, retain detailed progress in SLS-LITE logs, and provide one
+      actionable terminal message with the correlation or instance identifier
+      needed for support. Test shared installation ownership, concurrent joiners,
+      cancellation/dequeue, timeout, disconnect, disabled presentation, and each
+      failure phase.
+- [ ] Make managed-output commands discoverable by separating their user-facing
+      purposes: retain `/sls logs <server|this> [page] [lines]` for bounded
+      retained output, add canonical `/sls logs <server|this> --follow` for live
+      chat output and targetless `/sls logs --unfollow` to stop it, and present
+      `/sls console <server|this> <command...>` solely as server-console input.
+      Reuse one streaming engine rather than duplicating subscriptions, grant
+      the canonical follow forms through `sls.command.logs` without requiring
+      the more powerful console-input permission, and retain the existing
+      `/sls console ... --follow|--unfollow` forms as documented compatibility
+      aliases. Improve missing/invalid console usage, help, tab completion, and
+      start/move/stop feedback so each points to the right operation; offer a
+      clickable stop action to players where Adventure permits it. Preserve one
+      active follow per sender and automatic cleanup on disconnect, instance
+      stop, permission loss, plugin shutdown, or switching targets. Add a hard
+      global follower bound plus per-session line/batch/rate limits, truncation,
+      retention-loss summaries, and overload coalescing so a noisy child cannot
+      flood chat or create unbounded virtual threads. Test player and Velocity
+      console senders, granular versus umbrella permissions, `this`, stopped or
+      deleted targets, targetless unfollow, alias compatibility, concurrent
+      followers, switching, output floods, disconnect, shutdown, and exact
+      command/documentation contract. Keep external windows, web consoles, and
+      panel presentation outside core; extensions may provide those interfaces.
 - [ ] Reopen candidate scope for safe per-file persistent state and publish the
       result as a new release candidate rather than changing `rc.1`. Audit full
       SLS file-shaped volume behavior, then design and implement root-file state
@@ -955,12 +1028,32 @@ post-release milestone.
       reconciliation, backup-boundary, documentation, API-compatibility, clean
       installation, upgrade, distribution-smoke, and real-client checks for the
       replacement candidate.
+- [ ] Rehearse the complete `v0.1.0-rc.1` to `v0.1.0-rc.2` operator upgrade on a
+      disposable copy of a realistic installation containing a customized
+      unversioned config, blueprints, software definitions, volume data, logs,
+      and stopped plus running/persistent instance metadata. Verify the original
+      config and user data are not rewritten, new defaults remain safe, reference
+      configuration and migration guidance are accurate, persistent ownership and
+      recovery still work, and the Java API/distribution consumers remain
+      compatible. Define and test the supported rollback boundary before
+      publication: never promise an in-place downgrade when RC.2-only state makes
+      it unsafe, preserve a recoverable pre-upgrade copy, and give exact restore
+      instructions instead of silently coercing newer metadata. Repeat the clean
+      install beside the upgrade fixture and record artifact checksums for both.
 - [ ] Fix every candidate blocker and repeat its automated, storage, lifecycle,
       protocol, and real-client scenarios.
 
-Acceptance: external testers receive reproducible, documented
-`v0.1.0-rc.2` artifacts whose known limitations and compatibility boundaries
-match observed behavior, with `v0.1.0-rc.1` retained as the prior baseline.
+`v0.1.0-rc.2` exit: external testers receive reproducible, documented artifacts
+whose known limitations and compatibility boundaries match observed behavior,
+with `v0.1.0-rc.1` retained as the prior baseline. New findings after publication
+move into a new release-candidate subsection.
+
+Stage 4.3 acceptance: the latest published candidate has completed its planned
+external testing period; no known release blockers remain; every accepted
+finding is fixed and verified or explicitly assigned to a later milestone with
+rationale; the candidate's source, artifact, checksum, documentation, and
+evidence agree; the build is frozen as the stable release baseline; and the
+maintainer explicitly approves moving to Stage 5.
 
 ## Stage 5: Release
 
