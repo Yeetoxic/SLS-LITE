@@ -6,13 +6,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.velocitypowered.api.proxy.Player;
+import java.lang.reflect.Proxy;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
+import net.slimelabs.slslite.instance.ManagedInstance;
+import net.slimelabs.slslite.instance.ManagedInstanceTestFactory;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import org.junit.jupiter.api.Test;
 
@@ -100,6 +107,77 @@ class CommandMessagesTest {
     String directDetails = plainText(CommandMessages.blueprintDetails(blueprint, List.of()));
     assertTrue(directDetails.contains("Blueprint: minigame/blastoff"));
     assertFalse(directDetails.contains("Click to prepare or join"));
+  }
+
+  @Test
+  void fullServerConfirmationClearlyIdentifiesPlayersAndRunsTheForceCommand() {
+    Blueprint blueprint =
+        new Blueprint(
+            "arena",
+            "Arena",
+            "minigame",
+            "paper-auto",
+            "1.21.8",
+            1024,
+            1,
+            1,
+            false,
+            java.util.Map.of(),
+            List.of());
+    ManagedInstance instance =
+        ManagedInstanceTestFactory.ready(
+            "minigame.arena.01", blueprint, 25600, temporaryPath("confirmation"));
+    Player joiningPlayer = player("Administrator");
+    Player targetPlayer = player("TargetPlayer");
+
+    Component message =
+        CommandMessages.fullServerJoinConfirmation(joiningPlayer, targetPlayer, instance, 1, 1);
+
+    assertEquals(
+        "[SLS] Blueprint capacity reached: minigame.arena.01 is full (1/1).\n"
+            + "Joining Administrator with TargetPlayer will exceed this blueprint's matchmaking limit. "
+            + "[Join Anyway]",
+        plainText(message));
+    Component confirmation = findText(message, "[Join Anyway]");
+    assertNotNull(confirmation);
+    assertNotNull(confirmation.hoverEvent());
+    assertEquals(ClickEvent.Action.RUN_COMMAND, confirmation.clickEvent().action());
+    assertEquals(
+        "/sls join player TargetPlayer --force",
+        ((ClickEvent.Payload.Text) confirmation.clickEvent().payload()).value());
+  }
+
+  private static Path temporaryPath(String name) {
+    return Path.of(System.getProperty("java.io.tmpdir"), "sls-lite-command-message-test", name);
+  }
+
+  private static Player player(String username) {
+    UUID playerId =
+        UUID.nameUUIDFromBytes(username.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    return (Player)
+        Proxy.newProxyInstance(
+            Player.class.getClassLoader(),
+            new Class<?>[] {Player.class},
+            (ignored, method, arguments) ->
+                switch (method.getName()) {
+                  case "getUsername" -> username;
+                  case "getUniqueId" -> playerId;
+                  case "getCurrentServer" -> java.util.Optional.empty();
+                  default -> null;
+                });
+  }
+
+  private static Component findText(Component component, String text) {
+    if (component instanceof TextComponent textComponent && text.equals(textComponent.content())) {
+      return component;
+    }
+    for (Component child : component.children()) {
+      Component match = findText(child, text);
+      if (match != null) {
+        return match;
+      }
+    }
+    return null;
   }
 
   private static String plainText(Component component) {

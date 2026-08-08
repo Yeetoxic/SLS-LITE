@@ -14,11 +14,23 @@ public final class ServerPropertiesEditor {
   public static void applyManagedNetworkSettings(
       Path instanceDirectory, int port, int maxPlayers, Map<String, String> configuredProperties)
       throws IOException {
+    applyManagedNetworkSettings(
+        instanceDirectory, port, maxPlayers, maxPlayers, configuredProperties);
+  }
+
+  public static void applyManagedNetworkSettings(
+      Path instanceDirectory,
+      int port,
+      int publicMaxPlayers,
+      int backendMaxPlayers,
+      Map<String, String> configuredProperties)
+      throws IOException {
     if (port < 1024 || port > 65535) {
       throw new IllegalArgumentException("port must be between 1024 and 65535");
     }
-    if (maxPlayers <= 0) {
-      throw new IllegalArgumentException("maxPlayers must be positive");
+    if (publicMaxPlayers <= 0 || backendMaxPlayers < publicMaxPlayers) {
+      throw new IllegalArgumentException(
+          "backendMaxPlayers must be at least the positive publicMaxPlayers limit");
     }
 
     Path root = instanceDirectory.toAbsolutePath().normalize();
@@ -40,13 +52,13 @@ public final class ServerPropertiesEditor {
                 key,
                 value
                     .replace("{port}", Integer.toString(port))
-                    .replace("{max_players}", Integer.toString(maxPlayers))));
+                    .replace("{max_players}", Integer.toString(publicMaxPlayers))));
 
     // Proxy-owned values must win over blueprint configuration.
     properties.setProperty("server-ip", "127.0.0.1");
     properties.setProperty("server-port", Integer.toString(port));
     properties.setProperty("online-mode", "false");
-    properties.setProperty("max-players", Integer.toString(maxPlayers));
+    properties.setProperty("max-players", Integer.toString(backendMaxPlayers));
 
     Path temporaryPath = ConfinedConfigFile.createTemporary(propertiesPath);
     try {

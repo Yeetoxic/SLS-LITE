@@ -14,6 +14,9 @@ const client = minecraft.createClient({
 });
 
 let settled = false;
+let loggedIn = false;
+let backendReady = false;
+let commandsSent = false;
 const matched = new Set();
 const timeout = setTimeout(
   () => finish(new Error(
@@ -23,16 +26,15 @@ const timeout = setTimeout(
 );
 
 client.on("login", () => {
-  let delay = 500;
-  for (const command of options.commands) {
-    // Let minecraft-protocol select the version-correct chat or command
-    // packet; writing the legacy `chat` packet directly corrupts modern
-    // protocol streams once ViaVersion remaps them.
-    setTimeout(() => client.chat(`/${command}`), delay);
-    delay += 500;
-  }
+  loggedIn = true;
+  maybeSendCommands();
 });
 client.on("packet", (packet, metadata) => {
+  if (["custom_payload", "plugin_message"].includes(metadata.name)
+      && (packet.channel === "minecraft:brand" || packet.channel === "MC|Brand")) {
+    backendReady = true;
+    maybeSendCommands();
+  }
   if (!["chat", "system_chat", "profileless_chat"].includes(metadata.name)) {
     return;
   }
@@ -49,6 +51,21 @@ client.on("packet", (packet, metadata) => {
     finish(null);
   }
 });
+
+function maybeSendCommands() {
+  if (commandsSent || !loggedIn || !backendReady || typeof client.chat !== "function") {
+    return;
+  }
+  commandsSent = true;
+  let delay = 500;
+  for (const command of options.commands) {
+    // Let minecraft-protocol select the version-correct chat or command
+    // packet; writing the legacy `chat` packet directly corrupts modern
+    // protocol streams once ViaVersion remaps them.
+    setTimeout(() => client.chat(`/${command}`), delay);
+    delay += 500;
+  }
+}
 client.on("error", error => finish(error));
 client.on("end", reason => {
   if (!settled) {

@@ -2,7 +2,7 @@
 
 [Documentation home](README.md)
 
-<!-- sls-command-contract-sha256:7e2d50bf0b261b2bf563d63296ce93f08236f82713a486708e975f07c1c9e947 -->
+<!-- sls-command-contract-sha256:88f18ed1c0303ba683d77338b0a3dbea368d14c2d264bffdcde8922dd86c7ad4 -->
 
 SLS-LITE uses `/sls` and mirrors the pinned vSLS command tree where the local
 operation exists. Composite instance IDs use `<blueprint>.<short-id>`. For
@@ -183,8 +183,20 @@ different follow, or proxy shutdown.
 /sls reset <protected-lobby> --force
 ```
 
-- Force join requires administrative `join` access and bypasses capacity for a
-  direct player-to-player instance join.
+- Force join requires administrative `join` access. It transfers the command
+  sender to the target player's exact managed instance; it never moves the
+  named target player. The override bypasses only that blueprint's public
+  player limit. It does not bypass readiness, registration, draining/stopping
+  state, protocol compatibility, backend technical capacity, or connection
+  failures.
+- When an administrator uses the ordinary form against a full target,
+  SLS-LITE identifies both players and offers a clickable `[Join Anyway]`
+  confirmation. Non-administrators receive the normal full-instance error.
+- SLS-LITE reserves force admission before requesting the transfer. Ordinary
+  matchmaking, direct joins, and Velocity `/server` connections remain subject
+  to the public blueprint limit, including while another connection is in
+  flight. A bounded backend-only slot ceiling permits the override without
+  changing the capacity advertised by `{max_players}` or used by matchmaking.
 - Kill always means immediate process termination. Its pinned upstream `force`
   modifier requests Velocity unregistration even if the termination request
   itself fails; it never releases process, port, memory, or storage ownership

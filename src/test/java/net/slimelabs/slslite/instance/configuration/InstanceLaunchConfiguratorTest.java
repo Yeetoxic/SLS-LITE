@@ -59,7 +59,7 @@ class InstanceLaunchConfiguratorTest {
     assertEquals("blueprint-game.abc123-25571", properties.getProperty("motd"));
     assertEquals("hard", properties.getProperty("difficulty"));
     assertEquals("25571", properties.getProperty("server-port"));
-    assertEquals("42", properties.getProperty("max-players"));
+    assertEquals("43", properties.getProperty("max-players"));
     assertEquals("false", properties.getProperty("online-mode"));
     assertEquals("feature=512\nuntouched=yes\n", Files.readString(instance.resolve("custom.conf")));
     Map<String, Object> settings = map(yaml(instance.resolve("bukkit.yml")).get("settings"));
@@ -90,6 +90,26 @@ class InstanceLaunchConfiguratorTest {
     assertFalse(Files.exists(instance.resolve("spigot.yml")));
     assertFalse(Files.exists(instance.resolve("config/paper-global.yml")));
     assertTrue(Files.isRegularFile(instance.resolve("server.properties")));
+  }
+
+  @Test
+  void separatesPublicCapacityPlaceholdersFromBackendForceJoinHeadroom() throws Exception {
+    Path instance = temporaryDirectory.resolve("instances/game.capacity");
+    Files.createDirectories(instance);
+    Blueprint blueprint = blueprint(Map.of("public-capacity", "{max_players}"), Map.of(), Map.of());
+    InstanceLaunchConfigurator configurator =
+        new InstanceLaunchConfigurator(
+            new ForwardingConfig(
+                ForwardingMode.NONE, false, temporaryDirectory.resolve("missing.secret")),
+            new JavaJarProcessSpecFactory(temporaryDirectory),
+            100);
+
+    configurator.configure(
+        profile(SoftwareConfigurator.GENERIC), blueprint, "game.capacity", instance, 25572);
+
+    Properties properties = properties(instance.resolve("server.properties"));
+    assertEquals("42", properties.getProperty("public-capacity"));
+    assertEquals("100", properties.getProperty("max-players"));
   }
 
   @Test

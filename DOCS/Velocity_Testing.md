@@ -107,10 +107,32 @@ wait for that limit.
 3. Disconnect while queued; the request must be removed.
 4. Test a blueprint at capacity and confirm matchmaking starts another instance
    when its `max_instances` permits one.
-5. Confirm an administrator can use the supported force join path while a
-   normal player cannot bypass capacity.
+5. With a one-player blueprint, connect the target player and verify a second
+   ordinary matchmaking or `/server` route is rejected at the public limit.
+   Then run `/sls join player <target> --force` as an authorized administrator:
+   the administrator (not the target) must enter that same instance. Repeat as
+   an unauthorized player and verify permission denial. Confirm the generated
+   backend `max-players` supplies bounded technical headroom without changing
+   the blueprint's advertised or matchmaking capacity.
 6. Cancel the last request for a queue-created instance and confirm startup is
    stopped only when it reaches a safe lifecycle point.
+
+The repository includes a bounded offline-client check for steps 5 and the
+ordinary direct-join portion of step 4:
+
+```powershell
+node tools/protocol-smoke/force-join-smoke.js `
+  --registry test --blueprint smoke --version 1.21.11
+```
+
+Use it only against the disposable offline fixture. The selected blueprint
+must have `max_players: 1` and `max_instances: 1`, `SLS_FORCE_ADMIN` must be a
+built-in test administrator, and the client protocol must be supported by the
+fixture backend or its compatible Via plugins. The script keeps the target
+connected while it verifies ordinary denial, unauthorized force denial,
+authorized force transfer, and target identity. A real-client `/server` attempt
+remains required for the native server-selection route; unit tests cover its
+race-safe admission gate but do not replace that live check.
 
 ## Lifecycle And Cleanup
 

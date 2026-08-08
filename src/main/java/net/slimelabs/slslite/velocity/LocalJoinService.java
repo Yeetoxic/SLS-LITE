@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
@@ -30,6 +31,7 @@ import net.slimelabs.slslite.config.TransferActionBarConfig;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
+import net.slimelabs.slslite.instance.configuration.ManagedPlayerCapacity;
 import net.slimelabs.slslite.instance.lifecycle.IdleAdmissionControl;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.log.SLSDetailLog;
@@ -49,6 +51,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   private final JoinTimingReporter timingReporter;
   private final BlueprintSelectionStrategy blueprintSelection;
   private final Map<UUID, QueueEntry> queue = new HashMap<>();
+  private final Map<AdmissionKey, PendingAdmission> pendingAdmissions = new HashMap<>();
   private final Set<String> queueOwnedInstances = new java.util.HashSet<>();
   private final Set<String> drainingInstances = new java.util.HashSet<>();
   private volatile java.util.function.Consumer<MatchmakingTransition> matchmakingObserver =
@@ -353,10 +356,13 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                 () ->
                     new InstanceOperationException(
                         "Managed instance is not registered with Velocity: " + instance.id()));
-    if (!force
-        && registered.getPlayersConnected().size() + queuedFor(instance.id())
-            >= instance.blueprint().maxPlayers()) {
-      throw new InstanceOperationException("Instance is full: " + instance.id());
+    int occupiedSlots = occupiedSlots(instance);
+    if (!force && occupiedSlots >= instance.blueprint().maxPlayers()) {
+      throw InstanceOperationException.blueprintCapacity(
+          instance.id(), occupiedSlots, instance.blueprint().maxPlayers());
+    }
+    if (force && backendOccupiedSlots(instance) >= backendPlayerLimit(instance)) {
+      throw new InstanceOperationException("Backend force-join capacity is full: " + instance.id());
     }
     if (force) {
       actionBar.forceJoining(player, instance.id());
@@ -366,14 +372,62 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     JoinPhaseTimings timings = new JoinPhaseTimings(false);
     timings.backendReady();
     timings.transferStarted();
-    CompletableFuture<ConnectionRequestBuilder.Result> connection =
-        player.createConnectionRequest(registered).connect();
+    PendingAdmission admission = reserveAdmission(player.getUniqueId(), instance.id(), force);
+    CompletableFuture<ConnectionRequestBuilder.Result> connection;
+    try {
+      connection = player.createConnectionRequest(registered).connect();
+    } catch (RuntimeException failure) {
+      removeAdmission(admission);
+      throw new InstanceOperationException(
+          "Unable to request connection to managed instance: " + instance.id(), failure);
+    }
     connection.whenComplete(
-        (result, failure) -> timingReporter.connection(instance.id(), timings, result, failure));
+        (result, failure) -> {
+          removeAdmission(admission);
+          timingReporter.connection(instance.id(), timings, result, failure);
+        });
     return new DirectJoin(instance, connection);
   }
 
+  public synchronized ConnectionAdmission admitConnection(Player player, RegisteredServer target) {
+    if (closed) {
+      return ConnectionAdmission.SHUTDOWN;
+    }
+    String instanceId = target.getServerInfo().getName();
+    ManagedInstance instance =
+        instances.getAll().stream()
+            .filter(candidate -> candidate.id().equals(instanceId))
+            .findFirst()
+            .orElse(null);
+    if (instance == null) {
+      return ConnectionAdmission.UNMANAGED;
+    }
+    if (instance.state() != InstanceState.READY) {
+      return ConnectionAdmission.NOT_READY;
+    }
+
+    AdmissionKey key = new AdmissionKey(player.getUniqueId(), instanceId);
+    PendingAdmission pending = pendingAdmissions.get(key);
+    if (pending != null) {
+      return pending.force ? ConnectionAdmission.FORCED : ConnectionAdmission.RESERVED;
+    }
+    QueueEntry queued = queue.get(player.getUniqueId());
+    if (queued != null
+        && queued.state == QueueState.TRANSFERRING
+        && queued.instance.id().equals(instanceId)) {
+      return ConnectionAdmission.RESERVED;
+    }
+    if (occupiedSlots(instance) >= instance.blueprint().maxPlayers()) {
+      return ConnectionAdmission.FULL;
+    }
+    reserveAdmission(player.getUniqueId(), instanceId, false);
+    return ConnectionAdmission.AVAILABLE;
+  }
+
   public void connected(Player player, RegisteredServer server) {
+    synchronized (this) {
+      removeAdmissions(player.getUniqueId());
+    }
     timingReporter.connected(server);
   }
 
@@ -447,6 +501,9 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   }
 
   public void disconnect(UUID playerId) {
+    synchronized (this) {
+      removeAdmissions(playerId);
+    }
     dequeue(playerId, false, MatchmakingTransitionStatus.DISCONNECTED);
   }
 
@@ -470,6 +527,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       entries = List.copyOf(queue.values());
       entries.forEach(entry -> entry.state = QueueState.CANCELLED);
       queue.clear();
+      pendingAdmissions.clear();
       drainingInstances.clear();
     }
     entries.forEach(
@@ -545,7 +603,56 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   private int occupiedSlots(ManagedInstance instance) {
     int connected =
         proxy.getServer(instance.id()).map(server -> server.getPlayersConnected().size()).orElse(0);
-    return connected + queuedFor(instance.id());
+    return connected + queuedFor(instance.id()) + pendingAdmissions(instance.id(), false);
+  }
+
+  private int backendOccupiedSlots(ManagedInstance instance) {
+    int connected =
+        proxy.getServer(instance.id()).map(server -> server.getPlayersConnected().size()).orElse(0);
+    return connected + queuedFor(instance.id()) + pendingAdmissions(instance.id(), true);
+  }
+
+  private int backendPlayerLimit(ManagedInstance instance) {
+    int proxyLimit =
+        proxy.getConfiguration() == null ? 0 : proxy.getConfiguration().getShowMaxPlayers();
+    return ManagedPlayerCapacity.backendLimit(instance.blueprint().maxPlayers(), proxyLimit);
+  }
+
+  private int pendingAdmissions(String instanceId, boolean includeForced) {
+    return (int)
+        pendingAdmissions.values().stream()
+            .filter(admission -> admission.key.instanceId().equals(instanceId))
+            .filter(admission -> includeForced || !admission.force)
+            .count();
+  }
+
+  private PendingAdmission reserveAdmission(UUID playerId, String instanceId, boolean force) {
+    removeAdmissions(playerId);
+    AdmissionKey key = new AdmissionKey(playerId, instanceId);
+    PendingAdmission admission = new PendingAdmission(key, force);
+    pendingAdmissions.put(key, admission);
+    try {
+      scheduler.schedule(
+          () -> {
+            synchronized (LocalJoinService.this) {
+              pendingAdmissions.remove(key, admission);
+            }
+          },
+          15,
+          TimeUnit.SECONDS);
+    } catch (RejectedExecutionException failure) {
+      pendingAdmissions.remove(key, admission);
+      throw failure;
+    }
+    return admission;
+  }
+
+  private synchronized void removeAdmission(PendingAdmission admission) {
+    pendingAdmissions.remove(admission.key, admission);
+  }
+
+  private void removeAdmissions(UUID playerId) {
+    pendingAdmissions.keySet().removeIf(key -> key.playerId().equals(playerId));
   }
 
   private int queuedFor(String instanceId) {
@@ -745,6 +852,26 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
   public record DirectJoin(
       ManagedInstance instance, CompletableFuture<ConnectionRequestBuilder.Result> connection) {}
 
+  public enum ConnectionAdmission {
+    UNMANAGED(true),
+    AVAILABLE(true),
+    RESERVED(true),
+    FORCED(true),
+    FULL(false),
+    NOT_READY(false),
+    SHUTDOWN(false);
+
+    private final boolean allowed;
+
+    ConnectionAdmission(boolean allowed) {
+      this.allowed = allowed;
+    }
+
+    public boolean allowed() {
+      return allowed;
+    }
+  }
+
   public record MatchmakingTransition(
       QueueTicket ticket,
       boolean instanceCreated,
@@ -824,6 +951,18 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     CANCELLED,
     TIMED_OUT,
     FAILED
+  }
+
+  private record AdmissionKey(UUID playerId, String instanceId) {}
+
+  private static final class PendingAdmission {
+    private final AdmissionKey key;
+    private final boolean force;
+
+    private PendingAdmission(AdmissionKey key, boolean force) {
+      this.key = key;
+      this.force = force;
+    }
   }
 
   public static final class QueueCancelledException extends RuntimeException {

@@ -9,6 +9,7 @@ import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.player.ServerConnectedEvent;
+import com.velocitypowered.api.event.player.ServerPreConnectEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Dependency;
@@ -281,6 +282,7 @@ public final class SLSLite implements SLSLiteApiProvider {
               installationService,
               detailLog,
               configuration.get().diagnosticRetention().consoleTailLines(),
+              proxy.getConfiguration().getShowMaxPlayers(),
               logger);
       joinService =
           new LocalJoinService(
@@ -542,6 +544,43 @@ public final class SLSLite implements SLSLiteApiProvider {
     event.setResult(
         KickedFromServerEvent.RedirectPlayer.create(
             selected, Component.text("Waiting in SLS-Limbo for the destination to recover.")));
+  }
+
+  @Subscribe(order = PostOrder.LAST)
+  public void onServerPreConnect(ServerPreConnectEvent event) {
+    if (joinService == null || !event.getResult().isAllowed()) {
+      return;
+    }
+    var target = event.getResult().getServer().orElse(null);
+    if (target == null) {
+      return;
+    }
+    LocalJoinService.ConnectionAdmission admission =
+        joinService.admitConnection(event.getPlayer(), target);
+    if (admission == LocalJoinService.ConnectionAdmission.FORCED) {
+      logger.info(
+          "Authorized force-capacity join for player {} to managed instance {}",
+          event.getPlayer().getUsername(),
+          target.getServerInfo().getName());
+      return;
+    }
+    if (admission.allowed()) {
+      return;
+    }
+    event.setResult(ServerPreConnectEvent.ServerResult.denied());
+    String instanceId = target.getServerInfo().getName();
+    String reason =
+        switch (admission) {
+          case FULL -> "Instance is full: " + instanceId;
+          case NOT_READY -> "Instance is not ready: " + instanceId;
+          case SHUTDOWN -> "Matchmaking is shutting down";
+          default -> "Connection to managed instance was denied: " + instanceId;
+        };
+    event
+        .getPlayer()
+        .sendMessage(
+            net.slimelabs.slslite.command.CommandMessages.message(
+                reason, net.kyori.adventure.text.format.NamedTextColor.RED));
   }
 
   @Subscribe

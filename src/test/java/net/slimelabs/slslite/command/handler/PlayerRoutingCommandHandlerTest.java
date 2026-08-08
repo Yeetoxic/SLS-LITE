@@ -121,6 +121,17 @@ class PlayerRoutingCommandHandlerTest {
   }
 
   @Test
+  void forceJoinRequiresAdministrativeJoinAccessBeforeResolvingTarget() {
+    List<Component> messages = new ArrayList<>();
+
+    handler.join(
+        playerSource("Self", messages), new String[] {"join", "player", "Alpha", "--force"});
+
+    assertEquals(1, messages.size());
+    assertTrue(plainText(messages.getFirst()).contains("do not have permission"));
+  }
+
+  @Test
   void dequeuePreservesPinnedBranchSpecificEmptyFeedback() {
     List<Component> selfMessages = new ArrayList<>();
     List<Component> targetMessages = new ArrayList<>();

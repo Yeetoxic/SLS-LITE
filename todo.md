@@ -867,7 +867,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       malformed/future versions, reference-file collision and symlink handling,
       atomic reference installation, deprecated aliases, conflicts, and fresh
       `rc.2` generation.
-- [ ] Complete and verify vSLS-compatible administrator force joining. Preserve
+- [x] Complete and verify vSLS-compatible administrator force joining. Preserve
       `/sls join player <player> --force` as a direct join to that player's exact
       managed instance, require administrator join access, and make the feedback
       unambiguously identify the command sender as the player being transferred.
@@ -883,6 +883,13 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       ordinary joining must reject the second player, an authorized administrator
       must enter the same full instance, an unauthorized player must fail, and
       the backend must still enforce the public limit for every normal route.
+  - [x] Pin vSLS behavior, implement bounded backend headroom and race-safe
+        Velocity admission, cover normal/forced/unauthorized/concurrent paths,
+        and pass the real local Velocity/Paper one-player protocol scenario.
+  - [x] Repeat the scenario in the WSL2-native Docker-backed Pterodactyl
+        allocation and perform one real-client native `/server <instance>`
+        capacity attempt; the offline protocol harness cannot reliably emulate
+        that client route.
 - [ ] Replace the scattered first-run forwarding instructions with one
       copy-and-paste onboarding path for a real Velocity/Paper network and one
       explicitly insecure isolated-development path. Show the matching

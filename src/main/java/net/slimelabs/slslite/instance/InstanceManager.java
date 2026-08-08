@@ -202,6 +202,40 @@ public final class InstanceManager implements ServerController {
       SLSDetailLog detailLog,
       int consoleTailLines,
       Logger logger) {
+    this(
+        blueprints,
+        softwareProfiles,
+        resourceBudget,
+        outputConfig,
+        forwardingConfig,
+        portAllocator,
+        directoryPreparer,
+        processSpecFactory,
+        processSupervisor,
+        backendRegistry,
+        installationService,
+        detailLog,
+        consoleTailLines,
+        0,
+        logger);
+  }
+
+  public InstanceManager(
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository softwareProfiles,
+      ResourceBudget resourceBudget,
+      ManagedOutputConfig outputConfig,
+      ForwardingConfig forwardingConfig,
+      LoopbackPortAllocator portAllocator,
+      InstanceDirectoryPreparer directoryPreparer,
+      JavaJarProcessSpecFactory processSpecFactory,
+      ProcessSupervisor processSupervisor,
+      BackendRegistry backendRegistry,
+      SoftwareInstallationService installationService,
+      SLSDetailLog detailLog,
+      int consoleTailLines,
+      int proxyPlayerLimit,
+      Logger logger) {
     this.blueprints = blueprints;
     this.softwareProfiles = softwareProfiles;
     this.resourceBudget = resourceBudget;
@@ -215,7 +249,8 @@ public final class InstanceManager implements ServerController {
     this.metadata = new InstanceMetadataService(directoryPreparer.root(), logger);
     this.softwareDirectories =
         new SoftwareBaseDirectoryResolver(processSpecFactory, installationService);
-    this.launchConfigurator = new InstanceLaunchConfigurator(forwardingConfig, processSpecFactory);
+    this.launchConfigurator =
+        new InstanceLaunchConfigurator(forwardingConfig, processSpecFactory, proxyPlayerLimit);
     this.processSupervisor = processSupervisor;
     this.backendRegistry = backendRegistry;
     this.diagnosticRedactor =

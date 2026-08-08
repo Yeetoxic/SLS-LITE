@@ -126,6 +126,7 @@ final class VSLSCommandContractTest {
     assertEquals(
         Set.of(
             "join.player",
+            "join.player.force",
             "debug",
             "stop.current",
             "kill.current",

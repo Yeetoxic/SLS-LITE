@@ -10,6 +10,11 @@ weaken a hosting provider's security profile.
 
 - Managed backends bind allocated loopback addresses and are registered only
   after readiness and ownership checks.
+- Velocity gates every connection to a managed backend against readiness and
+  the blueprint's public player limit, including native server-selection
+  routes. The backend may have bounded technical headroom for an explicitly
+  authorized administrator force join; that headroom is not public capacity
+  and is not a substitute for secure forwarding.
 - Production Paper networks should use Velocity online mode and modern
   forwarding with a unique secret readable only by the service account.
 - The console is an administrator. In-game administrator claims use
@@ -27,8 +32,10 @@ weaken a hosting provider's security profile.
   sandbox. Install extensions only from sources trusted with Velocity and
   SLS-LITE-managed data.
 
-SLS-LITE memory and player limits are admission controls. They cannot enforce
-panel, cgroup, CPU, disk, network, or process isolation.
+SLS-LITE memory and public player limits are proxy admission controls. They
+cannot enforce panel, cgroup, CPU, disk, network, or process isolation. Keep
+managed backend ports private to the allocation and configure secure Velocity
+forwarding so clients cannot bypass the proxy's identity and admission checks.
 
 ## Network Access
 

@@ -22,11 +22,21 @@ public final class InstanceLaunchConfigurator {
 
   private final ForwardingConfig forwarding;
   private final JavaJarProcessSpecFactory processSpecs;
+  private final int proxyPlayerLimit;
 
   public InstanceLaunchConfigurator(
       ForwardingConfig forwarding, JavaJarProcessSpecFactory processSpecs) {
+    this(forwarding, processSpecs, 0);
+  }
+
+  public InstanceLaunchConfigurator(
+      ForwardingConfig forwarding, JavaJarProcessSpecFactory processSpecs, int proxyPlayerLimit) {
     this.forwarding = java.util.Objects.requireNonNull(forwarding, "forwarding");
     this.processSpecs = java.util.Objects.requireNonNull(processSpecs, "processSpecs");
+    if (proxyPlayerLimit < 0) {
+      throw new IllegalArgumentException("proxyPlayerLimit must not be negative");
+    }
+    this.proxyPlayerLimit = proxyPlayerLimit;
   }
 
   public ProcessSpec configure(
@@ -54,7 +64,11 @@ public final class InstanceLaunchConfigurator {
     ServerDistancePolicy.validate(blueprint.version(), configuredProperties);
     TextFileConfigEditor.apply(instanceDirectory, textConfigs);
     ServerPropertiesEditor.applyManagedNetworkSettings(
-        instanceDirectory, port, blueprint.maxPlayers(), configuredProperties);
+        instanceDirectory,
+        port,
+        blueprint.maxPlayers(),
+        ManagedPlayerCapacity.backendLimit(blueprint.maxPlayers(), proxyPlayerLimit),
+        configuredProperties);
     YamlConfigEditor.apply(instanceDirectory, yamlConfigs);
     if (profile.configurator() == SoftwareConfigurator.PAPER) {
       PaperForwardingEditor.apply(instanceDirectory, forwarding);

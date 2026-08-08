@@ -163,10 +163,10 @@ public final class VSLSCommandContract {
           branch(
               "join.player.force",
               "join player <player> --force",
-              Origin.ADDITIVE,
+              Origin.PINNED,
               Availability.ADAPTED,
               Access.ADMIN,
-              Sender.ANY,
+              Sender.PLAYER_ONLY,
               List.of("sls.command.join"),
               List.of("player"),
               List.of(ADDITIVE_FORCE),

@@ -84,6 +84,36 @@ public final class CommandMessages {
         .hoverEvent(HoverEvent.showText(instanceDetails(instance, playerCount)));
   }
 
+  public static Component fullServerJoinConfirmation(
+      Player joiningPlayer,
+      Player targetPlayer,
+      ManagedInstance instance,
+      int currentPlayers,
+      int maxPlayers) {
+    String forceCommand = "/sls join player " + targetPlayer.getUsername() + " --force";
+    Component confirmation =
+        Component.text("[Join Anyway]", NamedTextColor.GREEN)
+            .clickEvent(ClickEvent.runCommand(forceCommand))
+            .hoverEvent(
+                HoverEvent.showText(
+                    Component.text("Run ", NamedTextColor.GRAY)
+                        .append(Component.text(forceCommand, NamedTextColor.GREEN))));
+    return prefix()
+        .append(Component.text("Blueprint capacity reached: ", NamedTextColor.YELLOW))
+        .append(server(instance, currentPlayers))
+        .append(
+            Component.text(
+                " is full (" + currentPlayers + "/" + maxPlayers + ").\n", NamedTextColor.GRAY))
+        .append(Component.text("Joining ", NamedTextColor.DARK_GRAY))
+        .append(player(joiningPlayer))
+        .append(Component.text(" with ", NamedTextColor.DARK_GRAY))
+        .append(player(targetPlayer))
+        .append(
+            Component.text(
+                " will exceed this blueprint's matchmaking limit. ", NamedTextColor.DARK_GRAY))
+        .append(confirmation);
+  }
+
   public static Component listEntry(ManagedInstance instance, Collection<Player> players) {
     Component playerNames =
         players.isEmpty()

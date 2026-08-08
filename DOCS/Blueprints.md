@@ -70,13 +70,21 @@ documented below.
 | `server.image` | no | Modern `java_<major>` selector; requires a matching local Java runtime unless it matches the proxy JVM. |
 | `server.path` | no | Relative manually prepared base path below `plugins/sls-lite/software/`; bypasses provider installation. |
 | `server.limits.memory_limit` | no | Positive MiB; inherits a modern software definition's `limits.memory_limit`, otherwise defaults to `1024`. |
-| `server.limits.max_players` | no | Positive slots per instance; default `20`. |
+| `server.limits.max_players` | no | Positive public player slots per instance; default `20`. |
 | `server.limits.max_instances` | no | Positive concurrent instances; default `1`. |
 | `save` | no | Boolean persistence policy; default `false`. |
 
 SLS-LITE prefers a ready instance with capacity. It creates another instance
 only when needed and allowed by `max_instances`, resource admission, process
-slots, and available ports. Queued joins reserve player capacity.
+slots, and available ports. Queued and in-flight joins reserve player capacity.
+The public limit is enforced for matchmaking, direct joins, and native Velocity
+server-selection routes.
+
+The generated backend `max-players` may be higher than this public limit. That
+bounded technical headroom exists only so an authorized administrator can use
+`/sls join player <player> --force` without also needing Paper operator access.
+It does not increase ordinary capacity: SLS-LITE enforces `max_players` at the
+proxy for every non-forced route.
 
 ### Base Template Decision
 
@@ -165,7 +173,7 @@ outputs may use these runtime placeholders:
 | `{blueprint_id}` | Loaded blueprint ID. |
 | `{version}` | Exact configured software/Minecraft version. |
 | `{port}` | Allocated loopback backend port. |
-| `{max_players}` | Effective per-instance player limit. |
+| `{max_players}` | Effective public per-instance player limit. |
 | `{memory_mib}` | Effective managed-memory reservation in MiB. |
 
 Unknown lowercase runtime placeholders reject preparation rather than leaking

@@ -308,6 +308,8 @@ public final class PlayerRoutingCommandHandler {
                   Component.text(
                       force ? "Force joining " : "Joining ",
                       force ? NamedTextColor.YELLOW : NamedTextColor.GREEN))
+              .append(CommandMessages.player(player))
+              .append(Component.text(" with ", NamedTextColor.GRAY))
               .append(CommandMessages.player(target))
               .append(Component.text(" on ", NamedTextColor.GRAY))
               .append(
@@ -320,6 +322,16 @@ public final class PlayerRoutingCommandHandler {
               (result, failure) ->
                   reportConnection(source, player, directJoin.instance(), result, failure));
     } catch (InstanceOperationException exception) {
+      if (exception.kind() == InstanceOperationException.Kind.BLUEPRINT_CAPACITY
+          && authorizer.canAdminister(source, "join")) {
+        ManagedInstance instance = instances.find(exception.instanceId());
+        if (instance != null) {
+          source.sendMessage(
+              CommandMessages.fullServerJoinConfirmation(
+                  player, target, instance, exception.currentPlayers(), exception.maxPlayers()));
+          return;
+        }
+      }
       source.sendMessage(CommandMessages.message(exception.getMessage(), NamedTextColor.RED));
     }
   }

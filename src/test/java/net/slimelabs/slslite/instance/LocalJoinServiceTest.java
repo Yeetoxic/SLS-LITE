@@ -492,6 +492,10 @@ class LocalJoinServiceTest {
           assertThrows(
               InstanceOperationException.class, () -> service.joinPlayer(fixture.player(), target));
       assertTrue(full.getMessage().contains("Instance is full"));
+      assertEquals(InstanceOperationException.Kind.BLUEPRINT_CAPACITY, full.kind());
+      assertEquals(instance.id(), full.instanceId());
+      assertEquals(1, full.currentPlayers());
+      assertEquals(1, full.maxPlayers());
 
       LocalJoinService.DirectJoin forced = service.joinPlayer(fixture.player(), target, true);
 
@@ -499,6 +503,116 @@ class LocalJoinServiceTest {
       assertEquals(
           ConnectionRequestBuilder.Status.SUCCESS,
           forced.connection().get(1, TimeUnit.SECONDS).getStatus());
+    }
+  }
+
+  @Test
+  void managedConnectionGateReservesForceJoinWithoutOpeningOrdinaryFullRoutes() throws Exception {
+    CompletableFuture<ConnectionRequestBuilder.Result> pendingConnection =
+        new CompletableFuture<>();
+    Fixture fixture = fixture(Duration.ofSeconds(5), 1, pendingConnection);
+    try (LocalJoinService service = fixture.service()) {
+      ManagedInstance instance = fixture.controller().start("smoke");
+      instance.lifecycle().transitionTo(InstanceState.STARTING);
+      instance.lifecycle().transitionTo(InstanceState.READY);
+      instance.readyFuture().complete(instance);
+
+      assertEquals(
+          LocalJoinService.ConnectionAdmission.FULL,
+          service.admitConnection(fixture.player(), fixture.registeredServer()));
+
+      ServerConnection targetConnection =
+          serverConnection(instance.id(), fixture.registeredServer());
+      Player target =
+          player(
+              UUID.randomUUID(),
+              "TargetPlayer",
+              fixture.registeredServer(),
+              connectionResult(fixture.registeredServer()),
+              Optional.of(targetConnection));
+      LocalJoinService.DirectJoin forced = service.joinPlayer(fixture.player(), target, true);
+
+      assertEquals(
+          LocalJoinService.ConnectionAdmission.FORCED,
+          service.admitConnection(fixture.player(), fixture.registeredServer()));
+      pendingConnection.complete(connectionResult(fixture.registeredServer()));
+      assertEquals(
+          ConnectionRequestBuilder.Status.SUCCESS,
+          forced.connection().get(1, TimeUnit.SECONDS).getStatus());
+    }
+  }
+
+  @Test
+  void forceJoinFailsClearlyWhenBoundedBackendHeadroomIsOccupied() throws Exception {
+    Fixture fixture = fixture(Duration.ofSeconds(5), 2);
+    try (LocalJoinService service = fixture.service()) {
+      ManagedInstance instance = fixture.controller().start("smoke");
+      instance.lifecycle().transitionTo(InstanceState.STARTING);
+      instance.lifecycle().transitionTo(InstanceState.READY);
+      instance.readyFuture().complete(instance);
+      ServerConnection targetConnection =
+          serverConnection(instance.id(), fixture.registeredServer());
+      Player target =
+          player(
+              UUID.randomUUID(),
+              "TargetPlayer",
+              fixture.registeredServer(),
+              connectionResult(fixture.registeredServer()),
+              Optional.of(targetConnection));
+
+      InstanceOperationException full =
+          assertThrows(
+              InstanceOperationException.class,
+              () -> service.joinPlayer(fixture.player(), target, true));
+
+      assertTrue(full.getMessage().contains("Backend force-join capacity is full"));
+    }
+  }
+
+  @Test
+  void connectionGatePreservesQueuedReservationAtThePublicLimit() throws Exception {
+    CompletableFuture<ConnectionRequestBuilder.Result> pendingConnection =
+        new CompletableFuture<>();
+    Fixture fixture = fixture(Duration.ofSeconds(5), 0, pendingConnection);
+    try (LocalJoinService service = fixture.service()) {
+      LocalJoinService.JoinAttempt attempt = service.join(fixture.player(), "test", "smoke");
+      ManagedInstance instance = fixture.controller().instance();
+      instance.lifecycle().transitionTo(InstanceState.STARTING);
+      instance.lifecycle().transitionTo(InstanceState.READY);
+      instance.readyFuture().complete(instance);
+
+      assertEquals(
+          LocalJoinService.ConnectionAdmission.RESERVED,
+          service.admitConnection(fixture.player(), fixture.registeredServer()));
+      pendingConnection.complete(connectionResult(fixture.registeredServer()));
+      assertEquals(
+          ConnectionRequestBuilder.Status.SUCCESS,
+          attempt.connection().get(1, TimeUnit.SECONDS).getStatus());
+    }
+  }
+
+  @Test
+  void connectionGateReservesAnAvailableSlotAgainstConcurrentUnmanagedRoutes() throws Exception {
+    Fixture fixture = fixture(Duration.ofSeconds(5));
+    try (LocalJoinService service = fixture.service()) {
+      ManagedInstance instance = fixture.controller().start("smoke");
+      instance.lifecycle().transitionTo(InstanceState.STARTING);
+      instance.lifecycle().transitionTo(InstanceState.READY);
+      instance.readyFuture().complete(instance);
+      Player competing =
+          player(
+              UUID.randomUUID(),
+              "CompetingPlayer",
+              fixture.registeredServer(),
+              connectionResult(fixture.registeredServer()),
+              Optional.empty());
+
+      assertEquals(
+          LocalJoinService.ConnectionAdmission.AVAILABLE,
+          service.admitConnection(fixture.player(), fixture.registeredServer()));
+      assertEquals(
+          LocalJoinService.ConnectionAdmission.FULL,
+          service.admitConnection(competing, fixture.registeredServer()));
     }
   }
 
@@ -661,6 +775,7 @@ class LocalJoinServiceTest {
         controller,
         player,
         playerId,
+        registeredServer,
         actionBars,
         connectionRequests);
   }
@@ -831,12 +946,15 @@ class LocalJoinServiceTest {
   }
 
   private static RegisteredServer registeredServer(int connectedPlayers) {
+    ServerInfo serverInfo =
+        new ServerInfo("smoke.test01", new InetSocketAddress("127.0.0.1", 25600));
     return (RegisteredServer)
         Proxy.newProxyInstance(
             RegisteredServer.class.getClassLoader(),
             new Class<?>[] {RegisteredServer.class},
             (proxy, method, arguments) ->
                 switch (method.getName()) {
+                  case "getServerInfo" -> serverInfo;
                   case "getPlayersConnected" ->
                       java.util.Collections.nCopies(connectedPlayers, null);
                   default -> defaultValue(method.getReturnType());
@@ -889,6 +1007,7 @@ class LocalJoinServiceTest {
       FakeController controller,
       Player player,
       UUID playerId,
+      RegisteredServer registeredServer,
       List<Component> actionBars,
       AtomicInteger connectionRequests) {}
 
