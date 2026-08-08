@@ -32,7 +32,7 @@
         <adventure.version>5.2.0</adventure.version>
         <slf4j.version>2.0.17</slf4j.version>
         <guice.version>7.0.0</guice.version>
-        <junit.version>5.13.4</junit.version>
+        <junit.version>6.1.2</junit.version>
         <google-java-format.version>1.35.0</google-java-format.version>
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
         <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
