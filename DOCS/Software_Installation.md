@@ -36,7 +36,9 @@ paper:
   allowed instability: `beta` accepts stable or beta builds, and `alpha`
   accepts stable, beta, or alpha builds. It defaults to `stable`; non-stable
   channels must be selected explicitly.
-- `accept_eula` must be set to `true` before a provider download can begin.
+- A provider download requires an explicit EULA opt-in: either the profile's
+  `accept_eula` or host-wide `software.auto_accept_eula` in `config.yml` must be
+  `true`. Both default to `false`; manual software is unaffected.
   This records the operator's choice; SLS-LITE does not accept the Minecraft
   EULA by default.
 - `base_directory` is the reusable software cache. It supports `{version}`,

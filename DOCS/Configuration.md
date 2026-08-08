@@ -4,7 +4,9 @@
 
 SLS-LITE generates `plugins/sls-lite/config.yml`. The bundled, commented
 [`config.yml`](../src/main/resources/defaults/host/config.yml) is the canonical
-default.
+default. The [complete copyable configuration](Copyable_Config.md) mirrors that
+file inside a Markdown YAML block for operators working entirely from the
+documentation.
 Unknown structural keys are rejected. Host configuration changes require a
 Velocity restart; `/sls reload` reloads blueprints and software profiles only.
 This restart boundary applies to every `config.yml` key because each one owns
@@ -26,10 +28,20 @@ allocation. Repository test fixtures keep their larger budgets, shorter
 lifecycle timers, verbose diagnostics, and offline-security exceptions in
 fixture scripts rather than in these product defaults.
 
+SLS-LITE never rewrites an existing `config.yml`. Newly generated files declare
+their `config_version`; an unversioned RC.1 file is treated as legacy generation
+1 and continues to load with safe defaults for omitted optional keys. On startup,
+the plugin installs a canonical `config-reference-v2.yml` beside `config.yml`.
+Compare and merge it manually, then update `config_version` after reviewing the
+changes. A configuration declaring a newer generation than the running plugin is
+rejected rather than guessed or downgraded.
+
 ## Reference
 
 | Key | Default | Valid values and behavior |
 | --- | --- | --- |
+| `config_version` | `2` | Positive schema generation. Unversioned RC.1 configurations are treated as generation 1 without being rewritten; versions newer than this plugin supports are rejected. |
+| `software.auto_accept_eula` | `false` | Host-wide explicit Minecraft EULA acceptance for automatic Paper/vanilla acquisition. A profile-level `software.accept_eula: true` is an independent opt-in; manual software and already verified caches are unaffected. |
 | `resources.total_memory_mib` | `2048` | Portable starting admission budget for managed children, not host detection. Excludes Velocity and does not measure the panel limit; operators must size it from the real allocation. |
 | `resources.max_managed_processes` | `20` | Positive process count no greater than the configured port count. When omitted manually, it follows that port count. SLS-Limbo consumes one slot. |
 | `network.ports.start` | `25570` | Integer `1024..65535`; first managed loopback port. |

@@ -14,8 +14,12 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 public final class SLSConfigRepository {
   static final int MAX_CONFIG_BYTES = 1024 * 1024;
+  static final int LEGACY_CONFIG_VERSION = 1;
+  static final int CURRENT_CONFIG_VERSION = 2;
 
   private static final String DEFAULT_CONFIG_RESOURCE = "defaults/host/config.yml";
+  private static final String REFERENCE_CONFIG_FILE =
+      "config-reference-v" + CURRENT_CONFIG_VERSION + ".yml";
 
   private static final int DEFAULT_TOTAL_MEMORY_MIB = 2048;
   private static final int DEFAULT_PORT_RANGE_START = 25570;
@@ -32,6 +36,7 @@ public final class SLSConfigRepository {
   private static final int DEFAULT_DETAIL_LOG_RETAINED_FILES = 3;
   private static final int DEFAULT_DETAIL_LOG_QUEUE_CAPACITY = 1024;
   private static final boolean DEFAULT_DETAIL_LOG_REDACT_PATHS = true;
+  private static final boolean DEFAULT_AUTO_ACCEPT_EULA = false;
   private static final String DEFAULT_FORWARDING_MODE = "none";
   private static final boolean DEFAULT_FORWARDING_ONLINE_MODE = true;
   private static final String DEFAULT_FORWARDING_SECRET_FILE = "forwarding.secret";
@@ -65,7 +70,7 @@ public final class SLSConfigRepository {
   private final Path dataDirectory;
   private final Path proxyDirectory;
   private final Path configPath;
-  private volatile SLSConfig config;
+  private volatile LoadedConfiguration loaded;
 
   public SLSConfigRepository(Path dataDirectory) {
     this(dataDirectory, dataDirectory);
@@ -80,23 +85,32 @@ public final class SLSConfigRepository {
   public void initialize() throws IOException, ConfigurationException {
     ConfinedFiles.ensureDirectory(dataDirectory);
     installDefaultWhenMissing();
+    installReferenceConfiguration();
     reload();
     ConfinedFiles.ensureDirectory(get().instancesDirectory());
   }
 
   public synchronized void reload() throws ConfigurationException {
-    config = read();
+    loaded = read();
   }
 
   public SLSConfig get() {
-    SLSConfig current = config;
+    LoadedConfiguration current = loaded;
     if (current == null) {
       throw new IllegalStateException("SLS-LITE configuration has not been initialized");
     }
-    return current;
+    return current.config();
   }
 
-  private SLSConfig read() throws ConfigurationException {
+  public ConfigMigrationStatus migrationStatus() {
+    LoadedConfiguration current = loaded;
+    if (current == null) {
+      throw new IllegalStateException("SLS-LITE configuration has not been initialized");
+    }
+    return current.migrationStatus();
+  }
+
+  private LoadedConfiguration read() throws ConfigurationException {
     LoaderOptions options = new LoaderOptions();
     options.setAllowDuplicateKeys(false);
     options.setCodePointLimit(MAX_CONFIG_BYTES);
@@ -106,7 +120,20 @@ public final class SLSConfigRepository {
 
     try (InputStream input = BoundedFileReader.openNoFollow(configPath, MAX_CONFIG_BYTES)) {
       Map<String, Object> root = YamlValues.asMap(yaml.load(input), "root", configPath);
+      boolean versionDeclared = root.containsKey("config_version");
+      int configuredVersion =
+          YamlValues.optionalPositiveInt(root, "config_version", LEGACY_CONFIG_VERSION, configPath);
+      if (configuredVersion > CURRENT_CONFIG_VERSION) {
+        throw YamlValues.error(
+            configPath,
+            "config_version "
+                + configuredVersion
+                + " is newer than supported version "
+                + CURRENT_CONFIG_VERSION
+                + "; install a newer SLS-LITE build");
+      }
       Map<String, Object> resources = YamlValues.optionalMap(root, "resources", configPath);
+      Map<String, Object> software = YamlValues.optionalMap(root, "software", configPath);
       Map<String, Object> network = YamlValues.optionalMap(root, "network", configPath);
       Map<String, Object> ports = YamlValues.optionalMap(network, "ports", "network", configPath);
       Map<String, Object> matchmaking = YamlValues.optionalMap(root, "matchmaking", configPath);
@@ -151,7 +178,9 @@ public final class SLSConfigRepository {
           root,
           "",
           configPath,
+          "config_version",
           "resources",
+          "software",
           "network",
           "matchmaking",
           "lifecycle",
@@ -165,6 +194,7 @@ public final class SLSConfigRepository {
           "lobby",
           "storage",
           "paths");
+      YamlValues.requireOnlyKeys(software, "software", configPath, "auto_accept_eula");
       YamlValues.requireOnlyKeys(
           resources, "resources", configPath, "total_memory_mib", "max_managed_processes");
       YamlValues.requireOnlyKeys(network, "network", configPath, "ports");
@@ -279,6 +309,9 @@ public final class SLSConfigRepository {
       int totalMemory =
           YamlValues.optionalPositiveInt(
               resources, "total_memory_mib", DEFAULT_TOTAL_MEMORY_MIB, configPath);
+      boolean autoAcceptEula =
+          YamlValues.optionalBoolean(
+              software, "auto_accept_eula", "software", DEFAULT_AUTO_ACCEPT_EULA, configPath);
       int portStart =
           YamlValues.optionalPositiveInt(ports, "start", DEFAULT_PORT_RANGE_START, configPath);
       int portEnd =
@@ -480,74 +513,88 @@ public final class SLSConfigRepository {
               "storage.snapshot_hook.executable is required when "
                   + "storage.strategy is snapshot-hook");
         }
-        return new SLSConfig(
-            totalMemory,
-            maxManagedProcesses,
-            portStart,
-            portEnd,
-            queueTimeout,
-            BlueprintSelectionMode.parse(blueprintSelection),
-            idleShutdown,
-            new ManagedOutputConfig(mirrorManagedOutput, writeTemporaryLog, temporaryLogMaxKiB),
-            new ForwardingConfig(
-                ForwardingMode.parse(forwardingMode),
-                forwardingOnlineMode,
-                resolveProxyPath(forwardingSecretFile, "forwarding.secret_file")),
-            new SecurityConfig(
-                allowInsecureOfflineAdministrators,
-                claimCodeExpirySeconds,
-                new BackendMessagingConfig(
-                    backendMessagingEnabled,
-                    backendCommandRelayEnabled,
-                    backendRequestsPerWindow,
-                    backendWindowSeconds,
-                    backendMessageSources)),
-            new SLSLimboConfig(
-                limboEnabled,
-                limboMemory,
-                limboStartupTimeout,
-                limboAdvertisedProtocol,
-                limboMaxRestartAttempts,
-                limboInitialBackoff,
-                limboMaxBackoff,
-                limboStableAfter,
-                limboPresentation),
-            new LobbyConfig(
-                LobbyMode.parse(lobbyMode),
-                lobbyRegistry,
-                lobbyServer,
-                lobbyAutoStart,
-                lobbyMaxRestartAttempts,
-                lobbyInitialBackoff,
-                lobbyMaxBackoff,
-                lobbyStableAfter),
-            new StorageConfig(
-                parsedStorageStrategy,
-                snapshotHookExecutable.isBlank()
-                    ? null
-                    : resolveManagedPath(
-                        snapshotHookExecutable, "storage.snapshot_hook.executable"),
-                snapshotHookTimeoutSeconds,
-                storageAutoPriority.stream().map(StorageStrategy::parse).toList(),
-                storageCopyParallelism),
-            new DetailedLoggingConfig(
-                DetailLogLevel.parse(detailLogLevel),
-                detailConsoleMirror,
-                detailLogMaxKiB,
-                detailLogRetainedFiles,
-                detailLogQueueCapacity,
-                detailLogRedactPaths),
-            new TransferActionBarConfig(
-                actionBarEnabled,
-                actionBarJoining,
-                actionBarForceJoining,
-                actionBarDequeued,
-                actionBarFrames,
-                actionBarFrameInterval),
-            ViaVersionSyncPolicy.parse(viaVersionBackendSync),
-            new DiagnosticRetentionConfig(
-                consoleTailLines, installerHistoryEntries, failureReports),
-            instancesDirectory);
+        SLSConfig parsed =
+            new SLSConfig(
+                totalMemory,
+                maxManagedProcesses,
+                portStart,
+                portEnd,
+                queueTimeout,
+                BlueprintSelectionMode.parse(blueprintSelection),
+                idleShutdown,
+                new ManagedOutputConfig(mirrorManagedOutput, writeTemporaryLog, temporaryLogMaxKiB),
+                new ForwardingConfig(
+                    ForwardingMode.parse(forwardingMode),
+                    forwardingOnlineMode,
+                    resolveProxyPath(forwardingSecretFile, "forwarding.secret_file")),
+                new SecurityConfig(
+                    allowInsecureOfflineAdministrators,
+                    claimCodeExpirySeconds,
+                    new BackendMessagingConfig(
+                        backendMessagingEnabled,
+                        backendCommandRelayEnabled,
+                        backendRequestsPerWindow,
+                        backendWindowSeconds,
+                        backendMessageSources)),
+                new SLSLimboConfig(
+                    limboEnabled,
+                    limboMemory,
+                    limboStartupTimeout,
+                    limboAdvertisedProtocol,
+                    limboMaxRestartAttempts,
+                    limboInitialBackoff,
+                    limboMaxBackoff,
+                    limboStableAfter,
+                    limboPresentation),
+                new LobbyConfig(
+                    LobbyMode.parse(lobbyMode),
+                    lobbyRegistry,
+                    lobbyServer,
+                    lobbyAutoStart,
+                    lobbyMaxRestartAttempts,
+                    lobbyInitialBackoff,
+                    lobbyMaxBackoff,
+                    lobbyStableAfter),
+                new StorageConfig(
+                    parsedStorageStrategy,
+                    snapshotHookExecutable.isBlank()
+                        ? null
+                        : resolveManagedPath(
+                            snapshotHookExecutable, "storage.snapshot_hook.executable"),
+                    snapshotHookTimeoutSeconds,
+                    storageAutoPriority.stream().map(StorageStrategy::parse).toList(),
+                    storageCopyParallelism),
+                new DetailedLoggingConfig(
+                    DetailLogLevel.parse(detailLogLevel),
+                    detailConsoleMirror,
+                    detailLogMaxKiB,
+                    detailLogRetainedFiles,
+                    detailLogQueueCapacity,
+                    detailLogRedactPaths),
+                new TransferActionBarConfig(
+                    actionBarEnabled,
+                    actionBarJoining,
+                    actionBarForceJoining,
+                    actionBarDequeued,
+                    actionBarFrames,
+                    actionBarFrameInterval),
+                ViaVersionSyncPolicy.parse(viaVersionBackendSync),
+                new DiagnosticRetentionConfig(
+                    consoleTailLines, installerHistoryEntries, failureReports),
+                new SoftwareConfig(autoAcceptEula),
+                instancesDirectory);
+        java.util.List<String> effectiveDefaults = new java.util.ArrayList<>();
+        if (!software.containsKey("auto_accept_eula")) {
+          effectiveDefaults.add("software.auto_accept_eula: false");
+        }
+        return new LoadedConfiguration(
+            parsed,
+            new ConfigMigrationStatus(
+                configuredVersion,
+                CURRENT_CONFIG_VERSION,
+                versionDeclared,
+                dataDirectory.resolve(REFERENCE_CONFIG_FILE),
+                effectiveDefaults));
       } catch (IllegalArgumentException exception) {
         throw YamlValues.error(configPath, exception.getMessage());
       }
@@ -787,4 +834,40 @@ public final class SLSConfigRepository {
       ConfinedFiles.atomicCopy(dataDirectory, "config.yml", source, MAX_CONFIG_BYTES);
     }
   }
+
+  private void installReferenceConfiguration() throws IOException {
+    byte[] bundled = bundledConfiguration();
+    Path reference = dataDirectory.resolve(REFERENCE_CONFIG_FILE);
+    if (!Files.exists(reference, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+      ConfinedFiles.atomicWrite(dataDirectory, REFERENCE_CONFIG_FILE, bundled, MAX_CONFIG_BYTES);
+      return;
+    }
+    ConfinedFiles.requireRegularFile(reference);
+    byte[] existing;
+    try (InputStream input = BoundedFileReader.openNoFollow(reference, MAX_CONFIG_BYTES)) {
+      existing = input.readAllBytes();
+    }
+    if (!java.util.Arrays.equals(existing, bundled)) {
+      throw new IOException(
+          "Configuration reference collision at "
+              + reference
+              + "; preserve or rename that file so SLS-LITE can install its canonical reference");
+    }
+  }
+
+  private byte[] bundledConfiguration() throws IOException {
+    try (InputStream source =
+        getClass().getClassLoader().getResourceAsStream(DEFAULT_CONFIG_RESOURCE)) {
+      if (source == null) {
+        throw new IOException("Bundled host default is missing: " + DEFAULT_CONFIG_RESOURCE);
+      }
+      byte[] contents = source.readNBytes(MAX_CONFIG_BYTES + 1);
+      if (contents.length > MAX_CONFIG_BYTES) {
+        throw new IOException("Bundled host default exceeds the configuration byte limit");
+      }
+      return contents;
+    }
+  }
+
+  private record LoadedConfiguration(SLSConfig config, ConfigMigrationStatus migrationStatus) {}
 }

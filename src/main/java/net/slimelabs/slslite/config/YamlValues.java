@@ -112,12 +112,19 @@ public final class YamlValues {
   public static boolean optionalBoolean(
       Map<String, Object> values, String key, boolean defaultValue, Path path)
       throws ConfigurationException {
+    return optionalBoolean(values, key, "", defaultValue, path);
+  }
+
+  public static boolean optionalBoolean(
+      Map<String, Object> values, String key, String section, boolean defaultValue, Path path)
+      throws ConfigurationException {
     Object value = values.get(key);
     if (value == null) {
       return defaultValue;
     }
     if (!(value instanceof Boolean booleanValue)) {
-      throw error(path, "'" + key + "' must be true or false");
+      String qualified = section == null || section.isBlank() ? key : section + "." + key;
+      throw error(path, "'" + qualified + "' must be true or false");
     }
     return booleanValue;
   }

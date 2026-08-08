@@ -137,6 +137,29 @@ public final class SLSLite implements SLSLiteApiProvider {
           "SLS-LITE startup began; detailed level={} path={}",
           configuration.get().detailedLogging().level(),
           detailLog.path());
+      net.slimelabs.slslite.config.ConfigMigrationStatus configStatus =
+          configuration.migrationStatus();
+      if (configStatus.updateAvailable()) {
+        logger.warn(
+            "Host configuration requires review: loaded generation {} of {}; "
+                + "omitted safe defaults={} and canonical reference={} (config.yml was not changed)",
+            configStatus.versionDeclared()
+                ? configStatus.configuredVersion()
+                : "unversioned legacy",
+            configStatus.currentVersion(),
+            configStatus.effectiveDefaults(),
+            configStatus.referenceConfig().getFileName());
+        detailLog.normal(
+            startupCorrelation,
+            "configuration",
+            "Loaded host config generation {} of {}; effective defaults={}; reference={}",
+            configStatus.configuredVersion(),
+            configStatus.currentVersion(),
+            configStatus.effectiveDefaults(),
+            configStatus.referenceConfig());
+      } else {
+        logger.info("Host configuration generation {} is current", configStatus.currentVersion());
+      }
       administrators = new AdministratorStore(dataDirectory);
       administrators.initialize();
       adminClaims =
@@ -237,6 +260,7 @@ public final class SLSLite implements SLSLiteApiProvider {
               processSpecFactory,
               List.of(new PaperInstallationProvider(), new VanillaInstallationProvider()),
               configuration.get().diagnosticRetention().installerHistoryEntries(),
+              configuration.get().software().autoAcceptEula(),
               logger);
       BackendProtocolSynchronizer protocolSynchronizer =
           ViaVersionProtocolSynchronizer.create(

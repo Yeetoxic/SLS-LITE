@@ -119,6 +119,21 @@ final class OperatorDocumentationContractTest {
     assertTrue(documented.get("storage.snapshot_hook.executable").contains("unset"));
   }
 
+  @Test
+  void copyableConfigurationExactlyMatchesTheBundledCanonicalFile() throws IOException {
+    String document = normalize(read("DOCS/Copyable_Config.md"));
+    String opening = "```yaml\n";
+    int start = document.indexOf(opening);
+    int end = document.indexOf("\n```", start + opening.length());
+
+    assertTrue(start >= 0, "Copyable_Config.md must contain a YAML code block");
+    assertTrue(end > start, "Copyable_Config.md must close its YAML code block");
+    String copyable = document.substring(start + opening.length(), end) + "\n";
+    String canonical = normalize(read("src/main/resources/defaults/host/config.yml"));
+
+    assertEquals(canonical, copyable, "Copyable config must match the bundled default exactly");
+  }
+
   private static Map<String, String> flattenBundledDefaults() throws IOException {
     LoaderOptions options = new LoaderOptions();
     options.setAllowDuplicateKeys(false);
@@ -132,6 +147,10 @@ final class OperatorDocumentationContractTest {
     Map<String, String> flattened = new LinkedHashMap<>();
     flatten("", castMap(loaded), flattened);
     return flattened;
+  }
+
+  private static String normalize(String value) {
+    return value.replace("\r\n", "\n").replace('\r', '\n');
   }
 
   private static void flatten(

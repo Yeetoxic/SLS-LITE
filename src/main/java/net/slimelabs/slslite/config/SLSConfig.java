@@ -20,6 +20,7 @@ public record SLSConfig(
     TransferActionBarConfig transferActionBar,
     ViaVersionSyncPolicy viaVersionSyncPolicy,
     DiagnosticRetentionConfig diagnosticRetention,
+    SoftwareConfig software,
     Path instancesDirectory) {
 
   public SLSConfig(
@@ -58,6 +59,7 @@ public record SLSConfig(
         transferActionBar,
         viaVersionSyncPolicy,
         DiagnosticRetentionConfig.defaults(),
+        SoftwareConfig.defaults(),
         instancesDirectory);
   }
 
@@ -96,6 +98,7 @@ public record SLSConfig(
         transferActionBar,
         ViaVersionSyncPolicy.AUTO,
         DiagnosticRetentionConfig.defaults(),
+        SoftwareConfig.defaults(),
         instancesDirectory);
   }
 
@@ -133,6 +136,7 @@ public record SLSConfig(
         TransferActionBarConfig.defaults(),
         ViaVersionSyncPolicy.AUTO,
         DiagnosticRetentionConfig.defaults(),
+        SoftwareConfig.defaults(),
         instancesDirectory);
   }
 
@@ -169,6 +173,7 @@ public record SLSConfig(
         TransferActionBarConfig.defaults(),
         ViaVersionSyncPolicy.AUTO,
         DiagnosticRetentionConfig.defaults(),
+        SoftwareConfig.defaults(),
         instancesDirectory);
   }
 
@@ -204,6 +209,7 @@ public record SLSConfig(
         TransferActionBarConfig.defaults(),
         ViaVersionSyncPolicy.AUTO,
         DiagnosticRetentionConfig.defaults(),
+        SoftwareConfig.defaults(),
         instancesDirectory);
   }
 
@@ -238,6 +244,7 @@ public record SLSConfig(
         TransferActionBarConfig.defaults(),
         ViaVersionSyncPolicy.AUTO,
         DiagnosticRetentionConfig.defaults(),
+        SoftwareConfig.defaults(),
         instancesDirectory);
   }
 
@@ -297,6 +304,9 @@ public record SLSConfig(
     }
     if (diagnosticRetention == null) {
       throw new IllegalArgumentException("diagnostic retention configuration is required");
+    }
+    if (software == null) {
+      throw new IllegalArgumentException("software configuration is required");
     }
     instancesDirectory = instancesDirectory.toAbsolutePath().normalize();
   }

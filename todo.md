@@ -838,7 +838,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       batch passes its required regression and clean-install checks, and publish
       it through the approved release-candidate workflow with matching source
       and checksums.
-- [ ] Add the tester-requested host-wide `software.auto_accept_eula` convenience
+- [x] Add the tester-requested host-wide `software.auto_accept_eula` convenience
       setting to `config.yml`, defaulting to `false`. Treat `true` as the
       operator's explicit acceptance for automatic Paper/vanilla installation
       across profiles while retaining the existing per-profile
@@ -849,7 +849,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       upgrades that omit the new key, and test false/default, global true,
       profile true, malformed values, reload/restart, cache reuse, warmup, and
       generated `eula.txt` behavior.
-- [ ] Add a non-destructive host-configuration evolution contract before
+- [x] Add a non-destructive host-configuration evolution contract before
       publishing `rc.2`. Give newly generated configurations an explicit
       `config_version`; treat an unversioned `rc.1` file as the documented legacy
       version. Never overwrite, reserialize, reorder, or remove an operator's
@@ -900,6 +900,12 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       generated config point directly to this single canonical setup section,
       then validate it with a clean tester-style installation that begins with
       an unmodified Velocity configuration.
+- [x] RC.2 scope amendment (maintainer-approved accessibility request): publish
+      the complete current canonical `config.yml` inside a copyable Markdown YAML
+      block, link it from the configuration and first-run paths, retain warnings
+      to review host-specific and security-sensitive values, and enforce exact
+      byte-normalized content parity with the bundled default in automated tests
+      so the pasted example cannot drift.
 - [ ] Add a copyable blueprint recipe book that teaches mappings visually before
       presenting the full schema. For every recipe, show the source directory
       tree, a complete valid YAML fragment or minimal blueprint, and the

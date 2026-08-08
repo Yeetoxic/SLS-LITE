@@ -59,6 +59,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
   private final ExecutorService executor;
   private final Logger logger;
   private final int maximumHistory;
+  private final boolean autoAcceptEula;
   private final AtomicBoolean closed = new AtomicBoolean();
   private final Object lifecycleLock = new Object();
   private volatile Consumer<InstallationTransition> installationObserver = ignored -> {};
@@ -67,13 +68,22 @@ public final class SoftwareInstallationService implements AutoCloseable {
       JavaJarProcessSpecFactory paths,
       Collection<SoftwareInstallationProvider> providers,
       Logger logger) {
-    this(paths, providers, DEFAULT_MAX_HISTORY, logger);
+    this(paths, providers, DEFAULT_MAX_HISTORY, false, logger);
   }
 
   public SoftwareInstallationService(
       JavaJarProcessSpecFactory paths,
       Collection<SoftwareInstallationProvider> providers,
       int maximumHistory,
+      Logger logger) {
+    this(paths, providers, maximumHistory, false, logger);
+  }
+
+  public SoftwareInstallationService(
+      JavaJarProcessSpecFactory paths,
+      Collection<SoftwareInstallationProvider> providers,
+      int maximumHistory,
+      boolean autoAcceptEula,
       Logger logger) {
     this.paths = paths;
     this.logger = logger;
@@ -84,6 +94,7 @@ public final class SoftwareInstallationService implements AutoCloseable {
       throw new IllegalArgumentException("maximumHistory is outside the configured bounds");
     }
     this.maximumHistory = maximumHistory;
+    this.autoAcceptEula = autoAcceptEula;
     EnumMap<SoftwareSource, SoftwareInstallationProvider> indexed =
         new EnumMap<>(SoftwareSource.class);
     for (SoftwareInstallationProvider provider : providers) {
@@ -126,11 +137,12 @@ public final class SoftwareInstallationService implements AutoCloseable {
       return CompletableFuture.failedFuture(
           new SoftwareInstallationException("Manual software is missing: " + target));
     }
-    if (!profile.acceptEula()) {
+    if (!profile.acceptEula() && !autoAcceptEula) {
       return CompletableFuture.failedFuture(
           new SoftwareInstallationException(
-              "Automatic installation requires software.accept_eula=true "
-                  + "after the operator reviews the Minecraft EULA"));
+              "Automatic installation requires either host "
+                  + "software.auto_accept_eula=true or profile "
+                  + "software.accept_eula=true after the operator reviews the Minecraft EULA"));
     }
     Path installationTarget = target.toAbsolutePath().normalize();
     ActiveInstallation selected;

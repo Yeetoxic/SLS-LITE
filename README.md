@@ -64,7 +64,9 @@ restrictions.
 3. Start Velocity once to generate `plugins/sls-lite/`.
 4. Review `config.yml`, especially memory, ports, forwarding, lobby mode, and
    administrator security.
-5. Set `software.accept_eula: true` only after reviewing the Minecraft EULA.
+5. After reviewing the Minecraft EULA, accept it either per automatic software
+   profile with `software.accept_eula: true` or host-wide with
+   `software.auto_accept_eula: true` in `config.yml`.
 6. Add worlds and blueprints, then restart Velocity or run
    `/sls reload blueprints`.
 

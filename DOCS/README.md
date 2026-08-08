@@ -11,7 +11,7 @@ summaries.
 
 1. [Current Release Notes](../RELEASE_NOTES.md)
 2. [Getting Started](Getting_Started.md)
-3. [Configuration](Configuration.md)
+3. [Configuration](Configuration.md) and the [complete copyable config](Copyable_Config.md)
 4. [Blueprints](Blueprints.md)
 5. [Commands and Permissions](Commands.md)
 6. [Operations and Recovery](Operations.md)
@@ -42,7 +42,7 @@ summaries.
 | Subject | Canonical page | Supporting detail |
 | --- | --- | --- |
 | Installation, first run, update, backup, removal | [Getting Started](Getting_Started.md) | [Data Layout](Data_Layout.md) |
-| Host configuration and defaults | [Configuration](Configuration.md) | Generated `config.yml` |
+| Host configuration and defaults | [Configuration](Configuration.md) | [Complete copyable config](Copyable_Config.md), generated `config.yml` |
 | Blueprint schema and behavior | [Blueprints](Blueprints.md) | [Blueprint Volumes](Blueprint_Volumes.md), [Resource Packs](Resource_Packs.md) |
 | Commands and permissions | [Commands](Commands.md) | [vSLS command comparison](SLS_Command_Compatibility.md) |
 | Daily operation, logs, lifecycle, recovery | [Operations](Operations.md) | [Lifecycle concurrency](Lifecycle_Concurrency.md) |

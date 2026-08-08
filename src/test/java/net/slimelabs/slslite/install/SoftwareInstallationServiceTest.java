@@ -694,6 +694,95 @@ class SoftwareInstallationServiceTest {
     }
   }
 
+  @Test
+  void hostWideAcceptanceAllowsProviderInstallationWithoutProfileAcceptance() {
+    AtomicInteger installs = new AtomicInteger();
+    SoftwareInstallationProvider provider =
+        new SoftwareInstallationProvider() {
+          @Override
+          public SoftwareSource source() {
+            return SoftwareSource.PAPER;
+          }
+
+          @Override
+          public InstallationArtifact install(
+              SoftwareProfile profile,
+              String version,
+              Path stagingDirectory,
+              java.util.function.Consumer<String> log)
+              throws Exception {
+            installs.incrementAndGet();
+            Path jar = stagingDirectory.resolve("server.jar");
+            Files.writeString(jar, "fixture");
+            return artifact(jar);
+          }
+        };
+    SoftwareProfile accepted = profile(SoftwareSource.PAPER);
+    SoftwareProfile notAccepted =
+        new SoftwareProfile(
+            accepted.id(),
+            accepted.runtime(),
+            accepted.configurator(),
+            accepted.source(),
+            accepted.channel(),
+            false,
+            accepted.javaExecutable(),
+            accepted.javaExecutables(),
+            accepted.baseDirectory(),
+            accepted.serverJar(),
+            accepted.jvmArguments(),
+            accepted.serverArguments(),
+            accepted.readinessPattern(),
+            accepted.startupTimeoutSeconds(),
+            accepted.stopCommand(),
+            accepted.stopTimeoutSeconds());
+
+    try (SoftwareInstallationService service =
+        new SoftwareInstallationService(
+            new JavaJarProcessSpecFactory(temporaryDirectory),
+            List.of(provider),
+            100,
+            true,
+            LoggerFactory.getLogger(getClass()))) {
+      Path installed = service.ensureInstalled(notAccepted, "1.0").join();
+
+      assertEquals(1, installs.get());
+      assertEquals("eula=true" + System.lineSeparator(), read(installed.resolve("eula.txt")));
+    }
+  }
+
+  @Test
+  void verifiedCacheRemainsReusableWhenEffectiveEulaPolicyIsLaterFalse() {
+    SoftwareInstallationProvider provider = providerWritingVersion();
+    SoftwareProfile accepted = profile(SoftwareSource.PAPER);
+    Path installed;
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      installed = service.ensureInstalled(accepted, "1.0").join();
+    }
+    SoftwareProfile notAccepted =
+        new SoftwareProfile(
+            accepted.id(),
+            accepted.runtime(),
+            accepted.configurator(),
+            accepted.source(),
+            accepted.channel(),
+            false,
+            accepted.javaExecutable(),
+            accepted.javaExecutables(),
+            accepted.baseDirectory(),
+            accepted.serverJar(),
+            accepted.jvmArguments(),
+            accepted.serverArguments(),
+            accepted.readinessPattern(),
+            accepted.startupTimeoutSeconds(),
+            accepted.stopCommand(),
+            accepted.stopTimeoutSeconds());
+
+    try (SoftwareInstallationService service = service(List.of(provider))) {
+      assertEquals(installed, service.ensureInstalled(notAccepted, "1.0").join());
+    }
+  }
+
   private SoftwareInstallationService service(List<SoftwareInstallationProvider> providers) {
     return new SoftwareInstallationService(
         new JavaJarProcessSpecFactory(temporaryDirectory),

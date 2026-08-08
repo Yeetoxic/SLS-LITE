@@ -33,10 +33,15 @@ accounting.
 3. Place the shaded SLS-LITE JAR in Velocity's `plugins/` directory.
 4. Start Velocity and wait for `SLS-LITE initialized`.
 5. Stop Velocity before making the first host-wide configuration changes.
-6. Review `plugins/sls-lite/config.yml`.
+6. Review `plugins/sls-lite/config.yml`. If a complete replacement is easier,
+   use the [copyable canonical configuration](Copyable_Config.md) and then adapt
+   its host-specific values before restarting Velocity.
 7. Configure player forwarding for the test or production environment.
 8. Review `software-profiles/paper.yml` and `vanilla.yml`.
-9. Set `accept_eula: true` only after accepting the Minecraft EULA.
+9. After accepting the Minecraft EULA, set `accept_eula: true` in each automatic
+   software profile you approve, or set host-wide
+   `software.auto_accept_eula: true` in `config.yml`. Both remain false by
+   default.
 10. Copy `blueprints/template.yml.example` to a `.yml` file, then customize it
     and add any required source worlds.
 11. Start Velocity and inspect `/sls system`.

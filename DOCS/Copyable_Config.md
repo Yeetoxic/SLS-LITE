@@ -1,3 +1,19 @@
+# Complete Copyable Configuration
+
+[Documentation home](README.md) | [Configuration reference](Configuration.md)
+
+This is the complete canonical SLS-LITE host configuration for the current
+source tree. Copy the contents of the YAML block into
+`plugins/sls-lite/config.yml`, then review every setting for the real host before
+restarting Velocity. In particular, do not enable EULA acceptance, insecure
+offline administrators, backend messaging, or privileged storage integrations
+without understanding and accepting their documented effects.
+
+Existing configurations do not need to be replaced wholesale. SLS-LITE never
+rewrites `config.yml`; compare this example with the installed versioned
+`config-reference-vN.yml` and merge desired changes manually.
+
+```yaml
 # Host-wide SLS-LITE settings.
 #
 # All settings in this file apply after Velocity is restarted. YAML indentation
@@ -375,3 +391,5 @@ paths:
   # paths and values that escape the SLS-LITE plugin data directory are rejected.
   # Do not point this at a software template or another server's live directory.
   instances: instances
+```
+

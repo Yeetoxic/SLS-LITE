@@ -105,11 +105,90 @@ class SLSConfigRepositoryTest {
     assertEquals(TransferActionBarConfig.defaults(), config.transferActionBar());
     assertEquals(ViaVersionSyncPolicy.AUTO, config.viaVersionSyncPolicy());
     assertEquals(DiagnosticRetentionConfig.defaults(), config.diagnosticRetention());
+    assertEquals(SoftwareConfig.defaults(), config.software());
     assertEquals(
         temporaryDirectory.resolve("instances").toAbsolutePath().normalize(),
         config.instancesDirectory());
     assertTrue(Files.isRegularFile(temporaryDirectory.resolve("config.yml")));
+    assertTrue(Files.isRegularFile(temporaryDirectory.resolve("config-reference-v2.yml")));
     assertTrue(Files.isDirectory(config.instancesDirectory()));
+    assertEquals(2, repository.migrationStatus().configuredVersion());
+    assertEquals(false, repository.migrationStatus().updateAvailable());
+  }
+
+  @Test
+  void loadsLegacyConfigurationWithoutRewritingItAndReportsSafeDefaults() throws Exception {
+    String legacy = "resources:\n  total_memory_mib: 3072\n";
+    writeConfig(legacy);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.initialize();
+
+    assertEquals(legacy, Files.readString(temporaryDirectory.resolve("config.yml")));
+    assertEquals(false, repository.get().software().autoAcceptEula());
+    assertEquals(1, repository.migrationStatus().configuredVersion());
+    assertEquals(false, repository.migrationStatus().versionDeclared());
+    assertTrue(repository.migrationStatus().updateAvailable());
+    assertTrue(
+        repository
+            .migrationStatus()
+            .effectiveDefaults()
+            .contains("software.auto_accept_eula: false"));
+  }
+
+  @Test
+  void rejectsFutureConfigurationVersionWithUpgradeDirection() throws Exception {
+    writeConfig("config_version: 99\n");
+
+    ConfigurationException exception =
+        assertThrows(
+            ConfigurationException.class,
+            () -> new SLSConfigRepository(temporaryDirectory).reload());
+
+    assertTrue(exception.getMessage().contains("newer than supported version 2"));
+    assertTrue(exception.getMessage().contains("newer SLS-LITE build"));
+  }
+
+  @Test
+  void refusesToOverwriteAConflictingVersionedReference() throws Exception {
+    writeConfig("config_version: 2\n");
+    Files.writeString(temporaryDirectory.resolve("config-reference-v2.yml"), "operator file\n");
+
+    java.io.IOException exception =
+        assertThrows(
+            java.io.IOException.class,
+            () -> new SLSConfigRepository(temporaryDirectory).initialize());
+
+    assertTrue(exception.getMessage().contains("reference collision"));
+    assertEquals(
+        "operator file\n", Files.readString(temporaryDirectory.resolve("config-reference-v2.yml")));
+  }
+
+  @Test
+  void loadsHostWideAutomaticEulaAcceptance() throws Exception {
+    writeConfig(
+        """
+        config_version: 2
+        software:
+          auto_accept_eula: true
+        """);
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.reload();
+
+    assertEquals(true, repository.get().software().autoAcceptEula());
+  }
+
+  @Test
+  void rejectsMalformedHostWideAutomaticEulaAcceptance() throws Exception {
+    writeConfig("software:\n  auto_accept_eula: yes-please\n");
+
+    ConfigurationException exception =
+        assertThrows(
+            ConfigurationException.class,
+            () -> new SLSConfigRepository(temporaryDirectory).reload());
+
+    assertTrue(exception.getMessage().contains("software.auto_accept_eula"));
   }
 
   @Test
