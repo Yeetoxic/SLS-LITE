@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest an improvement to SLS-LITE or its extension API.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should this solve?
+      description: Explain the user need rather than only the proposed implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe how you would expect the feature to work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or extension approach
+      description: Note any workaround and whether this could reasonably be implemented as an SLS-LITE extension.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add examples, configuration sketches, or related links if useful.

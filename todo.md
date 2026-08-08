@@ -1069,6 +1069,29 @@ Goal: approve and publish the first public SLS-LITE release.
       Stage 4 scenarios.
 - [ ] Complete the final clean-install, upgrade, security, licensing,
       documentation, dependency, compatibility, and artifact audit.
+- [ ] End the RC direct-push policy only after the maintainer freezes the stable
+      baseline. Replace the RC `main` ruleset with stable protection that
+      requires pull requests, successful `Java 25 verification` and
+      `Dependency review` checks, and resolved review conversations while
+      continuing to block force pushes and deletion. Keep required approvals at
+      zero while there is only one active maintainer, raise it to one when a
+      second maintainer can provide real independent review, and do not require
+      strict branch currency, signed commits, or CODEOWNERS merely for ceremony.
+- [ ] Create and verify a dedicated GitHub `release` environment before the
+      first stable publication. Restrict it to `main`, require the maintainer's
+      explicit approval, keep self-review possible while the project has one
+      releaser, and confirm the `Build Release` workflow cannot publish stable
+      artifacts without passing the environment gate and its existing clean
+      consumer verification.
+- [ ] Add a GitHub tag ruleset for release tags matching `v*` that permits the
+      approved release workflow to create a new tag but blocks later updates and
+      deletion. Confirm candidate and stable tags remain immutable without
+      preventing creation of the next legitimate release.
+- [ ] Evaluate GitHub CodeQL default setup for Java against the frozen stable
+      baseline. Triage every initial result, retain the scan only when it adds
+      useful signal beyond the existing tests and SpotBugs checks, and document
+      a concrete incompatibility or noise rationale if it is disabled rather
+      than maintaining a failing or ignored security badge.
 - [ ] Build the release artifact from the approved source revision and publish
       its SHA-256 checksum.
 - [ ] Publish versioned documentation, source, corresponding bundled-component
@@ -1217,6 +1240,43 @@ refer to the same approved revision and passed release evidence.
       local Linux/WSL fixture. Document which results affect disk, I/O, startup,
       or runtime memory rather than promising generic memory savings.
 
+## Post-release: Repository and Release Engineering
+
+- [ ] Add GitHub artifact attestations when release consumers or downstream
+      automation will verify them. Attest the exact plugin, public API, source,
+      Javadoc, and distribution artifacts produced by the approved release
+      workflow; publish verification instructions and retain SHA-256 checksums
+      for ordinary users. Do not claim provenance value merely because an
+      attestation was generated but never checked.
+- [ ] Evaluate a release SBOM after the dependency and bundled-component model
+      is stable. Publish it only if the selected generator accurately represents
+      Maven dependencies, shaded content, bundled NanoLimbo material, and the
+      separate public API artifacts; version it with the release and reject
+      incomplete output that could mislead operators.
+- [ ] Publish the public API to a Maven-compatible package repository only when
+      extension authors need normal dependency resolution beyond release-asset
+      downloads. Freeze coordinates and compatibility policy first, keep the
+      runnable plugin JAR as the ordinary operator download, automate package
+      publication from the approved release workflow, and document credentials,
+      checksums/provenance, retention, and consumption without requiring server
+      operators to use GitHub Packages.
+- [ ] Introduce multi-maintainer governance only when another maintainer is
+      actively reviewing changes: add accurate CODEOWNERS, require one
+      independent approval, prevent release self-review when it cannot strand
+      publication, and document emergency/bypass use. Do not add nominal owners
+      or approval gates that nobody else can satisfy.
+- [ ] Reassess repository hardening when workflow or contributor complexity
+      grows. Consider repository-enforced action SHA pinning, a narrow Actions
+      allowlist, verified commit/tag signing, and stricter external-contributor
+      workflow approval only against concrete threats and a tested maintenance
+      path; retain the current read-only default token and never enable Actions
+      to approve pull requests without a specific reviewed need.
+- [ ] Add community-governance surfaces only if public participation outgrows
+      the existing Issues, Wiki, and Discord workflow. At that point define a
+      maintained Code of Conduct, decide whether GitHub Discussions improves or
+      fragments support, and establish issue/PR triage ownership; do not add
+      them solely to increase GitHub's community-profile percentage.
+
 ## Coverage Audit
 
 This rewrite consolidates the former phase checklist, feature backlog,
@@ -1240,6 +1300,8 @@ remain represented until completed or explicitly deferred:
   guidance.
 - Internal package/resource organization, contributor guidance, formatting,
   static analysis, CI, and test coverage.
+- Repository security reporting, dependency automation, branch/tag protection,
+  release environments, contributor governance, and release provenance.
 - Public API/events/integrations, optional features, documentation, licensing,
   corresponding source, candidate testing, and release publication.
 
