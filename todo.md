@@ -810,15 +810,157 @@ post-release milestone.
 - [x] Publish the candidate artifact and checksums to the selected external
       testers.
 
-### 4.3 Candidate Feedback
+### 4.3 Candidate Feedback and `v0.1.0-rc.2`
 
 - [ ] Triage external findings as release-blocking, scheduled follow-up, or
       rejected with rationale.
+- [ ] Preserve published `v0.1.0-rc.1` as the immutable first-candidate
+      baseline. Implement the accepted Stage 4.3 tester feedback below for
+      `v0.1.0-rc.2`, update versioned artifacts and release notes only after the
+      batch passes its required regression and clean-install checks, and publish
+      it through the approved release-candidate workflow with matching source
+      and checksums.
+- [ ] Continue the same immutable candidate cycle for `rc.3`, `rc.4`, and later
+      candidates whenever additional accepted feedback or blockers require
+      changes. Give each candidate a bounded documented scope, preserve every
+      prior tag/artifact/checksum, repeat affected regression and clean-install
+      evidence, and return it to testers. Advance to Stage 5 only after the
+      current candidate has no known release blockers and the maintainer
+      explicitly approves promotion; `rc.2` is not presumed final.
+- [ ] Add the tester-requested host-wide `software.auto_accept_eula` convenience
+      setting to `config.yml`, defaulting to `false`. Treat `true` as the
+      operator's explicit acceptance for automatic Paper/vanilla installation
+      across profiles while retaining the existing per-profile
+      `software.accept_eula` opt-in; either explicit choice may satisfy the
+      installation gate. Never infer acceptance, change generated defaults to
+      true, alter manual software, or download software before an effective
+      opt-in. Document the precedence and operator responsibility, preserve
+      upgrades that omit the new key, and test false/default, global true,
+      profile true, malformed values, reload/restart, cache reuse, warmup, and
+      generated `eula.txt` behavior.
+- [ ] Add a non-destructive host-configuration evolution contract before
+      publishing `rc.2`. Give newly generated configurations an explicit
+      `config_version`; treat an unversioned `rc.1` file as the documented legacy
+      version. Never overwrite, reserialize, reorder, or remove an operator's
+      `config.yml`. Continue applying safe code defaults for omitted optional
+      keys (including `software.auto_accept_eula: false`), and fail with an exact
+      migration instruction rather than guessing whenever a future change has
+      no safe default. Ship each changed canonical configuration as a bounded,
+      versioned, plugin-owned reference file without copying secrets, and report
+      the old/current versions, newly available keys, effective defaults, and
+      reference path once in the compact startup checklist. Allow operators to
+      merge and acknowledge the new version deliberately. For renamed fields,
+      provide a documented bounded compatibility alias when safe and reject
+      configurations containing conflicting old and new forms. Test untouched
+      `rc.1` upgrades, customized comments/order, missing and current versions,
+      malformed/future versions, reference-file collision and symlink handling,
+      atomic reference installation, deprecated aliases, conflicts, and fresh
+      `rc.2` generation.
+- [ ] Replace the scattered first-run forwarding instructions with one
+      copy-and-paste onboarding path for a real Velocity/Paper network and one
+      explicitly insecure isolated-development path. Show the matching
+      `velocity.toml` and SLS-LITE `config.yml` fragments, exact secret-file
+      location and permissions, matching online-mode values, required full
+      restart, and the Paper-versus-vanilla boundary. Explain that SLS-LITE runs
+      inside Velocity, dynamically registers managed backends, patches managed
+      Paper instances, and does not require users to add each managed instance
+      to `[servers]`; separately show when velocity-owned or external lobby
+      entries and `try`/forced-host routes are required. Add a short decision
+      table for `velocity`, `external`, and `managed` lobby modes, startup-log
+      and `/sls system` checks, a mandatory real-client join/transfer test, and
+      symptom-based fixes for mismatched modes, secrets, online mode, unreachable
+      example servers, and players stranded in SLS-Limbo. Make README and the
+      generated config point directly to this single canonical setup section,
+      then validate it with a clean tester-style installation that begins with
+      an unmodified Velocity configuration.
+- [ ] Add a copyable blueprint recipe book that teaches mappings visually before
+      presenting the full schema. For every recipe, show the source directory
+      tree, a complete valid YAML fragment or minimal blueprint, and the
+      resulting instance tree, with callouts explaining that `source` is below
+      the SLS-LITE data directory while `target` is inside each prepared server.
+      Include disposable and persistent worlds, one plugin JAR, a shared plugin
+      bundle, multiple bundles merged into `plugins/`, a seeded
+      `whitelist.json`, configuration patches, same-target COW precedence, a
+      private `ro` snapshot, the explicitly single-instance shared-directory
+      `rw` case, and importing a complete existing Paper server as a manually
+      prepared `server.path` base. For the import recipe, show required JAR/profile
+      agreement, `save: true`, SLS-LITE-owned networking overrides, source versus
+      live-instance ownership, files operators may wish to clean first, and the
+      destructive consequence of reset without mutating the original template.
+      Explain why a root-target volume is not the import mechanism. Add a concise
+      `state.volumes` versus `state.copy` versus `server.path` decision table and
+      make directory-only volumes, file-capable copies, root-target limits,
+      save/reset consequences, source immutability, collision precedence, and
+      trailing-slash behavior unmistakable. Keep examples free of test-rig paths
+      and version assumptions where possible, link them from README, the
+      blueprint template, and Getting Started, and automatically parse every
+      published YAML example or assemble it into a valid fixture so copied
+      documentation cannot drift from the accepted schema.
+- [ ] Perform a beginner-accessibility pass over installation and blueprint
+      documentation so operators do not need storage or container expertise to
+      begin. Lead with the mental model: SLS-LITE is an assembly line for
+      servers, and a blueprint is the build sheet describing how each instance
+      is assembled. Introduce `source` as the component's supply location,
+      `target` as its location in the finished server, `copy` as placing a fresh
+      copy, `cow` as a private writable copy, `rw` as deliberately shared live
+      storage, and `save` as retaining the assembled instance. Organize the path
+      as plain-language concepts, goal-based recipes, visual before/after trees,
+      verification, troubleshooting, and only then the full schema and advanced
+      COW/provider internals. Define unavoidable jargon on first use, separate
+      safe defaults from advanced choices, provide clear next actions after
+      errors, and usability-test the path with someone unfamiliar with SLS-LITE
+      before calling the candidate documentation complete.
+- [ ] Add one compact, bounded startup setup checklist that distinguishes
+      release blockers, actions needed before a configured feature can work,
+      and valid but development-oriented choices. Cover plugin initialization,
+      forwarding/online-mode agreement, forwarding-secret readiness without
+      exposing it, lobby/SLS-Limbo routing, loaded and rejected blueprints,
+      zero-blueprint next steps, software EULA gates that are actually relevant
+      to loaded definitions, required Java runtimes, managed process/memory/port
+      admission, and the selected storage fallback. End with an unambiguous
+      ready/action-needed summary and one canonical setup-document link; keep
+      full probe detail in the detail log and `/sls system` so startup does not
+      become another wall of text. Test clean production, isolated development,
+      incomplete first-run, malformed definition, offline optional provider,
+      and restricted Pterodactyl configurations.
+- [ ] Make the change-application model explicit wherever operators edit or
+      reload definitions. Document and report that blueprint/software reloads
+      affect future assembly, persistent restart reuses the existing instance,
+      reset rebuilds it from the current base/volumes/copies, `state.copy`
+      changes therefore require reset, and `config.yml` requires a Velocity
+      restart. After a successful definition reload, provide a concise next
+      action when changed definitions have persistent or running instances,
+      without touching those instances automatically. Add regression tests for
+      plugin-JAR replacement, source-world changes, running-instance isolation,
+      persistent restart, reset, rejected sibling definitions, and restart-only
+      host configuration.
+- [ ] Reopen candidate scope for safe per-file persistent state and publish the
+      result as a new release candidate rather than changing `rc.1`. Audit full
+      SLS file-shaped volume behavior, then design and implement root-file state
+      for files such as `whitelist.json`, `ops.json`, ban lists, and server
+      icons. Keep `state.copy` as the existing private/COW-like file seed and
+      avoid duplicating its semantics; optimize eligible copies with reflinks
+      only when behavior remains identical. Do not implement writable file
+      volumes as naive symbolic links or privileged-only bind mounts:
+      applications may atomically replace files, hosts may reject mounts, and
+      either behavior can silently break persistence. Define an explicit bounded
+      import/write-back contract with single-writer ownership, atomic
+      publication, canonical-file backups, size and path confinement, symlink
+      rejection, reset/delete behavior, conflict detection, crash
+      reconciliation, and actionable diagnostics. Test real Paper whitelist,
+      operator, and ban-list command saves plus interrupted writes, restarts,
+      resets, concurrent access rejection, Windows, native Linux, and restricted
+      Pterodactyl hosts before freezing and documenting the stable blueprint
+      field. Repeat the affected schema, migration, storage, lifecycle,
+      reconciliation, backup-boundary, documentation, API-compatibility, clean
+      installation, upgrade, distribution-smoke, and real-client checks for the
+      replacement candidate.
 - [ ] Fix every candidate blocker and repeat its automated, storage, lifecycle,
       protocol, and real-client scenarios.
 
-Acceptance: external testers receive a reproducible, documented candidate whose
-known limitations and compatibility boundaries match observed behavior.
+Acceptance: external testers receive reproducible, documented
+`v0.1.0-rc.2` artifacts whose known limitations and compatibility boundaries
+match observed behavior, with `v0.1.0-rc.1` retained as the prior baseline.
 
 ## Stage 5: Release
 
@@ -845,6 +987,74 @@ refer to the same approved revision and passed release evidence.
       software administration). Keep membership in the operator's permission
       provider, retain the built-in SLS-LITE administrator, and define child
       grant/deny precedence before implementation.
+- [ ] Evaluate a guided existing-server import assistant that inspects an
+      operator-selected directory and generates a draft manual software profile,
+      blueprint, and compatibility report. Detect likely server software/JAR and
+      version only when evidence is unambiguous; report hardcoded ports, bind and
+      forwarding settings, absolute paths, plugin databases, caches/logs, world
+      layout, EULA responsibility, persistence, and reset consequences. Confine
+      all reads, bound traversal and output, reject symbolic-link escapes and
+      special files, never execute imported content, and never move, delete,
+      rewrite, clean, or adopt the original server automatically. Require the
+      operator to review and activate the generated drafts explicitly.
+
+## Post-release: Backup and Portability
+
+- [ ] Design and implement explicit backup/export and restore/import operations
+      for SLS-LITE-owned persistent instances. Define stopped-versus-live
+      guarantees, Minecraft flush requirements, OverlayFS/FUSE suspension,
+      snapshot-hook coordination, atomic publication, checksums, format/version
+      metadata, free-space and size bounds, cancellation, partial-output cleanup,
+      conflict handling, and crash recovery. Treat shared `rw` directories as
+      separately owned external state: never traverse or silently include them,
+      list every exclusion, and require an explicit separately confined backup
+      choice if support is added. Restore must stage and verify into a new owned
+      destination before any replacement, preserve the original on failure, and
+      require explicit confirmation before replacing an existing instance.
+
+## Post-release: Storage Portability
+
+- [ ] Remove GNU `cp` as the only Linux reflink interface by evaluating a small,
+      verified native helper or binding for the `FICLONE` operation. Continue to
+      require an exact-path clone, mutation-isolation, allocated-size, and
+      cleanup probe; bundle architecture-specific code only with checksums,
+      notices, corresponding source, and a maintained security-update path.
+      This may recover reflinks on minimal images with a capable filesystem but
+      must never report reflink support where the backing filesystem rejects it.
+- [ ] Evaluate an internal Btrfs seed-subvolume cache so ordinary eligible
+      source directories can be imported once and subsequent instances created
+      as snapshots. Define strong source identity and invalidation, bounded
+      staging/publication, nested-subvolume rejection, immutable-seed
+      protection, reference-safe cleanup, crash reconciliation, and disk-space
+      accounting. Use it only when the exact workspace is Btrfs and contained
+      subvolume create/snapshot/delete probes succeed.
+- [ ] Prototype rootless kernel OverlayFS in an isolated user and mount
+      namespace only on hosts that explicitly permit it. Prove that the managed
+      Minecraft process shares the mount namespace, the source remains
+      isolated, persistent instances can be resumed or recovered, and shutdown
+      cannot strand mounts or namespace owners. Do not request host capability,
+      seccomp, AppArmor, or user-namespace changes; reject the approach if it
+      cannot fit the existing bounded supervision and reconciliation model.
+- [ ] Evaluate a verified bundled `fuse-overlayfs` fallback for hosts that expose
+      a usable `/dev/fuse` but do not install the executable. First collect
+      capability diagnostics from real hosts to distinguish missing binaries
+      from unavailable devices, permissions, user namespaces, or mount helpers.
+      Prefer a compatible system binary, then consider pinned upstream static
+      builds for supported architectures with checksums, licenses,
+      corresponding source, no-follow extraction, and security-update handling.
+      Retain the full mount/isolation/unmount probe and never create `/dev/fuse`,
+      add capabilities, alter seccomp, or weaken host security. Test native Linux
+      and restricted Pterodactyl hosts on x86-64 and ARM64, compare performance
+      with portable copy, and proceed only if the experiment unlocks meaningful
+      provider coverage without making release maintenance or supply-chain risk
+      disproportionate.
+- [ ] Publish a reference provider integration for the existing bounded
+      `sls-snapshot-helper-v1` protocol, demonstrating how a trusted host-side
+      component can expose OverlayFS, Btrfs, ZFS, LVM-thin, or a provider
+      snapshot API without granting the Velocity JVM storage privileges. Keep
+      installation explicit and provider-controlled, authenticate and confine
+      the boundary, preserve idempotent lifecycle operations, and do not bundle
+      or auto-start a privileged daemon with SLS-LITE.
 
 ## Post-release: Compatibility and Routing
 
@@ -880,6 +1090,13 @@ refer to the same approved revision and passed release evidence.
       maintenance/shutdown integration, crash reconciliation, idle-cost
       diagnostics, and hard protection against unbounded start loops. Preserve
       ordinary on-demand behavior when disabled.
+- [ ] Profile and improve the universal portable-copy path without weakening
+      isolation: preserve sparse allocation where supported, tune bounded
+      parallelism by measured workload, avoid safely reusable scans, perform
+      preflight space admission, report logical versus allocated bytes, and
+      evaluate post-copy extent deduplication only after an exact-path
+      isolation probe. Never substitute hard links, writable symbolic links,
+      race-prone file watching, or process-interposition tricks for COW.
 
 ## Post-release: World Maintenance
 
