@@ -110,7 +110,7 @@ class SLSConfigRepositoryTest {
         temporaryDirectory.resolve("instances").toAbsolutePath().normalize(),
         config.instancesDirectory());
     assertTrue(Files.isRegularFile(temporaryDirectory.resolve("config.yml")));
-    assertTrue(Files.isRegularFile(temporaryDirectory.resolve("config-reference-v2.yml")));
+    assertEquals(false, Files.exists(temporaryDirectory.resolve("config-reference-v2.yml")));
     assertTrue(Files.isDirectory(config.instancesDirectory()));
     assertEquals(2, repository.migrationStatus().configuredVersion());
     assertEquals(false, repository.migrationStatus().updateAvailable());
@@ -150,18 +150,29 @@ class SLSConfigRepositoryTest {
   }
 
   @Test
-  void refusesToOverwriteAConflictingVersionedReference() throws Exception {
+  void ignoresLegacyReferenceFilesWithoutCreatingOrChangingThem() throws Exception {
     writeConfig("config_version: 2\n");
     Files.writeString(temporaryDirectory.resolve("config-reference-v2.yml"), "operator file\n");
 
-    java.io.IOException exception =
-        assertThrows(
-            java.io.IOException.class,
-            () -> new SLSConfigRepository(temporaryDirectory).initialize());
+    new SLSConfigRepository(temporaryDirectory).initialize();
 
-    assertTrue(exception.getMessage().contains("reference collision"));
     assertEquals(
         "operator file\n", Files.readString(temporaryDirectory.resolve("config-reference-v2.yml")));
+  }
+
+  @Test
+  void currentVersionWithOmittedOptionalValuesIsNotReportedAsBehind() throws Exception {
+    writeConfig("config_version: 2\n");
+    SLSConfigRepository repository = new SLSConfigRepository(temporaryDirectory);
+
+    repository.initialize();
+
+    assertEquals(false, repository.migrationStatus().updateAvailable());
+    assertTrue(
+        repository
+            .migrationStatus()
+            .effectiveDefaults()
+            .contains("software.auto_accept_eula: false"));
   }
 
   @Test

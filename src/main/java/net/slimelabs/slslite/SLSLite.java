@@ -28,11 +28,12 @@ import net.slimelabs.slslite.command.SLSCommand;
 import net.slimelabs.slslite.config.ConfigurationValidator;
 import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.DefinitionReloader;
-import net.slimelabs.slslite.config.ForwardingMode;
 import net.slimelabs.slslite.config.SLSConfigRepository;
 import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityChecker;
 import net.slimelabs.slslite.host.HostCapabilityReport;
+import net.slimelabs.slslite.host.StartupSetupChecklist;
+import net.slimelabs.slslite.host.StartupSetupInspector;
 import net.slimelabs.slslite.install.PaperInstallationProvider;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
 import net.slimelabs.slslite.install.VanillaInstallationProvider;
@@ -76,6 +77,9 @@ import org.slf4j.Logger;
     dependencies = {@Dependency(id = "viaversion", optional = true)})
 public final class SLSLite implements SLSLiteApiProvider {
 
+  private static final String CONFIGURATION_GUIDE =
+      "https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Copyable_Config.md";
+
   private final ProxyServer proxy;
   private final Logger logger;
   private final BlueprintRepository blueprints;
@@ -118,6 +122,7 @@ public final class SLSLite implements SLSLiteApiProvider {
   @Subscribe
   public void onProxyInitialization(ProxyInitializeEvent event) {
     ProxyRecoveryTiming recoveryTiming = new ProxyRecoveryTiming();
+    StartupSetupChecklist.Report startupChecklist;
     String startupCorrelation = CorrelationIds.next("startup");
     ConsoleBanner.logStartup(logger);
 
@@ -142,22 +147,24 @@ public final class SLSLite implements SLSLiteApiProvider {
           configuration.migrationStatus();
       if (configStatus.updateAvailable()) {
         logger.warn(
-            "Host configuration requires review: loaded generation {} of {}; "
-                + "omitted safe defaults={} and canonical reference={} (config.yml was not changed)",
+            "Host configuration {} is behind current generation {}; omitted safe defaults={} "
+                + "(config.yml was not changed). Review: {}",
             configStatus.versionDeclared()
-                ? configStatus.configuredVersion()
-                : "unversioned legacy",
+                ? "generation " + configStatus.configuredVersion()
+                : "is unversioned legacy (treated as generation "
+                    + configStatus.configuredVersion()
+                    + ")",
             configStatus.currentVersion(),
             configStatus.effectiveDefaults(),
-            configStatus.referenceConfig().getFileName());
+            CONFIGURATION_GUIDE);
         detailLog.normal(
             startupCorrelation,
             "configuration",
-            "Loaded host config generation {} of {}; effective defaults={}; reference={}",
+            "Loaded host config generation {} of {}; effective defaults={}; migration guide={}",
             configStatus.configuredVersion(),
             configStatus.currentVersion(),
             configStatus.effectiveDefaults(),
-            configStatus.referenceConfig());
+            CONFIGURATION_GUIDE);
       } else {
         logger.info("Host configuration generation {} is current", configStatus.currentVersion());
       }
@@ -190,24 +197,11 @@ public final class SLSLite implements SLSLiteApiProvider {
                       "Rejected {}: {}",
                       rejection.path(),
                       rejection.error()));
-      if (!startupDefinitions.rejectedBlueprints().isEmpty()) {
-        logger.warn(
-            "Loaded {} blueprint(s) and rejected {} invalid blueprint file(s) [{}]; "
-                + "valid siblings remain available and details are in the SLS-LITE detail log",
-            startupDefinitions.acceptedBlueprints(),
-            startupDefinitions.rejectedBlueprints().size(),
-            startupCorrelation);
-      }
       ConfigurationValidator.validateFaultIsolated(
           configuration.get(),
           blueprints.getAll(),
           softwareProfiles.getAll(),
           proxy.getConfiguration().isOnlineMode());
-      if (configuration.get().forwarding().mode() == ForwardingMode.NONE) {
-        logger.warn(
-            "Managed player forwarding is disabled; forwarding.mode=none "
-                + "is intended only for isolated development");
-      }
       resourceBudget = new ResourceBudget(configuration.get().totalMemoryMiB());
       LoopbackPortAllocator portAllocator =
           new LoopbackPortAllocator(
@@ -228,6 +222,15 @@ public final class SLSLite implements SLSLiteApiProvider {
         throw new IllegalStateException(
             "Required host capability checks failed: " + hostCapabilities.failureSummary());
       }
+      startupChecklist =
+          new StartupSetupInspector()
+              .inspect(
+                  configuration.get(),
+                  startupDefinitions,
+                  blueprints.getAll(),
+                  softwareProfiles.getAll(),
+                  processSpecFactory,
+                  hostCapabilities);
       InstanceDirectoryPreparer directoryPreparer =
           new InstanceDirectoryPreparer(
               configuration.get().instancesDirectory(),
@@ -383,6 +386,19 @@ public final class SLSLite implements SLSLiteApiProvider {
                             startupCorrelation, "timing", "Proxy restart recovery: {}", summary)));
     lobbyProvider.start();
     idleReaper.start();
+
+    logger.info("Setup checklist [{}]: {}", startupCorrelation, startupChecklist.consoleSummary());
+    startupChecklist
+        .findings()
+        .forEach(
+            finding ->
+                detailLog.normal(
+                    startupCorrelation,
+                    "setup-checklist",
+                    "{} [{}]: {}",
+                    finding.level(),
+                    finding.topic(),
+                    finding.message()));
 
     if (configuration.get().detailedLogging().level()
         == net.slimelabs.slslite.config.DetailLogLevel.OFF) {

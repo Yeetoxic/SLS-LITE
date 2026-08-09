@@ -950,7 +950,12 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       safe defaults from advanced choices, provide clear next actions after
       errors, and usability-test the path with someone unfamiliar with SLS-LITE
       before calling the candidate documentation complete.
-- [ ] Add one compact, bounded startup setup checklist that distinguishes
+  - [x] Reorder the beginner journey, lead with the assembly-line mental model,
+        define the core mapping terms, and separate the first-server path from
+        the full schema and advanced storage choices.
+  - [ ] Usability-test that path with someone unfamiliar with SLS-LITE and fix
+        the points where they hesitate or need undocumented help.
+- [x] Add one compact, bounded startup setup checklist that distinguishes
       release blockers, actions needed before a configured feature can work,
       and valid but development-oriented choices. Cover plugin initialization,
       forwarding/online-mode agreement, forwarding-secret readiness without

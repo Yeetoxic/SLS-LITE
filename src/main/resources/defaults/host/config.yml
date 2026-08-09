@@ -4,8 +4,8 @@
 # matters: use spaces, not tabs. Sizes use MiB/KiB and durations use seconds.
 
 # Schema generation for this host configuration. SLS-LITE never rewrites an
-# existing config.yml; use the separately installed versioned reference when
-# this number is older than the current plugin's supported generation.
+# existing config.yml; use the linked canonical documentation when this number
+# is older than the current plugin's supported generation.
 config_version: 2
 
 software:

@@ -5,7 +5,31 @@
 SLS-LITE is designed for a Velocity allocation whose host permits additional
 local Java processes. Test host capabilities before importing a real network.
 
-## Host Checklist
+## The Simple Mental Model
+
+Think of SLS-LITE as an assembly line for servers. A blueprint is the build
+sheet that tells it which clean server base to use, which world and plugins to
+add, and whether to keep the finished instance after it stops. You prepare the
+parts; SLS-LITE assembles and runs the result.
+
+If this is your first install, use this path and ignore advanced storage
+internals until the first server works:
+
+1. Complete [Install](#install) and
+   [Forwarding and First Connection](#forwarding-and-first-connection).
+2. Build one server from a copyable [Blueprint Recipe](Blueprint_Recipes.md).
+3. Start Velocity and read its single `Setup checklist` line. `READY` means the
+   host checks passed; `ACTION NEEDED` names the first fixes and points back to
+   this page. Exact probe details remain in `/sls system` and the detail log.
+4. Run `/sls reload blueprints`, `/sls blueprints`, and then `/sls join`.
+5. Only after that works, use the full [Blueprint Schema](Blueprints.md) and
+   [advanced storage guide](Blueprint_Volumes.md).
+
+The generated defaults favor safety and portability. `forwarding.mode: none`
+is a deliberate development-only choice, while `storage.strategy: auto` may
+select `portable-copy` on restricted hosting and still be fully functional.
+
+## Before Installing
 
 - The pinned Velocity generation used by this release runs on Java 25.
   SLS-LITE's own classes target Java 21 bytecode, but installing an older JDK

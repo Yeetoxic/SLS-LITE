@@ -9,12 +9,13 @@ summaries.
 
 ### New operator
 
-1. [Current Release Notes](../RELEASE_NOTES.md)
-2. [Getting Started](Getting_Started.md)
+1. [Getting Started](Getting_Started.md)
+2. [Blueprint Recipe Book](Blueprint_Recipes.md)
 3. [Configuration](Configuration.md) and the [complete copyable config](Copyable_Config.md)
-4. [Blueprints](Blueprints.md)
-5. [Commands and Permissions](Commands.md)
+4. [Commands and Permissions](Commands.md)
+5. [Full Blueprint Schema](Blueprints.md)
 6. [Operations and Recovery](Operations.md)
+7. [Current Release Notes](../RELEASE_NOTES.md)
 
 ### Existing SLS or SLS-LITE operator
 

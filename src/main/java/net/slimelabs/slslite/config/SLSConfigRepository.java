@@ -18,9 +18,6 @@ public final class SLSConfigRepository {
   static final int CURRENT_CONFIG_VERSION = 2;
 
   private static final String DEFAULT_CONFIG_RESOURCE = "defaults/host/config.yml";
-  private static final String REFERENCE_CONFIG_FILE =
-      "config-reference-v" + CURRENT_CONFIG_VERSION + ".yml";
-
   private static final int DEFAULT_TOTAL_MEMORY_MIB = 2048;
   private static final int DEFAULT_PORT_RANGE_START = 25570;
   private static final int DEFAULT_PORT_RANGE_END = 25589;
@@ -85,7 +82,6 @@ public final class SLSConfigRepository {
   public void initialize() throws IOException, ConfigurationException {
     ConfinedFiles.ensureDirectory(dataDirectory);
     installDefaultWhenMissing();
-    installReferenceConfiguration();
     reload();
     ConfinedFiles.ensureDirectory(get().instancesDirectory());
   }
@@ -590,11 +586,7 @@ public final class SLSConfigRepository {
         return new LoadedConfiguration(
             parsed,
             new ConfigMigrationStatus(
-                configuredVersion,
-                CURRENT_CONFIG_VERSION,
-                versionDeclared,
-                dataDirectory.resolve(REFERENCE_CONFIG_FILE),
-                effectiveDefaults));
+                configuredVersion, CURRENT_CONFIG_VERSION, versionDeclared, effectiveDefaults));
       } catch (IllegalArgumentException exception) {
         throw YamlValues.error(configPath, exception.getMessage());
       }
@@ -832,40 +824,6 @@ public final class SLSConfigRepository {
         throw new IOException("Bundled host default is missing: " + DEFAULT_CONFIG_RESOURCE);
       }
       ConfinedFiles.atomicCopy(dataDirectory, "config.yml", source, MAX_CONFIG_BYTES);
-    }
-  }
-
-  private void installReferenceConfiguration() throws IOException {
-    byte[] bundled = bundledConfiguration();
-    Path reference = dataDirectory.resolve(REFERENCE_CONFIG_FILE);
-    if (!Files.exists(reference, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
-      ConfinedFiles.atomicWrite(dataDirectory, REFERENCE_CONFIG_FILE, bundled, MAX_CONFIG_BYTES);
-      return;
-    }
-    ConfinedFiles.requireRegularFile(reference);
-    byte[] existing;
-    try (InputStream input = BoundedFileReader.openNoFollow(reference, MAX_CONFIG_BYTES)) {
-      existing = input.readAllBytes();
-    }
-    if (!java.util.Arrays.equals(existing, bundled)) {
-      throw new IOException(
-          "Configuration reference collision at "
-              + reference
-              + "; preserve or rename that file so SLS-LITE can install its canonical reference");
-    }
-  }
-
-  private byte[] bundledConfiguration() throws IOException {
-    try (InputStream source =
-        getClass().getClassLoader().getResourceAsStream(DEFAULT_CONFIG_RESOURCE)) {
-      if (source == null) {
-        throw new IOException("Bundled host default is missing: " + DEFAULT_CONFIG_RESOURCE);
-      }
-      byte[] contents = source.readNBytes(MAX_CONFIG_BYTES + 1);
-      if (contents.length > MAX_CONFIG_BYTES) {
-        throw new IOException("Bundled host default exceeds the configuration byte limit");
-      }
-      return contents;
     }
   }
 

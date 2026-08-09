@@ -10,8 +10,8 @@ offline administrators, backend messaging, or privileged storage integrations
 without understanding and accepting their documented effects.
 
 Existing configurations do not need to be replaced wholesale. SLS-LITE never
-rewrites `config.yml`; compare this example with the installed versioned
-`config-reference-vN.yml` and merge desired changes manually.
+rewrites `config.yml`; compare this example with your file and merge desired
+changes manually. The startup migration notice is based on `config_version`.
 
 ```yaml
 # Host-wide SLS-LITE settings.
@@ -20,8 +20,8 @@ rewrites `config.yml`; compare this example with the installed versioned
 # matters: use spaces, not tabs. Sizes use MiB/KiB and durations use seconds.
 
 # Schema generation for this host configuration. SLS-LITE never rewrites an
-# existing config.yml; use the separately installed versioned reference when
-# this number is older than the current plugin's supported generation.
+# existing config.yml; use the linked canonical documentation when this number
+# is older than the current plugin's supported generation.
 config_version: 2
 
 software:

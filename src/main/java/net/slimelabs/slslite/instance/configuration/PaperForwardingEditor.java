@@ -3,25 +3,20 @@ package net.slimelabs.slslite.instance.configuration;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ForwardingMode;
+import net.slimelabs.slslite.config.ForwardingSecretFile;
 import net.slimelabs.slslite.instance.InstancePreparationException;
-import net.slimelabs.slslite.io.BoundedFileReader;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 public final class PaperForwardingEditor {
-
-  private static final int MAXIMUM_SECRET_LENGTH = 4096;
-  private static final int MAXIMUM_SECRET_BYTES = 16 * 1024;
 
   private PaperForwardingEditor() {}
 
@@ -53,27 +48,11 @@ public final class PaperForwardingEditor {
 
   private static String readSecret(Path secretFile) throws InstancePreparationException {
     try {
-      if (Files.isSymbolicLink(secretFile)
-          || !Files.isRegularFile(secretFile, LinkOption.NOFOLLOW_LINKS)) {
-        throw new InstancePreparationException(
-            "Velocity forwarding secret file must be a regular non-symbolic file: " + secretFile);
-      }
-      String secret =
-          BoundedFileReader.readStringNoFollow(
-                  secretFile, StandardCharsets.UTF_8, MAXIMUM_SECRET_BYTES)
-              .trim();
-      if (secret.isEmpty()) {
-        throw new InstancePreparationException(
-            "Velocity forwarding secret file is empty: " + secretFile);
-      }
-      if (secret.length() > MAXIMUM_SECRET_LENGTH) {
-        throw new InstancePreparationException(
-            "Velocity forwarding secret exceeds " + MAXIMUM_SECRET_LENGTH + " characters");
-      }
-      return secret;
+      return ForwardingSecretFile.read(secretFile);
     } catch (IOException exception) {
       throw new InstancePreparationException(
-          "Unable to read Velocity forwarding secret file: " + secretFile, exception);
+          "Velocity forwarding secret file " + exception.getMessage() + ": " + secretFile,
+          exception);
     }
   }
 

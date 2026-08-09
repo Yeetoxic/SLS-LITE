@@ -30,11 +30,12 @@ fixture scripts rather than in these product defaults.
 
 SLS-LITE never rewrites an existing `config.yml`. Newly generated files declare
 their `config_version`; an unversioned RC.1 file is treated as legacy generation
-1 and continues to load with safe defaults for omitted optional keys. On startup,
-the plugin installs a canonical `config-reference-v2.yml` beside `config.yml`.
-Compare and merge it manually, then update `config_version` after reviewing the
-changes. A configuration declaring a newer generation than the running plugin is
-rejected rather than guessed or downgraded.
+1 and continues to load with safe defaults for omitted optional keys. Startup
+compares that number with the supported generation and links to the
+[complete copyable configuration](Copyable_Config.md) when review is needed.
+It does not create duplicate reference files or alter extension-owned files. A
+configuration declaring a newer generation than the running plugin is rejected
+rather than guessed or downgraded.
 
 ## Reference
 

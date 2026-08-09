@@ -5,9 +5,10 @@
 SLS-LITE keeps modern SLS-compatible concepts under its Velocity plugin data
 directory while managing every process locally:
 
-The operator-owned `config.yml` is never rewritten during an upgrade. Each
-configuration generation also installs a plugin-owned
-`config-reference-vN.yml` beside it for manual comparison and migration.
+The operator-owned `config.yml` is never rewritten during an upgrade. Its
+`config_version` is compared with the plugin's supported generation; migration
+details and the complete current example live in the documentation instead of
+duplicate generated files.
 
 ```text
 plugins/sls-lite/

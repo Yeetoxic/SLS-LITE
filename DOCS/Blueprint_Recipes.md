@@ -16,11 +16,28 @@ For example, `source: volumes/worlds/spleef` reads from
 `world/` directory at the root of each prepared instance. SLS-LITE never runs a
 managed server directly from a `cow`, `ro`, or `copy` source.
 
+Five terms cover most beginner blueprints:
+
+- `source`: the supply shelf under `plugins/sls-lite/`;
+- `target`: where that part belongs in the finished server;
+- `copy`: place a fresh file or directory into each new assembly;
+- `cow`: give each instance a private writable directory while protecting the
+  source (copy-on-write, with a portable full-copy fallback when needed);
+- `save`: keep the assembled instance and its changes after it stops.
+
+Use `cow` for a normal world and `copy` for plugin files. `rw` is advanced: it
+connects every instance directly to the same live source directory, so one
+server changes what the others see. Use it only when that sharing is deliberate
+and normally limit the blueprint to one instance.
+
 Replace every `REPLACE_WITH_EXACT_VERSION` value with an exact version supported
 by the selected software profile. Change the example IDs and names before
 loading more than one recipe.
 
 ## Pick The Right Assembly Tool
+
+Start with the first two rows. The remaining choices solve specific advanced
+cases and are not required for a first server.
 
 | Goal | Use | Source kind | Persistence behavior |
 | --- | --- | --- | --- |
@@ -30,9 +47,11 @@ loading more than one recipe.
 | Place or replace files, plugin JARs, or directory bundles | `state.copy` | File or directory | Fresh creation and reset read the source; restart reuses the existing persistent result. |
 | Use a complete operator-prepared server as the software base | `server.path` | Complete directory below `software/` | SLS-LITE copies the base into the managed instance and then applies its owned settings. |
 
-`save: false` discards the assembled instance after it stops. `save: true` keeps
-that instance and its changes. A persistent restart reuses it; `/sls reset`
-rebuilds it from the current software base, volumes, and copies.
+`save` and `rw` solve different problems. `save: true` keeps one assembled
+instance, including its private `cow` changes. `rw` changes the shared source
+itself, regardless of `save`. `save: false` discards the assembled instance
+after it stops. A persistent restart reuses it; `/sls reset` rebuilds it from
+the current software base, volumes, and copies.
 
 ## 1. Disposable World
 
