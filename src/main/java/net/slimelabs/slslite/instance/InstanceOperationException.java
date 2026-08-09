@@ -4,7 +4,10 @@ public final class InstanceOperationException extends Exception {
 
   public enum Kind {
     GENERIC,
-    BLUEPRINT_CAPACITY
+    BLUEPRINT_CAPACITY,
+    BACKEND_CAPACITY,
+    INSTANCE_NOT_READY,
+    INSTANCE_NOT_REGISTERED
   }
 
   private final Kind kind;
@@ -41,6 +44,29 @@ public final class InstanceOperationException extends Exception {
         instanceId,
         currentPlayers,
         maxPlayers);
+  }
+
+  public static InstanceOperationException backendCapacity(String instanceId) {
+    return new InstanceOperationException(
+        "Backend force-join capacity is full: " + instanceId,
+        Kind.BACKEND_CAPACITY,
+        instanceId,
+        -1,
+        -1);
+  }
+
+  public static InstanceOperationException notReady(String instanceId) {
+    return new InstanceOperationException(
+        "Instance is not ready: " + instanceId, Kind.INSTANCE_NOT_READY, instanceId, -1, -1);
+  }
+
+  public static InstanceOperationException notRegistered(String instanceId) {
+    return new InstanceOperationException(
+        "Managed instance is not registered with Velocity: " + instanceId,
+        Kind.INSTANCE_NOT_REGISTERED,
+        instanceId,
+        -1,
+        -1);
   }
 
   public Kind kind() {

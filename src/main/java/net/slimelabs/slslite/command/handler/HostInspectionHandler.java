@@ -6,6 +6,8 @@ import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.slimelabs.slslite.BuildInfo;
+import net.slimelabs.slslite.api.ExtensionDiagnosticSeverity;
+import net.slimelabs.slslite.api.ExtensionDiagnosticView;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandMessages;
@@ -15,6 +17,8 @@ import net.slimelabs.slslite.host.HostCapabilityReport;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.lobby.LobbyProvider;
 import net.slimelabs.slslite.lobby.SLSLimboDiagnostics;
+import net.slimelabs.slslite.log.CorrelationIds;
+import net.slimelabs.slslite.log.SLSDetailLog;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
@@ -32,6 +36,9 @@ final class HostInspectionHandler {
   private final ManagedOutputConfig outputConfig;
   private final HostCapabilityReport hostCapabilities;
   private final CommandAuthorizer authorizer;
+  private final SLSDetailLog detailLog;
+  private java.util.function.Supplier<java.util.List<ExtensionDiagnosticView>>
+      extensionDiagnostics = java.util.List::of;
 
   HostInspectionHandler(
       BlueprintRepository blueprints,
@@ -43,7 +50,8 @@ final class HostInspectionHandler {
       ProcessSupervisor processSupervisor,
       ManagedOutputConfig outputConfig,
       HostCapabilityReport hostCapabilities,
-      CommandAuthorizer authorizer) {
+      CommandAuthorizer authorizer,
+      SLSDetailLog detailLog) {
     this.blueprints = blueprints;
     this.softwareProfiles = softwareProfiles;
     this.resourceBudget = resourceBudget;
@@ -54,6 +62,12 @@ final class HostInspectionHandler {
     this.outputConfig = outputConfig;
     this.hostCapabilities = hostCapabilities;
     this.authorizer = authorizer;
+    this.detailLog = java.util.Objects.requireNonNull(detailLog, "detailLog");
+  }
+
+  void installExtensionDiagnostics(
+      java.util.function.Supplier<java.util.List<ExtensionDiagnosticView>> diagnostics) {
+    this.extensionDiagnostics = java.util.Objects.requireNonNull(diagnostics, "diagnostics");
   }
 
   void summary(CommandSource source) {
@@ -171,7 +185,45 @@ final class HostInspectionHandler {
     for (HostCapability capability : hostCapabilities.capabilities()) {
       message.appendNewline().append(capabilityLine(capability));
     }
+    java.util.List<ExtensionDiagnosticView> extensionViews = extensionDiagnostics.get();
+    long information = findings(extensionViews, ExtensionDiagnosticSeverity.INFO);
+    long warnings = findings(extensionViews, ExtensionDiagnosticSeverity.WARNING);
+    long errors = findings(extensionViews, ExtensionDiagnosticSeverity.ERROR);
+    message
+        .appendNewline()
+        .append(
+            infoLine(
+                "Extension diagnostics:",
+                extensionViews.size()
+                    + " extension(s), info="
+                    + information
+                    + ", warnings="
+                    + warnings
+                    + ", errors="
+                    + errors));
+    String correlationId = CorrelationIds.next("system");
+    extensionViews.forEach(
+        view ->
+            view.findings()
+                .forEach(
+                    finding ->
+                        detailLog.normal(
+                            correlationId,
+                            "extension-diagnostic",
+                            "{} {} {}: {}",
+                            view.namespace(),
+                            finding.severity(),
+                            finding.code(),
+                            finding.message())));
     source.sendMessage(message.build());
+  }
+
+  private static long findings(
+      java.util.List<ExtensionDiagnosticView> views, ExtensionDiagnosticSeverity severity) {
+    return views.stream()
+        .flatMap(view -> view.findings().stream())
+        .filter(finding -> finding.severity() == severity)
+        .count();
   }
 
   private boolean requireAdmin(CommandSource source) {

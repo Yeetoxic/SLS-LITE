@@ -345,11 +345,17 @@ public final class SLSLite implements SLSLiteApiProvider {
               logger);
       publicApi.activate(
           blueprints,
+          softwareProfiles,
+          configuration.get(),
           instanceManager,
           joinService,
           lobbyProvider,
           installationService,
-          hostCapabilities);
+          hostCapabilities,
+          blueprintReadiness,
+          backendRegistry,
+          publicApi::publishCatalogReload,
+          detailLog);
     } catch (Exception exception) {
       logger.error(
           "SLS-LITE initialization failed; managed server features are disabled", exception);
@@ -385,6 +391,7 @@ public final class SLSLite implements SLSLiteApiProvider {
             backendRegistry,
             logger);
     slsCommand.installReadinessCatalog(blueprintReadiness);
+    slsCommand.installExtensionDiagnostics(publicApi::extensionDiagnostics);
     proxy.getCommandManager().register(commandMeta, slsCommand);
     backendMessaging.start();
     issueInitialAdministratorCode();
@@ -649,6 +656,7 @@ public final class SLSLite implements SLSLiteApiProvider {
 
   @Subscribe
   public void onProxyShutdown(ProxyShutdownEvent event) {
+    publicApi.close();
     if (backendMessaging != null) {
       backendMessaging.close();
     }
@@ -681,7 +689,6 @@ public final class SLSLite implements SLSLiteApiProvider {
       detailLog.normal("shutdown", "shutdown", "SLS-LITE shutdown completed");
       detailLog.close();
     }
-    publicApi.close();
     ConsoleBanner.logShutdown(logger);
   }
 

@@ -47,6 +47,20 @@ public interface ExtensionContext extends AutoCloseable {
   }
 
   /**
+   * Registers this namespace's single bounded status contributor.
+   *
+   * <p>The contributor must be read-only. SLS-LITE evaluates it on a bounded worker and isolates
+   * timeout, saturation, failure, and context closure.
+   *
+   * @param contributor read-only diagnostic contributor
+   * @return idempotent registration handle
+   */
+  default Subscription onDiagnostics(ExtensionDiagnosticContributor contributor) {
+    throw new UnsupportedOperationException(
+        "This SLS-LITE provider does not advertise extension diagnostics");
+  }
+
+  /**
    * Registers an owned action delivered after matching instances reach READY.
    *
    * @param action non-blocking action consumer

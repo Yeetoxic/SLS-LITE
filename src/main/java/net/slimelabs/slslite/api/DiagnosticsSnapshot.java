@@ -16,6 +16,7 @@ import net.slimelabs.slslite.api.event.InstanceFailureEvent;
  * @param instanceStatistics up to 256 managed-instance statistics
  * @param recentLogs up to 256 bounded instance log tails
  * @param recentFailures up to 64 sanitized instance failures
+ * @param extensionDiagnostics up to 128 cached, namespaced extension diagnostic views
  */
 public record DiagnosticsSnapshot(
     Instant capturedAt,
@@ -26,7 +27,8 @@ public record DiagnosticsSnapshot(
     List<HostCapabilityView> hostCapabilities,
     List<InstanceStatisticsView> instanceStatistics,
     List<InstanceLogSnapshot> recentLogs,
-    List<InstanceFailureEvent> recentFailures) {
+    List<InstanceFailureEvent> recentFailures,
+    List<ExtensionDiagnosticView> extensionDiagnostics) {
 
   public DiagnosticsSnapshot {
     capturedAt = java.util.Objects.requireNonNull(capturedAt, "capturedAt");
@@ -38,6 +40,7 @@ public record DiagnosticsSnapshot(
     instanceStatistics = boundedCopy(instanceStatistics, 256, "instanceStatistics");
     recentLogs = boundedCopy(recentLogs, 256, "recentLogs");
     recentFailures = boundedCopy(recentFailures, 64, "recentFailures");
+    extensionDiagnostics = boundedCopy(extensionDiagnostics, 128, "extensionDiagnostics");
   }
 
   private static <T> List<T> boundedCopy(List<T> values, int maximum, String field) {

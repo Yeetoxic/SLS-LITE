@@ -3,10 +3,11 @@
 [Documentation home](README.md)
 
 SLS-LITE exposes a versioned in-process Java API for trusted Velocity plugins.
-API `1.1` supports capability discovery, immutable blueprint and instance
-inspection, asynchronous start/stop/delete and player-matchmaking requests,
-queue inspection/cancellation, ordered lifecycle events, and bounded
-namespaced blueprint-readiness contributions.
+API `1.2` supports capability discovery, immutable blueprint and instance
+inspection, asynchronous lifecycle, installation, definition reload,
+maintenance, exact-instance transfer, and player-matchmaking requests, queue
+inspection/cancellation, ordered lifecycle events, and bounded namespaced
+blueprint-readiness and operational-diagnostic contributions.
 
 The JVM contract is enforced by a checked signature baseline. Breaking changes
 require a new API major version. Distribution verification covers checksums,
@@ -31,12 +32,12 @@ developers, comparable to an SDK. Keeping it separate prevents extension code
 from accidentally importing SLS-LITE implementation packages and avoids using
 the large shaded runtime JAR as a development dependency.
 
-The accepted 1.1 JVM class, field, constructor, and method descriptors have a
+The accepted 1.2 JVM class, field, constructor, and method descriptors have a
 checked SHA-256 baseline in
-`src/test/resources/api/public-api-1.1.sha256`; the immutable 1.0 fingerprint
-is retained beside it. The build derives the current signature directly from
+`src/test/resources/api/public-api-1.2.sha256`; the immutable 1.0 and 1.1
+fingerprints are retained beside it. The build derives the current signature directly from
 compiled class files (not reflection), writes the reviewable form to
-`target/api-signature/public-api-1.1.txt`, and fails on any descriptor or
+`target/api-signature/public-api-1.2.txt`, and fails on any descriptor or
 visibility change. Updating the current baseline requires an explicit
 compatibility review; a passing hash does not authorize an undocumented API
 change.
@@ -146,16 +147,25 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 | `instances()` / `instance(id)` | Inspect immutable instance views. |
 | `start(request)` | Start and register an instance. |
 | `stop(id)` / `delete(id)` | Stop or delete through normal lifecycle rules. |
+| `restart(id)` / `reset(id)` | Safely evacuate and cycle an ordinary persistent instance. |
+| `install(request)` | Ensure one configured software release is installed. |
+| `reload(scope)` | Atomically reload blueprint and/or software definitions. |
+| `setMaintenance(enabled, reason)` | Change new-instance admission state. |
 | `enqueue(request)` | Match and transfer an online player. |
+| `transfer(request)` | Transfer an online player to one exact READY instance. |
 | `queued(playerId)` / `dequeue(playerId)` | Inspect or cancel a queued request. |
+| `extensionDiagnostics()` | Evaluate bounded namespaced extension status contributions. |
 | `subscribe(listener)` | Receive ordered lifecycle, matchmaking, and failure events. |
 
-API 1.1 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
+API 1.2 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
 `INSTANCE_START`, `INSTANCE_STOP`, `INSTANCE_DELETE`, `PLAYER_QUEUE`,
 `MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, `CATALOG_RELOAD_EVENTS`,
 `LOBBY_STATUS_EVENTS`, `SOFTWARE_INSTALLATION_EVENTS`, `RECONCILIATION_EVENTS`,
 `API_SHUTDOWN_EVENTS`, `DIAGNOSTICS`, `EXTENSION_CONTEXTS`,
-`EXTENSION_ACTIONS`, `EXTENSION_BLUEPRINT_READINESS`, and `LIFECYCLE_EVENTS`.
+`EXTENSION_ACTIONS`, `EXTENSION_BLUEPRINT_READINESS`, `INSTANCE_RESTART`,
+`INSTANCE_RESET`, `SOFTWARE_INSTALLATION_REQUESTS`,
+`DEFINITION_RELOAD_REQUESTS`, `MAINTENANCE_CONTROL`,
+`EXACT_INSTANCE_TRANSFER`, `EXTENSION_DIAGNOSTICS`, and `LIFECYCLE_EVENTS`.
 
 ## Operations
 
@@ -180,6 +190,22 @@ uses the same ownership-aware persistent/ephemeral deletion transaction as the
 operator command. These calls return `CompletionStage` and must not be blocked
 on Velocity's event thread.
 
+`restart(instanceId)` and `reset(instanceId)` first evacuate players through the
+configured safe lobby, then reuse the persistent lifecycle transaction and
+complete after the replacement backend is READY. They deliberately reject the
+protected managed lobby; cycling that routing-critical service remains an
+explicit operator command. `reset` rebuilds from current definitions while
+`restart` reuses the existing persistent instance.
+
+`install(new SoftwareInstallationRequest(software, version))` uses the existing
+provider, EULA, checksum, cache, and shared-installation ownership rules without
+returning a filesystem path. `reload(CatalogReloadScope)` runs atomic definition
+reload, readiness refresh, and dynamic-registration reconciliation on a bounded
+administrative worker. The result contains only counts and a correlation ID;
+rejected blueprint and registration details remain in the SLS-LITE detail log.
+Host `config.yml` is never live-reloaded. `setMaintenance(...)` changes only
+new-instance admission and does not stop existing instances.
+
 Queue an online player through normal capacity-aware matchmaking:
 
 ```java
@@ -195,14 +221,24 @@ api.enqueue(new QueueRequest(playerId, "minigame", "block_hunt"))
 one. Queue requests still enforce blueprint pools, maximum instances, player
 capacity, maintenance mode, memory admission, and normal connection behavior.
 
+Use `transfer(new InstanceTransferRequest(playerId, instanceId, force))` for an
+exact READY instance rather than matchmaking. Its typed `InstanceTransferStatus`
+distinguishes offline players, missing/not-ready/unregistered instances,
+ordinary capacity, reserved force capacity, and final Velocity connection
+failure. Force bypasses only ordinary public instance capacity; it cannot bypass
+backend headroom, readiness, registration, protocol/connection handling, or
+lifecycle safety. Trusted extensions must authorize the user who caused the
+request.
+
 ## Diagnostics
 
 `diagnostics()` returns one immutable point-in-time `DiagnosticsSnapshot`.
 It includes system and queue counts, maintenance state, effective primary and
 holding-lobby health, up to 100 recent installations, 64 startup host probes,
 256 instance statistics and redacted 20-line output tails, and the latest 64
-sanitized correlated instance failures. System counts remain exact when the
-detailed instance lists are truncated.
+sanitized correlated instance failures. It also contains up to 128 cached,
+namespaced extension diagnostic views, with no wait for extension code. System
+counts remain exact when the detailed instance lists are truncated.
 
 Messages are single-line, redacted, and limited to 512 characters. The view
 does not expose credentials, filesystem paths, download URLs, process IDs or
@@ -226,6 +262,7 @@ context.onComplete(api.start(request), (instance, failure) -> handle(instance, f
 context.onInstanceReady(action -> initializeBackend(action.instance(), action.annotations()));
 context.onPostTransfer(action -> recordArrival(action.ticket(), action.annotations()));
 context.onBlueprintReadiness((blueprint, annotations) -> checkDependencies(annotations));
+context.onDiagnostics(() -> inspectExtensionHealth());
 
 // During extension shutdown:
 context.close();
@@ -279,6 +316,18 @@ limits the combined refresh to two seconds on four bounded daemon workers, and
 reports an affected annotated blueprint as temporarily unavailable when its
 checker fails, times out, or cannot be scheduled. A context owns at most one
 checker; closing its registration or context immediately removes its findings.
+
+`onDiagnostics(contributor)` registers one read-only operational status
+contributor for the context namespace. Each inspection may return up to 16
+single-line `ExtensionDiagnosticFinding` values with `INFO`, `WARNING`, or
+`ERROR` severity. `extensionDiagnostics()` returns immutable per-namespace
+views; `/sls system` shows only bounded aggregate counts while exact findings go
+to the detail log. Inspection calls return the latest completed immutable cache
+immediately and request an asynchronous refresh. SLS-LITE evaluates contributors
+on four bounded workers with a shared two-second deadline, redacts common secret and absolute-path patterns,
+and substitutes a safe error finding for timeout, saturation, excessive output,
+null output, or failure. Closing the registration or context removes the
+contributor.
 
 `onInstanceReady(action)` runs after the instance is registered with Velocity
 and immediately after its public READY event is queued. `onPostTransfer(action)`

@@ -8,7 +8,7 @@ package net.slimelabs.slslite.api;
  */
 public record ApiVersion(int major, int minor) implements Comparable<ApiVersion> {
 
-  public static final ApiVersion CURRENT = new ApiVersion(1, 1);
+  public static final ApiVersion CURRENT = new ApiVersion(1, 2);
 
   public ApiVersion {
     if (major < 1 || minor < 0) {

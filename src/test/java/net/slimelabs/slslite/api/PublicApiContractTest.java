@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.slimelabs.slslite.api.event.ApiShutdownEvent;
 import net.slimelabs.slslite.api.event.CatalogDelta;
@@ -71,6 +72,16 @@ class PublicApiContractTest {
           StartRequest.class,
           InstanceOperationResult.class,
           DeleteResult.class,
+          DefinitionReloadResult.class,
+          ExtensionDiagnosticContributor.class,
+          ExtensionDiagnosticFinding.class,
+          ExtensionDiagnosticSeverity.class,
+          ExtensionDiagnosticView.class,
+          InstanceTransferRequest.class,
+          InstanceTransferResult.class,
+          InstanceTransferStatus.class,
+          SoftwareInstallationRequest.class,
+          SoftwareInstallationResult.class,
           QueueRequest.class,
           QueueTicket.class,
           QueueResult.class,
@@ -104,7 +115,7 @@ class PublicApiContractTest {
 
   @Test
   void versionAndCapabilitiesAreStable() {
-    assertEquals("1.1", ApiVersion.CURRENT.toString());
+    assertEquals("1.2", ApiVersion.CURRENT.toString());
     assertTrue(Set.of(Capability.values()).contains(Capability.LIFECYCLE_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.PLAYER_QUEUE));
     assertTrue(Set.of(Capability.values()).contains(Capability.MATCHMAKING_EVENTS));
@@ -118,6 +129,13 @@ class PublicApiContractTest {
     assertTrue(Set.of(Capability.values()).contains(Capability.EXTENSION_CONTEXTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.EXTENSION_ACTIONS));
     assertTrue(Set.of(Capability.values()).contains(Capability.EXTENSION_BLUEPRINT_READINESS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.INSTANCE_RESTART));
+    assertTrue(Set.of(Capability.values()).contains(Capability.INSTANCE_RESET));
+    assertTrue(Set.of(Capability.values()).contains(Capability.SOFTWARE_INSTALLATION_REQUESTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.DEFINITION_RELOAD_REQUESTS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.MAINTENANCE_CONTROL));
+    assertTrue(Set.of(Capability.values()).contains(Capability.EXACT_INSTANCE_TRANSFER));
+    assertTrue(Set.of(Capability.values()).contains(Capability.EXTENSION_DIAGNOSTICS));
   }
 
   @Test
@@ -206,6 +224,22 @@ class PublicApiContractTest {
                 false,
                 Set.of(),
                 Map.of("extension", new AtomicInteger(1))));
+  }
+
+  @Test
+  void exactInstanceTransferIdsAreNormalizedAndBounded() {
+    UUID playerId = UUID.randomUUID();
+
+    assertEquals(
+        "arena.123", new InstanceTransferRequest(playerId, "  arena.123  ", false).instanceId());
+    assertThrows(
+        IllegalArgumentException.class, () -> new InstanceTransferRequest(playerId, "   ", false));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new InstanceTransferRequest(playerId, "arena\nother", false));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new InstanceTransferRequest(playerId, "x".repeat(129), false));
   }
 
   private static void assertPublicType(Type type, String context) {

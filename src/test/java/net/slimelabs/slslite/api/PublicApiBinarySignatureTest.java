@@ -19,10 +19,10 @@ import org.junit.jupiter.api.Test;
 
 class PublicApiBinarySignatureTest {
 
-  private static final String BASELINE_RESOURCE = "/api/public-api-1.1.sha256";
+  private static final String BASELINE_RESOURCE = "/api/public-api-1.2.sha256";
 
   @Test
-  void publicJvmDescriptorsMatchTheCheckedOnePointOneBaseline() throws Exception {
+  void publicJvmDescriptorsMatchTheCheckedOnePointTwoBaseline() throws Exception {
     Path apiClasses =
         Path.of(System.getProperty("user.dir")).resolve("target/classes/net/slimelabs/slslite/api");
     assertTrue(Files.isDirectory(apiClasses), "Compiled public API classes are unavailable");
@@ -43,7 +43,7 @@ class PublicApiBinarySignatureTest {
     String canonical = String.join("\n", signatures) + "\n";
     String actual = sha256(canonical);
     Path report =
-        Path.of(System.getProperty("user.dir")).resolve("target/api-signature/public-api-1.1.txt");
+        Path.of(System.getProperty("user.dir")).resolve("target/api-signature/public-api-1.2.txt");
     Files.createDirectories(report.getParent());
     Files.writeString(report, canonical, StandardCharsets.UTF_8);
     String expected;

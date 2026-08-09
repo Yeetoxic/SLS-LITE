@@ -3,7 +3,8 @@
 This deliberately small plugin compiles against the public API classifier,
 not the SLS-LITE runtime plugin. It demonstrates provider discovery, readiness,
 immutable catalog and instance inspection, diagnostics, ordered lifecycle and
-player events, namespaced actions, and owned cleanup.
+player events, namespaced readiness/status contributions, safe administrative
+requests, exact-instance routing, and owned cleanup.
 
 Build and install the current SLS-LITE artifacts locally, then compile the
 same source tree with Maven or Gradle:
@@ -44,12 +45,18 @@ The live-operation example command is:
 /sls-api-example status
 /sls-api-example start <blueprint>
 /sls-api-example stop <instance>
+/sls-api-example restart <instance>
+/sls-api-example reset <instance>
 /sls-api-example delete <instance>
+/sls-api-example install <software> <version>
+/sls-api-example reload <all|blueprints|software>
+/sls-api-example maintenance <on|off> [reason]
+/sls-api-example transfer <instance> [--force]
 /sls-api-example queue <registry> <blueprint>
 /sls-api-example dequeue
 ```
 
-`status`, `start`, `stop`, and `delete` require
+All commands except self-service `queue` and `dequeue` require
 `slslite.example.admin` when invoked by a player; the Velocity console is
 treated as an administrator. `queue` and `dequeue` only operate on the player
 who invoked them. The command reports public failure categories and never

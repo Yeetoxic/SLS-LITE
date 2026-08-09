@@ -22,6 +22,8 @@ import net.slimelabs.slslite.api.BlueprintReadinessFinding;
 import net.slimelabs.slslite.api.BlueprintReadinessStatus;
 import net.slimelabs.slslite.api.BlueprintView;
 import net.slimelabs.slslite.api.ExtensionContext;
+import net.slimelabs.slslite.api.ExtensionDiagnosticFinding;
+import net.slimelabs.slslite.api.ExtensionDiagnosticSeverity;
 import net.slimelabs.slslite.api.InstanceReadyAction;
 import net.slimelabs.slslite.api.InstanceStatus;
 import net.slimelabs.slslite.api.InstanceView;
@@ -191,6 +193,26 @@ class DefaultExtensionContextTest {
     context.onBlueprintReadiness((blueprint, annotations) -> List.of());
     context.close();
     assertTrue(api.extensionReadiness().findings("arena").isEmpty());
+    api.close();
+  }
+
+  @Test
+  void contextOwnsOneNamespacedDiagnosticContributor() {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    ExtensionContext context = api.extension("example-plugin");
+    context.onDiagnostics(
+        () ->
+            List.of(
+                new ExtensionDiagnosticFinding(
+                    "healthy", ExtensionDiagnosticSeverity.INFO, "ready")));
+
+    SLSLiteApiException conflict =
+        assertThrows(SLSLiteApiException.class, () -> context.onDiagnostics(java.util.List::of));
+    assertEquals(SLSLiteApiException.Code.CONFLICT, conflict.code());
+
+    context.close();
+    ExtensionContext replacement = api.extension("example-plugin");
+    replacement.onDiagnostics(java.util.List::of);
     api.close();
   }
 

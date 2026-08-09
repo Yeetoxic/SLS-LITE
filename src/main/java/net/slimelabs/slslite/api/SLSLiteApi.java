@@ -6,6 +6,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
+import net.slimelabs.slslite.api.event.CatalogReloadScope;
 import net.slimelabs.slslite.api.event.SLSLiteEvent;
 import net.slimelabs.slslite.api.event.Subscription;
 
@@ -79,6 +80,16 @@ public interface SLSLiteApi {
    */
   CompletionStage<InstanceOperationResult> stop(String instanceId);
 
+  /** Restarts an ordinary persistent instance after safely evacuating connected players. */
+  default CompletionStage<InstanceView> restart(String instanceId) {
+    throw new UnsupportedOperationException("Instance restart is not supported by this provider");
+  }
+
+  /** Reassembles an ordinary persistent instance after safely evacuating connected players. */
+  default CompletionStage<InstanceView> reset(String instanceId) {
+    throw new UnsupportedOperationException("Instance reset is not supported by this provider");
+  }
+
   /**
    * Deletes a stopped instance through ownership-aware cleanup.
    *
@@ -87,6 +98,23 @@ public interface SLSLiteApi {
    */
   CompletionStage<DeleteResult> delete(String instanceId);
 
+  /** Requests provider-backed installation without exposing its filesystem path. */
+  default CompletionStage<SoftwareInstallationResult> install(SoftwareInstallationRequest request) {
+    throw new UnsupportedOperationException(
+        "Software installation is not supported by this provider");
+  }
+
+  /** Atomically reloads the selected definition catalogs for future assembly. */
+  default CompletionStage<DefinitionReloadResult> reload(CatalogReloadScope scope) {
+    throw new UnsupportedOperationException("Definition reload is not supported by this provider");
+  }
+
+  /** Changes host-wide new-instance admission without stopping existing instances. */
+  default CompletionStage<MaintenanceView> setMaintenance(boolean enabled, String reason) {
+    throw new UnsupportedOperationException(
+        "Maintenance control is not supported by this provider");
+  }
+
   /**
    * Matches and transfers an online player through the normal queue.
    *
@@ -94,6 +122,12 @@ public interface SLSLiteApi {
    * @return stage completed after the transfer attempt reaches a terminal state
    */
   CompletionStage<QueueResult> enqueue(QueueRequest request);
+
+  /** Transfers an online player to one exact READY managed instance. */
+  default CompletionStage<InstanceTransferResult> transfer(InstanceTransferRequest request) {
+    throw new UnsupportedOperationException(
+        "Exact-instance transfer is not supported by this provider");
+  }
 
   /**
    * Inspects one player's current queue ticket.
@@ -110,6 +144,11 @@ public interface SLSLiteApi {
    * @return removed ticket when cancellation won
    */
   Optional<QueueTicket> dequeue(UUID playerId);
+
+  /** Returns the latest bounded diagnostic cache and schedules a non-blocking refresh. */
+  default List<ExtensionDiagnosticView> extensionDiagnostics() {
+    return List.of();
+  }
 
   /**
    * Registers a global non-blocking event listener.

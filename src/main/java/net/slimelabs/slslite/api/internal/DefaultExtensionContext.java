@@ -12,6 +12,7 @@ import java.util.function.Consumer;
 import net.slimelabs.slslite.api.BlueprintReadinessChecker;
 import net.slimelabs.slslite.api.BlueprintView;
 import net.slimelabs.slslite.api.ExtensionContext;
+import net.slimelabs.slslite.api.ExtensionDiagnosticContributor;
 import net.slimelabs.slslite.api.InstanceReadyAction;
 import net.slimelabs.slslite.api.InstanceView;
 import net.slimelabs.slslite.api.NamespacedAnnotations;
@@ -102,6 +103,22 @@ final class DefaultExtensionContext implements ExtensionContext {
     registrations.add(registration);
     try {
       registration.install(api.registerBlueprintReadiness(namespace, checker));
+      rejectIfClosed(registration);
+      return registration;
+    } catch (RuntimeException exception) {
+      registration.close();
+      throw exception;
+    }
+  }
+
+  @Override
+  public Subscription onDiagnostics(ExtensionDiagnosticContributor contributor) {
+    java.util.Objects.requireNonNull(contributor, "contributor");
+    reserve();
+    OwnedDiagnosticRegistration registration = new OwnedDiagnosticRegistration();
+    registrations.add(registration);
+    try {
+      registration.install(api.registerDiagnostics(namespace, contributor));
       rejectIfClosed(registration);
       return registration;
     } catch (RuntimeException exception) {
@@ -290,6 +307,26 @@ final class DefaultExtensionContext implements ExtensionContext {
   }
 
   private final class OwnedBlueprintReadinessRegistration extends OwnedRegistration {
+
+    private volatile Subscription delegate;
+
+    private void install(Subscription delegate) {
+      this.delegate = delegate;
+      if (!active()) {
+        delegate.close();
+      }
+    }
+
+    @Override
+    void releaseDelegate() {
+      Subscription current = delegate;
+      if (current != null) {
+        current.close();
+      }
+    }
+  }
+
+  private final class OwnedDiagnosticRegistration extends OwnedRegistration {
 
     private volatile Subscription delegate;
 

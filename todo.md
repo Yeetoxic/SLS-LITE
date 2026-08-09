@@ -995,7 +995,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       player capacity, protocol, or presentation after a crash. Keep
       `config.yml` authoritative, document the runtime file as replaceable
       internal state, and regression-test repeated installation.
-- [ ] Complete the RC.2 extension-control baseline with additive, asynchronous
+- [x] Complete the RC.2 extension-control baseline with additive, asynchronous
       API operations for graceful restart, persistent-instance reset/reassembly,
       software installation requests, blueprint/software-definition reload, and
       maintenance-state changes. Route every request through the same admission,
@@ -1003,14 +1003,14 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       commands; return bounded typed results instead of internal coordinators or
       mutable state. Keep raw process control and forced termination out of this
       RC.2 surface.
-- [ ] Add exact-instance player routing to the RC.2 API. Support ordinary and
+- [x] Add exact-instance player routing to the RC.2 API. Support ordinary and
       explicitly forced transfer requests while retaining readiness,
       registration, protocol, and lifecycle checks; permit force to bypass only
       the same capacity/admission restrictions as the reviewed administrator
       command. Treat extensions as trusted callers responsible for their own
       user authorization, but never let them bypass core safety invariants, and
       return typed rejection reasons suitable for custom UI or matchmaking.
-- [ ] Add bounded, namespaced extension diagnostic/status contributions to the
+- [x] Add bounded, namespaced extension diagnostic/status contributions to the
       RC.2 API so extension readiness and failures are visible through the
       existing system snapshot, detailed log, and inspection surfaces. Give each
       extension context ownership and automatic cleanup; isolate timeouts,

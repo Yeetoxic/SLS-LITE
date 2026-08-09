@@ -12,6 +12,7 @@ import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityReport;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.lobby.LobbyProvider;
+import net.slimelabs.slslite.log.SLSDetailLog;
 import net.slimelabs.slslite.process.ProcessSupervisor;
 import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
@@ -38,6 +39,34 @@ public final class InspectionCommandHandler {
       HostCapabilityReport hostCapabilities,
       CommandAuthorizer authorizer,
       CommandInstanceAccess instanceAccess) {
+    this(
+        blueprints,
+        softwareProfiles,
+        resourceBudget,
+        instances,
+        joinService,
+        lobbyProvider,
+        processSupervisor,
+        outputConfig,
+        hostCapabilities,
+        authorizer,
+        instanceAccess,
+        SLSDetailLog.disabled());
+  }
+
+  public InspectionCommandHandler(
+      BlueprintRepository blueprints,
+      SoftwareProfileRepository softwareProfiles,
+      ResourceBudget resourceBudget,
+      ServerController instances,
+      LocalJoinService joinService,
+      LobbyProvider lobbyProvider,
+      ProcessSupervisor processSupervisor,
+      ManagedOutputConfig outputConfig,
+      HostCapabilityReport hostCapabilities,
+      CommandAuthorizer authorizer,
+      CommandInstanceAccess instanceAccess,
+      SLSDetailLog detailLog) {
     this.catalog = new CatalogInspectionHandler(blueprints, instances, authorizer);
     this.instance =
         new InstanceInspectionHandler(instances, joinService, authorizer, instanceAccess);
@@ -52,7 +81,8 @@ public final class InspectionCommandHandler {
             processSupervisor,
             outputConfig,
             hostCapabilities,
-            authorizer);
+            authorizer,
+            detailLog);
   }
 
   public void info(CommandSource source, String[] arguments) {
@@ -97,6 +127,12 @@ public final class InspectionCommandHandler {
 
   public void installReadinessCatalog(BlueprintReadinessCatalog readiness) {
     catalog.installReadinessCatalog(readiness);
+  }
+
+  public void installExtensionDiagnostics(
+      java.util.function.Supplier<java.util.List<net.slimelabs.slslite.api.ExtensionDiagnosticView>>
+          diagnostics) {
+    host.installExtensionDiagnostics(diagnostics);
   }
 
   public List<String> suggestions(CommandSource source, String operation, String[] arguments) {

@@ -9,10 +9,13 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import net.slimelabs.slslite.api.ExtensionContext;
+import net.slimelabs.slslite.api.InstanceTransferRequest;
 import net.slimelabs.slslite.api.QueueRequest;
 import net.slimelabs.slslite.api.SLSLiteApi;
 import net.slimelabs.slslite.api.SLSLiteApiException;
 import net.slimelabs.slslite.api.StartRequest;
+import net.slimelabs.slslite.api.SoftwareInstallationRequest;
+import net.slimelabs.slslite.api.event.CatalogReloadScope;
 import org.slf4j.Logger;
 
 final class ExampleCommand implements SimpleCommand {
@@ -57,7 +60,13 @@ final class ExampleCommand implements SimpleCommand {
       case "status" -> status(invocation.source());
       case "start" -> start(invocation.source(), arguments);
       case "stop" -> stop(invocation.source(), arguments);
+      case "restart" -> restart(invocation.source(), arguments, false);
+      case "reset" -> restart(invocation.source(), arguments, true);
       case "delete" -> delete(invocation.source(), arguments);
+      case "install" -> install(invocation.source(), arguments);
+      case "reload" -> reload(invocation.source(), arguments);
+      case "maintenance" -> maintenance(invocation.source(), arguments);
+      case "transfer" -> transfer(invocation.source(), arguments);
       default -> help(invocation.source());
     }
   }
@@ -65,7 +74,19 @@ final class ExampleCommand implements SimpleCommand {
   @Override
   public List<String> suggest(Invocation invocation) {
     if (invocation.arguments().length <= 1) {
-      return List.of("status", "start", "stop", "delete", "queue", "dequeue");
+      return List.of(
+          "status",
+          "start",
+          "stop",
+          "restart",
+          "reset",
+          "delete",
+          "install",
+          "reload",
+          "maintenance",
+          "transfer",
+          "queue",
+          "dequeue");
     }
     return List.of();
   }
@@ -116,6 +137,77 @@ final class ExampleCommand implements SimpleCommand {
             result.instanceId()
                 + " deleted; markerCleaned="
                 + result.reconciliationMarkerCleaned());
+  }
+
+  private void restart(CommandSource source, String[] arguments, boolean reset) {
+    String operation = reset ? "reset" : "restart";
+    if (!arity(source, arguments, 2, operation + " <instance>")) {
+      return;
+    }
+    observe(
+        source,
+        operation,
+        reset ? api.reset(arguments[1]) : api.restart(arguments[1]),
+        instance -> instance.id() + " is " + instance.status());
+  }
+
+  private void install(CommandSource source, String[] arguments) {
+    if (!arity(source, arguments, 3, "install <software> <version>")) {
+      return;
+    }
+    observe(
+        source,
+        "install",
+        api.install(new SoftwareInstallationRequest(arguments[1], arguments[2])),
+        result -> result.softwareId() + "/" + result.version() + " is ready");
+  }
+
+  private void reload(CommandSource source, String[] arguments) {
+    if (!arity(source, arguments, 2, "reload <all|blueprints|software>")) {
+      return;
+    }
+    CatalogReloadScope scope = CatalogReloadScope.valueOf(arguments[1].toUpperCase(Locale.ROOT));
+    observe(
+        source,
+        "reload",
+        api.reload(scope),
+        result -> result.scope() + " committed as " + result.correlationId());
+  }
+
+  private void maintenance(CommandSource source, String[] arguments) {
+    if (arguments.length < 2 || !List.of("on", "off").contains(arguments[1])) {
+      source.sendPlainMessage("Usage: /sls-api-example maintenance <on|off> [reason]");
+      return;
+    }
+    boolean enabled = arguments[1].equals("on");
+    String reason =
+        enabled && arguments.length > 2
+            ? String.join(" ", java.util.Arrays.copyOfRange(arguments, 2, arguments.length))
+            : "";
+    observe(
+        source,
+        "maintenance",
+        api.setMaintenance(enabled, reason),
+        result -> "enabled=" + result.enabled());
+  }
+
+  private void transfer(CommandSource source, String[] arguments) {
+    if (!(source instanceof Player player)) {
+      source.sendPlainMessage("transfer must be run by a player");
+      return;
+    }
+    if (arguments.length < 2
+        || arguments.length > 3
+        || arguments.length == 3 && !arguments[2].equals("--force")) {
+      source.sendPlainMessage("Usage: /sls-api-example transfer <instance> [--force]");
+      return;
+    }
+    observe(
+        source,
+        "transfer",
+        api.transfer(
+            new InstanceTransferRequest(player.getUniqueId(), arguments[1], arguments.length == 3)),
+        result -> "status=" + result.status() + ", instance=" + result.instanceId());
   }
 
   private void playerOperation(CommandSource source, String[] arguments, String operation) {
@@ -207,6 +299,6 @@ final class ExampleCommand implements SimpleCommand {
 
   private static void help(CommandSource source) {
     source.sendPlainMessage(
-        "Usage: /sls-api-example <status|start|stop|delete|queue|dequeue> ...");
+        "Usage: /sls-api-example <status|start|stop|restart|reset|delete|install|reload|maintenance|transfer|queue|dequeue> ...");
   }
 }

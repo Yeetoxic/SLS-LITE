@@ -346,23 +346,29 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                         target.getUsername() + " is not connected to a backend server"));
     String instanceId = targetConnection.getServerInfo().getName();
     ManagedInstance instance = instances.get(instanceId);
+    return joinInstance(player, instance, force);
+  }
+
+  public synchronized DirectJoin joinInstance(
+      Player player, ManagedInstance requestedInstance, boolean force)
+      throws InstanceOperationException {
+    java.util.Objects.requireNonNull(player, "player");
+    java.util.Objects.requireNonNull(requestedInstance, "requestedInstance");
+    ManagedInstance instance = instances.get(requestedInstance.id());
     if (instance.state() != InstanceState.READY) {
-      throw new InstanceOperationException("Instance is not ready: " + instance.id());
+      throw InstanceOperationException.notReady(instance.id());
     }
     RegisteredServer registered =
         proxy
             .getServer(instance.id())
-            .orElseThrow(
-                () ->
-                    new InstanceOperationException(
-                        "Managed instance is not registered with Velocity: " + instance.id()));
+            .orElseThrow(() -> InstanceOperationException.notRegistered(instance.id()));
     int occupiedSlots = occupiedSlots(instance);
     if (!force && occupiedSlots >= instance.blueprint().maxPlayers()) {
       throw InstanceOperationException.blueprintCapacity(
           instance.id(), occupiedSlots, instance.blueprint().maxPlayers());
     }
     if (force && backendOccupiedSlots(instance) >= backendPlayerLimit(instance)) {
-      throw new InstanceOperationException("Backend force-join capacity is full: " + instance.id());
+      throw InstanceOperationException.backendCapacity(instance.id());
     }
     if (force) {
       actionBar.forceJoining(player, instance.id());

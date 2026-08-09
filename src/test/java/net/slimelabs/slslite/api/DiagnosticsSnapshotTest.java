@@ -34,6 +34,7 @@ class DiagnosticsSnapshotTest {
             List.of(),
             List.of(),
             logs,
+            List.of(),
             List.of());
 
     lines.add("mutated");

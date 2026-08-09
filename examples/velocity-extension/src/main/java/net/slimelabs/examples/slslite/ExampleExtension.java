@@ -12,6 +12,8 @@ import net.slimelabs.slslite.api.BlueprintReadinessFinding;
 import net.slimelabs.slslite.api.BlueprintReadinessStatus;
 import net.slimelabs.slslite.api.DiagnosticsSnapshot;
 import net.slimelabs.slslite.api.ExtensionContext;
+import net.slimelabs.slslite.api.ExtensionDiagnosticFinding;
+import net.slimelabs.slslite.api.ExtensionDiagnosticSeverity;
 import net.slimelabs.slslite.api.SLSLiteApi;
 import net.slimelabs.slslite.api.SLSLiteApiProvider;
 import net.slimelabs.slslite.api.event.InstanceLifecycleEvent;
@@ -88,6 +90,14 @@ public final class ExampleExtension {
                   : java.util.List.of());
     }
 
+    if (api.capabilities().contains(Capability.EXTENSION_DIAGNOSTICS)) {
+      owned.onDiagnostics(
+          () ->
+              java.util.List.of(
+                  new ExtensionDiagnosticFinding(
+                      "ready", ExtensionDiagnosticSeverity.INFO, "example extension is ready")));
+    }
+
     owned.onComplete(
         api.ready(),
         (unused, failure) -> {
@@ -97,12 +107,14 @@ public final class ExampleExtension {
           }
           DiagnosticsSnapshot diagnostics = api.diagnostics();
           logger.info(
-              "SLS-LITE API {} ready: capabilities={}, blueprints={}, instances={}, queued={}",
+              "SLS-LITE API {} ready: capabilities={}, blueprints={}, instances={}, queued={}, "
+                  + "extensionDiagnostics={}",
               api.version(),
               api.capabilities().size(),
               api.blueprints().size(),
               api.instances().size(),
-              diagnostics.system().queuedPlayers());
+              diagnostics.system().queuedPlayers(),
+              diagnostics.extensionDiagnostics().size());
         });
 
     CommandMeta meta =

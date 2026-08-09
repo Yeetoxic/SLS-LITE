@@ -259,7 +259,8 @@ public final class SLSCommand implements SimpleCommand {
             outputConfig,
             hostCapabilities,
             authorizer,
-            instanceAccess);
+            instanceAccess,
+            detailLog);
     this.playerRoutingHandler =
         new PlayerRoutingCommandHandler(
             proxy, blueprints, joinService, authorizer, instanceAccess, logger);
@@ -325,6 +326,13 @@ public final class SLSCommand implements SimpleCommand {
     }
     readinessCatalog = java.util.Objects.requireNonNull(catalog, "catalog");
     inspectionHandler.installReadinessCatalog(catalog);
+  }
+
+  /** Installs the bounded extension diagnostic snapshot used by `/sls system`. */
+  public void installExtensionDiagnostics(
+      java.util.function.Supplier<java.util.List<net.slimelabs.slslite.api.ExtensionDiagnosticView>>
+          diagnostics) {
+    inspectionHandler.installExtensionDiagnostics(diagnostics);
   }
 
   @Override
