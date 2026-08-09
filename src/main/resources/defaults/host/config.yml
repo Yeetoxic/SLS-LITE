@@ -225,6 +225,8 @@ presentation:
     joining: "<green>Joining <server>"
     force_joining: "<yellow>Force joining <server>"
     dequeued: "<red>You have been dequeued."
+    # Available placeholders: <frame>, <phase>, and <server>.
+    progress: "<frame> <yellow><phase> <gray>(<server>)"
     # 1-32 bounded MiniMessage frames, cycled while a destination prepares.
     frames:
       - "<gold>▇▆▅▃▂▂▂▂▂"

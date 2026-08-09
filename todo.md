@@ -1028,7 +1028,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       plugin-JAR replacement, source-world changes, running-instance isolation,
       persistent restart, reset, rejected sibling definitions, and restart-only
       host configuration.
-- [ ] Give players and operators bounded phase feedback during slow first-time
+- [x] Give players and operators bounded phase feedback during slow first-time
       joins and starts. Distinguish queueing, software installation, instance
       assembly, process startup, backend readiness, transfer, and failure without
       exposing paths or flooding chat/console; do not invent completion estimates.

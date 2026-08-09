@@ -71,6 +71,31 @@ class TransferActionBarTest {
   }
 
   @Test
+  void rejectedPresentationHandleCannotStopTheCurrentOwner() throws Exception {
+    ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    List<Component> messages = new CopyOnWriteArrayList<>();
+    UUID playerId = UUID.randomUUID();
+    Player player = player(playerId, messages);
+    try (TransferActionBar actionBar = new TransferActionBar(scheduler)) {
+      Runnable owner = actionBar.start(player, "Smoke", () -> "Instance assembly");
+      Runnable rejected = actionBar.start(player, "Other", () -> "Process startup");
+      awaitMessages(messages, 1);
+
+      rejected.run();
+      assertTrue(actionBar.isRunning(playerId));
+      owner.run();
+      assertFalse(actionBar.isRunning(playerId));
+
+      Runnable replacement = actionBar.start(player, "Other", () -> "Process startup");
+      assertTrue(actionBar.isRunning(playerId));
+      replacement.run();
+      assertFalse(actionBar.isRunning(playerId));
+    } finally {
+      scheduler.shutdownNow();
+    }
+  }
+
+  @Test
   void disabledConfigurationSendsNothingAndSchedulesNothing() throws Exception {
     ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     List<Component> messages = new CopyOnWriteArrayList<>();
@@ -82,6 +107,7 @@ class TransferActionBarTest {
             defaults.joining(),
             defaults.forceJoining(),
             defaults.dequeued(),
+            defaults.progress(),
             defaults.frames(),
             defaults.frameIntervalMillis());
     try (TransferActionBar actionBar = new TransferActionBar(scheduler, disabled)) {

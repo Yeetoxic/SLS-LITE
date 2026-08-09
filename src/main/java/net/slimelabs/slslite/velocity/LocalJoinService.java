@@ -23,6 +23,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintQueuePolicy;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
@@ -30,6 +32,7 @@ import net.slimelabs.slslite.blueprint.VSLSBlueprintAnnotations;
 import net.slimelabs.slslite.config.TransferActionBarConfig;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
+import net.slimelabs.slslite.instance.ProvisioningFeedback;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.instance.configuration.ManagedPlayerCapacity;
 import net.slimelabs.slslite.instance.lifecycle.IdleAdmissionControl;
@@ -298,7 +301,9 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
             scheduler.schedule(
                 () -> timeout(entry), effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS);
       }
-      actionBar.start(player);
+      entry.feedback =
+          actionBar.start(
+              player, instance.blueprint().name(), () -> ProvisioningFeedback.progress(instance));
       publish(entry, MatchmakingTransitionStatus.QUEUED);
     }
 
@@ -319,6 +324,12 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
 
   public long queueTimeoutSeconds() {
     return queueTimeout.toSeconds();
+  }
+
+  /** Reuses the configured transfer surface for a player-issued manual start. */
+  public Runnable showPreparation(Player player, ManagedInstance instance) {
+    return actionBar.start(
+        player, instance.blueprint().name(), () -> ProvisioningFeedback.progress(instance));
   }
 
   public long queueTimeoutSeconds(Blueprint blueprint) {
@@ -481,9 +492,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
         .ifPresent(
             player -> {
               if (showFeedback) {
-                actionBar.dequeued(player);
-              } else {
-                actionBar.stop(playerId);
+                actionBar.showDequeued(player);
               }
             });
     stopOrphaned(entry.instance);
@@ -692,6 +701,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       return;
     }
     publish(entry, MatchmakingTransitionStatus.TRANSFER_STARTED);
+    entry.stopFeedback();
     actionBar.joining(player, instance.blueprint().name());
     entry.timings.transferStarted();
     try {
@@ -734,6 +744,9 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                 : MatchmakingTransitionStatus.TRANSFER_FAILED,
         playerMoved);
     timingReporter.connection(entry.instance.id(), entry.timings, result, failure);
+    if (!connected) {
+      notifyTerminalFailure(entry, "transfer");
+    }
     if (failure == null) {
       entry.completion.complete(result);
     } else {
@@ -745,10 +758,12 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     if (!remove(entry, QueueState.QUEUED, QueueState.TIMED_OUT)) {
       return;
     }
-    actionBar.stop(entry.ticket.playerId());
+    String phase = ProvisioningFeedback.progress(entry.instance).toLowerCase(java.util.Locale.ROOT);
+    entry.stopFeedback();
     timingReporter.complete(entry.instance.id(), entry.timings, "timeout");
     stopOrphaned(entry.instance);
     publish(entry, MatchmakingTransitionStatus.TIMED_OUT);
+    notifyTerminalFailure(entry, phase);
     entry.completion.completeExceptionally(
         new TimeoutException(
             "Queue timed out after " + entry.queueTimeout.toSeconds() + " seconds"));
@@ -763,17 +778,36 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     if (!remove(entry, QueueState.QUEUED, QueueState.FAILED)) {
       return;
     }
-    actionBar.stop(entry.ticket.playerId());
+    entry.stopFeedback();
     entry.cancelTimeout();
     timingReporter.complete(entry.instance.id(), entry.timings, "failed");
     stopOrphaned(entry.instance);
     publish(entry, transitionStatus);
+    notifyTerminalFailure(entry, ProvisioningFeedback.failure(entry.instance));
     entry.completion.completeExceptionally(failure);
+  }
+
+  private void notifyTerminalFailure(QueueEntry entry, String phase) {
+    proxy
+        .getPlayer(entry.ticket.playerId())
+        .filter(Player::isActive)
+        .ifPresent(
+            player ->
+                player.sendMessage(
+                    Component.text("SLS-LITE: ", NamedTextColor.DARK_AQUA)
+                        .append(
+                            Component.text(
+                                "Unable to connect; failed during "
+                                    + phase
+                                    + ". Ask an operator to check SLS-LITE logs; reference "
+                                    + entry.instance.correlationId()
+                                    + ".",
+                                NamedTextColor.RED))));
   }
 
   private void cancel(
       QueueEntry entry, String message, MatchmakingTransitionStatus transitionStatus) {
-    actionBar.stop(entry.ticket.playerId());
+    entry.stopFeedback();
     entry.cancelTimeout();
     publish(entry, transitionStatus);
     entry.completion.completeExceptionally(new QueueCancelledException(message));
@@ -930,6 +964,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     private final CompletableFuture<ConnectionRequestBuilder.Result> completion =
         new CompletableFuture<>();
     private volatile ScheduledFuture<?> timeout;
+    private volatile Runnable feedback = () -> {};
     private QueueState state = QueueState.QUEUED;
 
     private QueueEntry(
@@ -947,6 +982,11 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
       if (timeout != null) {
         timeout.cancel(false);
       }
+    }
+
+    private void stopFeedback() {
+      feedback.run();
+      feedback = () -> {};
     }
   }
 

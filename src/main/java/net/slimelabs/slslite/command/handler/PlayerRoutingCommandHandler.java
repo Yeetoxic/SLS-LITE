@@ -18,6 +18,7 @@ import net.slimelabs.slslite.command.CommandInstanceAccess;
 import net.slimelabs.slslite.command.CommandMessages;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
+import net.slimelabs.slslite.instance.ProvisioningFeedback;
 import net.slimelabs.slslite.velocity.LocalJoinService;
 import org.slf4j.Logger;
 
@@ -112,7 +113,8 @@ public final class PlayerRoutingCommandHandler {
         attempt
             .connection()
             .whenComplete(
-                (result, failure) -> reportConnection(source, target, instance, result, failure));
+                (result, failure) ->
+                    reportConnection(source, target, instance, result, failure, true));
       } catch (InstanceOperationException exception) {
         source.sendMessage(
             CommandMessages.message(
@@ -320,7 +322,7 @@ public final class PlayerRoutingCommandHandler {
           .connection()
           .whenComplete(
               (result, failure) ->
-                  reportConnection(source, player, directJoin.instance(), result, failure));
+                  reportConnection(source, player, directJoin.instance(), result, failure, false));
     } catch (InstanceOperationException exception) {
       if (exception.kind() == InstanceOperationException.Kind.BLUEPRINT_CAPACITY
           && authorizer.canAdminister(source, "join")) {
@@ -371,7 +373,8 @@ public final class PlayerRoutingCommandHandler {
       Player target,
       ManagedInstance instance,
       ConnectionRequestBuilder.Result result,
-      Throwable failure) {
+      Throwable failure,
+      boolean playerAlreadyNotified) {
     if (failure != null) {
       if (rootCause(failure) instanceof LocalJoinService.QueueCancelledException) {
         logger.info("Join for player {} to {} was cancelled", target.getUsername(), instance.id());
@@ -382,10 +385,18 @@ public final class PlayerRoutingCommandHandler {
           target.getUsername(),
           instance.id(),
           rootMessage(failure));
-      source.sendMessage(
-          CommandMessages.message(
-              "Unable to connect " + target.getUsername() + ": " + rootMessage(failure),
-              NamedTextColor.RED));
+      if (!playerAlreadyNotified || source != target) {
+        source.sendMessage(
+            CommandMessages.message(
+                "Unable to connect "
+                    + target.getUsername()
+                    + "; failed during "
+                    + ProvisioningFeedback.failure(instance)
+                    + ". Check SLS-LITE logs; reference "
+                    + instance.correlationId()
+                    + ".",
+                NamedTextColor.RED));
+      }
       return;
     }
     if (result.isSuccessful()
@@ -406,10 +417,16 @@ public final class PlayerRoutingCommandHandler {
         target.getUsername(),
         instance.id(),
         result.getStatus());
-    source.sendMessage(
-        CommandMessages.message(
-            "Connection to " + instance.id() + " failed: " + result.getStatus(),
-            NamedTextColor.RED));
+    if (!playerAlreadyNotified || source != target) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Connection to "
+                  + instance.id()
+                  + " failed during transfer. Check SLS-LITE logs; reference "
+                  + instance.correlationId()
+                  + ".",
+              NamedTextColor.RED));
+    }
   }
 
   private List<String> playerNames() {

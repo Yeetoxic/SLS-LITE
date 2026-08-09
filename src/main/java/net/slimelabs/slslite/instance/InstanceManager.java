@@ -945,6 +945,7 @@ public final class InstanceManager implements ServerController {
   }
 
   void recordFailedStart(ManagedInstance instance, FailurePhase phase, Throwable failure) {
+    instance.recordFailurePhase(phase);
     if (!instance.markFailureDiagnosticsRecorded()) {
       return;
     }

@@ -8,6 +8,7 @@ public record TransferActionBarConfig(
     String joining,
     String forceJoining,
     String dequeued,
+    String progress,
     List<String> frames,
     int frameIntervalMillis) {
 
@@ -22,6 +23,7 @@ public record TransferActionBarConfig(
         "<green>Joining <server>",
         "<yellow>Force joining <server>",
         "<red>You have been dequeued.",
+        "<frame> <yellow><phase> <gray>(<server>)",
         List.of(
             "<gold>\u2587\u2586\u2585\u2583\u2582\u2582\u2582\u2582\u2582",
             "<gold>\u2586\u2587\u2586\u2585\u2583\u2582\u2582\u2582\u2582",
@@ -45,6 +47,7 @@ public record TransferActionBarConfig(
     joining = validateTemplate(joining, "joining");
     forceJoining = validateTemplate(forceJoining, "forceJoining");
     dequeued = validateTemplate(dequeued, "dequeued");
+    progress = validateTemplate(progress, "progress");
     frames = List.copyOf(frames);
     if (frames.isEmpty() || frames.size() > MAX_FRAMES) {
       throw new IllegalArgumentException("transfer action-bar frames must contain 1-32 entries");

@@ -103,6 +103,11 @@ public final class InstancePhaseTimings {
     return Optional.ofNullable(elapsedNanos.get(phase));
   }
 
+  /** Returns the currently active phase without exposing mutable timing state. */
+  public synchronized Optional<Phase> currentPhase() {
+    return java.util.Arrays.stream(Phase.values()).filter(startedAt::containsKey).findFirst();
+  }
+
   public synchronized Optional<Long> firstPlayerConnected() {
     if (firstPlayerReported) {
       return Optional.empty();

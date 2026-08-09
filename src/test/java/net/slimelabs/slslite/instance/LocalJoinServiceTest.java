@@ -32,10 +32,13 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.lifecycle.InstanceLifecycle;
+import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
 import net.slimelabs.slslite.instance.model.InstanceState;
 import net.slimelabs.slslite.velocity.LocalJoinService;
 import org.junit.jupiter.api.Test;
@@ -299,8 +302,44 @@ class LocalJoinServiceTest {
       service.join(fixture.player(), "test", "smoke");
       awaitActionBars(fixture.actionBars(), 1);
 
-      assertEquals(
-          Component.text("▇▆▅▃▂▂▂▂▂", NamedTextColor.GOLD), fixture.actionBars().getFirst());
+      assertTrue(plain(fixture.actionBars().getFirst()).contains("Queueing"));
+      assertTrue(plain(fixture.actionBars().getFirst()).contains("Smoke"));
+    }
+  }
+
+  @Test
+  void queuedJoinReportsEveryProvisioningPhaseWithoutEstimates() throws Exception {
+    Fixture fixture = fixture(Duration.ofSeconds(5));
+    try (LocalJoinService service = fixture.service()) {
+      service.join(fixture.player(), "test", "smoke");
+      ManagedInstance instance = fixture.controller().instance();
+
+      assertActionBarContains(fixture.actionBars(), "Queueing");
+      advance(
+          instance,
+          InstancePhaseTimings.Phase.DISPATCH_QUEUE,
+          InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION);
+      assertActionBarContains(fixture.actionBars(), "Software installation");
+      advance(
+          instance,
+          InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION,
+          InstancePhaseTimings.Phase.FILE_PREPARATION);
+      assertActionBarContains(fixture.actionBars(), "Instance assembly");
+      advance(
+          instance,
+          InstancePhaseTimings.Phase.FILE_PREPARATION,
+          InstancePhaseTimings.Phase.PROCESS_LAUNCH);
+      assertActionBarContains(fixture.actionBars(), "Process startup");
+      advance(
+          instance,
+          InstancePhaseTimings.Phase.PROCESS_LAUNCH,
+          InstancePhaseTimings.Phase.READINESS);
+      assertActionBarContains(fixture.actionBars(), "Backend readiness");
+
+      assertTrue(
+          fixture.actionBars().stream()
+              .map(LocalJoinServiceTest::plain)
+              .noneMatch(text -> text.contains("%")));
     }
   }
 
@@ -333,6 +372,16 @@ class LocalJoinServiceTest {
       assertInstanceOf(TimeoutException.class, failure.getCause());
       assertTrue(service.queuedPlayers().isEmpty());
       assertEquals(1, fixture.controller().stopCount());
+      assertEquals(
+          1,
+          fixture.actionBars().stream()
+              .map(LocalJoinServiceTest::plain)
+              .filter(text -> text.contains("Ask an operator"))
+              .count());
+      assertTrue(
+          fixture.actionBars().stream()
+              .map(LocalJoinServiceTest::plain)
+              .anyMatch(text -> text.contains(attempt.instance().correlationId())));
     }
   }
 
@@ -342,6 +391,7 @@ class LocalJoinServiceTest {
     try (LocalJoinService service = fixture.service()) {
       LocalJoinService.JoinAttempt attempt = service.join(fixture.player(), "test", "smoke");
 
+      fixture.controller().instance().recordFailurePhase(FailurePhase.READINESS);
       fixture
           .controller()
           .instance()
@@ -354,6 +404,10 @@ class LocalJoinServiceTest {
       assertEquals("startup failed", failure.getCause().getMessage());
       assertTrue(service.queuedPlayers().isEmpty());
       assertEquals(1, fixture.controller().stopCount());
+      String terminal = plain(fixture.actionBars().getLast());
+      assertTrue(terminal.contains("backend readiness"));
+      assertTrue(terminal.contains(attempt.instance().correlationId()));
+      assertFalse(terminal.contains("startup failed"));
     }
   }
 
@@ -870,6 +924,10 @@ class LocalJoinServiceTest {
                     actionBar.accept((Component) arguments[0]);
                     yield null;
                   }
+                  case "sendMessage" -> {
+                    actionBar.accept((Component) arguments[0]);
+                    yield null;
+                  }
                   default -> defaultValue(method.getReturnType());
                 });
   }
@@ -905,6 +963,10 @@ class LocalJoinServiceTest {
                   case "getCurrentServer" -> currentServer;
                   case "createConnectionRequest" -> builder;
                   case "sendActionBar" -> {
+                    actionBar.accept((Component) arguments[0]);
+                    yield null;
+                  }
+                  case "sendMessage" -> {
                     actionBar.accept((Component) arguments[0]);
                     yield null;
                   }
@@ -1000,6 +1062,42 @@ class LocalJoinServiceTest {
       Thread.sleep(10);
     }
     assertTrue(messages.size() >= expected);
+  }
+
+  private static void assertActionBarContains(List<Component> messages, String expected)
+      throws Exception {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+    while (messages.stream()
+            .map(LocalJoinServiceTest::plain)
+            .noneMatch(text -> text.contains(expected))
+        && System.nanoTime() < deadline) {
+      Thread.sleep(10);
+    }
+    assertTrue(
+        messages.stream()
+            .map(LocalJoinServiceTest::plain)
+            .anyMatch(text -> text.contains(expected)));
+  }
+
+  private static void advance(
+      ManagedInstance instance,
+      InstancePhaseTimings.Phase previous,
+      InstancePhaseTimings.Phase next) {
+    instance.timings().finish(previous);
+    instance.timings().begin(next);
+  }
+
+  private static String plain(Component component) {
+    StringBuilder output = new StringBuilder();
+    appendPlain(component, output);
+    return output.toString();
+  }
+
+  private static void appendPlain(Component component, StringBuilder output) {
+    if (component instanceof TextComponent text) {
+      output.append(text.content());
+    }
+    component.children().forEach(child -> appendPlain(child, output));
   }
 
   private record Fixture(

@@ -9,6 +9,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
@@ -24,7 +25,7 @@ public final class TransferActionBar implements AutoCloseable {
   private final ScheduledExecutorService scheduler;
   private final TransferActionBarConfig config;
   private final List<Component> frames;
-  private final Map<UUID, ScheduledFuture<?>> tasks = new ConcurrentHashMap<>();
+  private final Map<UUID, AnimationTask> tasks = new ConcurrentHashMap<>();
 
   public TransferActionBar(ScheduledExecutorService scheduler) {
     this(scheduler, TransferActionBarConfig.defaults());
@@ -36,25 +37,48 @@ public final class TransferActionBar implements AutoCloseable {
     frames = config.frames().stream().map(MINI_MESSAGE::deserialize).toList();
   }
 
-  public void start(Player player) {
+  public Runnable start(Player player) {
+    return start(player, "server", () -> "Queueing");
+  }
+
+  public Runnable start(Player player, String serverName, Supplier<String> phase) {
     if (!config.enabled()) {
-      return;
+      return () -> {};
     }
     UUID playerId = player.getUniqueId();
-    tasks.computeIfAbsent(
-        playerId,
-        ignored -> {
-          AtomicInteger frame = new AtomicInteger();
-          return scheduler.scheduleAtFixedRate(
-              () -> {
-                if (player.isActive()) {
-                  player.sendActionBar(configuredFrame(frame.getAndIncrement()));
-                }
-              },
-              0,
-              config.frameIntervalMillis(),
-              TimeUnit.MILLISECONDS);
-        });
+    UUID owner = UUID.randomUUID();
+    AtomicInteger frame = new AtomicInteger();
+    ScheduledFuture<?> future =
+        scheduler.scheduleAtFixedRate(
+            () -> {
+              if (player.isActive()) {
+                player.sendActionBar(
+                    MINI_MESSAGE.deserialize(
+                        config.progress(),
+                        Placeholder.component("frame", configuredFrame(frame.getAndIncrement())),
+                        Placeholder.unparsed("phase", safePhase(phase)),
+                        Placeholder.unparsed("server", serverName)));
+              }
+            },
+            0,
+            config.frameIntervalMillis(),
+            TimeUnit.MILLISECONDS);
+    AnimationTask candidate = new AnimationTask(owner, future);
+    AnimationTask existing = tasks.putIfAbsent(playerId, candidate);
+    if (existing != null) {
+      future.cancel(false);
+      return () -> {};
+    }
+    return () -> stop(playerId, owner);
+  }
+
+  private static String safePhase(Supplier<String> phase) {
+    try {
+      String value = phase.get();
+      return value == null || value.isBlank() ? "Preparing" : value;
+    } catch (RuntimeException ignored) {
+      return "Preparing";
+    }
   }
 
   public void joining(Player player, String serverName) {
@@ -69,6 +93,10 @@ public final class TransferActionBar implements AutoCloseable {
 
   public void dequeued(Player player) {
     stop(player.getUniqueId());
+    showDequeued(player);
+  }
+
+  void showDequeued(Player player) {
     if (config.enabled()) {
       player.sendActionBar(MINI_MESSAGE.deserialize(config.dequeued()));
     }
@@ -82,10 +110,22 @@ public final class TransferActionBar implements AutoCloseable {
   }
 
   public void stop(UUID playerId) {
-    ScheduledFuture<?> task = tasks.remove(playerId);
+    AnimationTask task = tasks.remove(playerId);
     if (task != null) {
-      task.cancel(false);
+      task.future().cancel(false);
     }
+  }
+
+  private void stop(UUID playerId, UUID owner) {
+    tasks.computeIfPresent(
+        playerId,
+        (ignored, task) -> {
+          if (!task.owner().equals(owner)) {
+            return task;
+          }
+          task.future().cancel(false);
+          return null;
+        });
   }
 
   private Component configuredFrame(int index) {
@@ -102,7 +142,9 @@ public final class TransferActionBar implements AutoCloseable {
 
   @Override
   public void close() {
-    tasks.values().forEach(task -> task.cancel(false));
+    tasks.values().forEach(task -> task.future().cancel(false));
     tasks.clear();
   }
+
+  private record AnimationTask(UUID owner, ScheduledFuture<?> future) {}
 }

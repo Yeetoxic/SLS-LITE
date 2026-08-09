@@ -19,8 +19,10 @@ import net.slimelabs.slslite.command.VSLSCommandContract;
 import net.slimelabs.slslite.instance.InstanceDeletionResult;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
+import net.slimelabs.slslite.instance.ProvisioningFeedback;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.lobby.LobbyProvider;
+import net.slimelabs.slslite.velocity.LocalJoinService;
 import org.slf4j.Logger;
 
 /**
@@ -30,6 +32,7 @@ public final class InstanceLifecycleCommandHandler {
 
   private final BlueprintRepository blueprints;
   private final ServerController instances;
+  private final LocalJoinService joinService;
   private final LobbyProvider lobbyProvider;
   private final CommandAuthorizer authorizer;
   private final CommandInstanceAccess instanceAccess;
@@ -39,12 +42,14 @@ public final class InstanceLifecycleCommandHandler {
   public InstanceLifecycleCommandHandler(
       BlueprintRepository blueprints,
       ServerController instances,
+      LocalJoinService joinService,
       LobbyProvider lobbyProvider,
       CommandAuthorizer authorizer,
       CommandInstanceAccess instanceAccess,
       Logger logger) {
     this.blueprints = blueprints;
     this.instances = instances;
+    this.joinService = joinService;
     this.lobbyProvider = lobbyProvider;
     this.authorizer = authorizer;
     this.instanceAccess = instanceAccess;
@@ -102,10 +107,15 @@ public final class InstanceLifecycleCommandHandler {
                   + blueprint.get().id()
                   + "...",
               NamedTextColor.YELLOW));
+      Runnable feedback =
+          source instanceof Player player
+              ? joinService.showPreparation(player, instance)
+              : () -> {};
       instance
           .readyFuture()
           .whenComplete(
               (ready, failure) -> {
+                feedback.run();
                 if (failure == null) {
                   source.sendMessage(
                       CommandMessages.message(
@@ -118,7 +128,13 @@ public final class InstanceLifecycleCommandHandler {
                 } else {
                   source.sendMessage(
                       CommandMessages.message(
-                          "Server " + instance.id() + " failed: " + rootMessage(failure),
+                          "Server "
+                              + instance.id()
+                              + " failed during "
+                              + ProvisioningFeedback.failure(instance)
+                              + ". Check SLS-LITE logs; reference "
+                              + instance.correlationId()
+                              + ".",
                           NamedTextColor.RED));
                 }
               });

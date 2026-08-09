@@ -83,6 +83,7 @@ rather than guessed or downgraded.
 | `presentation.transfer_action_bar.joining` | `<green>Joining <server>` | Bounded MiniMessage template; `<server>` is inserted as unparsed text. |
 | `presentation.transfer_action_bar.force_joining` | `<yellow>Force joining <server>` | Bounded MiniMessage template for forced transfers. |
 | `presentation.transfer_action_bar.dequeued` | `<red>You have been dequeued.` | Bounded MiniMessage dequeue template. |
+| `presentation.transfer_action_bar.progress` | `<frame> <yellow><phase> <gray>(<server>)` | Animated preparation template. Safe `<frame>`, `<phase>`, and `<server>` placeholders distinguish queueing, installation, assembly, startup, and readiness without estimates. |
 | `presentation.transfer_action_bar.frames` | `15 entries` | The canonical SLS animation; accepts `1..32` bounded MiniMessage frames. |
 | `presentation.transfer_action_bar.frame_interval_millis` | `72` | Animation interval from `25..2000` milliseconds. |
 | `lobby.mode` | `velocity` | `velocity`, `external`, or `managed`. `velocity` preserves native `try` and forced-host routing. |

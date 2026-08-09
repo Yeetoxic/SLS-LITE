@@ -9,6 +9,7 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
+import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.diagnostics.InstanceLogPage;
 import net.slimelabs.slslite.instance.diagnostics.InstanceOutput;
 import net.slimelabs.slslite.instance.diagnostics.InstanceOutputBatch;
@@ -42,6 +43,7 @@ public final class ManagedInstance {
   private volatile boolean stopRequested;
   private volatile boolean preparationRunning;
   private boolean failureDiagnosticsRecorded;
+  private volatile FailurePhase failurePhase;
 
   ManagedInstance(
       String id, Blueprint blueprint, int port, Path directory, InstanceLifecycle lifecycle) {
@@ -153,6 +155,15 @@ public final class ManagedInstance {
 
   public String correlationId() {
     return correlationId;
+  }
+
+  /** Current provisioning phase for bounded operator and player feedback. */
+  public java.util.Optional<InstancePhaseTimings.Phase> provisioningPhase() {
+    return timings.currentPhase();
+  }
+
+  public java.util.Optional<FailurePhase> failurePhase() {
+    return java.util.Optional.ofNullable(failurePhase);
   }
 
   public CompletableFuture<ManagedInstance> readyFuture() {
@@ -321,6 +332,10 @@ public final class ManagedInstance {
     }
     failureDiagnosticsRecorded = true;
     return true;
+  }
+
+  void recordFailurePhase(FailurePhase phase) {
+    failurePhase = java.util.Objects.requireNonNull(phase, "phase");
   }
 
   public record ProcessResourceSnapshot(

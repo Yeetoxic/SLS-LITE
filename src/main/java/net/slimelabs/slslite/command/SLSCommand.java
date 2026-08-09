@@ -244,7 +244,7 @@ public final class SLSCommand implements SimpleCommand {
         new AdminCommandHandler(proxy, administrators, adminClaims, authorizer, logger);
     this.lifecycleHandler =
         new InstanceLifecycleCommandHandler(
-            blueprints, instances, lobbyProvider, authorizer, instanceAccess, logger);
+            blueprints, instances, joinService, lobbyProvider, authorizer, instanceAccess, logger);
     this.installationHandler =
         new InstallationCommandHandler(
             blueprints, softwareProfiles, installationService, authorizer, instances);

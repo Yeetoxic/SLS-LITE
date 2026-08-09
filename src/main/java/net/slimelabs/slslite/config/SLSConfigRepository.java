@@ -251,6 +251,7 @@ public final class SLSConfigRepository {
           "joining",
           "force_joining",
           "dequeued",
+          "progress",
           "frames",
           "frame_interval_millis");
       YamlValues.requireOnlyKeys(
@@ -417,6 +418,9 @@ public final class SLSConfigRepository {
       String actionBarDequeued =
           YamlValues.optionalString(
               transferActionBar, "dequeued", defaultActionBar.dequeued(), configPath);
+      String actionBarProgress =
+          YamlValues.optionalString(
+              transferActionBar, "progress", defaultActionBar.progress(), configPath);
       java.util.List<String> actionBarFrames =
           YamlValues.optionalStringList(
               transferActionBar, "frames", defaultActionBar.frames(), configPath);
@@ -572,6 +576,7 @@ public final class SLSConfigRepository {
                     actionBarJoining,
                     actionBarForceJoining,
                     actionBarDequeued,
+                    actionBarProgress,
                     actionBarFrames,
                     actionBarFrameInterval),
                 ViaVersionSyncPolicy.parse(viaVersionBackendSync),
