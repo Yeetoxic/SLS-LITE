@@ -6,7 +6,7 @@
 
     <groupId>net.slimelabs</groupId>
     <artifactId>sls-lite</artifactId>
-    <version>0.1.0-rc.1</version>
+    <version>0.1.0-rc.2</version>
     <packaging>jar</packaging>
 
     <name>SLS-LITE</name>

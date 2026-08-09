@@ -1,7 +1,7 @@
 {
   "id": "sls-lite",
   "name": "SLS-LITE",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0-rc.2",
   "description": "Standalone, single-host SLS implementation for Velocity",
   "url": "https://github.com/Yeetoxic/SLS-LITE",
   "authors": [

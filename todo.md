@@ -936,7 +936,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       blueprint template, and Getting Started, and automatically parse every
       published YAML example or assemble it into a valid fixture so copied
       documentation cannot drift from the accepted schema.
-- [ ] Perform a beginner-accessibility pass over installation and blueprint
+- [x] Perform a beginner-accessibility pass over installation and blueprint
       documentation so operators do not need storage or container expertise to
       begin. Lead with the mental model: SLS-LITE is an assembly line for
       servers, and a blueprint is the build sheet describing how each instance
@@ -953,7 +953,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
   - [x] Reorder the beginner journey, lead with the assembly-line mental model,
         define the core mapping terms, and separate the first-server path from
         the full schema and advanced storage choices.
-  - [ ] Usability-test that path with someone unfamiliar with SLS-LITE and fix
+  - [x] Usability-test that path with someone unfamiliar with SLS-LITE and fix
         the points where they hesitate or need undocumented help.
 - [x] Add one compact, bounded startup setup checklist that distinguishes
       release blockers, actions needed before a configured feature can work,
@@ -1167,7 +1167,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
           commit `68465ab`: immutable build and private draft, checksums, API
           boundary, isolated Maven and Gradle consumers, and automatic draft/tag
           cleanup all completed successfully.
-- [ ] Fix every candidate blocker and repeat its automated, storage, lifecycle,
+- [x] Fix every candidate blocker and repeat its automated, storage, lifecycle,
       protocol, and real-client scenarios.
 
 `v0.1.0-rc.2` exit: external testers receive reproducible, documented artifacts

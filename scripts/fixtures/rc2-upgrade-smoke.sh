@@ -6,7 +6,7 @@ set -euo pipefail
 : "${SLS_REPOSITORY_ROOT:=/repo}"
 
 rc1_jar="${SLS_REPOSITORY_ROOT}/.local-fixtures/rc2-upgrade/sls-lite-0.1.0-rc.1.jar"
-current_jar="${SLS_REPOSITORY_ROOT}/target/sls-lite-0.1.0-rc.1.jar"
+current_jar="${SLS_REPOSITORY_ROOT}/target/sls-lite-0.1.0-rc.2.jar"
 fixture_root="${SLS_REPOSITORY_ROOT}/scripts/fixtures"
 
 for required in "${SLS_FIXTURE_SERVER_ROOT}/velocity.jar" \

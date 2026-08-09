@@ -323,7 +323,9 @@ the forwarding secret.
 
 ## Updating
 
-There is no stable public upgrade contract before the first release.
+Candidate upgrades are supported only where the current
+[Migration guide](Migration.md) explicitly defines a tested path. Read both
+that guide and the current release notes before replacing an earlier candidate.
 
 1. Stop Velocity and all managed children through normal proxy shutdown.
 2. Back up the SLS-LITE data directory.

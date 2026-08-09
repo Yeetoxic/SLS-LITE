@@ -1,9 +1,9 @@
 # Java Extension Development
 
-Trusted Velocity plugins can use the internally frozen Java API 1.0 for
+Trusted Velocity plugins can use the additive, internally frozen Java API 1.2 for
 capability discovery, immutable inspection, bounded diagnostics, lifecycle and
-matchmaking requests, ordered events, namespaced annotations, and owned action
-callbacks.
+administrative requests, exact-instance routing, ordered events, namespaced
+annotations and readiness/status contributions, and owned action callbacks.
 
 Operators install only the full SLS-LITE plugin JAR. Extension builds use the
 smaller `-api.jar` as a provided or compile-only dependency and must not bundle

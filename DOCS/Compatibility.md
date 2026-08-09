@@ -101,9 +101,9 @@ boundaries, not silent parser acceptance or incomplete runtime behavior.
   `8e8b1e3cf7d2157887764c16f11b8901f8241121`.
 - Historical single-host behavior: SLS `2.1.2`, commit
   `4f9b7ca7f6d857d43253076f1627ad4087f663ab`.
-- Current SLS-LITE candidate: `0.1.0-rc.1`.
+- Current SLS-LITE candidate: `0.1.0-rc.2`.
 
-The pre-candidate release-line review on 2026-08-04 retained these boundaries:
+The supported release line retains these boundaries:
 
 - full SLS remains pinned to `v0.2.0`/`8e8b1e3c` because no newer stable shared
   contract supersedes it;

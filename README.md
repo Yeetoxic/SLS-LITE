@@ -23,6 +23,8 @@ product: full SLS is not a runtime dependency or operating mode.
   dynamic managed-backend protocol synchronization.
 - Persistent managed instances, restart/reset, crash reconciliation, and idle
   cleanup for ephemeral servers.
+- Bounded per-file persistent state for Paper-managed whitelist, operator, ban,
+  icon, and similar root files without privileged mounts or symbolic links.
 - Bounded in-game logs, temporary log files, lifecycle logging, resource
   admission, forwarding configuration, and host capability checks.
 - Built-in administrator claiming plus standard Velocity permissions.
@@ -105,7 +107,8 @@ plugins/sls-lite/
 |-- blueprints/
 |-- volumes/
 |   |-- worlds/
-|   `-- plugins/
+|   |-- plugins/
+|   `-- whitelists/
 |-- software-profiles/
 |-- software/
 |-- runtimes/

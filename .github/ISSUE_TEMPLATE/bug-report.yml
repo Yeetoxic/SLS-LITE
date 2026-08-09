@@ -15,7 +15,7 @@ body:
     attributes:
       label: SLS-LITE version
       description: Use the exact version shown by SLS-LITE or the release filename.
-      placeholder: 0.1.0-rc.1
+      placeholder: 0.1.0-rc.2
     validations:
       required: true
 

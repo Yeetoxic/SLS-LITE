@@ -1,6 +1,6 @@
 # Current Release
 
-The current candidate is **SLS-LITE 0.1.0-rc.1**.
+The current candidate is **SLS-LITE 0.1.0-rc.2**.
 
 Read the canonical [release notes](https://github.com/Yeetoxic/SLS-LITE/blob/main/RELEASE_NOTES.md),
 [installation and upgrade guide](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Getting_Started.md),
