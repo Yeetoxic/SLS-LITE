@@ -282,15 +282,16 @@ public final class SLSLimboProvider implements LobbyProvider {
     if (port < 0) {
       port = ports.allocate();
     }
-    if (installation == null) {
-      installation =
-          installer.install(
-              port,
-              forwarding,
-              config.advertisedProtocol(),
-              Math.max(1, proxy.getConfiguration().getShowMaxPlayers()),
-              config.presentation());
-    }
+    // settings.yml is generated runtime state, not an operator-owned configuration file. Refresh
+    // it before every launch so an automatic recovery cannot consume stale or manually edited
+    // bind, forwarding, capacity, protocol, or presentation settings.
+    installation =
+        installer.install(
+            port,
+            forwarding,
+            config.advertisedProtocol(),
+            Math.max(1, proxy.getConfiguration().getShowMaxPlayers()),
+            config.presentation());
   }
 
   private void prepareAndLaunch(boolean recovery) {

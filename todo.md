@@ -988,6 +988,13 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
         reload summaries, and new-instance admission; isolate failure, timeout,
         saturation, context closure, and sibling definitions without exposing a
         mutable repository or provider SPI.
+- [x] RC.2 scope amendment (maintainer-approved generated-configuration
+      correctness fix): regenerate SLS-Limbo's owned `settings.yml` before every
+      initial launch and automatic recovery so a manual or stale edit cannot
+      unexpectedly change its bind address, allocated port, forwarding mode,
+      player capacity, protocol, or presentation after a crash. Keep
+      `config.yml` authoritative, document the runtime file as replaceable
+      internal state, and regression-test repeated installation.
 - [ ] Complete the RC.2 extension-control baseline with additive, asynchronous
       API operations for graceful restart, persistent-instance reset/reassembly,
       software installation requests, blueprint/software-definition reload, and

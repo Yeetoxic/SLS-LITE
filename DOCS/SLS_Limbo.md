@@ -159,6 +159,10 @@ allocated port, forwarding credentials, player capacity, protocol baseline,
 traffic limits, process supervision, or recovery behavior. SLS-LITE continues
 to generate and own those values so customization cannot accidentally weaken
 the fallback's network boundary or escape the declared host resource budget.
+The resulting `plugins/sls-lite/sls-limbo/settings.yml` is internal generated
+runtime state, not a second operator configuration file. SLS-LITE replaces it
+from `config.yml` before every initial launch and automatic recovery; direct
+edits are unsupported and do not persist.
 
 The SLS-Limbo reservation is included in `resources.total_memory_mib`. It also
 uses one port from `network.ports` and one slot from
