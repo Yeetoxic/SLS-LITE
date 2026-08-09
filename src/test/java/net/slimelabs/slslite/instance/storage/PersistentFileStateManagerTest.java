@@ -8,7 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Properties;
 import net.slimelabs.slslite.blueprint.BlueprintPersistentFile;
 import net.slimelabs.slslite.instance.InstancePreparationException;
 import org.junit.jupiter.api.Test;
@@ -89,6 +92,39 @@ class PersistentFileStateManagerTest {
     fixture.manager.resume("lobby.abcdef", fixture.instance);
 
     assertEquals("[\"external\"]\n", Files.readString(fixture.target()));
+  }
+
+  @Test
+  void restartRepairsManifestAfterCrashBetweenCanonicalWriteAndManifestCommit() throws Exception {
+    Fixture fixture = fixture();
+    fixture.manager.prepare("lobby.abcdef", fixture.instance, List.of(mapping()), () -> false);
+    fixture.manager.release("lobby.abcdef");
+
+    // Reproduce the durable state left when the atomic canonical replacement completed but the
+    // process exited before the manifest's new digest could be committed.
+    byte[] published =
+        "[\"published-before-crash\"]\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    Files.write(fixture.source, published);
+    Files.write(fixture.target(), published);
+
+    PersistentFileStateManager restarted =
+        new PersistentFileStateManager(fixture.instances, fixture.content);
+    restarted.resume("lobby.abcdef", fixture.instance);
+
+    Properties manifest = new Properties();
+    try (var input =
+        Files.newInputStream(fixture.instance.resolve(PersistentFileStateManager.MANIFEST_FILE))) {
+      manifest.load(input);
+    }
+    assertEquals(
+        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(published)),
+        manifest.getProperty("file.0.sha256"));
+    assertEquals(
+        new String(published, java.nio.charset.StandardCharsets.UTF_8),
+        Files.readString(fixture.source));
+    assertEquals(
+        new String(published, java.nio.charset.StandardCharsets.UTF_8),
+        Files.readString(fixture.target()));
   }
 
   @Test

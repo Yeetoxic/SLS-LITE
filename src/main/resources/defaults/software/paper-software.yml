@@ -48,4 +48,7 @@ readiness:
 
 shutdown:
   command: stop
-  timeout_seconds: 30
+  # Paper may spend well over 30 seconds saving a newly generated world on a
+  # constrained host. This remains a bounded deadline and may be overridden by
+  # an operator profile or annotations.sls-lite.stop-timeout-seconds.
+  timeout_seconds: 60

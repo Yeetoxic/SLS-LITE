@@ -128,6 +128,9 @@ class SLSConfigRepositoryTest {
     assertEquals(false, repository.get().software().autoAcceptEula());
     assertEquals(1, repository.migrationStatus().configuredVersion());
     assertEquals(false, repository.migrationStatus().versionDeclared());
+    assertEquals(
+        "unversioned legacy (treated as generation 1)",
+        repository.migrationStatus().generationDescription());
     assertTrue(repository.migrationStatus().updateAvailable());
     assertTrue(
         repository

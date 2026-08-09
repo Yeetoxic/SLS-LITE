@@ -154,11 +154,7 @@ public final class SLSLite implements SLSLiteApiProvider {
         logger.warn(
             "Host configuration {} is behind current generation {}; omitted safe defaults={} "
                 + "(config.yml was not changed). Review: {}",
-            configStatus.versionDeclared()
-                ? "generation " + configStatus.configuredVersion()
-                : "is unversioned legacy (treated as generation "
-                    + configStatus.configuredVersion()
-                    + ")",
+            configStatus.generationDescription(),
             configStatus.currentVersion(),
             configStatus.effectiveDefaults(),
             CONFIGURATION_GUIDE);

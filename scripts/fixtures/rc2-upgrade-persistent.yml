@@ -1,0 +1,24 @@
+blueprint:
+  id: rc2-upgrade-persistent
+  name: RC.2 Upgrade Persistent File
+  type: test
+
+server:
+  software: paper
+  version: "1.18.2"
+  limits:
+    memory_limit: 1024
+    max_players: 4
+    max_instances: 1
+
+save: true
+
+state:
+  persistent_files:
+    - name: whitelist
+      source: volumes/whitelists/rc2-upgrade/whitelist.json
+      target: whitelist.json
+
+annotations:
+  sls-lite:
+    test-only: true

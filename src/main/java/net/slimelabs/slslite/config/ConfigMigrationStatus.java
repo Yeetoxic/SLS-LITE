@@ -19,4 +19,10 @@ public record ConfigMigrationStatus(
   public boolean updateAvailable() {
     return !versionDeclared || configuredVersion < currentVersion;
   }
+
+  public String generationDescription() {
+    return versionDeclared
+        ? "generation " + configuredVersion
+        : "unversioned legacy (treated as generation " + configuredVersion + ")";
+  }
 }

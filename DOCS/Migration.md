@@ -89,6 +89,31 @@ deletion. Restore the intended persistence setting before proceeding.
 Definition drift blocks ordinary restart. Review the reported blueprint/profile
 change and use reset only when replacing the managed copy is intended.
 
+### From `v0.1.0-rc.1`
+
+The RC.1 host configuration is unversioned. A newer candidate treats it as
+generation 1, applies documented safe defaults for missing optional settings,
+and reports that a newer reference is available. It does not rewrite, reorder,
+or create a second copy of `config.yml`; compare the current copyable
+configuration in [Configuration](Configuration.md) and add only the settings
+you choose. Extension-owned sibling files are not configuration migration
+inputs and remain untouched.
+
+Generated software profiles are also operator-owned after first installation.
+A clean installation uses Paper's current 60-second graceful-stop deadline, but
+an RC.1 `software-profiles/paper.yml` retains its existing value. Review that
+profile and raise `shutdown.timeout_seconds` where world saves can exceed 30
+seconds. A blueprint-specific `annotations.sls-lite.stop-timeout-seconds`
+remains available for an unusually slow server.
+
+Before replacing the JAR, stop Velocity normally and preserve a complete copy
+of `plugins/sls-lite/` plus the RC.1 plugin JAR. RC.2-only blueprint fields such
+as `state.persistent_files` are rejected by RC.1, and their managed manifests
+have no RC.1 lifecycle contract. Therefore rollback is restore-based: stop the
+newer build, restore the complete pre-upgrade data copy and RC.1 JAR together,
+then start RC.1. Do not point RC.1 at directories that a newer candidate has
+already assembled with RC.2-only state.
+
 Configurations using deprecated `lobby.emergency` remain accepted, but should
 be renamed to `lobby.limbo`. Do not define both keys.
 

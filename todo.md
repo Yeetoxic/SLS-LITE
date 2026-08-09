@@ -1108,12 +1108,18 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
         write-back and backups; restart and reset from externally edited
         canonical state; then stop and delete through SLS-LITE. Confirm the
         restricted host requires neither mounts nor additional privileges.
-  - [ ] Complete deliberate interrupted-publication fault injection, the
-        remaining native Windows and Linux portability coverage, clean-install,
+  - [x] Reproduce the interrupted-publication crash boundary where the atomic
+        canonical replacement completed but its new manifest digest did not;
+        verify restart accepts matching canonical and instance values and
+        repairs the manifest without a false conflict or another data write.
+  - [ ] Complete the remaining native Windows and Linux portability coverage,
+        clean-install,
         upgrade, distribution-smoke, and real-client verification before
         marking the feature stable. Treat the fixture's Paper 1.18.2 world-save
-        overrun of the existing 30-second stop deadline as separate shutdown-
-        budget follow-up; publication still completed and reported no error.
+        overrun of the prior 30-second Paper profile deadline as separate
+        shutdown-budget follow-up; publication still completed and reported no
+        error. Clean installations now use 60 seconds while existing profiles
+        remain operator-owned and retain their configured value.
 - [ ] Rehearse the complete `v0.1.0-rc.1` to `v0.1.0-rc.2` operator upgrade on a
       disposable copy of a realistic installation containing a customized
       unversioned config, blueprints, software definitions, volume data, logs,
@@ -1126,6 +1132,16 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       it unsafe, preserve a recoverable pre-upgrade copy, and give exact restore
       instructions instead of silently coercing newer metadata. Repeat the clean
       install beside the upgrade fixture and record artifact checksums for both.
+  - [x] Verify an empty unprivileged Pterodactyl-image clean installation, then
+        run the checksum-verified published RC.1 JAR and replace only that JAR
+        with the current build. Preserve a customized unversioned `config.yml`,
+        an RC.2 blueprint, canonical volume file, and extension-owned sibling
+        byte-for-byte; accept the new blueprint, emit migration/setup guidance,
+        create no config-reference sidecar, and retain recorded SHA-256 values.
+  - [ ] Extend the disposable upgrade rehearsal with realistic stopped and
+        running/persistent metadata, owned software definitions and cache data,
+        persistent-file recovery, API consumer compatibility, and the documented
+        full-directory restore rollback before closing the parent task.
 - [ ] Fix every candidate blocker and repeat its automated, storage, lifecycle,
       protocol, and real-client scenarios.
 
