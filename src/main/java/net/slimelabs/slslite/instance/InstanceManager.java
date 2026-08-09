@@ -25,6 +25,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessCatalog;
 import net.slimelabs.slslite.config.DefinitionCatalog;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
@@ -98,6 +99,7 @@ public final class InstanceManager implements ServerController {
       java.util.concurrent.ConcurrentHashMap.newKeySet();
 
   private volatile boolean closed;
+  private volatile BlueprintReadinessCatalog readinessCatalog;
   private volatile MaintenanceStatus maintenance = MaintenanceStatus.accepting();
 
   public InstanceManager(
@@ -305,6 +307,10 @@ public final class InstanceManager implements ServerController {
       throws InstanceOperationException {
     ResolvedDefinition definition =
         resolveDefinition(blueprintId, "Unknown blueprint: " + blueprintId);
+    BlueprintReadinessCatalog readiness = readinessCatalog;
+    if (readiness != null) {
+      readiness.requireReady(definition.blueprint().id());
+    }
     Blueprint blueprint;
     try {
       blueprint = overrides.applyTo(definition.blueprint());
@@ -409,6 +415,14 @@ public final class InstanceManager implements ServerController {
       throw new IllegalStateException("Failure observer must be installed before instances exist");
     }
     failureObserver = java.util.Objects.requireNonNull(observer, "observer");
+  }
+
+  /** Installs bounded preflight admission before any new instance is created. */
+  public synchronized void installReadinessCatalog(BlueprintReadinessCatalog catalog) {
+    if (readinessCatalog != null) {
+      throw new IllegalStateException("Blueprint readiness catalog is already installed");
+    }
+    readinessCatalog = java.util.Objects.requireNonNull(catalog, "catalog");
   }
 
   @Override

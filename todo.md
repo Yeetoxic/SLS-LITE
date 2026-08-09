@@ -968,7 +968,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       become another wall of text. Test clean production, isolated development,
       incomplete first-run, malformed definition, offline optional provider,
       and restricted Pterodactyl configurations.
-- [ ] Add a bounded, non-mutating readiness preflight for every loaded blueprint
+- [x] Add a bounded, non-mutating readiness preflight for every loaded blueprint
       so obvious first-start failures are visible before a player waits in the
       queue. Check referenced base/software identity, provider availability and
       effective EULA acceptance, selected Java executable, volume/copy source
@@ -982,6 +982,34 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       reload and verify that symlinks, inaccessible paths, offline providers,
       missing runtimes, optional strategies, and large catalogs remain safe and
       bounded.
+  - [x] Extend the Java API to 1.1 with one owned, namespaced blueprint-readiness
+        checker per extension context. Merge bounded action-needed and
+        temporarily-unavailable findings into inspection, detailed diagnostics,
+        reload summaries, and new-instance admission; isolate failure, timeout,
+        saturation, context closure, and sibling definitions without exposing a
+        mutable repository or provider SPI.
+- [ ] Complete the RC.2 extension-control baseline with additive, asynchronous
+      API operations for graceful restart, persistent-instance reset/reassembly,
+      software installation requests, blueprint/software-definition reload, and
+      maintenance-state changes. Route every request through the same admission,
+      ownership, cancellation, audit, and lifecycle invariants as the canonical
+      commands; return bounded typed results instead of internal coordinators or
+      mutable state. Keep raw process control and forced termination out of this
+      RC.2 surface.
+- [ ] Add exact-instance player routing to the RC.2 API. Support ordinary and
+      explicitly forced transfer requests while retaining readiness,
+      registration, protocol, and lifecycle checks; permit force to bypass only
+      the same capacity/admission restrictions as the reviewed administrator
+      command. Treat extensions as trusted callers responsible for their own
+      user authorization, but never let them bypass core safety invariants, and
+      return typed rejection reasons suitable for custom UI or matchmaking.
+- [ ] Add bounded, namespaced extension diagnostic/status contributions to the
+      RC.2 API so extension readiness and failures are visible through the
+      existing system snapshot, detailed log, and inspection surfaces. Give each
+      extension context ownership and automatic cleanup; isolate timeouts,
+      exceptions, saturation, and context closure; cap finding count and text;
+      redact secrets; and do not expose arbitrary console logging or mutable
+      diagnostic registries.
 - [ ] Make the change-application model explicit wherever operators edit or
       reload definitions. Document and report that blueprint/software reloads
       affect future assembly, persistent restart reuses the existing instance,
@@ -1066,6 +1094,42 @@ whose known limitations and compatibility boundaries match observed behavior,
 with `v0.1.0-rc.1` retained as the prior baseline. New findings after publication
 move into a new release-candidate subsection.
 
+#### v0.1.0-rc.3
+
+Planned extension-integration follow-up after RC.2 is published. Keep this scope
+closed until then except for release blockers explicitly moved here; preserve the
+RC.2 API and add capabilities rather than exposing core implementation classes.
+
+- [ ] Add safe extension-owned pre-start preparation actions. Run them only in a
+      confined staging transaction before publication, with namespaced
+      registration, deterministic ordering, bounded concurrency/time/output,
+      cancellation, rollback, crash cleanup, and typed diagnostics. Provide
+      narrowly scoped staging operations instead of unrestricted filesystem or
+      process access, and prove sibling extensions and instances remain isolated.
+- [ ] Add managed process-output integration for extensions in two distinct
+      capabilities: bounded read-only output subscriptions and explicitly
+      privileged console-input requests. Reuse the core capture/backpressure
+      engine; enforce ownership, global and per-context subscriber limits,
+      truncation, redaction, disconnect/shutdown cleanup, command length/rate
+      limits, and audit records. Never expose process handles, raw streams, or an
+      unbounded logging callback.
+- [ ] Add composable matchmaking and admission-policy hooks with immutable
+      request snapshots and typed allow, reject, rank, and reservation results.
+      Define deterministic precedence and conflict behavior; bound execution;
+      isolate timeout, failure, and context closure; preserve core protocol,
+      capacity, maintenance, lifecycle, and resource-admission rules; and make
+      every extension decision diagnosable without leaking player data.
+- [ ] Evaluate and, only with an explicit capability and audit contract,
+      complete destructive lifecycle control needed by trusted extensions,
+      including forced stop/termination. Keep graceful control in the RC.2 API;
+      require reason-bearing requests, preserve cleanup/reconciliation, prevent
+      raw PID/process access, and prove late exits cannot escape shutdown or
+      corrupt persistent-instance state.
+
+`v0.1.0-rc.3` exit: the extension hooks remain bounded under failure and load,
+their compatibility contracts are documented and consumer-tested, and external
+testers receive reproducible artifacts without weakening the RC.2 invariants.
+
 Stage 4.3 acceptance: the latest published candidate has completed its planned
 external testing period; no known release blockers remain; every accepted
 finding is fixed and verified or explicitly assigned to a later milestone with
@@ -1131,6 +1195,30 @@ refer to the same approved revision and passed release evidence.
       special files, never execute imported content, and never move, delete,
       rewrite, clean, or adopt the original server automatically. Require the
       operator to review and activate the generated drafts explicitly.
+
+## Post-release: Extension Provider SPIs
+
+- [ ] Design a versioned software-installation provider SPI for trusted
+      extensions. Model discovery, version resolution, artifacts, checksums,
+      licensing/EULA metadata, Java requirements, cache identity, offline and
+      retry behavior, cancellation, and bounded progress without exposing the
+      installer coordinator or arbitrary download/execution primitives. Define
+      deterministic provider conflicts and retain SLS-LITE's confinement,
+      verification, and publication guarantees.
+- [ ] Design replaceable managed-lobby and SLS-Limbo provider SPIs only after
+      their core routing contracts are stable. Preserve the distinction between
+      external and managed lobbies, intentional Limbo stays, automatic fallback
+      and return, protocol compatibility, health/capacity, shutdown, and failure
+      recovery. Require explicit operator selection and guarantee that a failed
+      provider cannot strand players or remove the built-in safe fallback.
+- [ ] Design a storage/instance-assembly provider SPI for trusted extensions and
+      host integrations. Expose capability negotiation and transactional
+      prepare, publish, mount, suspend, resume, reset, delete, and reconcile
+      operations rather than filesystem internals. Specify ownership,
+      idempotency, path confinement, source immutability, cancellation, crash
+      recovery, resource accounting, helper authentication, and fallback
+      behavior before allowing providers to participate in automatic strategy
+      selection.
 
 ## Post-release: Backup and Portability
 

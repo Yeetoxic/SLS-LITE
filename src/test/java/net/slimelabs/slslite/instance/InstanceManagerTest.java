@@ -27,9 +27,12 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessCatalog;
 import net.slimelabs.slslite.config.ForwardingConfig;
 import net.slimelabs.slslite.config.ForwardingMode;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
+import net.slimelabs.slslite.config.SLSConfigRepository;
+import net.slimelabs.slslite.config.StorageStrategy;
 import net.slimelabs.slslite.instance.diagnostics.FailurePhase;
 import net.slimelabs.slslite.instance.diagnostics.InstanceOutput;
 import net.slimelabs.slslite.instance.lifecycle.InstancePhaseTimings;
@@ -62,6 +65,31 @@ class InstanceManagerTest {
     if (manager != null) {
       manager.shutdown(Duration.ofSeconds(3));
     }
+  }
+
+  @Test
+  void rejectsANonReadyBlueprintBeforeAllocatingInstanceResources() throws Exception {
+    TestContext context = createContext(false, true);
+    SLSConfigRepository configuration =
+        new SLSConfigRepository(temporaryDirectory.resolve("preflight-config"));
+    configuration.initialize();
+    BlueprintReadinessCatalog readiness =
+        new BlueprintReadinessCatalog(
+            configuration.get(),
+            temporaryDirectory,
+            new JavaJarProcessSpecFactory(temporaryDirectory),
+            java.util.Set.of(),
+            StorageStrategy.COPY);
+    readiness.refresh(context.blueprints().getAll(), List.of());
+    manager.installReadinessCatalog(readiness);
+
+    InstanceOperationException failure =
+        assertThrows(InstanceOperationException.class, () -> manager.start("fixture"));
+
+    assertTrue(failure.getMessage().contains("action needed"));
+    assertTrue(manager.getAll().isEmpty());
+    assertEquals(0, context.budget().reservedMemoryMiB());
+    assertTrue(context.ports().reservations().isEmpty());
   }
 
   @Test

@@ -24,6 +24,9 @@ import net.slimelabs.slslite.api.SLSLiteApi;
 import net.slimelabs.slslite.api.SLSLiteApiProvider;
 import net.slimelabs.slslite.api.internal.DefaultSLSLiteApi;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessCatalog;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessDiagnostics;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessSummary;
 import net.slimelabs.slslite.command.SLSCommand;
 import net.slimelabs.slslite.config.ConfigurationValidator;
 import net.slimelabs.slslite.config.DefinitionCatalog;
@@ -60,6 +63,7 @@ import net.slimelabs.slslite.resource.ResourceBudget;
 import net.slimelabs.slslite.security.AdminClaimService;
 import net.slimelabs.slslite.security.AdministratorStore;
 import net.slimelabs.slslite.software.SoftwareProfileRepository;
+import net.slimelabs.slslite.software.SoftwareSource;
 import net.slimelabs.slslite.velocity.BackendProtocolSynchronizer;
 import net.slimelabs.slslite.velocity.BlueprintJoinActionService;
 import net.slimelabs.slslite.velocity.LocalJoinService;
@@ -103,6 +107,7 @@ public final class SLSLite implements SLSLiteApiProvider {
   private SLSCommand slsCommand;
   private SLSDetailLog detailLog;
   private BackendMessagingService backendMessaging;
+  private BlueprintReadinessCatalog blueprintReadiness;
 
   @Inject
   public SLSLite(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -222,15 +227,20 @@ public final class SLSLite implements SLSLiteApiProvider {
         throw new IllegalStateException(
             "Required host capability checks failed: " + hostCapabilities.failureSummary());
       }
+      blueprintReadiness =
+          new BlueprintReadinessCatalog(
+              configuration.get(),
+              dataDirectory,
+              processSpecFactory,
+              java.util.Set.of(SoftwareSource.PAPER, SoftwareSource.VANILLA),
+              hostCapabilities.selectedStorageStrategy().orElseThrow(),
+              publicApi.extensionReadiness());
+      BlueprintReadinessSummary startupReadiness =
+          blueprintReadiness.refresh(blueprints.getAll(), softwareProfiles.getAll());
       startupChecklist =
           new StartupSetupInspector()
-              .inspect(
-                  configuration.get(),
-                  startupDefinitions,
-                  blueprints.getAll(),
-                  softwareProfiles.getAll(),
-                  processSpecFactory,
-                  hostCapabilities);
+              .inspect(configuration.get(), startupDefinitions, hostCapabilities, startupReadiness);
+      BlueprintReadinessDiagnostics.write(blueprintReadiness, detailLog, startupCorrelation);
       InstanceDirectoryPreparer directoryPreparer =
           new InstanceDirectoryPreparer(
               configuration.get().instancesDirectory(),
@@ -287,6 +297,7 @@ public final class SLSLite implements SLSLiteApiProvider {
               configuration.get().diagnosticRetention().consoleTailLines(),
               proxy.getConfiguration().getShowMaxPlayers(),
               logger);
+      instanceManager.installReadinessCatalog(blueprintReadiness);
       joinService =
           new LocalJoinService(
               proxy,
@@ -373,6 +384,7 @@ public final class SLSLite implements SLSLiteApiProvider {
             detailLog,
             backendRegistry,
             logger);
+    slsCommand.installReadinessCatalog(blueprintReadiness);
     proxy.getCommandManager().register(commandMeta, slsCommand);
     backendMessaging.start();
     issueInitialAdministratorCode();

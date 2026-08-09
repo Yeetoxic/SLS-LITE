@@ -50,13 +50,23 @@ public final class StartupSetupChecklist {
               input.rejectedBlueprints()
                   + " invalid file(s) rejected; valid siblings remain available"));
     }
-    if (input.eulaGates() > 0) {
+    if (input.actionNeededBlueprints() > 0) {
       findings.add(
           Finding.action(
-              "Software",
-              input.eulaGates() + " required provider download(s) await explicit EULA acceptance"));
-    } else {
-      findings.add(Finding.ready("Software", "loaded definitions have no active EULA gate"));
+              "Readiness",
+              input.actionNeededBlueprints()
+                  + " blueprint(s) need operator action; inspect with /sls blueprint <id>"));
+    }
+    if (input.unavailableBlueprints() > 0) {
+      findings.add(
+          Finding.action(
+              "Readiness",
+              input.unavailableBlueprints() + " blueprint(s) are temporarily unavailable"));
+    }
+    if (input.actionNeededBlueprints() == 0 && input.unavailableBlueprints() == 0) {
+      findings.add(
+          Finding.ready(
+              "Readiness", input.readyBlueprints() + " blueprint(s) passed bounded preflight"));
     }
     findings.add(
         Finding.ready(
@@ -109,7 +119,9 @@ public final class StartupSetupChecklist {
       String routingDescription,
       int loadedBlueprints,
       int rejectedBlueprints,
-      int eulaGates,
+      int readyBlueprints,
+      int actionNeededBlueprints,
+      int unavailableBlueprints,
       int maxManagedProcesses,
       int managedMemoryMiB,
       int portCount,
@@ -118,7 +130,9 @@ public final class StartupSetupChecklist {
       if (hostFailures < 0
           || loadedBlueprints < 0
           || rejectedBlueprints < 0
-          || eulaGates < 0
+          || readyBlueprints < 0
+          || actionNeededBlueprints < 0
+          || unavailableBlueprints < 0
           || maxManagedProcesses <= 0
           || managedMemoryMiB <= 0
           || portCount <= 0) {

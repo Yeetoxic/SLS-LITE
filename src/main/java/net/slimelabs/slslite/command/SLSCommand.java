@@ -16,6 +16,9 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.slimelabs.slslite.BuildInfo;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessCatalog;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessDiagnostics;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessSummary;
 import net.slimelabs.slslite.command.handler.AdminCommandHandler;
 import net.slimelabs.slslite.command.handler.InspectionCommandHandler;
 import net.slimelabs.slslite.command.handler.InstallationCommandHandler;
@@ -64,6 +67,7 @@ public final class SLSCommand implements SimpleCommand {
   private final SLSDetailLog detailLog;
   private final BackendRegistry backendRegistry;
   private final Consumer<DefinitionReloader.DefinitionReloadTransition> reloadObserver;
+  private BlueprintReadinessCatalog readinessCatalog;
 
   public SLSCommand(
       ProxyServer proxy,
@@ -312,6 +316,15 @@ public final class SLSCommand implements SimpleCommand {
       case "node" -> unavailable(invocation.source(), arguments[0], true);
       default -> sendRootHelp(invocation.source());
     }
+  }
+
+  /** Installs the shared readiness snapshot before this command is registered. */
+  public void installReadinessCatalog(BlueprintReadinessCatalog catalog) {
+    if (readinessCatalog != null) {
+      throw new IllegalStateException("Blueprint readiness catalog is already installed");
+    }
+    readinessCatalog = java.util.Objects.requireNonNull(catalog, "catalog");
+    inspectionHandler.installReadinessCatalog(catalog);
   }
 
   @Override
@@ -693,6 +706,23 @@ public final class SLSCommand implements SimpleCommand {
                 + "SLS-LITE detail log",
             correlationId,
             report.rejectedBlueprints().size());
+      }
+      if (readinessCatalog != null) {
+        BlueprintReadinessSummary readiness =
+            readinessCatalog.refresh(blueprints.getAll(), softwareProfiles.getAll());
+        source.sendMessage(
+            CommandMessages.message(
+                "Blueprint readiness: ready="
+                    + readiness.ready()
+                    + ", action-needed="
+                    + readiness.actionNeeded()
+                    + ", temporarily-unavailable="
+                    + readiness.temporarilyUnavailable()
+                    + ".",
+                readiness.actionNeeded() == 0 && readiness.temporarilyUnavailable() == 0
+                    ? NamedTextColor.GREEN
+                    : NamedTextColor.YELLOW));
+        BlueprintReadinessDiagnostics.write(readinessCatalog, detailLog, correlationId);
       }
       if (backendRegistry != null) {
         BackendRegistry.ReconciliationReport registrations = backendRegistry.reconcile();

@@ -7,6 +7,9 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessCatalog;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessReport;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessState;
 import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandMessages;
 import net.slimelabs.slslite.instance.ServerController;
@@ -16,6 +19,7 @@ final class CatalogInspectionHandler {
   private final BlueprintRepository blueprints;
   private final ServerController instances;
   private final CommandAuthorizer authorizer;
+  private BlueprintReadinessCatalog readiness;
 
   CatalogInspectionHandler(
       BlueprintRepository blueprints, ServerController instances, CommandAuthorizer authorizer) {
@@ -63,11 +67,19 @@ final class CatalogInspectionHandler {
     }
     source.sendMessage(CommandMessages.message("Blueprints", NamedTextColor.GREEN));
     selected.forEach(
-        blueprint ->
-            source.sendMessage(
-                CommandMessages.prefix()
-                    .append(Component.text("- ", NamedTextColor.GOLD))
-                    .append(CommandMessages.blueprint(blueprint, instances.getAll()))));
+        blueprint -> {
+          Component line =
+              CommandMessages.prefix()
+                  .append(Component.text("- ", NamedTextColor.GOLD))
+                  .append(CommandMessages.blueprint(blueprint, instances.getAll()));
+          BlueprintReadinessReport report = report(blueprint.id());
+          if (report != null) {
+            line =
+                line.append(
+                    Component.text(" [" + stateName(report.state()) + "]", color(report.state())));
+          }
+          source.sendMessage(line);
+        });
   }
 
   void blueprint(CommandSource source, String[] arguments) {
@@ -90,6 +102,23 @@ final class CatalogInspectionHandler {
     source.sendMessage(
         CommandMessages.prefix()
             .append(CommandMessages.blueprintDetails(blueprint, instances.getAll())));
+    BlueprintReadinessReport report = report(blueprint.id());
+    if (report != null) {
+      source.sendMessage(
+          CommandMessages.message(
+              "Readiness: " + stateName(report.state()), color(report.state())));
+      report
+          .issues()
+          .forEach(
+              issue ->
+                  source.sendMessage(
+                      CommandMessages.prefix()
+                          .append(Component.text("- " + issue.message(), color(issue.state())))));
+    }
+  }
+
+  void installReadinessCatalog(BlueprintReadinessCatalog catalog) {
+    readiness = java.util.Objects.requireNonNull(catalog, "catalog");
   }
 
   List<String> suggestions(CommandSource source, String operation) {
@@ -105,6 +134,26 @@ final class CatalogInspectionHandler {
 
   private boolean requireAdmin(CommandSource source) {
     return requireAdmin(source, "blueprints", "inspect blueprints");
+  }
+
+  private BlueprintReadinessReport report(String id) {
+    return readiness == null ? null : readiness.get(id).orElse(null);
+  }
+
+  private static NamedTextColor color(BlueprintReadinessState state) {
+    return switch (state) {
+      case READY -> NamedTextColor.GREEN;
+      case ACTION_NEEDED -> NamedTextColor.RED;
+      case TEMPORARILY_UNAVAILABLE -> NamedTextColor.YELLOW;
+    };
+  }
+
+  private static String stateName(BlueprintReadinessState state) {
+    return switch (state) {
+      case READY -> "ready";
+      case ACTION_NEEDED -> "action needed";
+      case TEMPORARILY_UNAVAILABLE -> "temporarily unavailable";
+    };
   }
 
   private boolean requireAdmin(CommandSource source, String operation, String action) {

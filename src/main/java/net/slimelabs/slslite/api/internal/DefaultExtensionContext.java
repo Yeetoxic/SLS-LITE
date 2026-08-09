@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import net.slimelabs.slslite.api.BlueprintReadinessChecker;
 import net.slimelabs.slslite.api.BlueprintView;
 import net.slimelabs.slslite.api.ExtensionContext;
 import net.slimelabs.slslite.api.InstanceReadyAction;
@@ -91,6 +92,22 @@ final class DefaultExtensionContext implements ExtensionContext {
           values.put(stringKey, value);
         });
     return new NamespacedAnnotations(namespace, values);
+  }
+
+  @Override
+  public Subscription onBlueprintReadiness(BlueprintReadinessChecker checker) {
+    java.util.Objects.requireNonNull(checker, "checker");
+    reserve();
+    OwnedBlueprintReadinessRegistration registration = new OwnedBlueprintReadinessRegistration();
+    registrations.add(registration);
+    try {
+      registration.install(api.registerBlueprintReadiness(namespace, checker));
+      rejectIfClosed(registration);
+      return registration;
+    } catch (RuntimeException exception) {
+      registration.close();
+      throw exception;
+    }
   }
 
   @Override
@@ -260,6 +277,26 @@ final class DefaultExtensionContext implements ExtensionContext {
       } catch (RuntimeException exception) {
         close();
         throw exception;
+      }
+    }
+
+    @Override
+    void releaseDelegate() {
+      Subscription current = delegate;
+      if (current != null) {
+        current.close();
+      }
+    }
+  }
+
+  private final class OwnedBlueprintReadinessRegistration extends OwnedRegistration {
+
+    private volatile Subscription delegate;
+
+    private void install(Subscription delegate) {
+      this.delegate = delegate;
+      if (!active()) {
+        delegate.close();
       }
     }
 

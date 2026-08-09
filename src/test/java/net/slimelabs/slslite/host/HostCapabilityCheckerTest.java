@@ -74,8 +74,13 @@ class HostCapabilityCheckerTest {
                 new JavaJarProcessSpecFactory(temporaryDirectory),
                 1024);
 
-    assertTrue(report.hasFailures());
-    assertTrue(report.failureSummary().contains("Child Java process"));
+    assertFalse(report.hasFailures());
+    assertTrue(
+        report.capabilities().stream()
+            .anyMatch(
+                capability ->
+                    capability.name().equals("Child Java process")
+                        && capability.status() == HostCapabilityStatus.WARNING));
   }
 
   @Test
@@ -149,7 +154,7 @@ class HostCapabilityCheckerTest {
   }
 
   @Test
-  void missingSelectedRuntimeFailsEvenWhenDefaultIsAvailable() {
+  void missingSelectedRuntimeWarnsWithoutDisablingValidSiblings() {
     SoftwareProfile profile =
         withJavaVersions(profile(javaExecutable()), Map.of(17, "definitely-not-java-17"));
 
@@ -163,8 +168,13 @@ class HostCapabilityCheckerTest {
                 new JavaJarProcessSpecFactory(temporaryDirectory),
                 1024);
 
-    assertTrue(report.hasFailures());
-    assertTrue(report.failureSummary().contains("definitely-not-java-17"));
+    assertFalse(report.hasFailures());
+    assertTrue(
+        report.capabilities().stream()
+            .anyMatch(
+                capability ->
+                    capability.status() == HostCapabilityStatus.WARNING
+                        && capability.detail().contains("definitely-not-java-17")));
   }
 
   @Test

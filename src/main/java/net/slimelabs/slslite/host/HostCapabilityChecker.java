@@ -293,7 +293,10 @@ public final class HostCapabilityChecker {
 
   private static HostCapability unavailableJava(boolean required, String name, String detail) {
     return required
-        ? failure(name, detail)
+        ? new HostCapability(
+            name,
+            HostCapabilityStatus.WARNING,
+            detail + " (new instances using this runtime are unavailable)")
         : new HostCapability(
             name, HostCapabilityStatus.INFO, detail + " (configured but unused runtime)");
   }

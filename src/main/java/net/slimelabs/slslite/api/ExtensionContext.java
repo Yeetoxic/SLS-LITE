@@ -32,6 +32,21 @@ public interface ExtensionContext extends AutoCloseable {
   NamespacedAnnotations annotations(BlueprintView blueprint);
 
   /**
+   * Registers this namespace's single bounded, non-blocking blueprint readiness checker.
+   *
+   * <p>The checker is invoked only for blueprints containing this context's annotation namespace.
+   * Its findings join core readiness, inspection, startup/reload diagnostics, and new-instance
+   * admission. Closing the returned handle or this context removes its findings.
+   *
+   * @param checker read-only checker that must not block or change external state
+   * @return idempotent registration handle
+   */
+  default Subscription onBlueprintReadiness(BlueprintReadinessChecker checker) {
+    throw new UnsupportedOperationException(
+        "This SLS-LITE provider does not advertise extension blueprint readiness");
+  }
+
+  /**
    * Registers an owned action delivered after matching instances reach READY.
    *
    * @param action non-blocking action consumer

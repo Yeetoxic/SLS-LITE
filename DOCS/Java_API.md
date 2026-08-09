@@ -3,9 +3,10 @@
 [Documentation home](README.md)
 
 SLS-LITE exposes a versioned in-process Java API for trusted Velocity plugins.
-API `1.0` supports capability discovery, immutable blueprint and instance
+API `1.1` supports capability discovery, immutable blueprint and instance
 inspection, asynchronous start/stop/delete and player-matchmaking requests,
-queue inspection/cancellation, and ordered instance lifecycle events.
+queue inspection/cancellation, ordered lifecycle events, and bounded
+namespaced blueprint-readiness contributions.
 
 The JVM contract is enforced by a checked signature baseline. Breaking changes
 require a new API major version. Distribution verification covers checksums,
@@ -30,13 +31,15 @@ developers, comparable to an SDK. Keeping it separate prevents extension code
 from accidentally importing SLS-LITE implementation packages and avoids using
 the large shaded runtime JAR as a development dependency.
 
-The accepted 1.0 JVM class, field, constructor, and method descriptors have a
+The accepted 1.1 JVM class, field, constructor, and method descriptors have a
 checked SHA-256 baseline in
-`src/test/resources/api/public-api-1.0.sha256`. The build derives the signature
-directly from compiled class files (not reflection), writes the reviewable form
-to `target/api-signature/public-api-1.0.txt`, and fails on any descriptor or
-visibility change. Updating the baseline requires an explicit compatibility
-review; a passing hash does not authorize an undocumented API change.
+`src/test/resources/api/public-api-1.1.sha256`; the immutable 1.0 fingerprint
+is retained beside it. The build derives the current signature directly from
+compiled class files (not reflection), writes the reviewable form to
+`target/api-signature/public-api-1.1.txt`, and fails on any descriptor or
+visibility change. Updating the current baseline requires an explicit
+compatibility review; a passing hash does not authorize an undocumented API
+change.
 
 ### Developer artifacts
 
@@ -147,12 +150,12 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 | `queued(playerId)` / `dequeue(playerId)` | Inspect or cancel a queued request. |
 | `subscribe(listener)` | Receive ordered lifecycle, matchmaking, and failure events. |
 
-API 1.0 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
+API 1.1 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
 `INSTANCE_START`, `INSTANCE_STOP`, `INSTANCE_DELETE`, `PLAYER_QUEUE`,
 `MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, `CATALOG_RELOAD_EVENTS`,
 `LOBBY_STATUS_EVENTS`, `SOFTWARE_INSTALLATION_EVENTS`, `RECONCILIATION_EVENTS`,
 `API_SHUTDOWN_EVENTS`, `DIAGNOSTICS`, `EXTENSION_CONTEXTS`,
-`EXTENSION_ACTIONS`, and `LIFECYCLE_EVENTS`.
+`EXTENSION_ACTIONS`, `EXTENSION_BLUEPRINT_READINESS`, and `LIFECYCLE_EVENTS`.
 
 ## Operations
 
@@ -222,6 +225,7 @@ context.subscribe(event -> handle(event));
 context.onComplete(api.start(request), (instance, failure) -> handle(instance, failure));
 context.onInstanceReady(action -> initializeBackend(action.instance(), action.annotations()));
 context.onPostTransfer(action -> recordArrival(action.ticket(), action.annotations()));
+context.onBlueprintReadiness((blueprint, annotations) -> checkDependencies(annotations));
 
 // During extension shutdown:
 context.close();
@@ -257,6 +261,24 @@ annotations:
 tree to 16 levels and 4,096 total values, and strings to 4,096 characters.
 Only null, strings, booleans, immutable numeric values, maps, and lists cross
 the API boundary.
+
+`onBlueprintReadiness(checker)` registers the namespace's single read-only
+preflight checker. It runs only for blueprints containing that annotation
+namespace and may return up to eight `BlueprintReadinessFinding` values. An
+empty list means the extension is ready. `ACTION_NEEDED` identifies an operator
+input that must change; `TEMPORARILY_UNAVAILABLE` identifies a dependency that
+may recover without editing the blueprint. Findings are namespaced and merged
+into startup/reload aggregates, `/sls blueprints`, `/sls blueprint <id>`,
+startup/reload detail-log entries, and new-instance admission. Existing running or persistent
+instances retain their established lifecycle.
+
+Checkers receive only immutable `BlueprintView` and `NamespacedAnnotations`
+values. They must be non-blocking, non-mutating, and must not perform downloads,
+mounts, instance assembly, or unbounded I/O. SLS-LITE isolates exceptions,
+limits the combined refresh to two seconds on four bounded daemon workers, and
+reports an affected annotated blueprint as temporarily unavailable when its
+checker fails, times out, or cannot be scheduled. A context owns at most one
+checker; closing its registration or context immediately removes its findings.
 
 `onInstanceReady(action)` runs after the instance is registered with Velocity
 and immediately after its public READY event is queued. `onPostTransfer(action)`

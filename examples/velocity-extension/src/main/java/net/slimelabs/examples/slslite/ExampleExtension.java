@@ -8,6 +8,8 @@ import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.proxy.ProxyServer;
 import net.slimelabs.slslite.api.Capability;
+import net.slimelabs.slslite.api.BlueprintReadinessFinding;
+import net.slimelabs.slslite.api.BlueprintReadinessStatus;
 import net.slimelabs.slslite.api.DiagnosticsSnapshot;
 import net.slimelabs.slslite.api.ExtensionContext;
 import net.slimelabs.slslite.api.SLSLiteApi;
@@ -72,6 +74,18 @@ public final class ExampleExtension {
                   action.ticket().playerName(),
                   action.ticket().instanceId(),
                   action.annotations().values().keySet()));
+    }
+
+    if (api.capabilities().contains(Capability.EXTENSION_BLUEPRINT_READINESS)) {
+      owned.onBlueprintReadiness(
+          (blueprint, annotations) ->
+              Boolean.FALSE.equals(annotations.values().get("enabled"))
+                  ? java.util.List.of(
+                      new BlueprintReadinessFinding(
+                          "disabled",
+                          BlueprintReadinessStatus.ACTION_NEEDED,
+                          "enable this blueprint's example-extension integration"))
+                  : java.util.List.of());
     }
 
     owned.onComplete(

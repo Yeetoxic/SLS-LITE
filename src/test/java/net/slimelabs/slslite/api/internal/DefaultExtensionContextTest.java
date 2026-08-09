@@ -18,6 +18,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.slimelabs.slslite.api.BlueprintReadinessFinding;
+import net.slimelabs.slslite.api.BlueprintReadinessStatus;
 import net.slimelabs.slslite.api.BlueprintView;
 import net.slimelabs.slslite.api.ExtensionContext;
 import net.slimelabs.slslite.api.InstanceReadyAction;
@@ -158,6 +160,37 @@ class DefaultExtensionContextTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> new NamespacedAnnotations("example-plugin", Map.of("mutable", new AtomicInteger(1))));
+    api.close();
+  }
+
+  @Test
+  void contextOwnsOneNamespacedBlueprintReadinessChecker() {
+    DefaultSLSLiteApi api = new DefaultSLSLiteApi(proxy(), NOPLogger.NOP_LOGGER);
+    ExtensionContext context = api.extension("example-plugin");
+    api.extensionReadiness()
+        .refreshViews(List.of(blueprint(Map.of("example-plugin", Map.of("required", "database")))));
+
+    var registration =
+        context.onBlueprintReadiness(
+            (blueprint, annotations) ->
+                List.of(
+                    new BlueprintReadinessFinding(
+                        "database",
+                        BlueprintReadinessStatus.TEMPORARILY_UNAVAILABLE,
+                        "database is offline")));
+
+    assertEquals(1, api.extensionReadiness().findings("arena").size());
+    SLSLiteApiException conflict =
+        assertThrows(
+            SLSLiteApiException.class,
+            () -> context.onBlueprintReadiness((blueprint, annotations) -> List.of()));
+    assertEquals(SLSLiteApiException.Code.CONFLICT, conflict.code());
+
+    registration.close();
+    assertTrue(api.extensionReadiness().findings("arena").isEmpty());
+    context.onBlueprintReadiness((blueprint, annotations) -> List.of());
+    context.close();
+    assertTrue(api.extensionReadiness().findings("arena").isEmpty());
     api.close();
   }
 

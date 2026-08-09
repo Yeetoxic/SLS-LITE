@@ -4,6 +4,7 @@ import com.velocitypowered.api.command.CommandSource;
 import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessCatalog;
 import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandInstanceAccess;
 import net.slimelabs.slslite.config.ManagedOutputConfig;
@@ -92,6 +93,10 @@ public final class InspectionCommandHandler {
 
   public void system(CommandSource source, String[] arguments) {
     host.system(source, arguments);
+  }
+
+  public void installReadinessCatalog(BlueprintReadinessCatalog readiness) {
+    catalog.installReadinessCatalog(readiness);
   }
 
   public List<String> suggestions(CommandSource source, String operation, String[] arguments) {

@@ -83,8 +83,8 @@ name a player and cannot use player-only selectors.
 | `/sls admin remove <player>` | `admin` | Remove one by last known name. |
 | `/sls admin list` | `admin` | List built-in administrators. |
 | `/sls admin code` | console only | Issue a short-lived one-time claim code. |
-| `/sls blueprint <id>` | `blueprint` | Show one blueprint's registry, software, limits, persistence, active instances, volumes, copies, and environment-variable names. |
-| `/sls blueprints [registry]` | `blueprints` | List blueprint details; rows suggest join commands. |
+| `/sls blueprint <id>` | `blueprint` | Show one blueprint's definition, bounded readiness state, and exact preflight problems. |
+| `/sls blueprints [registry]` | `blueprints` | List blueprint details and compact `ready`, `action needed`, or `temporarily unavailable` readiness labels. |
 | `/sls create <registry> <blueprint> [flags...]` | `create` | Provision and start a fresh managed instance. Supported local overrides are persisted across restart and reset. |
 | `/sls debug` | `debug` | Player-only toggle for bounded SLS-LITE command-dispatch diagnostics in chat. |
 | `/sls join-test <server\|this>` | `join-test` | Run a bounded Minecraft status negotiation against a ready registered backend. This is a reachability diagnostic, not a synthetic player login. |
@@ -124,6 +124,14 @@ that Velocity can reach the registered backend and complete Minecraft status
 negotiation. It does not consume a player slot or verify authentication,
 player-information forwarding, permissions, configuration-channel behavior,
 login, or transfer. Those still require a real client test.
+
+Blueprint readiness is a bounded, read-only preflight. It checks the selected
+software base/provider and EULA gate, Java executable, confined volume/copy
+sources, expected source type, and the host-selected storage capability. It
+does not download, assemble, mount, hash, or recursively size content. A
+non-ready definition remains loaded for inspection and does not affect valid
+siblings or already-running instances, but SLS-LITE rejects creation of a new
+instance immediately with the first actionable reason.
 
 Create accepts this confined subset of vSLS `--name=value` overrides:
 

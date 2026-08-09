@@ -59,7 +59,9 @@ class StartupSetupChecklistTest {
             input.routingDescription(),
             input.loadedBlueprints(),
             input.rejectedBlueprints(),
-            input.eulaGates(),
+            input.readyBlueprints(),
+            input.actionNeededBlueprints(),
+            input.unavailableBlueprints(),
             input.maxManagedProcesses(),
             input.managedMemoryMiB(),
             input.portCount(),
@@ -84,7 +86,7 @@ class StartupSetupChecklistTest {
   }
 
   private static StartupSetupChecklist.Input input(
-      int blueprints, int rejected, int eula, boolean development, String secretProblem) {
+      int blueprints, int rejected, int actionNeeded, boolean development, String secretProblem) {
     return new StartupSetupChecklist.Input(
         0,
         development,
@@ -92,7 +94,9 @@ class StartupSetupChecklistTest {
         "lobby=managed, SLS-Limbo=enabled",
         blueprints,
         rejected,
-        eula,
+        Math.max(0, blueprints - actionNeeded),
+        actionNeeded,
+        0,
         4,
         2048,
         20,

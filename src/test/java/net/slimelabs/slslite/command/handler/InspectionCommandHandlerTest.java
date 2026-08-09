@@ -17,12 +17,16 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessCatalog;
 import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandInstanceAccess;
 import net.slimelabs.slslite.command.CommandPermissions;
+import net.slimelabs.slslite.config.SLSConfigRepository;
+import net.slimelabs.slslite.config.StorageStrategy;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ManagedInstanceTestFactory;
 import net.slimelabs.slslite.instance.ServerController;
+import net.slimelabs.slslite.process.JavaJarProcessSpecFactory;
 import net.slimelabs.slslite.security.AdministratorStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,6 +107,31 @@ class InspectionCommandHandlerTest {
             source(Set.of("sls.command.blueprint"), new ArrayList<>()),
             "blueprint",
             new String[] {"blueprint", ""}));
+  }
+
+  @Test
+  void blueprintInspectionShowsBoundedReadinessReasons() throws Exception {
+    installBlueprint();
+    SLSConfigRepository configuration =
+        new SLSConfigRepository(temporaryDirectory.resolve("readiness-config"));
+    configuration.initialize();
+    BlueprintReadinessCatalog readiness =
+        new BlueprintReadinessCatalog(
+            configuration.get(),
+            temporaryDirectory,
+            new JavaJarProcessSpecFactory(temporaryDirectory),
+            Set.of(),
+            StorageStrategy.COPY);
+    readiness.refresh(blueprints.getAll(), List.of());
+    handler.installReadinessCatalog(readiness);
+    List<Component> messages = new ArrayList<>();
+
+    handler.blueprint(
+        source(Set.of("sls.command.blueprint"), messages), new String[] {"blueprint", "arena"});
+
+    assertEquals(4, messages.size());
+    assertTrue(plainText(messages.get(2)).contains("Readiness: action needed"));
+    assertTrue(plainText(messages.get(3)).contains("software profile 'paper-auto' is not loaded"));
   }
 
   private void installBlueprint() {

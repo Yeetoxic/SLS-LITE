@@ -29,6 +29,10 @@ The generated defaults favor safety and portability. `forwarding.mode: none`
 is a deliberate development-only choice, while `storage.strategy: auto` may
 select `portable-copy` on restricted hosting and still be fully functional.
 
+`/sls blueprints` labels every loaded build sheet as `ready`, `action needed`,
+or `temporarily unavailable`. Use `/sls blueprint <id>` for exact reasons. Fix
+only the affected blueprint; valid siblings remain usable.
+
 ## Before Installing
 
 - The pinned Velocity generation used by this release runs on Java 25.

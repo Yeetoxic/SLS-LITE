@@ -68,6 +68,7 @@ import net.slimelabs.slslite.api.event.SoftwareReleaseChannel;
 import net.slimelabs.slslite.api.event.Subscription;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.readiness.ExtensionBlueprintReadinessRegistry;
 import net.slimelabs.slslite.config.DefinitionReloader;
 import net.slimelabs.slslite.host.HostCapabilityReport;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
@@ -99,6 +100,7 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   private final AtomicLong lastOverflowWarningNanos = new AtomicLong();
   private final java.util.concurrent.ConcurrentHashMap<String, DefaultExtensionContext>
       extensionContexts = new java.util.concurrent.ConcurrentHashMap<>();
+  private final ExtensionBlueprintReadinessRegistry extensionReadiness;
   private final ThreadPoolExecutor eventExecutor =
       new ThreadPoolExecutor(
           1,
@@ -128,6 +130,20 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
   public DefaultSLSLiteApi(ProxyServer proxy, Logger logger) {
     this.proxy = java.util.Objects.requireNonNull(proxy, "proxy");
     this.logger = java.util.Objects.requireNonNull(logger, "logger");
+    this.extensionReadiness = new ExtensionBlueprintReadinessRegistry(logger);
+  }
+
+  public ExtensionBlueprintReadinessRegistry extensionReadiness() {
+    return extensionReadiness;
+  }
+
+  Subscription registerBlueprintReadiness(
+      String namespace, net.slimelabs.slslite.api.BlueprintReadinessChecker checker) {
+    try {
+      return extensionReadiness.register(namespace, checker);
+    } catch (IllegalStateException exception) {
+      throw new SLSLiteApiException(SLSLiteApiException.Code.CONFLICT, exception.getMessage());
+    }
   }
 
   public synchronized void configureFailureRetention(int capacity) {
@@ -933,6 +949,7 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
     }
     extensionContexts.values().forEach(DefaultExtensionContext::closeFromApi);
     extensionContexts.clear();
+    extensionReadiness.close();
     subscribers.clear();
   }
 }

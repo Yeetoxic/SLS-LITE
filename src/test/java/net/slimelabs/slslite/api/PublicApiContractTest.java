@@ -47,6 +47,9 @@ class PublicApiContractTest {
       List.of(
           ApiVersion.class,
           ApiStatus.class,
+          BlueprintReadinessChecker.class,
+          BlueprintReadinessFinding.class,
+          BlueprintReadinessStatus.class,
           Capability.class,
           DiagnosticsSnapshot.class,
           ExtensionContext.class,
@@ -101,7 +104,7 @@ class PublicApiContractTest {
 
   @Test
   void versionAndCapabilitiesAreStable() {
-    assertEquals("1.0", ApiVersion.CURRENT.toString());
+    assertEquals("1.1", ApiVersion.CURRENT.toString());
     assertTrue(Set.of(Capability.values()).contains(Capability.LIFECYCLE_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.PLAYER_QUEUE));
     assertTrue(Set.of(Capability.values()).contains(Capability.MATCHMAKING_EVENTS));
@@ -114,6 +117,7 @@ class PublicApiContractTest {
     assertTrue(Set.of(Capability.values()).contains(Capability.DIAGNOSTICS));
     assertTrue(Set.of(Capability.values()).contains(Capability.EXTENSION_CONTEXTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.EXTENSION_ACTIONS));
+    assertTrue(Set.of(Capability.values()).contains(Capability.EXTENSION_BLUEPRINT_READINESS));
   }
 
   @Test
