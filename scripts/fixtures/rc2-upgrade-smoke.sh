@@ -41,13 +41,17 @@ test -f plugins/sls-lite/config.yml
 
 sed -i 's/total_memory_mib: 2048/total_memory_mib: 1536/' plugins/sls-lite/config.yml
 printf '\n# extension-owned upgrade marker\n' >>plugins/sls-lite/config.yml
-mkdir -p plugins/sls-lite/blueprints/rc2-test \
-  plugins/sls-lite/volumes/whitelists/rc2-upgrade
-cp "${fixture_root}/rc2-upgrade-persistent.yml" \
-  plugins/sls-lite/blueprints/rc2-test/
+mkdir -p plugins/sls-lite/volumes/whitelists/rc2-upgrade
 cp "${fixture_root}/rc2-upgrade-whitelist.json" \
   plugins/sls-lite/volumes/whitelists/rc2-upgrade/whitelist.json
 cp "${fixture_root}/rc2-upgrade-whitelist.json" plugins/sls-lite/extension-custom.yml
+
+# Capture the complete RC.1 pair before introducing any RC.2-only blueprint state. Rollback must
+# restore this data directory and plugin JAR together rather than asking RC.1 to interpret RC.2.
+tar -cf /tmp/sls-rc1-rollback.tar plugins/sls-lite plugins/sls-lite.jar
+mkdir -p plugins/sls-lite/blueprints/rc2-test
+cp "${fixture_root}/rc2-upgrade-persistent.yml" \
+  plugins/sls-lite/blueprints/rc2-test/
 
 config_before="$(sha256sum plugins/sls-lite/config.yml | cut -d' ' -f1)"
 blueprint_before="$(sha256sum plugins/sls-lite/blueprints/rc2-test/rc2-upgrade-persistent.yml | cut -d' ' -f1)"
@@ -79,3 +83,16 @@ echo "SLS_UPGRADE_VOLUME_SHA256=${volume_after}"
 echo "SLS_UPGRADE_EXTENSION_SHA256=${extension_after}"
 grep -E "Host configuration|Setup checklist|SLS-LITE initialized|blueprint.*rejected|ERROR|Exception" \
   /tmp/sls-rc2.log | tail -n 30
+
+mv plugins/sls-lite plugins/sls-lite-rc2-observed
+mv plugins/sls-lite.jar plugins/sls-lite-rc2-observed.jar
+tar -xf /tmp/sls-rc1-rollback.tar
+rollback_status="$(run_proxy 18s /tmp/sls-rc1-rollback.log)"
+rollback_config="$(sha256sum plugins/sls-lite/config.yml | cut -d' ' -f1)"
+rollback_volume="$(sha256sum plugins/sls-lite/volumes/whitelists/rc2-upgrade/whitelist.json | cut -d' ' -f1)"
+rollback_extension="$(sha256sum plugins/sls-lite/extension-custom.yml | cut -d' ' -f1)"
+test "${config_before}" = "${rollback_config}"
+test "${volume_before}" = "${rollback_volume}"
+test "${extension_before}" = "${rollback_extension}"
+test ! -e plugins/sls-lite/blueprints/rc2-test/rc2-upgrade-persistent.yml
+echo "SLS_ROLLBACK_RC1_EXIT=${rollback_status}"

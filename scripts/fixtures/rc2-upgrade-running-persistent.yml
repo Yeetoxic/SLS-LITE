@@ -1,0 +1,24 @@
+blueprint:
+  id: rc1-upgrade-running
+  name: RC.2 Running Upgrade Fixture
+  type: test
+
+server:
+  software: paper-auto
+  version: "1.18.2"
+  limits:
+    memory_limit: 768
+    max_players: 4
+    max_instances: 1
+
+save: true
+
+state:
+  persistent_files:
+    - name: whitelist
+      source: volumes/whitelists/rc2-instance-upgrade/whitelist.json
+      target: whitelist.json
+
+annotations:
+  sls-lite:
+    test-only: true

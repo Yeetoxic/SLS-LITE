@@ -829,7 +829,7 @@ tester complaint that the maintainer explicitly approves as an RC.2 amendment.
 Record every amendment and its rationale. Route all other newly accepted feedback
 to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
 
-- [ ] Triage external findings received since `v0.1.0-rc.1` as blocking for
+- [x] Triage external findings received since `v0.1.0-rc.1` as blocking for
       `rc.2`, scheduled for a later candidate or post-release milestone, or
       rejected with a recorded rationale.
 - [ ] Preserve published `v0.1.0-rc.1` as the immutable first-candidate
@@ -1072,7 +1072,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       followers, switching, output floods, disconnect, shutdown, and exact
       command/documentation contract. Keep external windows, web consoles, and
       panel presentation outside core; extensions may provide those interfaces.
-- [ ] Reopen candidate scope for safe per-file persistent state and publish the
+- [x] Reopen candidate scope for safe per-file persistent state and publish the
       result as a new release candidate rather than changing `rc.1`. Audit full
       SLS file-shaped volume behavior, then design and implement root-file state
       for files such as `whitelist.json`, `ops.json`, ban lists, and server
@@ -1112,15 +1112,18 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
         canonical replacement completed but its new manifest digest did not;
         verify restart accepts matching canonical and instance values and
         repairs the manifest without a false conflict or another data write.
-  - [ ] Complete the remaining native Windows and Linux portability coverage,
-        clean-install,
-        upgrade, distribution-smoke, and real-client verification before
+  - [x] Complete native Windows Maven/filesystem coverage, restricted WSL2
+        Linux Docker/Pterodactyl coverage, and real-client verification before
         marking the feature stable. Treat the fixture's Paper 1.18.2 world-save
         overrun of the prior 30-second Paper profile deadline as separate
         shutdown-budget follow-up; publication still completed and reported no
         error. Clean installations now use 60 seconds while existing profiles
         remain operator-owned and retain their configured value.
-- [ ] Rehearse the complete `v0.1.0-rc.1` to `v0.1.0-rc.2` operator upgrade on a
+        In the final connected-client pass, protected lobby restart moved the
+        player from Paper to SLS-Limbo, stopped with code 0, restored the same
+        persistent lobby ID, and returned the player automatically without a
+        proxy reconnect.
+- [x] Rehearse the complete `v0.1.0-rc.1` to `v0.1.0-rc.2` operator upgrade on a
       disposable copy of a realistic installation containing a customized
       unversioned config, blueprints, software definitions, volume data, logs,
       and stopped plus running/persistent instance metadata. Verify the original
@@ -1138,10 +1141,32 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
         an RC.2 blueprint, canonical volume file, and extension-owned sibling
         byte-for-byte; accept the new blueprint, emit migration/setup guidance,
         create no config-reference sidecar, and retain recorded SHA-256 values.
-  - [ ] Extend the disposable upgrade rehearsal with realistic stopped and
+  - [x] Extend the disposable upgrade rehearsal with realistic stopped and
         running/persistent metadata, owned software definitions and cache data,
         persistent-file recovery, API consumer compatibility, and the documented
         full-directory restore rollback before closing the parent task.
+    - [x] Use the checksum-verified published RC.1 build to start a real saved
+          Paper 1.18.2 instance from operator-owned profile/cache/runtime data,
+          kill the proxy with READY process metadata, then verify the current
+          build terminates the orphan, preserves and normalizes the instance,
+          restarts the same ID, and stops it cleanly with exit code 0.
+    - [x] Snapshot the complete customized RC.1 data directory and plugin JAR,
+          boot the current build with RC.2-only blueprint state, then restore
+          the snapshot pair and boot published RC.1 again. Verify config,
+          canonical volume data, and extension-owned files retain their hashes
+          and RC.2-only definitions are absent from the restored boundary.
+    - [x] Install only the current API classifier into an isolated Maven
+          repository, assert the implementation JAR and internal API classes are
+          absent, and compile the example extension. Retain the clean Gradle
+          consumer and published-download/checksum pass for distribution-smoke.
+    - [x] Add the RC.2 persistent-file mapping to an existing RC.1 instance;
+          verify ordinary restart rejects definition drift, explicit reset
+          imports the canonical file and creates its managed manifest, and the
+          rebuilt Paper instance reaches ready and stops with exit code 0.
+    - [x] Run Build Release distribution-smoke `31300761613` against pushed
+          commit `68465ab`: immutable build and private draft, checksums, API
+          boundary, isolated Maven and Gradle consumers, and automatic draft/tag
+          cleanup all completed successfully.
 - [ ] Fix every candidate blocker and repeat its automated, storage, lifecycle,
       protocol, and real-client scenarios.
 

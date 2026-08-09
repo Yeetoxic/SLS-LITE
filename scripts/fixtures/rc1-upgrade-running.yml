@@ -1,0 +1,18 @@
+blueprint:
+  id: rc1-upgrade-running
+  name: RC.1 Running Upgrade Fixture
+  type: test
+
+server:
+  software: paper-auto
+  version: "1.18.2"
+  limits:
+    memory_limit: 768
+    max_players: 4
+    max_instances: 1
+
+save: true
+
+annotations:
+  sls-lite:
+    test-only: true

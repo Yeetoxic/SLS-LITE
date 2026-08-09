@@ -72,4 +72,20 @@ final class BlueprintRecipeDocumentationTest {
       assertTrue(document.contains(required), () -> "Recipe book is missing: " + required);
     }
   }
+
+  @Test
+  void releaseCandidateUpgradeFixturesRemainAcceptedBlueprints() throws Exception {
+    Blueprint rc1 =
+        new BlueprintParser().parse(PROJECT.resolve("scripts/fixtures/rc1-upgrade-running.yml"));
+    Blueprint rc2 =
+        new BlueprintParser()
+            .parse(PROJECT.resolve("scripts/fixtures/rc2-upgrade-running-persistent.yml"));
+    Blueprint fresh =
+        new BlueprintParser().parse(PROJECT.resolve("scripts/fixtures/rc2-upgrade-persistent.yml"));
+
+    assertEquals(rc1.id(), rc2.id());
+    assertTrue(rc1.persistentFiles().isEmpty());
+    assertEquals(1, rc2.persistentFiles().size());
+    assertEquals(1, fresh.persistentFiles().size());
+  }
 }
