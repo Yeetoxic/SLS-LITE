@@ -43,6 +43,8 @@ final class VSLSCommandContractTest {
             "delete.server",
             "delete.all",
             "logs.server",
+            "logs.follow",
+            "logs.unfollow",
             "reload.default",
             "reload.mode",
             "stop.current",

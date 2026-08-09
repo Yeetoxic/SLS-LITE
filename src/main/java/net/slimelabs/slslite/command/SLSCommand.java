@@ -12,6 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.slimelabs.slslite.BuildInfo;
@@ -302,7 +303,7 @@ public final class SLSCommand implements SimpleCommand {
       case "join-test" -> joinTest(invocation.source(), arguments);
       case "kill" -> lifecycleHandler.kill(invocation.source(), arguments);
       case "list" -> list(invocation.source(), arguments);
-      case "logs" -> inspectionHandler.logs(invocation.source(), arguments);
+      case "logs" -> logs(invocation.source(), arguments);
       case "maintenance" -> maintenance(invocation.source(), arguments);
       case "registries" -> registries(invocation.source(), arguments);
       case "reload" -> reload(invocation.source(), arguments);
@@ -358,7 +359,10 @@ public final class SLSCommand implements SimpleCommand {
             authorizer.canAdminister(source, operation)
                 ? completed(withPrefix("this", instanceIds()))
                 : completed(List.of());
-        case "logs" -> completed(inspectionHandler.suggestions(source, operation, arguments));
+        case "logs" ->
+            authorizer.canAdminister(source, "logs")
+                ? completed(withPrefix(VSLSCommandContract.CONSOLE_UNFOLLOW, instanceIds()))
+                : completed(List.of());
         case "find", "join" ->
             completed(playerRoutingHandler.suggestions(source, operation, arguments));
         case "join-test" ->
@@ -410,7 +414,9 @@ public final class SLSCommand implements SimpleCommand {
           List.of(VSLSCommandContract.CONSOLE_FOLLOW, VSLSCommandContract.CONSOLE_UNFOLLOW));
     }
     if (arguments.length == 3 && "logs".equals(operation)) {
-      return completed(inspectionHandler.suggestions(source, operation, arguments));
+      return authorizer.canAdminister(source, "logs")
+          ? completed(List.of(VSLSCommandContract.CONSOLE_FOLLOW, "1"))
+          : completed(List.of());
     }
     if (arguments.length == 3 && "status".equals(operation)) {
       return completed(inspectionHandler.suggestions(source, operation, arguments));
@@ -571,43 +577,34 @@ public final class SLSCommand implements SimpleCommand {
     }
     if (arguments.length == 1) {
       source.sendMessage(CommandMessages.incorrectUsage());
-      source.sendMessage(CommandMessages.usage("/sls console", "server"));
+      source.sendMessage(CommandMessages.usage("/sls console", "server", "command"));
+      source.sendMessage(
+          CommandMessages.message(
+              "To read live output, use /sls logs <server|this> --follow.", NamedTextColor.GRAY));
       return;
     }
     if (arguments.length == 2) {
-      source.sendMessage(CommandMessages.incorrectUsage());
-      source.sendMessage(CommandMessages.usage("/sls console " + arguments[1], "command"));
+      sendConsoleUsage(source);
       return;
     }
 
+    if (isFollowModifier(arguments[2]) && arguments.length != 3) {
+      sendConsoleUsage(source);
+      return;
+    }
+
+    if (arguments.length == 3
+        && VSLSCommandContract.CONSOLE_UNFOLLOW.equalsIgnoreCase(arguments[2])) {
+      stopFollowing(source);
+      return;
+    }
     ManagedInstance instance = resolveInstance(source, arguments[1]);
     if (instance == null) {
       return;
     }
     if (arguments.length == 3
         && VSLSCommandContract.CONSOLE_FOLLOW.equalsIgnoreCase(arguments[2])) {
-      boolean replaced = consoleOutput.follow(source, instance);
-      source.sendMessage(
-          CommandMessages.message(
-              (replaced ? "Console follow moved to " : "Following console output from ")
-                  + instance.id()
-                  + ". Use /sls console "
-                  + instance.id()
-                  + " "
-                  + VSLSCommandContract.CONSOLE_UNFOLLOW
-                  + " to stop.",
-              NamedTextColor.GRAY));
-      return;
-    }
-    if (arguments.length == 3
-        && VSLSCommandContract.CONSOLE_UNFOLLOW.equalsIgnoreCase(arguments[2])) {
-      boolean removed = consoleOutput.unfollow(source);
-      source.sendMessage(
-          CommandMessages.message(
-              removed
-                  ? "Stopped following managed console output."
-                  : "You are not following managed console output.",
-              NamedTextColor.GRAY));
+      startFollowing(source, instance, "console");
       return;
     }
     String command = String.join(" ", java.util.Arrays.copyOfRange(arguments, 2, arguments.length));
@@ -616,7 +613,9 @@ public final class SLSCommand implements SimpleCommand {
       instances.sendCommand(instance.id(), command);
       logger.info("Console command sent by {} to {}", commandSourceName(source), instance.id());
       source.sendMessage(
-          CommandMessages.message("Command executed successfully", NamedTextColor.GRAY));
+          CommandMessages.message(
+              "Sent command to " + instance.id() + "; capturing its bounded response.",
+              NamedTextColor.GRAY));
       if (!consoleOutput.isFollowing(source)
           && !consoleOutput.capture(source, instance, outputCursor)) {
         source.sendMessage(
@@ -630,6 +629,107 @@ public final class SLSCommand implements SimpleCommand {
               "Failed to send command to server " + instance.id() + ": " + exception.getMessage(),
               NamedTextColor.RED));
     }
+  }
+
+  private void logs(CommandSource source, String[] arguments) {
+    if (arguments.length == 2
+        && VSLSCommandContract.CONSOLE_UNFOLLOW.equalsIgnoreCase(arguments[1])) {
+      if (requireAdmin(source, "logs", "view managed server logs")) {
+        stopFollowing(source);
+      }
+      return;
+    }
+    if (arguments.length == 3
+        && VSLSCommandContract.CONSOLE_FOLLOW.equalsIgnoreCase(arguments[2])) {
+      if (!requireAdmin(source, "logs", "view managed server logs")) {
+        return;
+      }
+      ManagedInstance instance = resolveInstance(source, arguments[1]);
+      if (instance != null) {
+        startFollowing(source, instance, "logs");
+      }
+      return;
+    }
+    if (containsFollowModifier(arguments)) {
+      sendLogsUsage(source);
+      return;
+    }
+    inspectionHandler.logs(source, arguments);
+  }
+
+  private static boolean containsFollowModifier(String[] arguments) {
+    return java.util.Arrays.stream(arguments).skip(1).anyMatch(SLSCommand::isFollowModifier);
+  }
+
+  private static boolean isFollowModifier(String argument) {
+    return VSLSCommandContract.CONSOLE_FOLLOW.equalsIgnoreCase(argument)
+        || VSLSCommandContract.CONSOLE_UNFOLLOW.equalsIgnoreCase(argument);
+  }
+
+  private static void sendConsoleUsage(CommandSource source) {
+    source.sendMessage(CommandMessages.incorrectUsage());
+    source.sendMessage(CommandMessages.usage("/sls console", "server", "command"));
+    source.sendMessage(
+        CommandMessages.message(
+            "To read live output, use /sls logs <server|this> --follow.", NamedTextColor.GRAY));
+  }
+
+  private static void sendLogsUsage(CommandSource source) {
+    source.sendMessage(CommandMessages.incorrectUsage());
+    source.sendMessage(CommandMessages.usage("/sls logs", "server|this", "--follow"));
+    source.sendMessage(CommandMessages.usage("/sls logs", "--unfollow"));
+  }
+
+  private void startFollowing(
+      CommandSource source, ManagedInstance instance, String permissionOperation) {
+    ConsoleOutputSessions.FollowResult result =
+        consoleOutput.follow(
+            source, instance, () -> authorizer.canAdminister(source, permissionOperation));
+    switch (result.status()) {
+      case STARTED ->
+          source.sendMessage(
+              followFeedback(source, "Following live output from " + result.instanceId() + "."));
+      case MOVED ->
+          source.sendMessage(
+              followFeedback(
+                  source,
+                  "Live output moved from "
+                      + result.previousInstanceId()
+                      + " to "
+                      + result.instanceId()
+                      + "."));
+      case CAPACITY ->
+          source.sendMessage(
+              CommandMessages.message(
+                  "Live-output capacity is currently full; try again later.",
+                  NamedTextColor.YELLOW));
+      case CLOSED ->
+          source.sendMessage(
+              CommandMessages.message(
+                  "Live output is unavailable while SLS-LITE is shutting down.",
+                  NamedTextColor.YELLOW));
+    }
+  }
+
+  private void stopFollowing(CommandSource source) {
+    java.util.Optional<String> stopped = consoleOutput.unfollow(source);
+    source.sendMessage(
+        CommandMessages.message(
+            stopped
+                .map(instanceId -> "Stopped following live output from " + instanceId + ".")
+                .orElse("You are not following managed live output."),
+            NamedTextColor.GRAY));
+  }
+
+  private static Component followFeedback(CommandSource source, String message) {
+    Component feedback = CommandMessages.message(message + " ", NamedTextColor.GRAY);
+    if (!(source instanceof Player)) {
+      return feedback;
+    }
+    return feedback.append(
+        Component.text("[Stop following]", NamedTextColor.RED)
+            .clickEvent(ClickEvent.runCommand("/sls logs " + VSLSCommandContract.CONSOLE_UNFOLLOW))
+            .hoverEvent(Component.text("Stop live managed output", NamedTextColor.GRAY)));
   }
 
   static Component capabilityLine(HostCapability capability) {

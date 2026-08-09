@@ -2,7 +2,7 @@
 
 [Documentation home](README.md)
 
-<!-- sls-command-contract-sha256:88f18ed1c0303ba683d77338b0a3dbea368d14c2d264bffdcde8922dd86c7ad4 -->
+<!-- sls-command-contract-sha256:4ca36eb8f256951e2b7822db1f17821ba519225308c45e022e61a0b88d2f716d -->
 
 SLS-LITE uses `/sls` and mirrors the pinned vSLS command tree where the local
 operation exists. Composite instance IDs use `<blueprint>.<short-id>`. For
@@ -27,7 +27,7 @@ complete permission inventory synchronized with the runtime:
 | `sls.command.admin` | Every administrative command, force operation, and local administrator-management action. |
 | `sls.command.blueprint` | Inspect one blueprint. |
 | `sls.command.blueprints` | Browse blueprint registries. |
-| `sls.command.console` | Send child-console commands and manage console follow. |
+| `sls.command.console` | Send commands to managed child-console input. Legacy follow aliases remain available under this stronger permission. |
 | `sls.command.create` | Provision a fresh instance. |
 | `sls.command.debug` | Toggle the player-only bounded debug stream. |
 | `sls.command.delete` | Delete ordinary managed instances. |
@@ -40,7 +40,7 @@ complete permission inventory synchronized with the runtime:
 | `sls.command.join-test` | Probe a registered backend with bounded status negotiation. |
 | `sls.command.kill` | Immediately terminate ordinary managed instances. |
 | `sls.command.kill.force` | Include the protected managed lobby in a forced kill. |
-| `sls.command.logs` | Read bounded retained child output. |
+| `sls.command.logs` | Read bounded retained child output and follow one live output stream. |
 | `sls.command.maintenance` | Enable, disable, or inspect new-instance drain mode. |
 | `sls.command.node` | Receive the explicit local-mode node compatibility response. |
 | `sls.command.pause` | Receive the explicit unavailable pause response. |
@@ -93,9 +93,11 @@ name a player and cannot use player-only selectors.
 | `/sls status [server\|this] [remote]` | `status` | Lifecycle state. Players may omit the target for their current server. `remote` is retained as an explicit local-mode boundary response because no daemon exists. |
 | `/sls stats [server\|this]` | `stats` | Uptime, CPU time, configured/current memory, Linux process I/O where measurable, and log retention. |
 | `/sls console <server\|this> <command...>` | `console` | Write one command to the child process input, then asynchronously show up to eight new output lines captured during the bounded two-second response window. |
-| `/sls console <server\|this> --follow` | `console` | Opt into a bounded nonblocking live output stream. Starting another follow moves the same source to the new instance. |
-| `/sls console <server\|this> --unfollow` | `console` | Stop the source's active live output stream. |
+| `/sls console <server\|this> --follow` | `console` | Compatibility alias for `/sls logs <server\|this> --follow`. New integrations should use the `logs` form. |
+| `/sls console <server\|this> --unfollow` | `console` | Compatibility alias for targetless `/sls logs --unfollow`. The named target is ignored so a stopped instance cannot trap the session. |
 | `/sls logs <server\|this> [page] [lines]` | `logs` | Read retained child output; up to 100 lines per page. |
+| `/sls logs <server\|this> --follow` | `logs` | Follow bounded live child output. Starting another follow moves the sender's single session to the new instance. |
+| `/sls logs --unfollow` | `logs` | Stop the sender's active live-output session without requiring the old target to remain active. |
 | `/sls delete <server\|this>` | `delete` | Evacuate an active server, stop it cleanly, and transactionally remove its owned instance storage. |
 | `/sls delete all` | `delete` | Sequentially delete every ordinary managed instance with per-server results. The managed lobby is always skipped. |
 | `/sls kill [server\|this] [force]` | `kill` | Evacuate players, immediately terminate the process without a graceful save, and perform normal owned-resource cleanup. A player may omit the target to select their current server. |
@@ -172,13 +174,16 @@ it never replays old retained lines. Capture waits away from Velocity's command
 thread, stops after two seconds or eight lines, and renders at most 320
 characters per line. A quiet command receives a concise no-output response.
 
-`--follow` is an additive operator mode and does not alter the pinned
-`console <server> <command...>` form. It uses the same cursor-backed buffer in
+`logs --follow` is an additive operator mode and does not alter the pinned
+`console <server> <command...>` input form. It uses the same cursor-backed buffer in
 bounded 16-line batches without blocking the managed process's output reader.
 If output outruns the configured in-memory retention buffer, the operator is told how many
 expired lines were skipped. Each source can follow one instance at a time.
-Follow ends on `--unfollow`, instance stop, player disconnect, replacement by a
-different follow, or proxy shutdown.
+Follow ends on targetless `/sls logs --unfollow`, instance stop or deletion,
+permission loss, player disconnect, replacement by a different follow, or proxy
+shutdown. At most 32 senders can follow globally. Each session emits no more
+than six lines per half-second batch, truncates long lines, summarizes retention
+loss, and coalesces noisy excess output. Players receive a clickable stop action.
 
 ## Force Operations
 

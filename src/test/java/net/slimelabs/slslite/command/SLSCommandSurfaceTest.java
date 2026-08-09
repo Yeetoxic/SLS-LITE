@@ -7,12 +7,16 @@ import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.command.SimpleCommand;
 import com.velocitypowered.api.proxy.ConsoleCommandSource;
 import com.velocitypowered.api.proxy.Player;
+import com.velocitypowered.api.proxy.ServerConnection;
+import com.velocitypowered.api.proxy.server.ServerInfo;
 import java.lang.reflect.Proxy;
+import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,6 +26,8 @@ import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityStatus;
+import net.slimelabs.slslite.instance.ManagedInstance;
+import net.slimelabs.slslite.instance.ManagedInstanceTestFactory;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.instance.lifecycle.MaintenanceStatus;
 import net.slimelabs.slslite.instance.model.InstanceLaunchOverrides;
@@ -326,6 +332,90 @@ final class SLSCommandSurfaceTest {
   }
 
   @Test
+  void canonicalLogsFollowUsesLogsPermissionAndTargetlessStop() {
+    ManagedInstance instance = managedInstance("server.abcdef");
+    command = command(controller(instance));
+    List<Component> messages = new ArrayList<>();
+    CommandSource logsOnly = source(Set.of("sls.command.logs"), messages);
+
+    command.execute(invocation(logsOnly, "logs", instance.id(), "--follow"));
+    command.execute(invocation(logsOnly, "logs", "--unfollow"));
+
+    assertTrue(plainText(messages.get(0)).contains("Following live output from " + instance.id()));
+    assertTrue(
+        plainText(messages.get(1)).contains("Stopped following live output from " + instance.id()));
+    List<Component> denied = new ArrayList<>();
+    command.execute(
+        invocation(source(Set.of("sls.command.logs"), denied), "console", instance.id(), "say hi"));
+    assertTrue(plainText(denied.getFirst()).contains("do not have permission"));
+  }
+
+  @Test
+  void administratorUmbrellaCanFollowAndMalformedModifiersAreNeverSentAsCommands() {
+    ManagedInstance instance = managedInstance("server.abcdef");
+    command = command(controller(instance));
+    List<Component> administratorMessages = new ArrayList<>();
+    CommandSource administrator = source(Set.of(CommandPermissions.ADMIN), administratorMessages);
+
+    command.execute(invocation(administrator, "logs", instance.id(), "--follow"));
+    command.execute(invocation(administrator, "logs", "--unfollow"));
+
+    assertTrue(plainText(administratorMessages.getFirst()).contains("Following live output"));
+    assertTrue(plainText(administratorMessages.getLast()).contains("Stopped following"));
+
+    List<Component> malformedLogs = new ArrayList<>();
+    command.execute(
+        invocation(source(Set.of("sls.command.logs"), malformedLogs), "logs", "--follow"));
+    assertTrue(plainText(malformedLogs.get(1)).contains("/sls logs <server|this | --follow>"));
+
+    List<Component> malformedConsole = new ArrayList<>();
+    command.execute(
+        invocation(
+            source(Set.of("sls.command.console"), malformedConsole),
+            "console",
+            instance.id(),
+            "--unfollow",
+            "unexpected"));
+    assertTrue(plainText(malformedConsole.get(1)).contains("/sls console <server | command>"));
+    assertTrue(plainText(malformedConsole.get(2)).contains("/sls logs"));
+  }
+
+  @Test
+  void consoleFollowAliasAndPlayerThisUseTheSharedSession() {
+    ManagedInstance instance = managedInstance("server.abcdef");
+    command = command(controller(instance));
+    List<Component> consoleMessages = new ArrayList<>();
+    ConsoleCommandSource console = console(consoleMessages);
+    command.execute(invocation(console, "console", instance.id(), "--follow"));
+    command.execute(invocation(console, "console", "deleted.old", "--unfollow"));
+    assertTrue(plainText(consoleMessages.getFirst()).contains("Following live output"));
+    assertTrue(plainText(consoleMessages.getLast()).contains("Stopped following live output"));
+
+    List<Component> playerMessages = new ArrayList<>();
+    Player player = playerOn(instance.id(), Set.of("sls.command.logs"), playerMessages);
+    command.execute(invocation(player, "logs", "this", "--follow"));
+    assertTrue(plainText(playerMessages.getFirst()).contains(instance.id()));
+    assertTrue(hasRunCommand(playerMessages.getFirst(), "/sls logs --unfollow"));
+    command.execute(invocation(player, "logs", "--unfollow"));
+  }
+
+  @Test
+  void logsFollowCompletionsUseTheLogsPermissionOnly() {
+    CommandSource permitted = source(Set.of("sls.command.logs"), new ArrayList<>());
+    assertTrue(
+        command.suggestAsync(invocation(permitted, "logs", "")).join().contains("--unfollow"));
+    assertEquals(
+        List.of("--follow", "1"),
+        command.suggestAsync(invocation(permitted, "logs", "server.abcdef", "")).join());
+    assertEquals(
+        List.of(),
+        command
+            .suggestAsync(
+                invocation(source(Set.of("sls.command.console"), new ArrayList<>()), "logs", ""))
+            .join());
+  }
+
+  @Test
   void joinTestCompletionIsPermissionFiltered() {
     assertEquals(
         List.of("this"),
@@ -462,6 +552,38 @@ final class SLSCommandSurfaceTest {
                 });
   }
 
+  private static Player playerOn(
+      String instanceId, Set<String> permissions, List<Component> messages) {
+    UUID playerId = UUID.randomUUID();
+    ServerInfo info = new ServerInfo(instanceId, new InetSocketAddress("127.0.0.1", 25566));
+    ServerConnection connection =
+        (ServerConnection)
+            Proxy.newProxyInstance(
+                ServerConnection.class.getClassLoader(),
+                new Class<?>[] {ServerConnection.class},
+                (ignored, method, arguments) ->
+                    "getServerInfo".equals(method.getName())
+                        ? info
+                        : defaultValue(method.getReturnType()));
+    return (Player)
+        Proxy.newProxyInstance(
+            Player.class.getClassLoader(),
+            new Class<?>[] {Player.class},
+            (ignored, method, arguments) ->
+                switch (method.getName()) {
+                  case "getUniqueId" -> playerId;
+                  case "getUsername" -> "Follower";
+                  case "getCurrentServer" -> Optional.of(connection);
+                  case "hasPermission" -> permissions.contains(arguments[0]);
+                  case "isActive" -> true;
+                  case "sendMessage" -> {
+                    messages.add((Component) arguments[0]);
+                    yield null;
+                  }
+                  default -> defaultValue(method.getReturnType());
+                });
+  }
+
   private static ConsoleCommandSource console(List<Component> messages) {
     return (ConsoleCommandSource)
         Proxy.newProxyInstance(
@@ -499,6 +621,26 @@ final class SLSCommandSurfaceTest {
             });
   }
 
+  private ManagedInstance managedInstance(String instanceId) {
+    Blueprint blueprint =
+        new Blueprint("arena", "Arena", "minigame", "paper-auto", "1.21.5", 1024, false, Map.of());
+    return ManagedInstanceTestFactory.ready(
+        instanceId, blueprint, 25566, temporaryDirectory.resolve(instanceId));
+  }
+
+  private static ServerController controller(ManagedInstance instance) {
+    return (ServerController)
+        Proxy.newProxyInstance(
+            ServerController.class.getClassLoader(),
+            new Class<?>[] {ServerController.class},
+            (ignored, method, arguments) ->
+                switch (method.getName()) {
+                  case "getAll" -> List.of(instance);
+                  case "persistentInstanceIds" -> List.of(instance.id());
+                  default -> defaultValue(method.getReturnType());
+                });
+  }
+
   private static ServerController maintenanceController(
       AtomicReference<MaintenanceStatus> current) {
     return (ServerController)
@@ -531,6 +673,19 @@ final class SLSCommandSurfaceTest {
       output.append(textComponent.content());
     }
     component.children().forEach(child -> appendPlainText(child, output));
+  }
+
+  private static boolean hasRunCommand(Component component, String command) {
+    if (component.clickEvent() != null
+        && component.clickEvent().action()
+            == net.kyori.adventure.text.event.ClickEvent.Action.RUN_COMMAND
+        && command.equals(
+            ((net.kyori.adventure.text.event.ClickEvent.Payload.Text)
+                    component.clickEvent().payload())
+                .value())) {
+      return true;
+    }
+    return component.children().stream().anyMatch(child -> hasRunCommand(child, command));
   }
 
   private static Object defaultValue(Class<?> type) {

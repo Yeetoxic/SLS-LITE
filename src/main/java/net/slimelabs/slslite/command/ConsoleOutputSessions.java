@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.slimelabs.slslite.instance.ManagedInstance;
@@ -20,13 +21,16 @@ import net.slimelabs.slslite.instance.diagnostics.InstanceOutputBatch;
 final class ConsoleOutputSessions implements AutoCloseable {
 
   static final int CAPTURE_LINES = 8;
-  static final int FOLLOW_BATCH_LINES = 16;
+  static final int FOLLOW_BATCH_LINES = 6;
+  static final int FOLLOW_READ_LINES = 128;
   static final int DISPLAY_LINE_LENGTH = 320;
   static final int MAX_CONCURRENT_CAPTURES = 16;
+  static final int MAX_FOLLOWERS = 32;
   static final Duration CAPTURE_QUIET_PERIOD = Duration.ofMillis(250);
   static final Duration CAPTURE_TIMEOUT = Duration.ofSeconds(2);
   static final Duration FOLLOW_QUIET_PERIOD = Duration.ofMillis(100);
   static final Duration FOLLOW_POLL_TIMEOUT = Duration.ofSeconds(1);
+  static final Duration FOLLOW_SEND_INTERVAL = Duration.ofMillis(500);
 
   private final ConcurrentMap<Object, FollowSession> followers = new ConcurrentHashMap<>();
   private final ConcurrentMap<CaptureKey, Thread> captures = new ConcurrentHashMap<>();
@@ -78,42 +82,58 @@ final class ConsoleOutputSessions implements AutoCloseable {
       capturePermits.release();
       return false;
     }
+    if (closed.get() && captures.remove(captureKey, thread)) {
+      capturePermits.release();
+      return false;
+    }
     thread.start();
     return true;
   }
 
-  boolean follow(CommandSource source, ManagedInstance instance) {
-    return follow(source, new ManagedOutputFeed(instance));
+  FollowResult follow(CommandSource source, ManagedInstance instance, BooleanSupplier permission) {
+    return follow(source, new ManagedOutputFeed(instance), permission);
   }
 
-  boolean follow(CommandSource source, OutputFeed feed) {
+  FollowResult follow(CommandSource source, OutputFeed feed) {
+    return follow(source, feed, () -> true);
+  }
+
+  synchronized FollowResult follow(
+      CommandSource source, OutputFeed feed, BooleanSupplier permission) {
     if (closed.get()) {
-      return false;
+      return new FollowResult(FollowStatus.CLOSED, null, feed.id());
     }
     Object key = key(source);
-    FollowSession next = new FollowSession(key, source, feed);
-    FollowSession previous = followers.put(key, next);
+    FollowSession previous = followers.get(key);
+    if (previous == null && followers.size() >= MAX_FOLLOWERS) {
+      return new FollowResult(FollowStatus.CAPACITY, null, feed.id());
+    }
+    FollowSession next = new FollowSession(key, source, feed, permission);
+    previous = followers.put(key, next);
     if (previous != null) {
       previous.stop();
     }
     next.start();
-    return previous != null;
+    return new FollowResult(
+        previous == null ? FollowStatus.STARTED : FollowStatus.MOVED,
+        previous == null ? null : previous.feed.id(),
+        feed.id());
   }
 
-  boolean unfollow(CommandSource source) {
+  synchronized java.util.Optional<String> unfollow(CommandSource source) {
     FollowSession removed = followers.remove(key(source));
     if (removed == null) {
-      return false;
+      return java.util.Optional.empty();
     }
     removed.stop();
-    return true;
+    return java.util.Optional.of(removed.feed.id());
   }
 
   boolean isFollowing(CommandSource source) {
     return followers.containsKey(key(source));
   }
 
-  void remove(UUID playerId) {
+  synchronized void remove(UUID playerId) {
     FollowSession removed = followers.remove(playerId);
     if (removed != null) {
       removed.stop();
@@ -137,22 +157,64 @@ final class ConsoleOutputSessions implements AutoCloseable {
 
   private void runFollow(FollowSession session) {
     long cursor = session.feed.cursor();
+    long lastDelivery = 0L;
     try {
       while (!closed.get()
           && !session.stopped.get()
           && !session.feed.stopped().isDone()
-          && canDeliver(session.source)) {
+          && canDeliver(session.source)
+          && authorized(session)) {
         InstanceOutputBatch batch =
             session.feed.awaitAfter(
-                cursor, FOLLOW_BATCH_LINES, FOLLOW_QUIET_PERIOD, FOLLOW_POLL_TIMEOUT);
+                cursor, FOLLOW_READ_LINES, FOLLOW_QUIET_PERIOD, FOLLOW_POLL_TIMEOUT);
         cursor = batch.cursor();
+        if (!authorized(session) || !canDeliver(session.source)) {
+          continue;
+        }
+        if (batch.lines().isEmpty() && batch.droppedLines() == 0) {
+          continue;
+        }
+        lastDelivery = awaitDeliveryWindow(lastDelivery);
+        if (session.stopped.get() || closed.get()) {
+          break;
+        }
         if (batch.droppedLines() > 0) {
           sendDropped(session.source, session.feed.id(), batch.droppedLines());
         }
-        batch.lines().forEach(line -> sendLine(session.source, session.feed.id(), line));
+        batch.lines().stream()
+            .limit(FOLLOW_BATCH_LINES)
+            .forEach(line -> sendLine(session.source, session.feed.id(), line));
+        int suppressed = Math.max(0, batch.lines().size() - FOLLOW_BATCH_LINES);
+        if (suppressed > 0) {
+          sendSuppressed(session.source, session.feed.id(), suppressed);
+        }
       }
     } finally {
-      followers.remove(session.key, session);
+      boolean removed = followers.remove(session.key, session);
+      if (removed && !session.stopped.get() && !closed.get() && canDeliver(session.source)) {
+        if (!authorized(session)) {
+          sendEnded(session.source, session.feed.id(), "permission was lost");
+        } else if (session.feed.stopped().isDone()) {
+          sendEnded(session.source, session.feed.id(), "the instance stopped");
+        }
+      }
+    }
+  }
+
+  private static long awaitDeliveryWindow(long previous) {
+    long now = System.nanoTime();
+    long remaining = previous + FOLLOW_SEND_INTERVAL.toNanos() - now;
+    if (remaining > 0) {
+      java.util.concurrent.locks.LockSupport.parkNanos(remaining);
+    }
+    return System.nanoTime();
+  }
+
+  private static boolean authorized(FollowSession session) {
+    try {
+      return session.permission.getAsBoolean();
+    } catch (RuntimeException ignored) {
+      return false;
     }
   }
 
@@ -171,6 +233,20 @@ final class ConsoleOutputSessions implements AutoCloseable {
                 + " expired retained line(s) while reading console output from "
                 + instanceId
                 + ".",
+            NamedTextColor.YELLOW));
+  }
+
+  private static void sendSuppressed(CommandSource source, String instanceId, long lines) {
+    source.sendMessage(
+        CommandMessages.message(
+            "Coalesced " + lines + " noisy output line(s) from " + instanceId + ".",
+            NamedTextColor.YELLOW));
+  }
+
+  private static void sendEnded(CommandSource source, String instanceId, String reason) {
+    source.sendMessage(
+        CommandMessages.message(
+            "Live output from " + instanceId + " ended because " + reason + ".",
             NamedTextColor.YELLOW));
   }
 
@@ -233,13 +309,16 @@ final class ConsoleOutputSessions implements AutoCloseable {
     private final Object key;
     private final CommandSource source;
     private final OutputFeed feed;
+    private final BooleanSupplier permission;
     private final AtomicBoolean stopped = new AtomicBoolean();
     private Thread thread;
 
-    private FollowSession(Object key, CommandSource source, OutputFeed feed) {
+    private FollowSession(
+        Object key, CommandSource source, OutputFeed feed, BooleanSupplier permission) {
       this.key = key;
       this.source = source;
       this.feed = feed;
+      this.permission = permission;
     }
 
     private void start() {
@@ -257,4 +336,13 @@ final class ConsoleOutputSessions implements AutoCloseable {
       }
     }
   }
+
+  enum FollowStatus {
+    STARTED,
+    MOVED,
+    CAPACITY,
+    CLOSED
+  }
+
+  record FollowResult(FollowStatus status, String previousInstanceId, String instanceId) {}
 }

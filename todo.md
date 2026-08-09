@@ -1038,7 +1038,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       needed for support. Test shared installation ownership, concurrent joiners,
       cancellation/dequeue, timeout, disconnect, disabled presentation, and each
       failure phase.
-- [ ] Make managed-output commands discoverable by separating their user-facing
+- [x] Make managed-output commands discoverable by separating their user-facing
       purposes: retain `/sls logs <server|this> [page] [lines]` for bounded
       retained output, add canonical `/sls logs <server|this> --follow` for live
       chat output and targetless `/sls logs --unfollow` to stop it, and present

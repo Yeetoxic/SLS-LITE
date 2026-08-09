@@ -138,12 +138,17 @@ Use:
 /sls status <server>
 /sls stats <server>
 /sls logs <server> [page] [lines]
+/sls logs <server|this> --follow
+/sls logs --unfollow
+/sls console <server|this> <command...>
 /sls install info
 /sls install logs <software> <version>
 /sls system
 ```
 
 Each managed instance retains 1,000 recent lines in memory for `/sls logs`.
+Live follow uses the same bounded buffer and is rate-limited; `console` is for
+child-process input, not the canonical output-reading interface.
 Temporary file output stops at its configured hard cap. Files are not rotated.
 Proxy mirroring is disabled by default to prevent child-console spam.
 
