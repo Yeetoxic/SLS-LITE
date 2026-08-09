@@ -180,8 +180,9 @@ the previous instance directory.
   a preparation failure.
 - `ro` uses the same source-protecting private writable semantics as `cow`; it
   is not a strict read-only bind mount.
-- `rw` requires a persistent, single-instance blueprint and host directory
-  symbolic-link support.
+- `rw` requires host directory symbolic-link support. Its shared source is
+  persistent regardless of `save`; use `max_instances: 1` unless the consumer
+  explicitly coordinates concurrent writers.
 - Volume sources must already exist before the blueprint is started.
 - Operators using the default automatic policy must budget for a complete copy
   per instance because portable fallback can be selected even on a host that

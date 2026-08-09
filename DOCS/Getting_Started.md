@@ -43,7 +43,9 @@ accounting.
    `software.auto_accept_eula: true` in `config.yml`. Both remain false by
    default.
 10. Copy `blueprints/template.yml.example` to a `.yml` file, then customize it
-    and add any required source worlds.
+    and add any required source worlds. The
+    [Blueprint Recipe Book](Blueprint_Recipes.md) provides complete copyable
+    world, plugin, whitelist, configuration, and import examples.
 11. Start Velocity and inspect `/sls system`.
 
 The generated defaults are intentionally conservative: forwarding is disabled,
@@ -73,6 +75,10 @@ Permission plugins remain supported. Grant `sls.command.admin` for full access
 or the granular nodes in [Commands](Commands.md).
 
 ## Add A World
+
+This compact example is enough for an experienced operator. If `source`,
+`target`, `cow`, or `save` is unfamiliar, start with the visual
+[Blueprint Recipe Book](Blueprint_Recipes.md).
 
 Place source content below the SLS-LITE data directory:
 

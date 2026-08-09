@@ -43,7 +43,7 @@ summaries.
 | --- | --- | --- |
 | Installation, first run, update, backup, removal | [Getting Started](Getting_Started.md) | [Data Layout](Data_Layout.md) |
 | Host configuration and defaults | [Configuration](Configuration.md) | [Complete copyable config](Copyable_Config.md), generated `config.yml` |
-| Blueprint schema and behavior | [Blueprints](Blueprints.md) | [Blueprint Volumes](Blueprint_Volumes.md), [Resource Packs](Resource_Packs.md) |
+| Blueprint recipes, schema, and behavior | [Blueprint Recipe Book](Blueprint_Recipes.md) | [Blueprints](Blueprints.md), [Blueprint Volumes](Blueprint_Volumes.md), [Resource Packs](Resource_Packs.md) |
 | Commands and permissions | [Commands](Commands.md) | [vSLS command comparison](SLS_Command_Compatibility.md) |
 | Daily operation, logs, lifecycle, recovery | [Operations](Operations.md) | [Lifecycle concurrency](Lifecycle_Concurrency.md) |
 | Failure diagnosis and problem reports | [Troubleshooting](Troubleshooting.md) | [Software Installation](Software_Installation.md), [Resource Packs](Resource_Packs.md) |

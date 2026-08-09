@@ -913,7 +913,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       to review host-specific and security-sensitive values, and enforce exact
       byte-normalized content parity with the bundled default in automated tests
       so the pasted example cannot drift.
-- [ ] Add a copyable blueprint recipe book that teaches mappings visually before
+- [x] Add a copyable blueprint recipe book that teaches mappings visually before
       presenting the full schema. For every recipe, show the source directory
       tree, a complete valid YAML fragment or minimal blueprint, and the
       resulting instance tree, with callouts explaining that `source` is below

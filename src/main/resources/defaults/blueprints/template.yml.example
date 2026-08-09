@@ -2,6 +2,8 @@
 #
 # Copy this file, choose a unique blueprint.id, and keep exact software versions
 # quoted so YAML cannot reinterpret them as numbers.
+# Visual, copyable world/plugin/whitelist/import recipes:
+# https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Blueprint_Recipes.md
 
 blueprint:
   # Lowercase letters, numbers, underscores, and hyphens; maximum 64 characters.

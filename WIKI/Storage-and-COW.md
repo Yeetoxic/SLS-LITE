@@ -1,5 +1,9 @@
 # Storage and COW
 
+New to blueprint mappings? Start with the copyable visual
+[Blueprint Recipe Book](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Blueprint_Recipes.md)
+before choosing an advanced storage strategy.
+
 Blueprint volumes use `cow`, `ro`, or `rw` intent:
 
 - `cow` creates an isolated writable instance view from clean source content.

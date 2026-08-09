@@ -69,8 +69,9 @@ restrictions.
 5. After reviewing the Minecraft EULA, accept it either per automatic software
    profile with `software.accept_eula: true` or host-wide with
    `software.auto_accept_eula: true` in `config.yml`.
-6. Add worlds and blueprints, then restart Velocity or run
-   `/sls reload blueprints`.
+6. Add worlds and blueprints using the copyable
+   [Blueprint Recipe Book](DOCS/Blueprint_Recipes.md), then restart Velocity or
+   run `/sls reload blueprints`.
 
 See [Getting Started](DOCS/Getting_Started.md) for the complete clean install,
 real-network and isolated-development paths, first transfer, updates, backup,
