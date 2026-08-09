@@ -13,8 +13,10 @@ cannot bypass hosting-panel limits or security restrictions.
 2. Place the shaded SLS-LITE plugin JAR in `plugins/`.
 3. Start Velocity once and wait for SLS-LITE initialization.
 4. Stop Velocity and review `plugins/sls-lite/config.yml`.
-5. Configure secure forwarding and choose Velocity-native, external, or managed
-   lobby routing.
+5. Follow the canonical copyable
+   [forwarding and first-connection setup](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Getting_Started.md#forwarding-and-first-connection),
+   choosing the production or explicitly insecure isolated-development path and
+   the matching Velocity-native, external, or managed lobby route.
 6. Review the generated software profiles and accept the Minecraft EULA only
    when you intend to use automatic installation.
 7. Put source worlds under `volumes/worlds/`, shared plugin groups under

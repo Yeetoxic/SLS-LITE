@@ -62,16 +62,19 @@ restrictions.
 1. Build with `mvn clean verify` or obtain a reviewed release artifact.
 2. Place `sls-lite-<version>.jar` in Velocity's `plugins/` directory.
 3. Start Velocity once to generate `plugins/sls-lite/`.
-4. Review `config.yml`, especially memory, ports, forwarding, lobby mode, and
-   administrator security.
+4. Follow the canonical
+   [forwarding and first-connection setup](DOCS/Getting_Started.md#forwarding-and-first-connection),
+   then review the remaining `config.yml` memory, ports, lobby, and security
+   choices.
 5. After reviewing the Minecraft EULA, accept it either per automatic software
    profile with `software.accept_eula: true` or host-wide with
    `software.auto_accept_eula: true` in `config.yml`.
 6. Add worlds and blueprints, then restart Velocity or run
    `/sls reload blueprints`.
 
-See [Getting Started](DOCS/Getting_Started.md) for clean installation, updates,
-backup, and removal.
+See [Getting Started](DOCS/Getting_Started.md) for the complete clean install,
+real-network and isolated-development paths, first transfer, updates, backup,
+and removal.
 
 ## Basic Use
 

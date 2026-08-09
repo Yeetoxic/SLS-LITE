@@ -890,7 +890,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
         allocation and perform one real-client native `/server <instance>`
         capacity attempt; the offline protocol harness cannot reliably emulate
         that client route.
-- [ ] Replace the scattered first-run forwarding instructions with one
+- [x] Replace the scattered first-run forwarding instructions with one
       copy-and-paste onboarding path for a real Velocity/Paper network and one
       explicitly insecure isolated-development path. Show the matching
       `velocity.toml` and SLS-LITE `config.yml` fragments, exact secret-file

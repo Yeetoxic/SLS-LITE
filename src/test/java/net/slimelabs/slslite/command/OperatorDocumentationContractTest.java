@@ -134,6 +134,41 @@ final class OperatorDocumentationContractTest {
     assertEquals(canonical, copyable, "Copyable config must match the bundled default exactly");
   }
 
+  @Test
+  void canonicalForwardingOnboardingPinsProductionAndIsolatedDevelopmentPaths() throws IOException {
+    String guide = normalize(read("DOCS/Getting_Started.md"));
+    String anchor = "DOCS/Getting_Started.md#forwarding-and-first-connection";
+
+    for (String required :
+        Set.of(
+            "online-mode = true",
+            "player-info-forwarding-mode = \"modern\"",
+            "forwarding-secret-file = \"forwarding.secret\"",
+            "mode: modern",
+            "online_mode: true",
+            "chmod 600 forwarding.secret",
+            "online-mode = false",
+            "player-info-forwarding-mode = \"none\"",
+            "mode: none",
+            "online_mode: false",
+            "allow_insecure_offline_administrators: false",
+            "Fully restart Velocity",
+            "real Minecraft client",
+            "Vanilla does not support Velocity modern forwarding",
+            "Do not add each managed instance to `[servers]`")) {
+      assertTrue(guide.contains(required), () -> "Forwarding guide is missing: " + required);
+    }
+    for (String lobbyMode : Set.of("`velocity`", "`external`", "`managed`")) {
+      assertTrue(
+          guide.contains("| " + lobbyMode + " |"), () -> "Lobby table is missing " + lobbyMode);
+    }
+
+    assertTrue(read("README.md").contains(anchor), "README must link to canonical onboarding");
+    assertTrue(
+        read("src/main/resources/defaults/host/config.yml").contains(anchor),
+        "Generated config must link to canonical onboarding");
+  }
+
   private static Map<String, String> flattenBundledDefaults() throws IOException {
     LoaderOptions options = new LoaderOptions();
     options.setAllowDuplicateKeys(false);

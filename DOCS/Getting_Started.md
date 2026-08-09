@@ -26,17 +26,17 @@ accounting.
 ## Install
 
 1. Stop Velocity.
-2. Remove or replace Velocity's unreachable example servers. With the default
-   `lobby.mode: velocity`, keep the real `[servers]`, `try`, and `[forced-hosts]`
-   routes you want Velocity to own. SLS-LITE registers its managed instances
-   itself and never rewrites `velocity.toml`.
+2. Remove or replace Velocity's unreachable example servers. Keep only the
+   static backends that actually exist; managed SLS-LITE instances are not
+   static Velocity entries.
 3. Place the shaded SLS-LITE JAR in Velocity's `plugins/` directory.
 4. Start Velocity and wait for `SLS-LITE initialized`.
 5. Stop Velocity before making the first host-wide configuration changes.
 6. Review `plugins/sls-lite/config.yml`. If a complete replacement is easier,
    use the [copyable canonical configuration](Copyable_Config.md) and then adapt
    its host-specific values before restarting Velocity.
-7. Configure player forwarding for the test or production environment.
+7. Follow [Forwarding and First Connection](#forwarding-and-first-connection)
+   for either a real network or an isolated development proxy.
 8. Review `software-profiles/paper.yml` and `vanilla.yml`.
 9. After accepting the Minecraft EULA, set `accept_eula: true` in each automatic
    software profile you approve, or set host-wide
@@ -118,21 +118,168 @@ The source world is never used as the live world. SLS-LITE prepares a private
 writable instance view using the selected COW strategy or portable-copy
 fallback. Keep an independent backup anyway.
 
-## Forwarding
+## Forwarding and First Connection
 
-For an isolated offline smoke test, `forwarding.mode: none` is acceptable. For
-a real Paper network:
+SLS-LITE runs inside Velocity. It starts managed backend processes, registers
+them with the running proxy when they are ready, and removes those dynamic
+registrations when they stop. Do not add each managed instance to `[servers]`
+in `velocity.toml`; only operator-owned static backends belong there.
 
-1. Configure Velocity `player-info-forwarding-mode = "modern"`.
-2. Replace Velocity's placeholder secret with a cryptographically random value
-   of at least 32 characters and restrict the secret file to the account that
-   runs Velocity. Do not reuse, publish, or commit this value.
-3. Set `forwarding.mode: modern`.
-4. Set `forwarding.online_mode` to Velocity's `online-mode`.
-5. Point `forwarding.secret_file` to the same secret file.
+SLS-LITE also writes the loopback address, allocated port, backend
+`online-mode=false`, player capacity, and supported forwarding settings into
+each managed Paper instance. Operators configure the proxy-facing half once.
 
-SLS-LITE patches managed Paper instances. Vanilla servers do not support modern
-Velocity forwarding.
+### Choose The Lobby Route
+
+Choose this before copying either forwarding example:
+
+| `lobby.mode` | Primary destination | What remains in `velocity.toml` |
+| --- | --- | --- |
+| `velocity` | Velocity's normal initial, `try`, and forced-host selection | Keep real static `[servers]` entries. Set `try` to the order players should use. Keep `[forced-hosts]` only where wanted. Remove the generated unreachable example entry. |
+| `external` | The exact static server named by `lobby.server` | Add that backend to `[servers]`. Native `try` and forced-host routes are optional and remain Velocity-owned. |
+| `managed` | The blueprint selected by `lobby.registry` and `lobby.server` | Do not add the managed lobby or its instances to `[servers]`, `try`, or `[forced-hosts]`. SLS-LITE registers it dynamically. |
+
+SLS-Limbo is a fallback, not a lobby mode. Keep it enabled unless another safe
+fallback is already proven. In `velocity` mode, SLS-LITE preserves Velocity's
+native routes; an unreachable example server can therefore prevent the intended
+first connection and must be removed or corrected.
+
+### Production Velocity And Paper
+
+Use this path for a real network. It authenticates players at Velocity and uses
+Velocity modern forwarding between the proxy and managed Paper backends.
+
+1. Stop Velocity. In the Velocity working directory, edit `velocity.toml`:
+
+   ```toml
+   online-mode = true
+   player-info-forwarding-mode = "modern"
+   forwarding-secret-file = "forwarding.secret"
+   ```
+
+2. Create `forwarding.secret` beside `velocity.toml`, not below
+   `plugins/sls-lite/`. It must contain one private, cryptographically random
+   value of at least 32 characters. If a Linux shell and OpenSSL are available:
+
+   ```sh
+   umask 077
+   openssl rand -hex 32 > forwarding.secret
+   chmod 600 forwarding.secret
+   ```
+
+   The resulting path is `<Velocity working directory>/forwarding.secret` and
+   only the account running Velocity should be able to read it. On a managed
+   panel without a shell, create the same file through its private file manager
+   and ensure other users or allocations cannot read it. Never paste the value
+   into chat, logs, an issue, a blueprint, or source control.
+
+3. In `plugins/sls-lite/config.yml`, use the matching settings:
+
+   ```yaml
+   forwarding:
+     mode: modern
+     online_mode: true
+     secret_file: forwarding.secret
+   ```
+
+   `forwarding.online_mode` describes the proxy's authentication choice and
+   must exactly match `online-mode` in `velocity.toml`. The relative secret path
+   is resolved from the Velocity working directory, so both files above refer
+   to the same secret.
+
+4. Configure one lobby mode using the table above. For example, a static lobby
+   owned by Velocity might use:
+
+   ```toml
+   [servers]
+   lobby = "127.0.0.1:25566"
+   try = ["lobby"]
+   ```
+
+   Do not copy this example unless a real lobby is listening at that address.
+   `external` mode additionally needs `lobby.server: lobby`; `managed` mode
+   needs a valid lobby blueprint instead and no static entry.
+
+5. Fully restart Velocity. `/sls reload` does not reload host forwarding,
+   lobby mode, or `velocity.toml`. SLS-LITE applies the Paper half when it
+   prepares an instance: modern forwarding is enabled, the same secret is
+   installed, BungeeCord forwarding is disabled, and backend online mode stays
+   false because Velocity performs authentication.
+
+This automatic patching applies only to software profiles whose `configurator`
+is `paper`. Vanilla does not support Velocity modern forwarding, and SLS-LITE
+rejects a vanilla blueprint while `forwarding.mode: modern` is active. A custom
+Paper-compatible fork should use the `paper` configurator only when its config
+contract is genuinely compatible. Fabric, Forge, and other software require
+their own forwarding integration and are not configured automatically in this
+release.
+
+PaperMC's upstream references remain useful for the protocol itself:
+[player-information forwarding](https://docs.papermc.io/velocity/player-information-forwarding/)
+and [backend security](https://docs.papermc.io/velocity/security/). The
+SLS-LITE steps above are the canonical instructions for managed instances.
+
+### Isolated Development Only
+
+This path is intentionally insecure. Use it only on a private loopback or
+otherwise isolated test proxy that untrusted players cannot reach:
+
+```toml
+# velocity.toml
+online-mode = false
+player-info-forwarding-mode = "none"
+```
+
+```yaml
+# plugins/sls-lite/config.yml
+forwarding:
+  mode: none
+  online_mode: false
+  secret_file: forwarding.secret
+
+security:
+  allow_insecure_offline_administrators: false
+```
+
+`secret_file` remains a required configuration field but is not read when the
+mode is `none`. Offline players have spoofable names and UUIDs, lose secure
+forwarded identity and address information, and must not be trusted as
+administrators. Keep `allow_insecure_offline_administrators: false`; use the
+Velocity console for administration. If a disposable test absolutely requires
+an in-game claim, enabling that option accepts the impersonation risk. Fully
+restart Velocity after changing either file.
+
+### Verify Before Importing A Network
+
+After the full restart:
+
+1. Confirm the startup log reaches `SLS-LITE initialized` without a forwarding,
+   lobby, or secret-file error.
+2. Run `/sls system` from the Velocity console and resolve every forwarding or
+   selected-lobby failure. A restricted but supported storage fallback is not a
+   forwarding failure.
+3. Run `/sls reload blueprints` and confirm the intended blueprint is loaded.
+4. Join with a real Minecraft client through Velocity. Do not connect directly
+   to a managed backend port.
+5. Run `/sls join <registry> <blueprint>`, wait for readiness, and confirm the
+   same client transfers successfully with the expected UUID, skin, and
+   permissions. A status ping or protocol bot does not prove login or
+   forwarding.
+
+Common first-connection symptoms:
+
+| Symptom | Check |
+| --- | --- |
+| Velocity reports that modern forwarding is not enabled, or Paper rejects the login | Both modes must be `modern`; fully restart Velocity and create a new instance after correcting them. |
+| `Unable to read`, `empty`, or invalid forwarding secret | The regular, non-symbolic file must exist beside `velocity.toml`, be readable by Velocity, and match both relative paths. Do not reveal it while diagnosing permissions. |
+| SLS-LITE reports mismatched online mode | Make `forwarding.online_mode` exactly equal Velocity's `online-mode`; use `true` for the production example. |
+| Login tries an example server or immediately disconnects | Remove Velocity's generated unreachable `[servers]`/`try` entry or replace it with a real static backend. Managed instances must not be listed there. |
+| External lobby is unavailable | Confirm `lobby.server` exactly names a reachable server in Velocity's `[servers]` table. |
+| Managed lobby does not start | Confirm the registry/blueprint pair exists, its software can install, EULA acceptance is explicit, and the host has a process slot and enough managed memory. |
+| Player remains in SLS-Limbo | Check the selected primary route and `/sls system`, then verify forwarding, backend readiness, compatible protocols, and ViaVersion mappings where required. A deliberate `/server sls-limbo` selection does not auto-return. |
+
+For deeper diagnosis, use [Troubleshooting](Troubleshooting.md) without exposing
+the forwarding secret.
 
 ## Updating
 

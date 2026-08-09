@@ -171,6 +171,8 @@ diagnostics:
   failure_reports: 64
 
 forwarding:
+  # First-time setup, matching velocity.toml examples, and connection checks:
+  # https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Getting_Started.md#forwarding-and-first-connection
   # Player-information forwarding mode. Valid values:
   #   none   - disable Velocity forwarding in managed Paper servers. Suitable
   #            only for isolated development where player identity is not needed.
@@ -392,4 +394,3 @@ paths:
   # Do not point this at a software template or another server's live directory.
   instances: instances
 ```
-
