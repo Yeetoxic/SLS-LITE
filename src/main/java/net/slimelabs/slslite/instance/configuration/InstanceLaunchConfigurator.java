@@ -71,7 +71,7 @@ public final class InstanceLaunchConfigurator {
         configuredProperties);
     YamlConfigEditor.apply(instanceDirectory, yamlConfigs);
     if (profile.configurator() == SoftwareConfigurator.PAPER) {
-      PaperForwardingEditor.apply(instanceDirectory, forwarding);
+      PaperForwardingEditor.apply(instanceDirectory, forwarding, blueprint.version());
     }
     ProcessSpec processSpec =
         processSpecs.create(profile, blueprint, instanceId, instanceDirectory, port);

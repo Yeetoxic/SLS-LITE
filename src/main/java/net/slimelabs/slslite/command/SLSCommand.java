@@ -266,7 +266,10 @@ public final class SLSCommand implements SimpleCommand {
     this.playerRoutingHandler =
         new PlayerRoutingCommandHandler(
             proxy, blueprints, joinService, authorizer, instanceAccess, logger);
-    this.debugPlayers = new DebugPlayerRegistry();
+    this.debugPlayers =
+        new DebugPlayerRegistry(
+            new DebugInstanceActionBar(instanceAccess, joinService),
+            player -> authorizer.canAdminister(player, "debug"));
     this.consoleOutput = new ConsoleOutputSessions();
     this.joinProbes = new OperatorJoinProbeService();
     this.reloadObserver = java.util.Objects.requireNonNull(reloadObserver, "reloadObserver");
@@ -498,7 +501,7 @@ public final class SLSCommand implements SimpleCommand {
   }
 
   public void close() {
-    debugPlayers.clear();
+    debugPlayers.close();
     installationHandler.close();
     consoleOutput.close();
     joinProbes.close();

@@ -43,7 +43,7 @@ class PaperForwardingEditorTest {
                 """);
 
     PaperForwardingEditor.apply(
-        temporaryDirectory, new ForwardingConfig(ForwardingMode.MODERN, true, secret));
+        temporaryDirectory, new ForwardingConfig(ForwardingMode.MODERN, true, secret), "1.21.11");
 
     Map<String, Object> spigot = yaml(temporaryDirectory.resolve("spigot.yml"));
     Map<String, Object> settings = map(spigot.get("settings"));
@@ -60,11 +60,49 @@ class PaperForwardingEditorTest {
   }
 
   @Test
+  void configuresLegacyPaperThroughOnePointEighteenTwo() throws Exception {
+    Path secret = temporaryDirectory.resolve("forwarding.secret");
+    Files.writeString(secret, "legacy-test-secret\n");
+    Path paper = temporaryDirectory.resolve("paper.yml");
+    Files.writeString(
+        paper,
+        """
+                settings:
+                  unsupported-settings:
+                    allow-headless-pistons: true
+                """);
+
+    PaperForwardingEditor.apply(
+        temporaryDirectory, new ForwardingConfig(ForwardingMode.MODERN, true, secret), "1.18.2");
+
+    Map<String, Object> settings = map(yaml(paper).get("settings"));
+    Map<String, Object> velocity = map(settings.get("velocity-support"));
+    assertEquals(true, velocity.get("enabled"));
+    assertEquals(true, velocity.get("online-mode"));
+    assertEquals("legacy-test-secret", velocity.get("secret"));
+    assertTrue(settings.containsKey("unsupported-settings"));
+    assertFalse(Files.exists(temporaryDirectory.resolve("config/paper-global.yml")));
+  }
+
+  @Test
+  void selectsThePaperConfigurationBoundaryByMinecraftVersion() {
+    assertTrue(PaperForwardingEditor.usesLegacyPaperConfig("1.8.8"));
+    assertTrue(PaperForwardingEditor.usesLegacyPaperConfig("1.18"));
+    assertTrue(PaperForwardingEditor.usesLegacyPaperConfig("1.18.2"));
+    assertFalse(PaperForwardingEditor.usesLegacyPaperConfig("1.19"));
+    assertFalse(PaperForwardingEditor.usesLegacyPaperConfig("1.19.2"));
+    assertFalse(PaperForwardingEditor.usesLegacyPaperConfig("1.21.11"));
+    assertFalse(PaperForwardingEditor.usesLegacyPaperConfig("26.2"));
+  }
+
+  @Test
   void disablesForwardingWithoutReadingASecret() throws Exception {
     Path missingSecret = temporaryDirectory.resolve("missing.secret");
 
     PaperForwardingEditor.apply(
-        temporaryDirectory, new ForwardingConfig(ForwardingMode.NONE, false, missingSecret));
+        temporaryDirectory,
+        new ForwardingConfig(ForwardingMode.NONE, false, missingSecret),
+        "1.21.11");
 
     Map<String, Object> paper = yaml(temporaryDirectory.resolve("config/paper-global.yml"));
     Map<String, Object> velocity = map(map(paper.get("proxies")).get("velocity"));
@@ -82,9 +120,8 @@ class PaperForwardingEditorTest {
                 PaperForwardingEditor.apply(
                     temporaryDirectory,
                     new ForwardingConfig(
-                        ForwardingMode.MODERN,
-                        true,
-                        temporaryDirectory.resolve("missing.secret"))));
+                        ForwardingMode.MODERN, true, temporaryDirectory.resolve("missing.secret")),
+                    "1.21.11"));
 
     assertTrue(exception.getMessage().contains("regular non-symbolic file"));
     assertFalse(Files.exists(temporaryDirectory.resolve("spigot.yml")));
@@ -105,7 +142,8 @@ class PaperForwardingEditorTest {
             PaperForwardingEditor.apply(
                 temporaryDirectory,
                 new ForwardingConfig(
-                    ForwardingMode.NONE, false, temporaryDirectory.resolve("unused.secret"))));
+                    ForwardingMode.NONE, false, temporaryDirectory.resolve("unused.secret")),
+                "1.21.11"));
     assertFalse(Files.exists(outside.resolve("paper-global.yml")));
   }
 

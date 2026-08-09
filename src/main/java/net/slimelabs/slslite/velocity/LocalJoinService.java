@@ -341,6 +341,11 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
     return entry == null ? Optional.empty() : Optional.of(entry.ticket);
   }
 
+  /** Whether built-in transfer feedback currently owns this player's action bar. */
+  public boolean isPresentingActionBar(UUID playerId) {
+    return actionBar.isRunning(playerId);
+  }
+
   public synchronized DirectJoin joinPlayer(Player player, Player target)
       throws InstanceOperationException {
     return joinPlayer(player, target, false);

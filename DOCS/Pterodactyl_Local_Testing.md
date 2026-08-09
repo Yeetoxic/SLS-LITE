@@ -72,6 +72,10 @@ Paper's generated configuration and enables modern forwarding with the fixture's
 existing Velocity secret; the secret is never printed. SLS-LITE must preserve
 Velocity's initial and kick fallback decisions in this mode.
 
+Managed Paper 1.18.2 and older use `paper.yml` `settings.velocity-support`;
+newer Paper uses `config/paper-global.yml` `proxies.velocity`. Exercise the
+version-appropriate path when the fixture includes a legacy backend.
+
 Switch to the separately hosted Paper lobby with:
 
 ```powershell

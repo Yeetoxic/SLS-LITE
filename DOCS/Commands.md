@@ -86,7 +86,7 @@ name a player and cannot use player-only selectors.
 | `/sls blueprint <id>` | `blueprint` | Show one blueprint's definition, bounded readiness state, and exact preflight problems. |
 | `/sls blueprints [registry]` | `blueprints` | List blueprint details and compact `ready`, `action needed`, or `temporarily unavailable` readiness labels. |
 | `/sls create <registry> <blueprint> [flags...]` | `create` | Provision and start a fresh managed instance. Supported local overrides are persisted across restart and reset. |
-| `/sls debug` | `debug` | Player-only toggle for bounded SLS-LITE command-dispatch diagnostics in chat. |
+| `/sls debug` | `debug` | Player-only toggle for bounded command-dispatch diagnostics in chat and a once-per-second action-bar summary for the player's current managed instance. |
 | `/sls join-test <server\|this>` | `join-test` | Run a bounded Minecraft status negotiation against a ready registered backend. This is a reachability diagnostic, not a synthetic player login. |
 | `/sls start <registry> <blueprint>` | `start` | Start a managed instance without joining it. The additive `/sls start <blueprint>` form also works for a globally unique ID. |
 | `/sls info <server\|this>` | `info` | Detailed instance information. |
@@ -166,8 +166,15 @@ Debug mode follows the pinned vSLS player-only toggle and gray enabled/disabled
 feedback. While enabled, the player receives timestamp-hovered SLS-LITE debug
 lines containing the invoked `/sls` operation and sender. Command arguments,
 child-console content, host paths, credentials, and other unbounded details are
-not copied into debug chat. The subscription is memory-only and is removed on
-disable, disconnect, or proxy shutdown.
+not copied into debug chat. On a managed backend, the action bar reports the
+instance ID, Linux process RSS against the blueprint memory budget, process CPU
+use, connected players against blueprint capacity, and lifecycle state once per
+second. RSS includes JVM native memory and may exceed the configured Java heap;
+CPU can exceed 100% when the process uses multiple cores. Unsupported metrics
+are shown as `n/a` rather than estimated. The action bar stays silent on
+unmanaged servers and while built-in preparation feedback owns the action bar.
+The subscription is memory-only and is removed on
+disable, disconnect, permission loss, or proxy shutdown.
 
 Console response capture reads only output appended after the command is sent;
 it never replays old retained lines. Capture waits away from Velocity's command

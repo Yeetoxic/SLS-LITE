@@ -156,8 +156,14 @@ Authorized players may toggle `/sls debug` to receive bounded command-dispatch
 context in chat. Each line includes only the `/sls` operation, sender, severity,
 and a timestamp hover. Arguments and raw child output are excluded so console
 commands, credentials, host paths, and high-volume logs are not mirrored into
-chat. The opt-in state is not persisted and is cleared on disconnect or proxy
-shutdown.
+chat. While the player is connected to a managed instance and built-in
+preparation feedback does not own the action bar,
+the same toggle publishes a once-per-second action-bar summary containing
+process RSS versus the blueprint memory budget, process CPU use,
+players/capacity, and lifecycle state. RSS is resident process memory rather
+than Java heap use and CPU may exceed 100% on multicore hosts; unavailable host
+metrics remain explicitly `n/a`. The opt-in state is not persisted and is
+cleared on disable, disconnect, permission loss, or proxy shutdown.
 
 The proxy console records concise milestones, warnings, failures, recovery, and
 operator actions. Routine probes, provisioning steps, timings, reconciliation

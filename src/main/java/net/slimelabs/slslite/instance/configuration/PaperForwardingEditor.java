@@ -20,7 +20,7 @@ public final class PaperForwardingEditor {
 
   private PaperForwardingEditor() {}
 
-  public static void apply(Path instanceDirectory, ForwardingConfig config)
+  public static void apply(Path instanceDirectory, ForwardingConfig config, String minecraftVersion)
       throws InstancePreparationException {
     Path root = instanceDirectory.toAbsolutePath().normalize();
     boolean modern = config.mode() == ForwardingMode.MODERN;
@@ -32,10 +32,19 @@ public final class PaperForwardingEditor {
       nestedMap(spigot, "settings", spigotPath).put("bungeecord", false);
       writeYaml(spigotPath, spigot);
 
-      Path paperPath = ConfinedConfigFile.resolve(root, "config/paper-global.yml", "Paper config");
+      boolean legacy = usesLegacyPaperConfig(minecraftVersion);
+      Path paperPath =
+          ConfinedConfigFile.resolve(
+              root, legacy ? "paper.yml" : "config/paper-global.yml", "Paper config");
       Map<String, Object> paper = readYaml(paperPath);
-      Map<String, Object> proxies = nestedMap(paper, "proxies", paperPath);
-      Map<String, Object> velocity = nestedMap(proxies, "velocity", paperPath);
+      Map<String, Object> velocity;
+      if (legacy) {
+        Map<String, Object> settings = nestedMap(paper, "settings", paperPath);
+        velocity = nestedMap(settings, "velocity-support", paperPath);
+      } else {
+        Map<String, Object> proxies = nestedMap(paper, "proxies", paperPath);
+        velocity = nestedMap(proxies, "velocity", paperPath);
+      }
       velocity.put("enabled", modern);
       velocity.put("online-mode", config.onlineMode());
       velocity.put("secret", secret);
@@ -44,6 +53,35 @@ public final class PaperForwardingEditor {
       throw new InstancePreparationException(
           "Unable to apply Paper forwarding configuration", exception);
     }
+  }
+
+  static boolean usesLegacyPaperConfig(String minecraftVersion) {
+    if (minecraftVersion == null) {
+      return false;
+    }
+    String[] parts = minecraftVersion.strip().split("\\.", 4);
+    if (parts.length < 2) {
+      return false;
+    }
+    try {
+      int major = Integer.parseInt(parts[0]);
+      int minor = Integer.parseInt(parts[1]);
+      int patch = parts.length >= 3 ? numericPrefix(parts[2]) : 0;
+      return major == 1 && (minor < 18 || (minor == 18 && patch <= 2));
+    } catch (NumberFormatException ignored) {
+      return false;
+    }
+  }
+
+  private static int numericPrefix(String value) {
+    int end = 0;
+    while (end < value.length() && Character.isDigit(value.charAt(end))) {
+      end++;
+    }
+    if (end == 0) {
+      throw new NumberFormatException("missing numeric patch");
+    }
+    return Integer.parseInt(value.substring(0, end));
   }
 
   private static String readSecret(Path secretFile) throws InstancePreparationException {

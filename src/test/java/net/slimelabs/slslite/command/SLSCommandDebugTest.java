@@ -19,6 +19,7 @@ import net.kyori.adventure.text.TextComponent;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
 import net.slimelabs.slslite.security.AdministratorStore;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -50,6 +51,11 @@ final class SLSCommandDebugTest {
             administrators,
             null,
             LoggerFactory.getLogger(SLSCommandDebugTest.class));
+  }
+
+  @AfterEach
+  void tearDown() {
+    command.close();
   }
 
   @Test

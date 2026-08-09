@@ -1038,6 +1038,18 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       needed for support. Test shared installation ownership, concurrent joiners,
       cancellation/dequeue, timeout, disconnect, disabled presentation, and each
       failure phase.
+- [x] Extend the player-only `/sls debug` toggle with a bounded once-per-second
+      action bar for the current managed instance: Linux process RSS versus the
+      blueprint memory budget, process CPU use, players/capacity, and lifecycle
+      state. Report unsupported metrics as unavailable, allow multicore CPU and
+      JVM native-memory overhead to remain visible, stay silent off managed
+      backends while built-in preparation feedback owns the action bar, and
+      clean up on disable, disconnect, permission loss, or shutdown.
+- [x] Fix production modern-forwarding configuration across supported Paper
+      generations. Write `paper.yml` `settings.velocity-support` for Minecraft
+      1.18.2 and older, and `config/paper-global.yml` `proxies.velocity` for
+      newer Paper; preserve sibling values, confine both paths, and cover the
+      exact version boundary so legacy backends do not strand players in limbo.
 - [x] Make managed-output commands discoverable by separating their user-facing
       purposes: retain `/sls logs <server|this> [page] [lines]` for bounded
       retained output, add canonical `/sls logs <server|this> --follow` for live

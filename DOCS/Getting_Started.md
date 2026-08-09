@@ -240,6 +240,12 @@ Velocity modern forwarding between the proxy and managed Paper backends.
    installed, BungeeCord forwarding is disabled, and backend online mode stays
    false because Velocity performs authentication.
 
+   Paper 1.18.2 and older store these values under
+   `settings.velocity-support` in `paper.yml`; newer Paper stores them under
+   `proxies.velocity` in `config/paper-global.yml`. SLS-LITE selects the correct
+   version-specific file and shape automatically. Do not copy a modern
+   `paper-global.yml` into a legacy Paper server and assume it will be read.
+
 This automatic patching applies only to software profiles whose `configurator`
 is `paper`. Vanilla does not support Velocity modern forwarding, and SLS-LITE
 rejects a vanilla blueprint while `forwarding.mode: modern` is active. A custom
