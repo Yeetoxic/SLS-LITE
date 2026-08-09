@@ -61,3 +61,6 @@ All commands except self-service `queue` and `dequeue` require
 treated as an administrator. `queue` and `dequeue` only operate on the player
 who invoked them. The command reports public failure categories and never
 prints internal exception messages.
+The reload command also prints the bounded `DefinitionReloadImpact` next action;
+extensions should present that guidance rather than restarting or resetting an
+instance automatically.

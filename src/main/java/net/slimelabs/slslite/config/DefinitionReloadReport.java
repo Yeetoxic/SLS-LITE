@@ -8,13 +8,15 @@ public record DefinitionReloadReport(
     CatalogDelta blueprints,
     CatalogDelta software,
     int acceptedBlueprints,
-    List<BlueprintRejection> rejectedBlueprints) {
+    List<BlueprintRejection> rejectedBlueprints,
+    List<String> affectedBlueprints) {
 
   public DefinitionReloadReport {
     if (acceptedBlueprints < 0) {
       throw new IllegalArgumentException("accepted blueprint count must not be negative");
     }
     rejectedBlueprints = List.copyOf(rejectedBlueprints);
+    affectedBlueprints = List.copyOf(affectedBlueprints);
   }
 
   public record BlueprintRejection(String path, String error) {

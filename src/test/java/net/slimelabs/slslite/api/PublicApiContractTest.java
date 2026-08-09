@@ -72,6 +72,7 @@ class PublicApiContractTest {
           StartRequest.class,
           InstanceOperationResult.class,
           DeleteResult.class,
+          DefinitionReloadImpact.class,
           DefinitionReloadResult.class,
           ExtensionDiagnosticContributor.class,
           ExtensionDiagnosticFinding.class,

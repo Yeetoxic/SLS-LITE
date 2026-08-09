@@ -171,7 +171,12 @@ final class ExampleCommand implements SimpleCommand {
         source,
         "reload",
         api.reload(scope),
-        result -> result.scope() + " committed as " + result.correlationId());
+        result ->
+            result.scope()
+                + " committed as "
+                + result.correlationId()
+                + "; "
+                + result.impact().nextAction());
   }
 
   private void maintenance(CommandSource source, String[] arguments) {

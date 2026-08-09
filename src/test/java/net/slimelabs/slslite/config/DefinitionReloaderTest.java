@@ -132,6 +132,36 @@ class DefinitionReloaderTest {
     assertEquals(java.util.List.of("test"), report.blueprints().updated());
     assertEquals(java.util.List.of("replacement"), report.software().added());
     assertEquals(java.util.List.of("paper"), report.software().removed());
+    assertEquals(java.util.List.of("test"), report.affectedBlueprints());
+  }
+
+  @Test
+  void identifiesBlueprintsAffectedOnlyBySoftwareChanges() throws Exception {
+    Repositories repositories = repositories();
+    Path profile = repositories.profilesPath().resolve("paper.yml");
+    Files.writeString(profile, Files.readString(profile).replace("paper.jar", "paper-v2.jar"));
+
+    DefinitionReloadReport report =
+        DefinitionReloader.reload(
+            repositories.config(), repositories.blueprints(), repositories.profiles(), false, true);
+
+    assertEquals(java.util.List.of("paper"), report.software().updated());
+    assertEquals(java.util.List.of("test"), report.affectedBlueprints());
+  }
+
+  @Test
+  void previouslyLoadedBlueprintSnapshotIsUnchangedByReload() throws Exception {
+    Repositories repositories = repositories();
+    var loadedForRunningInstance = repositories.blueprints().get("test").orElseThrow();
+    Path blueprint = repositories.blueprintsPath().resolve("test.yml");
+    Files.writeString(
+        blueprint, Files.readString(blueprint).replace("name: Test", "name: Updated"));
+
+    DefinitionReloader.reload(
+        repositories.config(), repositories.blueprints(), repositories.profiles(), true, false);
+
+    assertEquals("Test", loadedForRunningInstance.name());
+    assertEquals("Updated", repositories.blueprints().get("test").orElseThrow().name());
   }
 
   @Test

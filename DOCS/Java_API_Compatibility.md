@@ -34,7 +34,9 @@ promise.
 
 API 1.2 includes the API 1.0 and 1.1 baselines plus additive safe administrative
 requests, exact-instance routing, and namespaced operational diagnostics. The
-complete current contract includes:
+definition-reload result also includes a bounded impact summary without
+granting extensions authority to mutate affected instances. The complete
+current contract includes:
 
 - stable immutable models and machine-readable failure categories;
 - bounded ordered callbacks with explicit threading, overload, and shutdown

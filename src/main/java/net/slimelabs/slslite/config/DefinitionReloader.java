@@ -110,12 +110,42 @@ public final class DefinitionReloader {
       }
 
       catalog.install(resolvedBlueprints, softwareCandidate.values());
+      DefinitionReloadReport.CatalogDelta blueprintDelta =
+          DefinitionReloadReport.delta(blueprintBefore.values(), resolvedBlueprints);
+      DefinitionReloadReport.CatalogDelta softwareDelta =
+          DefinitionReloadReport.delta(softwareBefore.values(), softwareCandidate.values());
       return new DefinitionReloadReport(
-          DefinitionReloadReport.delta(blueprintBefore.values(), resolvedBlueprints),
-          DefinitionReloadReport.delta(softwareBefore.values(), softwareCandidate.values()),
+          blueprintDelta,
+          softwareDelta,
           resolvedBlueprints.size(),
-          blueprintCandidate.rejections());
+          blueprintCandidate.rejections(),
+          affectedBlueprints(
+              blueprintBefore.values(), resolvedBlueprints, blueprintDelta, softwareDelta));
     }
+  }
+
+  private static List<String> affectedBlueprints(
+      Map<String, net.slimelabs.slslite.blueprint.Blueprint> before,
+      Map<String, net.slimelabs.slslite.blueprint.Blueprint> after,
+      DefinitionReloadReport.CatalogDelta blueprintDelta,
+      DefinitionReloadReport.CatalogDelta softwareDelta) {
+    java.util.Set<String> changedSoftware = new java.util.HashSet<>();
+    changedSoftware.addAll(softwareDelta.added());
+    changedSoftware.addAll(softwareDelta.updated());
+    changedSoftware.addAll(softwareDelta.removed());
+    java.util.Set<String> affected = new java.util.TreeSet<>();
+    affected.addAll(blueprintDelta.added());
+    affected.addAll(blueprintDelta.updated());
+    affected.addAll(blueprintDelta.removed());
+    before.values().stream()
+        .filter(blueprint -> changedSoftware.contains(blueprint.software()))
+        .map(net.slimelabs.slslite.blueprint.Blueprint::id)
+        .forEach(affected::add);
+    after.values().stream()
+        .filter(blueprint -> changedSoftware.contains(blueprint.software()))
+        .map(net.slimelabs.slslite.blueprint.Blueprint::id)
+        .forEach(affected::add);
+    return List.copyOf(affected);
   }
 
   private static BlueprintCandidate loadBlueprintCandidate(

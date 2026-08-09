@@ -22,6 +22,7 @@ import net.slimelabs.slslite.api.ApiStatus;
 import net.slimelabs.slslite.api.ApiVersion;
 import net.slimelabs.slslite.api.BlueprintView;
 import net.slimelabs.slslite.api.Capability;
+import net.slimelabs.slslite.api.DefinitionReloadImpact;
 import net.slimelabs.slslite.api.DefinitionReloadResult;
 import net.slimelabs.slslite.api.DeleteResult;
 import net.slimelabs.slslite.api.DiagnosticsSnapshot;
@@ -82,6 +83,7 @@ import net.slimelabs.slslite.config.DefinitionReloader;
 import net.slimelabs.slslite.config.SLSConfig;
 import net.slimelabs.slslite.host.HostCapabilityReport;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
+import net.slimelabs.slslite.instance.DefinitionChangeImpact;
 import net.slimelabs.slslite.instance.InstanceManager;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
@@ -550,13 +552,19 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
                   conflict ->
                       detailLog.normal(
                           correlationId, "api-registration-reload", "Conflict: {}", conflict));
+          DefinitionChangeImpact impact = DefinitionChangeImpact.assess(report, instances);
           return new DefinitionReloadResult(
               correlationId,
               scope,
               delta(report.blueprints()),
               delta(report.software()),
               report.acceptedBlueprints(),
-              report.rejectedBlueprints().size());
+              report.rejectedBlueprints().size(),
+              new DefinitionReloadImpact(
+                  impact.affectedBlueprints(),
+                  impact.runningInstances(),
+                  impact.persistentInstances(),
+                  impact.nextAction()));
         });
   }
 

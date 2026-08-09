@@ -10,7 +10,8 @@ public record DefinitionReloadResult(
     CatalogDelta blueprints,
     CatalogDelta software,
     int acceptedBlueprints,
-    int rejectedBlueprints) {
+    int rejectedBlueprints,
+    DefinitionReloadImpact impact) {
 
   public DefinitionReloadResult {
     if (correlationId == null
@@ -23,6 +24,7 @@ public record DefinitionReloadResult(
     scope = java.util.Objects.requireNonNull(scope, "scope");
     blueprints = java.util.Objects.requireNonNull(blueprints, "blueprints");
     software = java.util.Objects.requireNonNull(software, "software");
+    impact = java.util.Objects.requireNonNull(impact, "impact");
     if (acceptedBlueprints < 0 || rejectedBlueprints < 0) {
       throw new IllegalArgumentException("blueprint counts must not be negative");
     }

@@ -119,7 +119,8 @@ with new software, properties, annotations, volumes, or persistence policy.
 
 Restart reuses the directory. Reset transactionally rebuilds it from current
 software and volume sources. Review reset carefully because it replaces the
-managed copy.
+managed copy. The complete reload and lifecycle decision table is in
+[Applying Changes Safely](Change_Application.md).
 
 ## Server Properties
 

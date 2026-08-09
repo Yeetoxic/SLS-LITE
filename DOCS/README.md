@@ -14,8 +14,9 @@ summaries.
 3. [Configuration](Configuration.md) and the [complete copyable config](Copyable_Config.md)
 4. [Commands and Permissions](Commands.md)
 5. [Full Blueprint Schema](Blueprints.md)
-6. [Operations and Recovery](Operations.md)
-7. [Current Release Notes](../RELEASE_NOTES.md)
+6. [Applying Changes Safely](Change_Application.md)
+7. [Operations and Recovery](Operations.md)
+8. [Current Release Notes](../RELEASE_NOTES.md)
 
 ### Existing SLS or SLS-LITE operator
 
@@ -47,6 +48,7 @@ summaries.
 | Blueprint recipes, schema, and behavior | [Blueprint Recipe Book](Blueprint_Recipes.md) | [Blueprints](Blueprints.md), [Blueprint Volumes](Blueprint_Volumes.md), [Resource Packs](Resource_Packs.md) |
 | Commands and permissions | [Commands](Commands.md) | [vSLS command comparison](SLS_Command_Compatibility.md) |
 | Daily operation, logs, lifecycle, recovery | [Operations](Operations.md) | [Lifecycle concurrency](Lifecycle_Concurrency.md) |
+| Reload, restart, reset, and change application | [Applying Changes Safely](Change_Application.md) | [Blueprints](Blueprints.md), [Configuration](Configuration.md) |
 | Failure diagnosis and problem reports | [Troubleshooting](Troubleshooting.md) | [Software Installation](Software_Installation.md), [Resource Packs](Resource_Packs.md) |
 | Security and privacy | [Security and Privacy](Security_and_Privacy.md) | [Backend Messaging](Backend_Messaging.md) |
 | Software profiles and installation | [Software Installation](Software_Installation.md) | Generated Paper and vanilla profiles |

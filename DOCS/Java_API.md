@@ -154,7 +154,7 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 | `enqueue(request)` | Match and transfer an online player. |
 | `transfer(request)` | Transfer an online player to one exact READY instance. |
 | `queued(playerId)` / `dequeue(playerId)` | Inspect or cancel a queued request. |
-| `extensionDiagnostics()` | Evaluate bounded namespaced extension status contributions. |
+| `extensionDiagnostics()` | Read the bounded namespaced diagnostic cache and schedule an asynchronous refresh. |
 | `subscribe(listener)` | Receive ordered lifecycle, matchmaking, and failure events. |
 
 API 1.2 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
@@ -201,8 +201,12 @@ explicit operator command. `reset` rebuilds from current definitions while
 provider, EULA, checksum, cache, and shared-installation ownership rules without
 returning a filesystem path. `reload(CatalogReloadScope)` runs atomic definition
 reload, readiness refresh, and dynamic-registration reconciliation on a bounded
-administrative worker. The result contains only counts and a correlation ID;
-rejected blueprint and registration details remain in the SLS-LITE detail log.
+administrative worker. The result contains bounded deltas, a correlation ID,
+and a `DefinitionReloadImpact` telling the caller how many running and
+persistent instances use changed definitions and what lifecycle choice to
+present next. Reload never modifies those instances. Rejected blueprint and
+registration details remain in the SLS-LITE detail log. See
+[Applying Changes Safely](Change_Application.md) for the authoritative model.
 Host `config.yml` is never live-reloaded. `setMaintenance(...)` changes only
 new-instance admission and does not stop existing instances.
 

@@ -1017,7 +1017,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       exceptions, saturation, and context closure; cap finding count and text;
       redact secrets; and do not expose arbitrary console logging or mutable
       diagnostic registries.
-- [ ] Make the change-application model explicit wherever operators edit or
+- [x] Make the change-application model explicit wherever operators edit or
       reload definitions. Document and report that blueprint/software reloads
       affect future assembly, persistent restart reuses the existing instance,
       reset rebuilds it from the current base/volumes/copies, `state.copy`

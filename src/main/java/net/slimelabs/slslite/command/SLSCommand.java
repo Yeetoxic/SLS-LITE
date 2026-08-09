@@ -30,6 +30,7 @@ import net.slimelabs.slslite.config.SLSConfig;
 import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityReport;
 import net.slimelabs.slslite.install.SoftwareInstallationService;
+import net.slimelabs.slslite.instance.DefinitionChangeImpact;
 import net.slimelabs.slslite.instance.InstanceOperationException;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.ServerController;
@@ -670,6 +671,7 @@ public final class SLSCommand implements SimpleCommand {
               "all".equals(mode) || "software".equals(mode),
               correlationId,
               reloadObserver);
+      DefinitionChangeImpact impact = DefinitionChangeImpact.assess(report, instances);
       source.sendMessage(
           CommandMessages.message(
               "Reloaded "
@@ -685,6 +687,12 @@ public final class SLSCommand implements SimpleCommand {
                   + ".",
               report.rejectedBlueprints().isEmpty()
                   ? NamedTextColor.GREEN
+                  : NamedTextColor.YELLOW));
+      source.sendMessage(
+          CommandMessages.message(
+              "Application: " + impact.nextAction(),
+              impact.runningInstances() == 0 && impact.persistentInstances() == 0
+                  ? NamedTextColor.GRAY
                   : NamedTextColor.YELLOW));
       logger.info(
           "Definition reload [{}] {} committed: blueprint added={} updated={} removed={}; "

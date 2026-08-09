@@ -13,6 +13,8 @@ This restart boundary applies to every `config.yml` key because each one owns
 or sizes a long-lived service, executor, listener, security decision, storage
 adapter, or recovery controller. `/sls reload config` performs no partial
 mutation and names the restart requirement.
+Blueprint/software reload, persistent restart, and reset have deliberately
+different effects; see [Applying Changes Safely](Change_Application.md).
 
 The generated file is arranged in stable operator-facing sections and retains
 comments for units, defaults, security implications, and restart behavior.

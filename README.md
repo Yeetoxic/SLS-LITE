@@ -74,6 +74,10 @@ restrictions.
    [Blueprint Recipe Book](DOCS/Blueprint_Recipes.md), then restart Velocity or
    run `/sls reload blueprints`.
 
+Reloading changes future assembly without touching running servers. Read
+[Applying Changes Safely](DOCS/Change_Application.md) before choosing restart
+or reset for a persistent instance.
+
 See [Getting Started](DOCS/Getting_Started.md) for the complete clean install,
 real-network and isolated-development paths, first transfer, updates, backup,
 and removal.
