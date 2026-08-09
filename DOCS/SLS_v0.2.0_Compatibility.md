@@ -79,6 +79,7 @@ out of scope.
 | `mode: rw` | Adapted | Creates and verifies a directory link to a source confined below the SLS-LITE data root. The source outlives instances and is shared concurrently; operators should normally combine it with a single-instance policy. |
 | `state.mounts` | Intentionally unsupported | Reload fails with a local-mode explanation and recommends a contained `cow` or `ro` volume. |
 | `state.copy` mapping and shorthand | Adapted | Transactional contained file/directory copy after software and volumes. Sources must be relative to the SLS-LITE data root; full-SLS absolute/allowed-host sources are intentionally rejected. Persistent instances refresh sources on reset rather than every restart. |
+| `state.persistent_files` | SLS-LITE extension | Single-writer regular-file import and bounded atomic write-back below `volumes/`, with conflict preservation and no symlink or mount dependency. Full SLS v0.2.0 has no file-shaped volume behavior; its volume manager checks directory sources. |
 | `state.env` | Adapted | Validated strings reach the local child process; JVM, loader, path, and SLS-owned variables are rejected. Names are visible to operators, values are not logged. |
 | `save` | Supported | Persistent instance directory and identity. |
 | `annotations` | Adapted | Unknown trees, including YAML null values, are retained as immutable metadata. |

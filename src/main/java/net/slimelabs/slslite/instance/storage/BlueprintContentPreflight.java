@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintCopy;
+import net.slimelabs.slslite.blueprint.BlueprintPersistentFile;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import net.slimelabs.slslite.config.StorageConfig;
 import net.slimelabs.slslite.config.StorageStrategy;
@@ -25,6 +26,7 @@ public final class BlueprintContentPreflight {
   private final StorageConfig storage;
   private final StorageStrategy selectedStrategy;
   private final BtrfsSnapshotManager btrfs;
+  private final PersistentFileStateManager persistentFiles;
 
   public BlueprintContentPreflight(
       Path instancesRoot,
@@ -38,6 +40,7 @@ public final class BlueprintContentPreflight {
     this.storage = java.util.Objects.requireNonNull(storage, "storage");
     this.selectedStrategy = java.util.Objects.requireNonNull(selectedStrategy, "selectedStrategy");
     this.btrfs = new BtrfsSnapshotManager(normalizedInstances, contentRoot);
+    this.persistentFiles = new PersistentFileStateManager(normalizedInstances, contentRoot);
   }
 
   public List<Problem> inspect(Blueprint blueprint) {
@@ -56,6 +59,9 @@ public final class BlueprintContentPreflight {
         break;
       }
       inspectCopy(copy, problems);
+    }
+    if (!blueprint.persistentFiles().isEmpty() && problems.size() < MAXIMUM_PROBLEMS) {
+      inspectPersistentFiles(blueprint.persistentFiles(), problems);
     }
     return List.copyOf(problems);
   }
@@ -104,6 +110,14 @@ public final class BlueprintContentPreflight {
   private void inspectCopy(BlueprintCopy copy, List<Problem> problems) {
     try {
       resolver.resolveCopies(List.of(copy), destination);
+    } catch (IOException | InstancePreparationException exception) {
+      problems.add(problem(exception));
+    }
+  }
+
+  private void inspectPersistentFiles(List<BlueprintPersistentFile> files, List<Problem> problems) {
+    try {
+      persistentFiles.inspect(destination, files);
     } catch (IOException | InstancePreparationException exception) {
       problems.add(problem(exception));
     }

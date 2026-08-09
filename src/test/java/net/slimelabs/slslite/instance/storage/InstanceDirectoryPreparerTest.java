@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import net.slimelabs.slslite.blueprint.BlueprintCopy;
+import net.slimelabs.slslite.blueprint.BlueprintPersistentFile;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import net.slimelabs.slslite.config.StorageStrategy;
 import net.slimelabs.slslite.instance.InstancePreparationException;
@@ -137,6 +138,39 @@ class InstanceDirectoryPreparerTest {
     assertEquals("copy world", Files.readString(prepared.resolve("world/level.dat")));
     assertEquals("software", Files.readString(software.resolve("config/settings.yml")));
     assertEquals("volume", Files.readString(world.resolve("level.dat")));
+  }
+
+  @Test
+  void persistentFileImportRunsAfterCopiesAndPublishesBeforeDeletion() throws Exception {
+    Path software = createSource();
+    Path copied = temporaryDirectory.resolve("files/whitelist.json");
+    Path canonical = temporaryDirectory.resolve("volumes/whitelists/lobby/whitelist.json");
+    Files.createDirectories(copied.getParent());
+    Files.createDirectories(canonical.getParent());
+    Files.writeString(copied, "[\"copy\"]\n");
+    Files.writeString(canonical, "[]\n");
+    Path instances = temporaryDirectory.resolve("instances");
+    InstanceDirectoryPreparer preparer =
+        new InstanceDirectoryPreparer(instances, temporaryDirectory);
+
+    Path prepared =
+        preparer.prepare(
+            "game.x82odk",
+            software,
+            List.of(),
+            List.of(new BlueprintCopy("files/whitelist.json", "whitelist.json")),
+            List.of(
+                new BlueprintPersistentFile(
+                    "whitelist", "volumes/whitelists/lobby/whitelist.json", "whitelist.json")),
+            () -> false);
+
+    assertEquals("[]\n", Files.readString(prepared.resolve("whitelist.json")));
+    Files.writeString(prepared.resolve("whitelist.json"), "[\"player\"]\n");
+    preparer.publishPersistentFiles("game.x82odk");
+    preparer.delete("game.x82odk");
+
+    assertEquals("[\"player\"]\n", Files.readString(canonical));
+    assertFalse(Files.exists(prepared));
   }
 
   @Test

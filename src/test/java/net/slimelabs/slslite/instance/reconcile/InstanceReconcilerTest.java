@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
+import net.slimelabs.slslite.blueprint.BlueprintPersistentFile;
 import net.slimelabs.slslite.instance.metadata.InstanceMetadataStore;
 import net.slimelabs.slslite.instance.model.InstanceMetadata;
 import net.slimelabs.slslite.instance.model.InstanceState;
@@ -129,6 +131,71 @@ final class InstanceReconcilerTest {
     assertTrue(Files.isDirectory(persistent));
     assertEquals(InstanceState.STOPPED, normalized.state());
     assertEquals(null, normalized.processId());
+  }
+
+  @Test
+  void publishesPersistentFileStateDuringCrashReconciliation() throws Exception {
+    Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+    Path software = Files.createDirectories(temporaryDirectory.resolve("software/base"));
+    Files.writeString(software.resolve("server.jar"), "fixture");
+    Path canonical = temporaryDirectory.resolve("volumes/whitelists/lobby/whitelist.json");
+    Files.createDirectories(canonical.getParent());
+    Files.writeString(canonical, "[]\n");
+    String id = "lobby.abc123";
+    InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(root, temporaryDirectory);
+    Path persistent =
+        preparer.prepare(
+            id,
+            software,
+            List.of(),
+            List.of(),
+            List.of(
+                new BlueprintPersistentFile(
+                    "whitelist", "volumes/whitelists/lobby/whitelist.json", "whitelist.json")),
+            () -> false);
+    Files.writeString(persistent.resolve("whitelist.json"), "[\"player\"]\n");
+    new InstanceMetadataStore(root)
+        .write(persistent, record(id, true, InstanceState.READY, null, null));
+
+    InstanceReconciliationReport report =
+        new InstanceReconciler(preparer, LoggerFactory.getLogger(InstanceReconcilerTest.class))
+            .reconcile();
+
+    assertEquals(1, report.preservedPersistent());
+    assertEquals("[\"player\"]\n", Files.readString(canonical));
+  }
+
+  @Test
+  void publishesEphemeralPersistentFileBeforeCrashReconciliationDeletesInstance() throws Exception {
+    Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+    Path software = Files.createDirectories(temporaryDirectory.resolve("software/base"));
+    Files.writeString(software.resolve("server.jar"), "fixture");
+    Path canonical = temporaryDirectory.resolve("volumes/whitelists/game/whitelist.json");
+    Files.createDirectories(canonical.getParent());
+    Files.writeString(canonical, "[]\n");
+    String id = "game.abc123";
+    InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(root, temporaryDirectory);
+    Path ephemeral =
+        preparer.prepare(
+            id,
+            software,
+            List.of(),
+            List.of(),
+            List.of(
+                new BlueprintPersistentFile(
+                    "whitelist", "volumes/whitelists/game/whitelist.json", "whitelist.json")),
+            () -> false);
+    Files.writeString(ephemeral.resolve("whitelist.json"), "[\"player\"]\n");
+    new InstanceMetadataStore(root)
+        .write(ephemeral, record(id, false, InstanceState.STOPPED, null, null));
+
+    InstanceReconciliationReport report =
+        new InstanceReconciler(preparer, LoggerFactory.getLogger(InstanceReconcilerTest.class))
+            .reconcile();
+
+    assertEquals(1, report.removedEphemeral());
+    assertEquals("[\"player\"]\n", Files.readString(canonical));
+    assertFalse(Files.exists(ephemeral));
   }
 
   @Test

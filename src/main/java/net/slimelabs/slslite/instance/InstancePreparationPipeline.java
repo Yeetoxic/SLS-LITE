@@ -86,10 +86,11 @@ final class InstancePreparationPipeline {
       detailLog.detailed(
           instance.correlationId(),
           "preparation",
-          "Preparing instance {} with {} volume(s) and {} copy entry(s)",
+          "Preparing instance {} with {} volume(s), {} copy entry(s), and {} persistent file(s)",
           instance.id(),
           instance.blueprint().volumes().size(),
-          instance.blueprint().copies().size());
+          instance.blueprint().copies().size(),
+          instance.blueprint().persistentFiles().size());
       timings.begin(InstancePhaseTimings.Phase.SOFTWARE_RESOLUTION);
       Path baseDirectory =
           softwareDirectories.resolve(
@@ -112,10 +113,11 @@ final class InstancePreparationPipeline {
       detailLog.detailed(
           instance.correlationId(),
           "preparation",
-          "Instance files ready: {} ({} volume(s), {} copy entry(s))",
+          "Instance files ready: {} ({} volume(s), {} copy entry(s), {} persistent file(s))",
           instance.id(),
           instance.blueprint().volumes().size(),
-          instance.blueprint().copies().size());
+          instance.blueprint().copies().size(),
+          instance.blueprint().persistentFiles().size());
       if (!prepared.equals(instance.directory())) {
         throw new InstanceOperationException("Prepared instance path changed unexpectedly");
       }
@@ -162,6 +164,7 @@ final class InstancePreparationPipeline {
         baseDirectory,
         instance.blueprint().volumes(),
         instance.blueprint().copies(),
+        instance.blueprint().persistentFiles(),
         instance::stopRequested);
   }
 

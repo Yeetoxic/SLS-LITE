@@ -113,6 +113,93 @@ class BlueprintParserTest {
         BlueprintVolume.Mode.RW, new BlueprintParser().parse(source).volumes().getFirst().mode());
   }
 
+  @Test
+  void parsesExplicitPersistentFileMappings() throws Exception {
+    Path source = temporaryDirectory.resolve("persistent-files.yml");
+    Files.writeString(
+        source,
+        """
+        blueprint:
+          id: lobby
+          name: Lobby
+          type: lobby
+        server:
+          software: paper
+          version: "1.21.11"
+        state:
+          persistent_files:
+            - name: whitelist
+              source: volumes/whitelists/lobby/whitelist.json
+              target: whitelist.json
+        """);
+
+    BlueprintPersistentFile file = new BlueprintParser().parse(source).persistentFiles().getFirst();
+
+    assertEquals("whitelist", file.name());
+    assertEquals("volumes/whitelists/lobby/whitelist.json", file.source());
+    assertEquals("whitelist.json", file.target());
+  }
+
+  @Test
+  void rejectsDuplicatePersistentSourcesAndTargetsPortably() throws Exception {
+    Path source = temporaryDirectory.resolve("duplicates.yml");
+    Files.writeString(
+        source,
+        """
+        blueprint:
+          id: lobby
+          name: Lobby
+          type: lobby
+        server:
+          software: paper
+          version: "1.21.11"
+        state:
+          persistent_files:
+            - name: whitelist
+              source: volumes/state/whitelist.json
+              target: whitelist.json
+            - name: operators
+              source: VOLUMES/STATE/WHITELIST.JSON
+              target: ops.json
+        """);
+
+    BlueprintException failure =
+        assertThrows(BlueprintException.class, () -> new BlueprintParser().parse(source));
+
+    assertTrue(failure.getMessage().contains("duplicate persistent file source"));
+  }
+
+  @Test
+  void confinesPersistentSourcesAndReservesSupervisorTargets() throws Exception {
+    Path source = temporaryDirectory.resolve("unsafe-persistent-file.yml");
+    String template =
+        """
+        blueprint:
+          id: lobby
+          name: Lobby
+          type: lobby
+        server:
+          software: paper
+          version: "1.21.11"
+        state:
+          persistent_files:
+            - name: unsafe
+              source: %s
+              target: %s
+        """;
+    Files.writeString(source, template.formatted("config.yml", "whitelist.json"));
+    BlueprintException unsafeSource =
+        assertThrows(BlueprintException.class, () -> new BlueprintParser().parse(source));
+    assertTrue(unsafeSource.getMessage().contains("below volumes/"));
+
+    Files.writeString(
+        source,
+        template.formatted("volumes/whitelists/whitelist.json", ".sls-lite-instance.properties"));
+    BlueprintException reservedTarget =
+        assertThrows(BlueprintException.class, () -> new BlueprintParser().parse(source));
+    assertTrue(reservedTarget.getMessage().contains("reserved SLS-LITE path"));
+  }
+
   private static String blueprintWithRw(boolean save, int maxInstances) {
     return """
         blueprint:

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintCopy;
+import net.slimelabs.slslite.blueprint.BlueprintPersistentFile;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import net.slimelabs.slslite.software.SoftwareProfile;
 import org.junit.jupiter.api.Test;
@@ -171,6 +172,35 @@ final class InstanceDefinitionIdentityTest {
     assertNotEquals(
         InstanceDefinitionIdentity.from(original, profile()),
         InstanceDefinitionIdentity.from(changedEnvironment, profile()));
+
+    Blueprint changedPersistentFile =
+        new Blueprint(
+            original.id(),
+            original.name(),
+            original.type(),
+            original.software(),
+            original.version(),
+            original.image(),
+            original.softwarePath(),
+            original.memoryLimitMiB(),
+            original.maxPlayers(),
+            original.maxInstances(),
+            original.save(),
+            original.serverProperties(),
+            original.yamlConfigs(),
+            original.textFileConfigs(),
+            original.annotations(),
+            original.volumes(),
+            original.copies(),
+            List.of(
+                new BlueprintPersistentFile(
+                    "whitelist", "volumes/whitelist.json", "whitelist.json")),
+            original.environment(),
+            original.inheritsSoftwareMemory(),
+            original.inheritsSoftwareImage());
+    assertNotEquals(
+        InstanceDefinitionIdentity.from(original, profile()),
+        InstanceDefinitionIdentity.from(changedPersistentFile, profile()));
   }
 
   private static Blueprint blueprint(

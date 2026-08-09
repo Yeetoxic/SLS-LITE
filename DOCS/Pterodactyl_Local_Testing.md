@@ -152,10 +152,15 @@ resumed or recovered. Restore `true` and restart Velocity before continuing.
 `infra/pterodactyl/send-command.php` sends one console command to the local
 Velocity allocation identified by external ID `sls-lite-local-velocity`. It is
 not a production Panel extension or remote administration endpoint.
+`infra/pterodactyl/send-power.php` provides the same fixture-only boundary for
+`start`, `stop`, and `restart`, allowing tests to use Wings' normal graceful
+power path instead of restarting a Docker container behind Pterodactyl.
 
 ```powershell
 docker cp infra/pterodactyl/send-command.php sls-ptero-panel:/tmp/sls-lite-send-command.php
+docker cp infra/pterodactyl/send-power.php sls-ptero-panel:/tmp/sls-lite-send-power.php
 docker exec -e PANEL_ROOT=/app sls-ptero-panel php /tmp/sls-lite-send-command.php sls info
+docker exec -e PANEL_ROOT=/app sls-ptero-panel php /tmp/sls-lite-send-power.php restart
 ```
 
 The helper uses the Panel's internal Wings repository and embeds no credential.

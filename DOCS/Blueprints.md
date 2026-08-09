@@ -299,6 +299,53 @@ conflicts fail preparation and remove the incomplete instance. Persistent
 instances refresh copy sources during `/sls reset`, not every restart, so an
 operator-controlled source change cannot silently mutate an existing server.
 
+## Persistent Files
+
+`state.persistent_files` is for small root files that Minecraft rewrites and
+that must outlive a disposable or resettable instance, such as
+`whitelist.json`, `ops.json`, `banned-players.json`, or `server-icon.png`:
+
+```yaml
+state:
+  persistent_files:
+    - name: whitelist
+      source: volumes/whitelists/lobby/whitelist.json
+      target: whitelist.json
+```
+
+The source is the canonical operator-owned file below
+`plugins/sls-lite/volumes/` and must already exist. Restricting write-back to
+that operator state root prevents a managed server from overwriting host
+configuration, blueprints, software, or SLS-LITE metadata. SLS-LITE imports it
+as an ordinary private file after
+volumes and copies, then publishes the stopped server's version atomically back
+to the source. This supports applications such as Paper that replace JSON files
+rather than editing them in place; it does not use symbolic links, bind mounts,
+or `/dev/fuse`.
+
+Each canonical source has exactly one active writer. A second instance is
+rejected until the first stops. On restart, an external source edit is imported
+when the stopped instance copy is unchanged. If both copies changed
+independently, SLS-LITE preserves the canonical source, stores the instance
+candidate below `internal/persistent-file-conflicts/`, and reports an actionable
+failure instead of guessing. The previous canonical value is retained below
+`internal/persistent-file-backups/` before a changed value is published.
+
+To resolve a conflict, keep the affected instance stopped and inspect both the
+canonical source and preserved `candidate` named in the diagnostic. Back up
+both values, copy the chosen or manually merged result into the canonical
+source, and remove the `candidate` only after that result is safely in place.
+The next start or explicit reset imports the resolved canonical value. Do not
+delete a conflict candidate merely to silence the diagnostic: it is the only
+copy of the instance-side edit SLS-LITE deliberately refused to overwrite.
+
+Only non-symbolic regular files are accepted. A blueprint may declare at most
+32 persistent files; each file is limited to 8 MiB and the aggregate mapping is
+limited to 32 MiB. Normal stop, crash finalization, persistent reset/delete,
+and startup reconciliation publish before instance storage is unmounted or
+removed. `save` controls the assembled directory, not the canonical file: a
+persistent-file source survives even when `save: false`.
+
 ## State Environment
 
 Modern SLS `state.env` values are passed to the locally managed child process:

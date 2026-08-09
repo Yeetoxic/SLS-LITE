@@ -66,6 +66,13 @@ save: false
 #     # Individual plugin files can also be copied to an exact target.
 #     # - source: volumes/plugins/one-off.jar
 #     #   target: plugins/one-off.jar
+#   persistent_files:
+#     # A private regular file is imported into the instance, then safely written
+#     # back to this canonical source after the server stops. Only one active
+#     # instance may own a source at a time.
+#     - name: whitelist
+#       source: volumes/whitelists/example/whitelist.json
+#       target: whitelist.json
 #   env:
 #     FEATURE_FLAG: "true"
 

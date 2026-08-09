@@ -52,7 +52,7 @@ final class BlueprintParser {
       requireOnlyKeys(metadata, "blueprint", path, "id", "name", "type");
       requireOnlyKeys(
           server, "server", path, "software", "version", "image", "path", "limits", "configs");
-      requireOnlyKeys(state, "state", path, "volumes", "copy", "env");
+      requireOnlyKeys(state, "state", path, "volumes", "copy", "persistent_files", "env");
       requireOnlyKeys(
           limits,
           "server.limits",
@@ -96,6 +96,7 @@ final class BlueprintParser {
       boolean save = optionalBoolean(root, "save", false, path);
       List<BlueprintVolume> volumes = parseVolumes(state, path);
       List<BlueprintCopy> copies = parseCopies(state, path);
+      List<BlueprintPersistentFile> persistentFiles = parsePersistentFiles(state, path);
       Map<String, String> environment = parseEnvironment(state, path);
 
       return new Blueprint(
@@ -116,6 +117,7 @@ final class BlueprintParser {
           annotations,
           volumes,
           copies,
+          persistentFiles,
           environment,
           !limits.containsKey("memory_limit"),
           image == null);
@@ -321,6 +323,62 @@ final class BlueprintParser {
       throw error(path, "'" + section + "' must use portable '/' separators");
     }
     return new BlueprintCopy(normalizedSource, normalizedTarget);
+  }
+
+  private static List<BlueprintPersistentFile> parsePersistentFiles(
+      Map<String, Object> state, Path path) throws BlueprintException {
+    Object configured = state.get("persistent_files");
+    if (configured == null) {
+      return List.of();
+    }
+    if (!(configured instanceof List<?> rawFiles)) {
+      throw error(path, "'state.persistent_files' must be a list");
+    }
+    if (rawFiles.size() > 32) {
+      throw error(path, "'state.persistent_files' must not contain more than 32 entries");
+    }
+
+    java.util.ArrayList<BlueprintPersistentFile> files = new java.util.ArrayList<>();
+    java.util.HashSet<String> names = new java.util.HashSet<>();
+    java.util.HashSet<String> sources = new java.util.HashSet<>();
+    java.util.HashSet<String> targets = new java.util.HashSet<>();
+    for (int index = 0; index < rawFiles.size(); index++) {
+      String section = "state.persistent_files[" + index + "]";
+      Map<String, Object> values = asMap(rawFiles.get(index), section, path);
+      requireOnlyKeys(values, section, path, "name", "source", "target");
+      String name = requiredString(values, "name", path).trim();
+      String source = requiredString(values, "source", path).trim();
+      String target = requiredString(values, "target", path).trim();
+      validateRelativePath(source, section + ".source", path);
+      validateRelativePath(target, section + ".target", path);
+      if (!VALID_ID.matcher(name.toLowerCase(Locale.ROOT)).matches()) {
+        throw error(path, "'" + section + ".name' must match " + VALID_ID.pattern());
+      }
+      if (source.indexOf('\\') >= 0 || target.indexOf('\\') >= 0) {
+        throw error(path, "'" + section + "' must use portable '/' separators");
+      }
+      if (!source.toLowerCase(Locale.ROOT).startsWith("volumes/")) {
+        throw error(path, "'" + section + ".source' must stay below volumes/");
+      }
+      if (java.util.Arrays.stream(target.split("/"))
+          .anyMatch(segment -> segment.toLowerCase(Locale.ROOT).startsWith(".sls-lite-"))) {
+        throw error(path, "'" + section + ".target' uses a reserved SLS-LITE path");
+      }
+      String portableName = name.toLowerCase(Locale.ROOT);
+      String portableSource = source.toLowerCase(Locale.ROOT);
+      String portableTarget = target.toLowerCase(Locale.ROOT);
+      if (!names.add(portableName)) {
+        throw error(path, "duplicate persistent file name: " + name);
+      }
+      if (!sources.add(portableSource)) {
+        throw error(path, "duplicate persistent file source: " + source);
+      }
+      if (!targets.add(portableTarget)) {
+        throw error(path, "duplicate persistent file target: " + target);
+      }
+      files.add(new BlueprintPersistentFile(name, source, target));
+    }
+    return List.copyOf(files);
   }
 
   private static Map<String, String> parseEnvironment(Map<String, Object> state, Path path)

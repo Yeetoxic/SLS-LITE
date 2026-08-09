@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintCopy;
+import net.slimelabs.slslite.blueprint.BlueprintPersistentFile;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import net.slimelabs.slslite.software.SoftwareProfile;
 
@@ -68,6 +69,15 @@ public record InstanceDefinitionIdentity(
         writeValue(
             output,
             blueprint.copies().stream().map(InstanceDefinitionIdentity::copyValues).toList());
+        // Preserve the published RC.1 fingerprint byte stream for blueprints that do not use the
+        // additive RC.2 field. Existing persistent instances must remain restartable after upgrade.
+        if (!blueprint.persistentFiles().isEmpty()) {
+          writeValue(
+              output,
+              blueprint.persistentFiles().stream()
+                  .map(InstanceDefinitionIdentity::persistentFileValues)
+                  .toList());
+        }
         writeValue(output, blueprint.environment());
       }
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -94,6 +104,13 @@ public record InstanceDefinitionIdentity(
     return Map.of(
         "source", copy.source(),
         "target", copy.target());
+  }
+
+  private static Map<String, Object> persistentFileValues(BlueprintPersistentFile file) {
+    return Map.of(
+        "name", file.name(),
+        "source", file.source(),
+        "target", file.target());
   }
 
   private static void writeValue(DataOutputStream output, Object value) throws IOException {

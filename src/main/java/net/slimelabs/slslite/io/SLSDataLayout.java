@@ -12,6 +12,7 @@ public final class SLSDataLayout {
           Path.of("volumes"),
           Path.of("volumes", "worlds"),
           Path.of("volumes", "plugins"),
+          Path.of("volumes", "whitelists"),
           Path.of("software"),
           Path.of("runtimes"));
 

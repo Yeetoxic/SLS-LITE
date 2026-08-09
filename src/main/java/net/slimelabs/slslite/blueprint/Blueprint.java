@@ -21,6 +21,7 @@ public record Blueprint(
     Map<String, Object> annotations,
     List<BlueprintVolume> volumes,
     List<BlueprintCopy> copies,
+    List<BlueprintPersistentFile> persistentFiles,
     Map<String, String> environment,
     boolean inheritsSoftwareMemory,
     boolean inheritsSoftwareImage) {
@@ -37,6 +38,7 @@ public record Blueprint(
     annotations = immutableAnnotationMap(annotations);
     volumes = List.copyOf(volumes);
     copies = List.copyOf(copies);
+    persistentFiles = List.copyOf(persistentFiles);
     environment = validateEnvironment(environment);
   }
 
@@ -77,9 +79,55 @@ public record Blueprint(
         annotations,
         volumes,
         copies,
+        List.of(),
         environment,
         false,
         false);
+  }
+
+  public Blueprint(
+      String id,
+      String name,
+      String type,
+      String software,
+      String version,
+      String image,
+      String softwarePath,
+      int memoryLimitMiB,
+      int maxPlayers,
+      int maxInstances,
+      boolean save,
+      Map<String, String> serverProperties,
+      Map<String, Map<String, Object>> yamlConfigs,
+      Map<String, Map<String, String>> textFileConfigs,
+      Map<String, Object> annotations,
+      List<BlueprintVolume> volumes,
+      List<BlueprintCopy> copies,
+      Map<String, String> environment,
+      boolean inheritsSoftwareMemory,
+      boolean inheritsSoftwareImage) {
+    this(
+        id,
+        name,
+        type,
+        software,
+        version,
+        image,
+        softwarePath,
+        memoryLimitMiB,
+        maxPlayers,
+        maxInstances,
+        save,
+        serverProperties,
+        yamlConfigs,
+        textFileConfigs,
+        annotations,
+        volumes,
+        copies,
+        List.of(),
+        environment,
+        inheritsSoftwareMemory,
+        inheritsSoftwareImage);
   }
 
   public Blueprint withSoftwareDefaults(int memoryLimit, String selectedImage) {
@@ -101,6 +149,7 @@ public record Blueprint(
         annotations,
         volumes,
         copies,
+        persistentFiles,
         environment,
         inheritsSoftwareMemory,
         inheritsSoftwareImage);
@@ -140,6 +189,7 @@ public record Blueprint(
         textFileConfigs,
         annotations,
         volumes,
+        List.of(),
         List.of(),
         Map.of(),
         false,

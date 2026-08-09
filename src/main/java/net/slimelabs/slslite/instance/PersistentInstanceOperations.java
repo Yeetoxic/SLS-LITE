@@ -207,6 +207,7 @@ final class PersistentInstanceOperations {
           baseDirectory,
           blueprint.volumes(),
           blueprint.copies(),
+          blueprint.persistentFiles(),
           directory -> metadata.write(directory, stopped));
     } catch (ProcessSpecificationException | InstancePreparationException exception) {
       throw new InstanceOperationException(exception.getMessage(), exception);

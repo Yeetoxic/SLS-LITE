@@ -14,6 +14,7 @@ rewrites, restarts, or disconnects an existing managed server.
 | SLS-LITE or extension plugin JAR | Restart Velocity | Plugin replacement is not a supported hot-reload operation. |
 | Blueprint or software definition | `/sls reload blueprints`, `/sls reload software`, `/sls reload all`, or restart Velocity | Keeps the immutable definition loaded when that instance was assembled. |
 | `state.copy` source, software-base file, or private `cow`/`ro` source | Create a new instance, or explicitly reset a persistent instance | Source changes do not mutate an existing assembly. |
+| `state.persistent_files` source | Restart a stopped instance to import an external edit; normal managed stop publishes instance changes | Concurrent external and instance edits are rejected as a conflict rather than merged. |
 | Shared `rw` volume contents | No definition reload is required | The instance uses the deliberately shared live directory. Coordinate a safe application-level reload or restart when the server software requires one. |
 
 After a successful definition reload, SLS-LITE reports how many running and
@@ -26,15 +27,17 @@ does not modify those instances automatically.
 It is appropriate when the goal is to cycle the Java process without rebuilding
 the server. SLS-LITE compares the recorded definition fingerprint with the
 current definition and rejects restart when software, generated configuration,
-annotations, volumes, copies, or persistence ownership drifted. This prevents
+annotations, volumes, copies, persistent files, or persistence ownership drifted. This prevents
 old data from being silently paired with new assembly instructions.
 
 `/sls reset <instance>` is an explicit rebuild. It transactionally replaces the
 owned instance directory using the current software base, blueprint properties,
-declared volumes, and `state.copy` sources, while keeping the persistent instance
+declared volumes, `state.copy` sources, and canonical persistent files, while keeping the persistent instance
 ID and approved create-time overrides. Review it before running: private changes
 inside the managed instance directory are replaced. Deliberately external `rw`
 volume data remains owned by its source directory rather than the assembly.
+Before reset or deletion, a running instance publishes its persistent files;
+the reset then imports those canonical values into the replacement assembly.
 
 For a changed `state.copy` mapping or source file, use reset rather than restart when the
 persistent server should receive the new file.

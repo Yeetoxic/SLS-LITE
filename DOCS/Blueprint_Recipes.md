@@ -16,11 +16,13 @@ For example, `source: volumes/worlds/spleef` reads from
 `world/` directory at the root of each prepared instance. SLS-LITE never runs a
 managed server directly from a `cow`, `ro`, or `copy` source.
 
-Five terms cover most beginner blueprints:
+Six terms cover most beginner blueprints:
 
 - `source`: the supply shelf under `plugins/sls-lite/`;
 - `target`: where that part belongs in the finished server;
 - `copy`: place a fresh file or directory into each new assembly;
+- `persistent_files`: import a private file and safely return its changes to one
+  canonical source below `volumes/` when the server stops;
 - `cow`: give each instance a private writable directory while protecting the
   source (copy-on-write, with a portable full-copy fallback when needed);
 - `save`: keep the assembled instance and its changes after it stops.
@@ -45,6 +47,7 @@ cases and are not required for a first server.
 | Take a private source-protecting directory snapshot | `state.volumes` with `mode: ro` | Directory only | Instance may write its private result; source stays unchanged. |
 | Deliberately share one live host directory | `state.volumes` with `mode: rw` | Directory only | Source itself changes and outlives restart, reset, and deletion. Use one instance. |
 | Place or replace files, plugin JARs, or directory bundles | `state.copy` | File or directory | Fresh creation and reset read the source; restart reuses the existing persistent result. |
+| Persist one Minecraft-managed file such as `whitelist.json` | `state.persistent_files` | Regular file only | Imports a private file and atomically writes it back after stop; one active writer per source. |
 | Use a complete operator-prepared server as the software base | `server.path` | Complete directory below `software/` | SLS-LITE copies the base into the managed instance and then applies its owned settings. |
 
 `save` and `rw` solve different problems. `save: true` keeps one assembled
@@ -52,6 +55,60 @@ instance, including its private `cow` changes. `rw` changes the shared source
 itself, regardless of `save`. `save: false` discards the assembled instance
 after it stops. A persistent restart reuses it; `/sls reset` rebuilds it from
 the current software base, volumes, and copies.
+
+## Persistent Whitelist File
+
+Use a persistent file when Paper must be able to change a root file through its
+normal commands without sharing the whole instance directory.
+
+Source:
+
+```text
+plugins/sls-lite/
+`-- volumes/whitelists/lobby/
+    `-- whitelist.json
+```
+
+Initialize `whitelist.json` with a valid empty JSON list:
+
+```json
+[]
+```
+
+Minimal blueprint:
+
+```yaml
+blueprint:
+  id: persistent_whitelist
+  name: Persistent Whitelist
+  type: lobby
+server:
+  software: paper
+  version: "REPLACE_WITH_EXACT_VERSION"
+  limits:
+    memory_limit: 1024
+    max_players: 20
+    max_instances: 1
+state:
+  persistent_files:
+    - name: whitelist
+      source: volumes/whitelists/lobby/whitelist.json
+      target: whitelist.json
+save: true
+```
+
+Running instance:
+
+```text
+plugins/sls-lite/instances/<instance-id>/
+`-- whitelist.json
+```
+
+Paper reads and replaces the ordinary instance file. After the process stops,
+SLS-LITE publishes the complete file back to the source atomically. Commands
+such as `/whitelist add <player>` therefore persist without making the entire
+server an `rw` volume. Only one active instance may use that canonical source;
+give independently running instances separate sources.
 
 ## 1. Disposable World
 

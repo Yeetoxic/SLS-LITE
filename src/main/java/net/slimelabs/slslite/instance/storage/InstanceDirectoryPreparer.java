@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import net.slimelabs.slslite.blueprint.BlueprintCopy;
+import net.slimelabs.slslite.blueprint.BlueprintPersistentFile;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import net.slimelabs.slslite.config.StorageConfig;
 import net.slimelabs.slslite.config.StorageStrategy;
@@ -24,6 +25,7 @@ public final class InstanceDirectoryPreparer {
   private final VolumeApplicator volumeApplicator;
   private final PreparedStorageLifecycle storageLifecycle;
   private final PersistentInstanceTransaction replacementTransaction;
+  private final PersistentFileStateManager persistentFiles;
 
   public InstanceDirectoryPreparer(Path instancesRoot) {
     this(instancesRoot, instancesRoot);
@@ -196,6 +198,7 @@ public final class InstanceDirectoryPreparer {
         new PreparedStorageLifecycle(overlayLayers, btrfsSnapshots, snapshotHooks);
     this.replacementTransaction =
         new PersistentInstanceTransaction(this.instancesRoot, storageLifecycle);
+    this.persistentFiles = new PersistentFileStateManager(this.instancesRoot, contentRoot);
   }
 
   private static int productionCopyParallelism() {
@@ -257,6 +260,17 @@ public final class InstanceDirectoryPreparer {
       List<BlueprintCopy> copies,
       BooleanSupplier cancellationRequested)
       throws InstancePreparationException {
+    return prepare(instanceId, sourceDirectory, volumes, copies, List.of(), cancellationRequested);
+  }
+
+  public Path prepare(
+      String instanceId,
+      Path sourceDirectory,
+      List<BlueprintVolume> volumes,
+      List<BlueprintCopy> copies,
+      List<BlueprintPersistentFile> persistentFileMappings,
+      BooleanSupplier cancellationRequested)
+      throws InstancePreparationException {
     Path destination = destination(instanceId);
     Path source = sourceDirectory.toAbsolutePath().normalize();
     java.util.Objects.requireNonNull(cancellationRequested, "cancellationRequested");
@@ -280,6 +294,8 @@ public final class InstanceDirectoryPreparer {
       copyEngine.copyDirectory(source, destination, cancellationRequested);
       volumeApplicator.apply(destination, resolvedVolumes, cancellationRequested);
       applyCopies(resolvedCopies, cancellationRequested);
+      persistentFiles.prepare(
+          instanceId, destination, persistentFileMappings, cancellationRequested);
       checkCancelled(cancellationRequested);
       return destination;
     } catch (IOException | InstancePreparationException exception) {
@@ -288,6 +304,7 @@ public final class InstanceDirectoryPreparer {
       } catch (IOException cleanupException) {
         exception.addSuppressed(cleanupException);
       }
+      persistentFiles.release(instanceId);
       throw new InstancePreparationException(
           "Unable to prepare instance directory " + destination + ": " + exception.getMessage(),
           exception);
@@ -298,6 +315,7 @@ public final class InstanceDirectoryPreparer {
     Path destination = destination(instanceId);
     try {
       storageLifecycle.delete(destination);
+      persistentFiles.release(instanceId);
     } catch (IOException exception) {
       throw new InstancePreparationException(
           "Unable to delete instance directory " + destination, exception);
@@ -310,16 +328,44 @@ public final class InstanceDirectoryPreparer {
       throw new InstancePreparationException(
           "Persistent instance directory does not exist: " + destination);
     }
-    return replacementTransaction.delete(instanceId, destination);
+    boolean cleaned = replacementTransaction.delete(instanceId, destination);
+    persistentFiles.release(instanceId);
+    return cleaned;
   }
 
   public void resume(String instanceId) throws InstancePreparationException {
     Path destination = destination(instanceId);
+    boolean resumed = false;
     try {
       storageLifecycle.resume(destination);
-    } catch (IOException | RuntimeException exception) {
+      resumed = true;
+      persistentFiles.resume(instanceId, destination);
+    } catch (IOException | InstancePreparationException | RuntimeException exception) {
+      if (resumed) {
+        try {
+          storageLifecycle.suspend(destination);
+        } catch (IOException cleanupException) {
+          exception.addSuppressed(cleanupException);
+        }
+      }
       throw new InstancePreparationException(
           "Unable to resume instance storage " + destination, exception);
+    }
+  }
+
+  public void publishPersistentFiles(String instanceId) throws InstancePreparationException {
+    publishPersistentFiles(instanceId, false);
+  }
+
+  public void publishPersistentFiles(String instanceId, boolean manifestRequired)
+      throws InstancePreparationException {
+    Path destination = destination(instanceId);
+    try {
+      persistentFiles.publish(instanceId, destination, manifestRequired);
+    } catch (IOException | RuntimeException exception) {
+      throw new InstancePreparationException(
+          "Unable to publish persistent files for " + destination + ": " + exception.getMessage(),
+          exception);
     }
   }
 
@@ -354,6 +400,17 @@ public final class InstanceDirectoryPreparer {
       List<BlueprintCopy> copies,
       DirectoryInitializer initializer)
       throws InstancePreparationException {
+    replace(instanceId, sourceDirectory, volumes, copies, List.of(), initializer);
+  }
+
+  public void replace(
+      String instanceId,
+      Path sourceDirectory,
+      List<BlueprintVolume> volumes,
+      List<BlueprintCopy> copies,
+      List<BlueprintPersistentFile> persistentFileMappings,
+      DirectoryInitializer initializer)
+      throws InstancePreparationException {
     Path destination = destination(instanceId);
     Path source = sourceDirectory.toAbsolutePath().normalize();
     if (!Files.isDirectory(source)) {
@@ -368,17 +425,26 @@ public final class InstanceDirectoryPreparer {
           "Software base and persistent instance directories must not overlap");
     }
 
-    replacementTransaction.replace(
-        instanceId,
-        destination,
-        staging -> {
-          List<ResolvedVolume> resolvedVolumes = contentResolver.resolveVolumes(volumes, staging);
-          List<ResolvedCopy> resolvedCopies = contentResolver.resolveCopies(copies, staging);
-          copyEngine.copyDirectory(source, staging, () -> false);
-          volumeApplicator.apply(staging, resolvedVolumes, () -> false);
-          applyCopies(resolvedCopies, () -> false);
-        },
-        directory -> initializer.initialize(directory));
+    boolean committed = false;
+    try {
+      replacementTransaction.replace(
+          instanceId,
+          destination,
+          staging -> {
+            List<ResolvedVolume> resolvedVolumes = contentResolver.resolveVolumes(volumes, staging);
+            List<ResolvedCopy> resolvedCopies = contentResolver.resolveCopies(copies, staging);
+            copyEngine.copyDirectory(source, staging, () -> false);
+            volumeApplicator.apply(staging, resolvedVolumes, () -> false);
+            applyCopies(resolvedCopies, () -> false);
+            persistentFiles.prepare(instanceId, staging, persistentFileMappings, () -> false);
+          },
+          directory -> initializer.initialize(directory));
+      committed = true;
+    } finally {
+      if (!committed) {
+        persistentFiles.release(instanceId);
+      }
+    }
   }
 
   public int recoverInterruptedReplacements(DirectoryCommitVerifier verifier) throws IOException {

@@ -18,7 +18,8 @@ plugins/sls-lite/
 |   `-- adventures/
 |-- volumes/
 |   |-- worlds/
-|   `-- plugins/
+|   |-- plugins/
+|   `-- whitelists/
 |-- software/
 |-- software-profiles/
 |-- runtimes/
@@ -53,7 +54,9 @@ directories such as `volumes/plugins/minigames/`; a `state.copy` directory
 entry targeting `plugins/` installs the complete group into that instance.
 Other shared assets may also be organized below `volumes/`; any contained
 non-instance source path is valid. SLS-LITE creates `volumes/worlds/` and
-`volumes/plugins/` empty on startup and never treats their contents as
+`volumes/plugins/` empty on startup. It also creates `volumes/whitelists/` as
+an obvious home for canonical `state.persistent_files` such as
+`whitelist.json`. SLS-LITE never treats their contents as
 generated data. The operator-facing `software/` and `runtimes/` roots are also
 created empty so manual installations and Java runtimes have an obvious home.
 
@@ -71,7 +74,7 @@ administrators, and any persistent instances.
 
 Persistent instance metadata schema 3 records the exact software ID and version
 plus a fingerprint of the software profile, config patches, annotations,
-volumes, copy declarations, environment names and values, and persistence
+volumes, copy declarations, persistent-file mappings, environment names and values, and persistence
 policy used to prepare the directory. SLS-LITE refuses a normal restart when
 that definition has changed, because reusing old files would silently mix
 definitions. Use `/sls reset <instance>` after reviewing the change to rebuild

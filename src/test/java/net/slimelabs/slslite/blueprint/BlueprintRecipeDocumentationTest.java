@@ -21,6 +21,7 @@ final class BlueprintRecipeDocumentationTest {
   private static final Set<String> EXPECTED_RECIPES =
       Set.of(
           "disposable_world",
+          "persistent_whitelist",
           "persistent_smp",
           "one_plugin",
           "plugin_bundle",

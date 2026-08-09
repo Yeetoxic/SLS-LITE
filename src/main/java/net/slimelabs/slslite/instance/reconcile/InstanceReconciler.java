@@ -132,6 +132,7 @@ public final class InstanceReconciler {
     }
     if (metadata.persistent()) {
       try {
+        directoryPreparer.publishPersistentFiles(metadata.instanceId());
         directoryPreparer.suspend(metadata.instanceId());
         metadataStore.write(directory, metadata.withoutProcess(InstanceState.STOPPED));
         report.preservedPersistent++;
@@ -160,6 +161,7 @@ public final class InstanceReconciler {
     }
 
     try {
+      directoryPreparer.publishPersistentFiles(metadata.instanceId());
       directoryPreparer.delete(metadata.instanceId());
       report.removedEphemeral++;
       detailLog.normal(

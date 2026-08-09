@@ -745,12 +745,15 @@ public final class InstanceManager implements ServerController {
           diagnosticFailure);
     }
     timings.finish(InstancePhaseTimings.Phase.SHUTDOWN);
-    cleanup(instance);
-    crashRecovery.exited(instance, unexpected);
-    if (failure == null) {
+    InstancePreparationException cleanupFailure = cleanup(instance);
+    if (failure != null && cleanupFailure != null) {
+      failure.addSuppressed(cleanupFailure);
+    }
+    crashRecovery.exited(instance, unexpected && cleanupFailure == null);
+    if (failure == null && cleanupFailure == null) {
       instance.stoppedFuture().complete(exitCode);
     } else {
-      instance.stoppedFuture().completeExceptionally(failure);
+      instance.stoppedFuture().completeExceptionally(failure == null ? cleanupFailure : failure);
     }
   }
 
@@ -840,7 +843,10 @@ public final class InstanceManager implements ServerController {
       process.forceStop();
       return;
     }
-    cleanup(instance);
+    InstancePreparationException cleanupFailure = cleanup(instance);
+    if (cleanupFailure != null) {
+      exception.addSuppressed(cleanupFailure);
+    }
     crashRecovery.exited(instance, true);
   }
 
@@ -851,18 +857,23 @@ public final class InstanceManager implements ServerController {
     instance.timings().finish(InstancePhaseTimings.Phase.SHUTDOWN);
     timingReporter.logProvisioning(
         instance.correlationId(), instance.id(), instance.timings(), "cancelled");
-    cleanup(instance);
-    instance.stoppedFuture().complete(0);
+    InstancePreparationException cleanupFailure = cleanup(instance);
+    if (cleanupFailure == null) {
+      instance.stoppedFuture().complete(0);
+    } else {
+      instance.stoppedFuture().completeExceptionally(cleanupFailure);
+    }
     logger.info("Cancelled instance startup for {}", instance.id());
   }
 
-  private void cleanup(ManagedInstance instance) {
+  private InstancePreparationException cleanup(ManagedInstance instance) {
     synchronized (instance) {
       synchronized (this) {
         if (instances.get(instance.id()) != instance) {
-          return;
+          return null;
         }
       }
+      InstancePreparationException persistentFileFailure = null;
       InstancePhaseTimings timings = instance.timings();
       timings.begin(InstancePhaseTimings.Phase.CLEANUP);
       unregister(instance);
@@ -878,6 +889,23 @@ public final class InstanceManager implements ServerController {
       portAllocator.release(instance.port());
       resourceBudget.release(instance.id());
       try {
+        directoryPreparer.publishPersistentFiles(
+            instance.id(), !instance.blueprint().persistentFiles().isEmpty());
+      } catch (InstancePreparationException exception) {
+        persistentFileFailure = exception;
+        logger.error(
+            "Unable to publish persistent files for {} during cleanup: {}",
+            instance.id(),
+            safeRootMessage(exception));
+        detailLog.normal(
+            instance.correlationId(),
+            "failure",
+            "phase={} instance={} operation=persistent-file-publication failure={}",
+            FailurePhase.CLEANUP.id(),
+            instance.id(),
+            safeRootMessage(exception));
+      }
+      try {
         directoryPreparer.suspend(instance.id());
       } catch (InstancePreparationException exception) {
         logger.error(
@@ -892,7 +920,7 @@ public final class InstanceManager implements ServerController {
             instance.id(),
             safeRootMessage(exception));
       }
-      if (!instance.blueprint().save()) {
+      if (!instance.blueprint().save() && persistentFileFailure == null) {
         try {
           directoryPreparer.delete(instance.id());
         } catch (InstancePreparationException exception) {
@@ -910,6 +938,11 @@ public final class InstanceManager implements ServerController {
         }
       } else {
         metadata.writeBestEffort(instance, instance.state(), null);
+        if (!instance.blueprint().save() && persistentFileFailure != null) {
+          logger.warn(
+              "Preserving ephemeral instance {} because persistent file publication failed",
+              instance.id());
+        }
       }
       if (!instance.readyFuture().isDone()) {
         instance
@@ -925,6 +958,7 @@ public final class InstanceManager implements ServerController {
           instance.correlationId(), instance.id(), instance.timings(), instance.state().name());
       timingReporter.logTermination(
           instance.correlationId(), instance.id(), instance.timings(), instance.state().name());
+      return persistentFileFailure;
     }
   }
 

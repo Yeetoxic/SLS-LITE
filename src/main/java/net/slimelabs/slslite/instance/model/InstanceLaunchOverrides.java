@@ -83,6 +83,7 @@ public record InstanceLaunchOverrides(
         blueprint.annotations(),
         blueprint.volumes(),
         blueprint.copies(),
+        blueprint.persistentFiles(),
         blueprint.environment(),
         memoryLimitMiB == null && blueprint.inheritsSoftwareMemory(),
         blueprint.inheritsSoftwareImage());

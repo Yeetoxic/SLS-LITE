@@ -856,17 +856,17 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       `config.yml`. Continue applying safe code defaults for omitted optional
       keys (including `software.auto_accept_eula: false`), and fail with an exact
       migration instruction rather than guessing whenever a future change has
-      no safe default. Ship each changed canonical configuration as a bounded,
-      versioned, plugin-owned reference file without copying secrets, and report
-      the old/current versions, newly available keys, effective defaults, and
-      reference path once in the compact startup checklist. Allow operators to
-      merge and acknowledge the new version deliberately. For renamed fields,
+      no safe default. Keep the complete canonical configuration in the versioned
+      documentation rather than generating duplicate reference files in an
+      operator installation, and report the old/current versions, newly available
+      keys, effective defaults, and canonical documentation link once in the
+      compact startup checklist. Allow operators to merge and acknowledge the new
+      version deliberately. For renamed fields,
       provide a documented bounded compatibility alias when safe and reject
       configurations containing conflicting old and new forms. Test untouched
       `rc.1` upgrades, customized comments/order, missing and current versions,
-      malformed/future versions, reference-file collision and symlink handling,
-      atomic reference installation, deprecated aliases, conflicts, and fresh
-      `rc.2` generation.
+      malformed/future versions, preservation of similarly named operator and
+      extension files, deprecated aliases, conflicts, and fresh `rc.2` generation.
 - [x] Complete and verify vSLS-compatible administrator force joining. Preserve
       `/sls join player <player> --force` as a direct join to that player's exact
       managed instance, require administrator join access, and make the feedback
@@ -1093,6 +1093,27 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
       reconciliation, backup-boundary, documentation, API-compatibility, clean
       installation, upgrade, distribution-smoke, and real-client checks for the
       replacement candidate.
+  - [x] Audit full SLS v0.2.0 and confirm its volume preparation requires
+        directory sources; introduce additive `state.persistent_files` rather
+        than silently changing existing `state.volumes` or `state.copy`
+        semantics.
+  - [x] Implement confined `volumes/` sources, ordinary private instance files,
+        single-writer ownership, bounded import, atomic write-back, canonical
+        backups, unresolved-conflict preservation, definition identity,
+        restart refresh, reset/delete blocking, and persistent plus ephemeral
+        crash reconciliation without symlinks or privileged mounts.
+  - [x] Exercise a disposable real Paper 1.18.2 instance through the normal
+        WSL2 Docker/Pterodactyl/Velocity fixture: mutate whitelist, operator,
+        player-ban, and IP-ban files through Paper commands; verify atomic
+        write-back and backups; restart and reset from externally edited
+        canonical state; then stop and delete through SLS-LITE. Confirm the
+        restricted host requires neither mounts nor additional privileges.
+  - [ ] Complete deliberate interrupted-publication fault injection, the
+        remaining native Windows and Linux portability coverage, clean-install,
+        upgrade, distribution-smoke, and real-client verification before
+        marking the feature stable. Treat the fixture's Paper 1.18.2 world-save
+        overrun of the existing 30-second stop deadline as separate shutdown-
+        budget follow-up; publication still completed and reported no error.
 - [ ] Rehearse the complete `v0.1.0-rc.1` to `v0.1.0-rc.2` operator upgrade on a
       disposable copy of a realistic installation containing a customized
       unversioned config, blueprints, software definitions, volume data, logs,
@@ -1119,6 +1140,11 @@ Planned extension-integration follow-up after RC.2 is published. Keep this scope
 closed until then except for release blockers explicitly moved here; preserve the
 RC.2 API and add capabilities rather than exposing core implementation classes.
 
+- [ ] Add an immutable API 1.3 inspection view for core persistent-file
+      mappings without changing the accepted API 1.2 `BlueprintView` record
+      descriptor. Expose names and contained source/target declarations only,
+      never live filesystem paths, manifests, ownership maps, or write-back
+      primitives; retain binary consumer checks for API 1.0-1.2.
 - [ ] Add safe extension-owned pre-start preparation actions. Run them only in a
       confined staging transaction before publication, with namespaced
       registration, deterministic ordering, bounded concurrency/time/output,

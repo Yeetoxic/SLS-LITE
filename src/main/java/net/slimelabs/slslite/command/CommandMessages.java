@@ -213,6 +213,10 @@ public final class CommandMessages {
                     NamedTextColor.DARK_PURPLE));
       }
     }
+    tooltip
+        .appendNewline()
+        .append(
+            labelValue("Persistent files:", Integer.toString(blueprint.persistentFiles().size())));
     if (blueprint.copies().isEmpty()) {
       tooltip.appendNewline().append(labelValue("Copies:", "none"));
     } else {
