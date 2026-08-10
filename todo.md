@@ -1177,9 +1177,9 @@ move into a new release-candidate subsection.
 
 #### v0.1.0-rc.3
 
-Planned extension-integration follow-up after RC.2 is published. Keep this scope
-closed until then except for release blockers explicitly moved here; preserve the
-RC.2 API and add capabilities rather than exposing core implementation classes.
+Active post-RC.2 extension-integration follow-up. Preserve RC.2 as an immutable
+published baseline, retain its API compatibility, and add capabilities rather
+than exposing core implementation classes.
 
 - [ ] Add an immutable API 1.3 inspection view for core persistent-file
       mappings without changing the accepted API 1.2 `BlueprintView` record
@@ -1199,6 +1199,15 @@ RC.2 API and add capabilities rather than exposing core implementation classes.
       truncation, redaction, disconnect/shutdown cleanup, command length/rate
       limits, and audit records. Never expose process handles, raw streams, or an
       unbounded logging callback.
+- [ ] Remove the legacy `/sls console <server|this> --follow|--unfollow`
+      compatibility aliases. Keep `/sls console <server|this> <command...>`
+      exclusively for bounded managed-server console input, and keep retained
+      plus live output exclusively under `/sls logs`, using
+      `/sls logs <server|this> --follow` and targetless
+      `/sls logs --unfollow`. Remove the aliases from parsing, completion,
+      command contracts, help, tests, and documentation; return concise
+      corrective usage when an old form is attempted rather than interpreting
+      the modifier as a child-server command.
 - [ ] Add composable matchmaking and admission-policy hooks with immutable
       request snapshots and typed allow, reject, rank, and reservation results.
       Define deterministic precedence and conflict behavior; bound execution;
