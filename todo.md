@@ -44,6 +44,10 @@ Project-wide invariants:
   invariants.
 - Keep ViaVersion, ViaBackwards, ViaRewind, PacketEvents, and permission plugins
   optional unless a retained feature has a proven hard requirement.
+- Treat every published version as immutable. Never replace its artifacts,
+  checksums, tag, source, release notes, or release-specific documentation;
+  corrections and behavioral changes require a new version whose notes explain
+  the earlier issue and the upgrade path.
 
 ## Stage 1: Surface Level — Complete
 
@@ -832,7 +836,7 @@ to a new `v0.1.0-rc.3` subsection or an existing named post-release milestone.
 - [x] Triage external findings received since `v0.1.0-rc.1` as blocking for
       `rc.2`, scheduled for a later candidate or post-release milestone, or
       rejected with a recorded rationale.
-- [ ] Preserve published `v0.1.0-rc.1` as the immutable first-candidate
+- [x] Preserve published `v0.1.0-rc.1` as the immutable first-candidate
       baseline. Implement the accepted tester feedback below for
       `v0.1.0-rc.2`, update versioned artifacts and release notes only after the
       batch passes its required regression and clean-install checks, and publish
@@ -1181,11 +1185,92 @@ Active post-RC.2 extension-integration follow-up. Preserve RC.2 as an immutable
 published baseline, retain its API compatibility, and add capabilities rather
 than exposing core implementation classes.
 
-- [ ] Add an immutable API 1.3 inspection view for core persistent-file
-      mappings without changing the accepted API 1.2 `BlueprintView` record
-      descriptor. Expose names and contained source/target declarations only,
-      never live filesystem paths, manifests, ownership maps, or write-back
-      primitives; retain binary consumer checks for API 1.0-1.2.
+- [ ] Eliminate unreachable instance directories left by failed or cancelled
+      starts. Audit every boundary between directory publication, metadata
+      creation, configuration, process launch, readiness, registration, and
+      cleanup. A failed ephemeral deletion must remain durably tracked for
+      retry/reconciliation instead of disappearing from the active registry;
+      startup reconciliation must distinguish provably SLS-LITE-owned
+      incomplete directories from unknown operator data and remove only the
+      former. Define failed-before-ready behavior for `save: true` so the
+      retained instance is either restartable/deletable through normal commands
+      or transactionally rolled back, never an inert folder. Surface deferred
+      cleanup with the instance/correlation ID and an actionable cause. Inject
+      failures at each phase and verify eventual cleanup or intentional reuse
+      across every storage strategy, proxy restart, Windows, and the restricted
+      WSL2 Docker/Pterodactyl fixture.
+- [ ] Remove redundant host configuration that duplicates authoritative
+      Velocity or runtime state. Begin by deleting `forwarding.online_mode` and
+      derive it from the stable public `ProxyConfig` API for validation, Paper,
+      SLS-Limbo, diagnostics, and reload behavior. Audit the remaining host
+      fields against supported Velocity APIs and existing runtime discovery;
+      inherit values such as configured routing or advertised capacity only
+      where Velocity is genuinely authoritative, while retaining real
+      SLS-LITE operator policy and forwarding values the public API does not
+      expose. Do not parse `velocity.toml`, reflect into implementation classes,
+      reveal secret contents, or turn discovered state back into another
+      editable duplicate. Give removed RC fields actionable migration errors or
+      notices, update the config generation and copyable reference, and test
+      clean install, upgrade, reload, API absence/version compatibility, and
+      managed Paper plus SLS-Limbo forwarding.
+- [ ] Replace the release/commit-pinned SLS `v0.2.0` compatibility contract with
+      ongoing compatibility against the current SLS `main` branch. Remove exact
+      upstream release and commit constants, assertions, current-document names,
+      and operator-facing claims; those pins established SLS-LITE's initial
+      baseline but no longer define the product. Periodically compare relevant
+      blueprint, software, command, S4J, vSLS, Protocube, and daemon behavior on
+      `main`, and change SLS-LITE only when an upstream change materially affects
+      the shared contract or offers a useful compatible improvement--do not
+      mirror unrelated implementation churn. Keep ordinary builds deterministic
+      with reviewed repository-owned fixtures rather than downloading a moving
+      branch, while a bounded scheduled/manual drift audit checks live `main`
+      and reports actionable differences for review. Refresh fixtures and the
+      branch-based compatibility matrices only after that review, document
+      intentional divergences, and retain old commit-specific release evidence
+      solely as historical records rather than an active compatibility promise.
+- [ ] Remove command branches retained only to imitate unavailable full-SLS
+      operations. Audit the complete parser and contract, then remove `/sls
+      node`, `/sls pause`, `/sls resume`, daemon/container-only `create`
+      modifiers, `status ... remote`, the unsupported `reload config` selector,
+      and any other branch whose sole behavior is a compatibility rejection.
+      Delete their handlers, permissions, suggestions, help, command-contract
+      entries, documentation, and tests rather than advertising controls this
+      runtime cannot perform; unknown legacy input should receive the ordinary
+      concise SLS-LITE usage response. Preserve locally supported/adapted
+      operations and commands whose availability depends on a configured
+      service, and keep full-SLS differences in the compatibility documentation
+      rather than the executable command tree. Verify console/player parsing,
+      granular permissions, completions, help, documentation contracts, and the
+      deployed Velocity command surface after removal.
+- [ ] Coordinate and implement one portable SLS/SLS-LITE blueprint-schema
+      overhaul. Agree the contract with Protoxon before freezing either side,
+      while allowing clear, documented breaking migrations from SLS-LITE's
+      experimental RC syntax. Add shared `state.files` with `private` and
+      single-owner `persistent` behavior; retain `state.copy` for one-way
+      assembly and `state.volumes` for directories; reject declarations that
+      ambiguously claim the same source or target. Give persistent writable
+      files and `rw` directories an explicit ownership policy: exclusive is the
+      safe new-schema choice and concurrent shared writing is an expert opt-in,
+      while published legacy behavior receives an intentional migration path.
+      Compare canonical sources across blueprints, acquire ownership before
+      assembly/start, release it only after write-back or unmount, preserve
+      conflicts, and recover stale ownership after crashes. Full SLS must decide
+      durable Protocube/node leases and fencing for allocation races, node loss,
+      stale processes, recovery, and operator override; SLS-LITE must enforce
+      the same declared semantics locally. Also standardize the location and
+      meaning of `max_players` and `max_instances`, a portable blueprint-ID
+      grammar, and sources relative to one logical managed-storage root so the
+      same blueprint works in both products. Replace RC.2
+      `state.persistent_files` and other superseded LITE forms with actionable
+      migration errors rather than permanent aliases unless compatibility
+      requires one. Update the public API through an additive immutable view
+      without changing the accepted API 1.2 `BlueprintView` descriptor or
+      exposing filesystem paths, manifests, leases, or write-back primitives;
+      retain binary consumer checks for API 1.0-1.2. Publish shared examples and
+      run the same attributed blueprint corpus in both projects' CI to prevent
+      later drift. If coordination cannot complete for RC.3, move this entire
+      unit to one named post-release schema milestone rather than splitting or
+      silently dropping it.
 - [ ] Add safe extension-owned pre-start preparation actions. Run them only in a
       confined staging transaction before publication, with namespaced
       registration, deterministic ordering, bounded concurrency/time/output,

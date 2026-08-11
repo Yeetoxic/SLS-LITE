@@ -20,6 +20,17 @@ Candidate and stable modes require `release_tag` to equal the exact
 GitHub environments before enabling publication. A rerun receives the same
 requested mode but is rejected if its tag or release already exists.
 
+## Published Versions Are Immutable
+
+Publication freezes the complete version: artifacts, checksums, tag, source,
+GitHub release notes, and release-specific documentation. Do not replace an
+artifact, retarget or recreate its tag, rewrite its notes, or otherwise make the
+same version mean something different later. If code, packaging, documentation,
+or release-note information needs correction, publish a new version and explain
+the correction and upgrade path in that new version's notes. Repository `DOCS/`
+and the Wiki may continue to describe the latest supported release, but must not
+rewrite the historical contents or claims attached to an earlier release.
+
 ## Before Running A Candidate
 
 1. Set the candidate version consistently in the POM, `BuildInfo`, Velocity
