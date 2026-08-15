@@ -25,7 +25,7 @@ dependencies {
     }
     compileOnly("com.velocitypowered:velocity-api:4.1.0-20260719.140524-3")
     compileOnly("com.google.inject:guice:7.0.0")
-    compileOnly("org.slf4j:slf4j-api:2.0.17")
+    compileOnly("org.slf4j:slf4j-api:2.0.18")
 }
 
 // The pinned Velocity 4 snapshot publishes Java 25 Gradle metadata. Compile on the same JDK as
