@@ -139,7 +139,7 @@ final class DocumentationNavigationTest {
             .matcher(Files.readString(PROJECT.resolve("pom.xml")));
     assertTrue(versionMatcher.find(), "Project version is missing from pom.xml");
     String version = versionMatcher.group(1);
-    assertEquals("0.1.0-rc.2", version, "Unexpected release-candidate version");
+    assertEquals("0.1.0-rc.2.1", version, "Unexpected release-candidate version");
 
     assertContains(
         "src/main/java/net/slimelabs/slslite/BuildInfo.java",

@@ -16,7 +16,7 @@ through Velocity.
 
 | Component | Version |
 | --- | --- |
-| SLS-LITE | `0.1.0-rc.2` |
+| SLS-LITE | `0.1.0-rc.2.1` |
 | Velocity | `4.0.0` build `6` |
 | Java | Temurin `25.0.3` |
 | NanoLimbo runtime | `1.13.0` at `d192d57d` |

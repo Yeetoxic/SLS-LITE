@@ -7,7 +7,7 @@ plugins {
 group = "net.slimelabs.examples"
 version = "1.0.0-SNAPSHOT"
 
-val slsLiteVersion = providers.gradleProperty("slsLiteVersion").orElse("0.1.0-rc.2")
+val slsLiteVersion = providers.gradleProperty("slsLiteVersion").orElse("0.1.0-rc.2.1")
 val slsLiteApiJar = providers.gradleProperty("slsLiteApiJar")
 
 repositories {

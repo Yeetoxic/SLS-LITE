@@ -1,79 +1,61 @@
-# SLS-LITE 0.1.0-rc.2
+# SLS-LITE 0.1.0-rc.2.1
 
-This second release candidate turns the first external-testing feedback into a
-safer, clearer operator experience. It remains intended for controlled
-single-host Velocity networks while the release-candidate testing period
-continues.
+This temporary hotfix candidate addresses release-blocking lifecycle and
+diagnostic problems reported against RC.2. It is intentionally narrow; the
+planned RC.3 feature work remains deferred.
 
-## Highlights Since RC.1
+## Fixes
 
-- Non-destructive configuration generation 2 diagnostics. Existing
-  `config.yml` files remain operator-owned and are never rewritten; omitted new
-  options receive safe defaults and the startup checklist points to the exact
-  current reference.
-- Optional host-wide `software.auto_accept_eula`, disabled by default, alongside
-  the existing per-software-profile EULA choice.
-- A focused first-run checklist, production and isolated-development forwarding
-  walkthroughs, blueprint readiness diagnostics, a copyable canonical config,
-  and a visual blueprint recipe book.
-- Bounded `state.persistent_files` mappings for root files such as Paper
-  whitelist, operator, ban, and icon files. They use single-writer ownership,
-  atomic write-back, backups, conflict detection, and crash reconciliation
-  without privileged mounts or symbolic links.
-- Discoverable live output through `/sls logs <server|this> --follow` and
-  `/sls logs --unfollow`, with bounded delivery and compatibility aliases for
-  the older console forms.
-- vSLS-compatible administrator force joining with backend-safe capacity
-  headroom, plus live managed-instance memory, CPU, player, and lifecycle
-  metrics in the `/sls debug` action bar.
-- Correct modern forwarding across old and current Paper configuration layouts,
-  authoritative generated SLS-Limbo settings, and protected fallback/automatic
-  lobby return during owned lobby outages.
-- Player-visible preparation phases for slow installs and starts, plus clearer
-  restart-versus-reset guidance when definitions change.
-- Additive Java extension API 1.2 with readiness and diagnostic contributions,
-  graceful administrative operations, maintenance controls, and exact-instance
-  routing. API 1.0 and 1.1 consumer compatibility remains covered.
-- Clean Paper installations now use a 60-second graceful shutdown allowance.
-  Existing generated software profiles remain operator-owned and are not
-  silently changed.
+- Saved instances are no longer silently replaced with newly generated IDs.
+  Start and creation paths identify an existing retained instance and require
+  an explicit restart, reset, or deletion instead of leaving duplicate storage.
+- Matchmaking and the managed lobby resume their single retained persistent
+  instance after a full proxy restart. If legacy storage contains multiple
+  retained copies for one blueprint, startup refuses to choose arbitrarily.
+- Startup reconciliation quarantines ambiguous persistent copies without
+  publishing any copy's managed files. It names the conflicting instance IDs so
+  an operator can preserve the wanted copy and remove the others safely.
+- Reset and replacement cleanup retain the exact persistent instance identity,
+  preserve unresolved file-conflict candidates, and avoid accumulating stale
+  directories after interrupted or failed lifecycle operations.
+- Malformed blueprints now appear in the normal `action needed` workflow at
+  startup and after reload. `/sls blueprint <rejected-path>` exposes the exact
+  parser or validation failure, including suggestions for recognizable typos
+  such as `state.volunes` instead of `state.volumes`.
+- `/sls console` is exclusively managed-server console input. Live output is
+  available only through `/sls logs <server|this> --follow` and targetless
+  `/sls logs --unfollow`.
 
-## Compatibility Baseline
+## Compatibility and Documentation
 
-- Java 21 plugin bytecode on the tested Java 25 Velocity runtime.
-- Exact Velocity 4.1.0 API snapshot pinned in `pom.xml`; the exercised local
-  proxy runtime is recorded in `DOCS/Compatibility.md`.
-- Stable Minecraft/Paper through 26.2 where the documented provider, Java,
-  plugin, forwarding, and real-client requirements are satisfied.
-- With compatible ViaVersion installed, Minecraft 26.2 is the forward-client
-  minimum rather than a maximum. Newer clients are allowed when that installed
-  ViaVersion build reports support for them; this does not qualify their worlds,
-  plugins, or gameplay behavior.
-- NanoLimbo 1.13.0 at revision
-  `d192d57d1d4a5fdc7b87643f453d82cb7b9b4242` for SLS-Limbo.
+- The full-SLS compatibility baseline now follows the upstream `main` branch
+  instead of a pinned release or commit. Documentation avoids repeating
+  upstream version identifiers that become stale between audits.
+- The SLS-LITE Java API remains compatible with the RC.2 API contracts. This
+  hotfix does not introduce a new extension API surface or configuration
+  generation.
+- Java 21 plugin bytecode remains supported on the tested Java 25 Velocity
+  runtime. Existing RC.2 host, storage, forwarding, and protocol boundaries are
+  unchanged.
 
-Minecraft 26.3 is still an upstream snapshot line and is not release-qualified.
-Snapshots may be tested only with a compatible ViaVersion build and disposable
-data.
+## Upgrade From RC.2
 
-## Upgrade From RC.1
+1. Stop Velocity normally and confirm its managed child processes have exited.
+2. Back up the complete `plugins/sls-lite/` directory and installed RC.2 plugin
+   JAR as one matching restore set.
+3. Replace only the plugin JAR with `0.1.0-rc.2.1`; do not use a plugin
+   hot-reloader. No configuration rewrite is required.
+4. Start Velocity and review the startup checklist, `/sls system`, blueprint
+   `action needed` entries, and the detailed log.
+5. If more than one saved instance is reported for a persistent blueprint,
+   preserve a backup and delete only the unwanted copies before starting that
+   blueprint. SLS-LITE deliberately will not select one on your behalf.
+6. Exercise a representative saved server through start or matchmaking,
+   restart, reset where appropriate, and a full proxy restart.
 
-1. Stop Velocity normally and confirm managed children have exited.
-2. Back up the complete `plugins/sls-lite/` directory and the installed RC.1
-   plugin JAR as one matching restore set.
-3. Read [Migration](DOCS/Migration.md), replace only the plugin JAR, and start
-   Velocity normally. Do not use a plugin hot-reloader.
-4. Review the compact setup/migration diagnostics, `/sls system`, and the detail
-   log. An unversioned RC.1 configuration is treated as generation 1; SLS-LITE
-   does not rewrite it or create a duplicate reference file.
-5. Compare operator-owned configuration and software profiles with the current
-   documented defaults, then deliberately add or acknowledge wanted changes.
-6. Run a representative start, join, restart, and stop. Adding or changing
-   `state.persistent_files` on an existing persistent instance requires an
-   explicit reset; ordinary restart correctly rejects definition drift.
-
-If RC.2-only state has been used, do not attempt an in-place downgrade. Stop the
-proxy and restore the complete matching RC.1 data-directory and JAR backup.
+If RC.2 persistent-file state has been used, do not attempt an in-place
+downgrade. Stop the proxy and restore the matching data-directory and JAR backup
+instead.
 
 ## Known Boundaries
 
@@ -82,15 +64,13 @@ proxy and restore the complete matching RC.1 data-directory and JAR backup.
 - Host permissions determine which storage strategies and child-process
   features are available. Portable copy remains the universal fallback unless
   the operator excludes it.
-- Vanilla backends cannot use modern Velocity forwarding.
-- Server software or ViaVersion protocol availability does not guarantee
-  compatibility of arbitrary worlds, plugins, Java versions, or game behavior.
-- Existing configuration, software profiles, blueprints, and volume sources are
-  operator-owned. Release upgrades report required changes instead of silently
-  normalizing custom or extension-owned fields.
+- Existing configuration, software profiles, blueprints, volume sources, and
+  saved instances remain operator-owned. The hotfix reports ambiguous state
+  instead of deleting or merging it automatically.
 
 Use the current [installation guide](DOCS/Getting_Started.md),
-[migration guide](DOCS/Migration.md), [compatibility matrix](DOCS/Compatibility.md),
-and [troubleshooting guide](DOCS/Troubleshooting.md). Report candidate issues
-with the SLS-LITE version, host capability summary, relevant detailed-log
-excerpt, and a minimal redacted configuration or blueprint.
+[migration guide](DOCS/Migration.md),
+[compatibility matrix](DOCS/Compatibility.md), and
+[troubleshooting guide](DOCS/Troubleshooting.md). Report candidate issues with
+the SLS-LITE version, host capability summary, relevant detailed-log excerpt,
+and a minimal redacted configuration or blueprint.

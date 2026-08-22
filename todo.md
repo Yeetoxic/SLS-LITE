@@ -1197,9 +1197,11 @@ RC.2 as an immutable baseline and defer the planned RC.3 feature scope below.
       reload, list rejected paths as `action needed`, and expose the exact
       parser/validation error through `/sls blueprint <rejected-path>`. Cover
       the reported `state.volunes` typo and its `state.volumes` suggestion.
-- [ ] Set the hotfix version consistently, update the release workflow to accept
+- [x] Set the hotfix version consistently, update the release workflow to accept
       the SemVer-ordered `x.y.z-rc.N.H` form, publish focused release and upgrade
-      notes, and complete the required regression and distribution gates.
+      notes, and pass the complete local Maven regression suite.
+- [ ] Complete the GitHub Actions distribution gates and manual release
+      verification for `v0.1.0-rc.2.1`.
 
 #### v0.1.0-rc.3
 
