@@ -1200,7 +1200,7 @@ RC.2 as an immutable baseline and defer the planned RC.3 feature scope below.
 - [x] Set the hotfix version consistently, update the release workflow to accept
       the SemVer-ordered `x.y.z-rc.N.H` form, publish focused release and upgrade
       notes, and pass the complete local Maven regression suite.
-- [ ] Complete the GitHub Actions distribution gates and manual release
+- [x] Complete the GitHub Actions distribution gates and manual release
       verification for `v0.1.0-rc.2.1`.
 
 #### v0.1.0-rc.3
@@ -1266,6 +1266,15 @@ than exposing core implementation classes.
       rather than the executable command tree. Verify console/player parsing,
       granular permissions, completions, help, documentation contracts, and the
       deployed Velocity command surface after removal.
+- [ ] Expand `/sls list` into a complete managed-instance overview. Include
+      stopped `save: true` instances retained on disk alongside active servers,
+      show each exact composite instance ID, and report the current lifecycle
+      stage rather than collapsing preparation, readiness, stopping, failure,
+      and saved-offline states into a generic status. Keep output bounded and
+      consistently ordered, distinguish retained offline instances from active
+      registry entries, preserve permission-safe player counts and hover
+      details, and update command contracts, documentation, and lifecycle plus
+      proxy-restart tests.
 - [ ] Coordinate and implement one portable SLS/SLS-LITE blueprint-schema
       overhaul. Agree the contract with Protoxon before freezing either side,
       while allowing clear, documented breaking migrations from SLS-LITE's
