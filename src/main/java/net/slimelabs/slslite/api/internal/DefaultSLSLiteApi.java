@@ -534,7 +534,8 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
                   reloadSoftware,
                   correlationId,
                   reloadObserver);
-          readinessCatalog.refresh(blueprints.getAll(), softwareProfiles.getAll());
+          readinessCatalog.refresh(
+              blueprints.getAll(), softwareProfiles.getAll(), blueprints.rejections());
           BackendRegistry.ReconciliationReport registrations = backendRegistry.reconcile();
           report
               .rejectedBlueprints()

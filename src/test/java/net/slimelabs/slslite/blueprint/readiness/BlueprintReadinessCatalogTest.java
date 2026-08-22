@@ -14,6 +14,7 @@ import net.slimelabs.slslite.api.BlueprintReadinessFinding;
 import net.slimelabs.slslite.api.BlueprintReadinessStatus;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintCopy;
+import net.slimelabs.slslite.blueprint.BlueprintRepository;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
 import net.slimelabs.slslite.config.SLSConfig;
 import net.slimelabs.slslite.config.SLSConfigRepository;
@@ -85,6 +86,25 @@ class BlueprintReadinessCatalogTest {
     assertTrue(report.issues().stream().anyMatch(issue -> issue.code().equals("software-base")));
     assertTrue(report.issues().stream().anyMatch(issue -> issue.code().equals("content-source")));
     assertThrows(InstanceOperationException.class, () -> catalog.requireReady("missing"));
+  }
+
+  @Test
+  void includesRejectedBlueprintFilesAsActionNeededReports() {
+    BlueprintReadinessCatalog catalog = catalog(Set.of());
+
+    BlueprintReadinessSummary summary =
+        catalog.refresh(
+            List.of(),
+            List.of(),
+            List.of(
+                new BlueprintRepository.Rejection(
+                    "practice.yml", "unknown key 'state.volunes'; expected one of state.volumes")));
+
+    assertEquals(new BlueprintReadinessSummary(0, 1, 0), summary);
+    BlueprintReadinessReport report = catalog.get("practice.yml").orElseThrow();
+    assertEquals(BlueprintReadinessState.ACTION_NEEDED, report.state());
+    assertEquals("definition-error", report.issues().getFirst().code());
+    assertTrue(report.conciseReason().contains("state.volunes"));
   }
 
   @Test

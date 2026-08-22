@@ -232,7 +232,8 @@ public final class SLSLite implements SLSLiteApiProvider {
               hostCapabilities.selectedStorageStrategy().orElseThrow(),
               publicApi.extensionReadiness());
       BlueprintReadinessSummary startupReadiness =
-          blueprintReadiness.refresh(blueprints.getAll(), softwareProfiles.getAll());
+          blueprintReadiness.refresh(
+              blueprints.getAll(), softwareProfiles.getAll(), blueprints.rejections());
       startupChecklist =
           new StartupSetupInspector()
               .inspect(configuration.get(), startupDefinitions, hostCapabilities, startupReadiness);

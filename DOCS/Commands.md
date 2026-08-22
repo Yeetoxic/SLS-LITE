@@ -83,8 +83,8 @@ name a player and cannot use player-only selectors.
 | `/sls admin remove <player>` | `admin` | Remove one by last known name. |
 | `/sls admin list` | `admin` | List built-in administrators. |
 | `/sls admin code` | console only | Issue a short-lived one-time claim code. |
-| `/sls blueprint <id>` | `blueprint` | Show one blueprint's definition, bounded readiness state, and exact preflight problems. |
-| `/sls blueprints [registry]` | `blueprints` | List blueprint details and compact `ready`, `action needed`, or `temporarily unavailable` readiness labels. |
+| `/sls blueprint <id-or-rejected-path>` | `blueprint` | Show one blueprint's definition and exact preflight problems, or the validation error for a rejected blueprint file. |
+| `/sls blueprints [registry]` | `blueprints` | List blueprint details and compact `ready`, `action needed`, or `temporarily unavailable` readiness labels. Rejected files appear as `action needed` in the unfiltered list instead of disappearing from inspection. |
 | `/sls create <registry> <blueprint> [flags...]` | `create` | Provision and start a fresh managed instance. Supported local overrides are persisted across restart and reset. |
 | `/sls debug` | `debug` | Player-only toggle for bounded command-dispatch diagnostics in chat and a once-per-second action-bar summary for the player's current managed instance. |
 | `/sls join-test <server\|this>` | `join-test` | Run a bounded Minecraft status negotiation against a ready registered backend. This is a reachability diagnostic, not a synthetic player login. |
@@ -134,6 +134,12 @@ does not download, assemble, mount, hash, or recursively size content. A
 non-ready definition remains loaded for inspection and does not affect valid
 siblings or already-running instances, but SLS-LITE rejects creation of a new
 instance immediately with the first actionable reason.
+
+Strict YAML validation failures use the same operator-facing readiness path.
+For example, misspelling `state.volumes` as `state.volunes` lists the source
+file as `action needed`; `/sls blueprint <rejected-path>` prints the exact
+unknown-key error and the expected key. Correct the file and run
+`/sls reload blueprints` to clear the finding.
 
 Create accepts this confined subset of vSLS `--name=value` overrides:
 

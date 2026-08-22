@@ -98,7 +98,7 @@ public final class DefinitionReloader {
       BlueprintCandidate blueprintCandidate =
           reloadBlueprints
               ? loadBlueprintCandidate(config, blueprints, softwareCandidate)
-              : new BlueprintCandidate(blueprintBefore.values(), List.of());
+              : new BlueprintCandidate(blueprintBefore.values(), blueprints.rejections());
 
       Map<String, net.slimelabs.slslite.blueprint.Blueprint> resolvedBlueprints =
           blueprintCandidate.values();
@@ -110,6 +110,9 @@ public final class DefinitionReloader {
       }
 
       catalog.install(resolvedBlueprints, softwareCandidate.values());
+      if (reloadBlueprints) {
+        blueprints.installRejections(blueprintCandidate.rejections());
+      }
       DefinitionReloadReport.CatalogDelta blueprintDelta =
           DefinitionReloadReport.delta(blueprintBefore.values(), resolvedBlueprints);
       DefinitionReloadReport.CatalogDelta softwareDelta =
@@ -118,7 +121,12 @@ public final class DefinitionReloader {
           blueprintDelta,
           softwareDelta,
           resolvedBlueprints.size(),
-          blueprintCandidate.rejections(),
+          blueprintCandidate.rejections().stream()
+              .map(
+                  rejection ->
+                      new DefinitionReloadReport.BlueprintRejection(
+                          rejection.path(), rejection.error()))
+              .toList(),
           affectedBlueprints(
               blueprintBefore.values(), resolvedBlueprints, blueprintDelta, softwareDelta));
     }
@@ -158,12 +166,7 @@ public final class DefinitionReloader {
     loaded.accepted().forEach((id, candidate) -> parsed.put(id, candidate.blueprint()));
     Map<String, net.slimelabs.slslite.blueprint.Blueprint> resolved =
         DefinitionCatalog.resolveBlueprints(parsed, softwareCandidate.values());
-    List<DefinitionReloadReport.BlueprintRejection> rejections = new ArrayList<>();
-    loaded.rejections().stream()
-        .map(
-            rejection ->
-                new DefinitionReloadReport.BlueprintRejection(rejection.path(), rejection.error()))
-        .forEach(rejections::add);
+    List<BlueprintRepository.Rejection> rejections = new ArrayList<>(loaded.rejections());
 
     Map<String, net.slimelabs.slslite.blueprint.Blueprint> accepted = new LinkedHashMap<>();
     for (Map.Entry<String, net.slimelabs.slslite.blueprint.Blueprint> entry : resolved.entrySet()) {
@@ -173,17 +176,16 @@ public final class DefinitionReloader {
         accepted.put(entry.getKey(), entry.getValue());
       } catch (ConfigurationException exception) {
         String path = loaded.accepted().get(entry.getKey()).path();
-        rejections.add(new DefinitionReloadReport.BlueprintRejection(path, exception.getMessage()));
+        rejections.add(new BlueprintRepository.Rejection(path, exception.getMessage()));
       }
     }
-    rejections.sort(
-        java.util.Comparator.comparing(DefinitionReloadReport.BlueprintRejection::path));
+    rejections.sort(java.util.Comparator.comparing(BlueprintRepository.Rejection::path));
     return new BlueprintCandidate(Map.copyOf(accepted), rejections);
   }
 
   private record BlueprintCandidate(
       Map<String, net.slimelabs.slslite.blueprint.Blueprint> values,
-      List<DefinitionReloadReport.BlueprintRejection> rejections) {
+      List<BlueprintRepository.Rejection> rejections) {
 
     private BlueprintCandidate {
       values = Map.copyOf(values);

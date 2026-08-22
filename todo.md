@@ -1190,7 +1190,11 @@ RC.2 as an immutable baseline and defer the planned RC.3 feature scope below.
       or delete it. Preserve persistent-file conflict candidates and keep
       restart/reset on the exact existing ID. Cover repeated creation attempts
       so one recoverable failure cannot accumulate additional saved directories.
-- [ ] Triage and resolve the second maintainer-reported hotfix defect.
+- [x] Surface malformed or invalid blueprint files in the normal readiness
+      workflow. Preserve fault-isolated rejection details across startup and
+      reload, list rejected paths as `action needed`, and expose the exact
+      parser/validation error through `/sls blueprint <rejected-path>`. Cover
+      the reported `state.volunes` typo and its `state.volumes` suggestion.
 - [ ] Set the hotfix version consistently, update the release workflow to accept
       the SemVer-ordered `x.y.z-rc.N.H` form, publish focused release and upgrade
       notes, and complete the required regression and distribution gates.

@@ -27,6 +27,7 @@ public final class BlueprintRepository {
   private final Path directory;
   private final DefinitionCatalog catalog;
   private final BlueprintParser parser = new BlueprintParser();
+  private volatile List<Rejection> rejections = List.of();
 
   public BlueprintRepository(Path directory) {
     this(directory, new DefinitionCatalog());
@@ -48,7 +49,12 @@ public final class BlueprintRepository {
   }
 
   public synchronized void reload() throws IOException, BlueprintException {
-    install(loadSnapshot());
+    LoadResult result = loadIsolated();
+    if (!result.rejections().isEmpty()) {
+      Rejection rejection = result.rejections().getFirst();
+      throw new BlueprintException(rejection.path() + ": " + rejection.error());
+    }
+    install(result.snapshot(), List.of());
   }
 
   public Snapshot loadSnapshot() throws IOException, BlueprintException {
@@ -97,7 +103,20 @@ public final class BlueprintRepository {
   }
 
   public synchronized void install(Snapshot snapshot) {
+    install(snapshot, List.of());
+  }
+
+  public synchronized void install(Snapshot snapshot, List<Rejection> rejected) {
     catalog.installBlueprints(snapshot.values());
+    rejections = List.copyOf(rejected);
+  }
+
+  public synchronized void installRejections(List<Rejection> rejected) {
+    rejections = List.copyOf(rejected);
+  }
+
+  public List<Rejection> rejections() {
+    return rejections;
   }
 
   public DefinitionCatalog catalog() {

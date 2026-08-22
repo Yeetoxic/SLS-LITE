@@ -92,6 +92,45 @@ class DefinitionReloaderTest {
             .map(DefinitionReloadReport.BlueprintRejection::path)
             .toList());
     assertEquals(java.util.List.of("second"), report.blueprints().removed());
+    assertEquals(
+        java.util.List.of("malformed.yml", "second.yml"),
+        repositories.blueprints().rejections().stream()
+            .map(BlueprintRepository.Rejection::path)
+            .toList());
+  }
+
+  @Test
+  void retainsUnknownBlueprintKeyAsAnOperatorFacingRejection() throws Exception {
+    Repositories repositories = repositories();
+    Files.writeString(
+        repositories.blueprintsPath().resolve("practice.yml"),
+        """
+                blueprint:
+                  id: practice
+                  name: Practice
+                  type: practice
+                server:
+                  software: paper
+                  version: "1.21.5"
+                state:
+                  volunes: []
+                """);
+
+    DefinitionReloadReport report =
+        DefinitionReloader.reload(
+            repositories.config(), repositories.blueprints(), repositories.profiles(), true, false);
+
+    assertEquals(1, report.rejectedBlueprints().size());
+    assertEquals("practice.yml", repositories.blueprints().rejections().getFirst().path());
+    org.junit.jupiter.api.Assertions.assertTrue(
+        repositories.blueprints().rejections().getFirst().error().contains("state.volunes"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        repositories.blueprints().rejections().getFirst().error().contains("state.volumes"));
+
+    Files.delete(repositories.blueprintsPath().resolve("practice.yml"));
+    DefinitionReloader.reload(
+        repositories.config(), repositories.blueprints(), repositories.profiles(), true, false);
+    assertEquals(java.util.List.of(), repositories.blueprints().rejections());
   }
 
   @Test

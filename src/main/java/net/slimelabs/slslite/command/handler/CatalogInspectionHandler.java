@@ -60,7 +60,9 @@ final class CatalogInspectionHandler {
       source.sendMessage(CommandMessages.usage("/sls blueprints", "registry"));
       return;
     }
-    if (selected.isEmpty()) {
+    List<BlueprintRepository.Rejection> rejected =
+        arguments.length == 1 ? blueprints.rejections() : List.of();
+    if (selected.isEmpty() && rejected.isEmpty()) {
       source.sendMessage(
           CommandMessages.message("No matching blueprints are loaded.", NamedTextColor.YELLOW));
       return;
@@ -80,6 +82,12 @@ final class CatalogInspectionHandler {
           }
           source.sendMessage(line);
         });
+    rejected.forEach(
+        rejection ->
+            source.sendMessage(
+                CommandMessages.prefix()
+                    .append(Component.text("- " + rejection.path(), NamedTextColor.GOLD))
+                    .append(Component.text(" [action needed]", NamedTextColor.RED))));
   }
 
   void blueprint(CommandSource source, String[] arguments) {
@@ -92,6 +100,16 @@ final class CatalogInspectionHandler {
     }
     Blueprint blueprint = blueprints.get(arguments[1]).orElse(null);
     if (blueprint == null) {
+      BlueprintRepository.Rejection rejection = rejected(arguments[1]);
+      if (rejection != null) {
+        source.sendMessage(
+            CommandMessages.message("Blueprint file " + rejection.path(), NamedTextColor.GREEN));
+        source.sendMessage(CommandMessages.message("Readiness: action needed", NamedTextColor.RED));
+        source.sendMessage(
+            CommandMessages.prefix()
+                .append(Component.text("- " + rejection.error(), NamedTextColor.RED)));
+        return;
+      }
       source.sendMessage(
           CommandMessages.message("Blueprint not found: " + arguments[1], NamedTextColor.YELLOW));
       return;
@@ -124,7 +142,11 @@ final class CatalogInspectionHandler {
   List<String> suggestions(CommandSource source, String operation) {
     if ("blueprint".equals(operation)) {
       return authorizer.canAdminister(source, operation)
-          ? blueprints.getAll().stream().map(Blueprint::id).sorted().toList()
+          ? java.util.stream.Stream.concat(
+                  blueprints.getAll().stream().map(Blueprint::id),
+                  blueprints.rejections().stream().map(BlueprintRepository.Rejection::path))
+              .sorted()
+              .toList()
           : List.of();
     }
     return authorizer.canAdminister(source, "blueprints")
@@ -138,6 +160,13 @@ final class CatalogInspectionHandler {
 
   private BlueprintReadinessReport report(String id) {
     return readiness == null ? null : readiness.get(id).orElse(null);
+  }
+
+  private BlueprintRepository.Rejection rejected(String path) {
+    return blueprints.rejections().stream()
+        .filter(rejection -> rejection.path().equals(path))
+        .findFirst()
+        .orElse(null);
   }
 
   private static NamedTextColor color(BlueprintReadinessState state) {

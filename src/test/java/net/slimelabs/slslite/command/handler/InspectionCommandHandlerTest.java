@@ -134,6 +134,37 @@ class InspectionCommandHandlerTest {
     assertTrue(plainText(messages.get(3)).contains("software profile 'paper-auto' is not loaded"));
   }
 
+  @Test
+  void rejectedBlueprintFilesAppearAsActionNeededWithExactDetails() {
+    blueprints.install(
+        new BlueprintRepository.Snapshot(Map.of()),
+        List.of(
+            new BlueprintRepository.Rejection(
+                "practice.yml", "unknown key 'state.volunes'; expected one of state.volumes")));
+    List<Component> listed = new ArrayList<>();
+    List<Component> details = new ArrayList<>();
+
+    handler.blueprints(
+        source(Set.of("sls.command.blueprints"), listed), new String[] {"blueprints"});
+    handler.blueprint(
+        source(Set.of("sls.command.blueprint"), details),
+        new String[] {"blueprint", "practice.yml"});
+
+    assertTrue(
+        listed.stream()
+            .map(InspectionCommandHandlerTest::plainText)
+            .anyMatch(message -> message.contains("practice.yml [action needed]")));
+    assertTrue(plainText(details.get(1)).contains("Readiness: action needed"));
+    assertTrue(plainText(details.get(2)).contains("state.volunes"));
+    assertTrue(
+        handler
+            .suggestions(
+                source(Set.of("sls.command.blueprint"), new ArrayList<>()),
+                "blueprint",
+                new String[] {"blueprint", ""})
+            .contains("practice.yml"));
+  }
+
   private void installBlueprint() {
     blueprints.install(
         new BlueprintRepository.Snapshot(

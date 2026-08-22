@@ -74,6 +74,13 @@ public final class BlueprintReadinessCatalog {
 
   public synchronized BlueprintReadinessSummary refresh(
       Collection<Blueprint> blueprints, Collection<SoftwareProfile> profiles) {
+    return refresh(blueprints, profiles, List.of());
+  }
+
+  public synchronized BlueprintReadinessSummary refresh(
+      Collection<Blueprint> blueprints,
+      Collection<SoftwareProfile> profiles,
+      Collection<net.slimelabs.slslite.blueprint.BlueprintRepository.Rejection> rejections) {
     Map<String, SoftwareProfile> profilesById = new LinkedHashMap<>();
     profiles.forEach(profile -> profilesById.put(profile.id(), profile));
     Map<String, BlueprintReadinessReport> refreshed = new LinkedHashMap<>();
@@ -84,6 +91,22 @@ public final class BlueprintReadinessCatalog {
                 refreshed.put(
                     blueprint.id(),
                     inspectSafely(blueprint, profilesById.get(blueprint.software()))));
+    rejections.stream()
+        .sorted(
+            Comparator.comparing(
+                net.slimelabs.slslite.blueprint.BlueprintRepository.Rejection::path))
+        .forEach(
+            rejection ->
+                refreshed.put(
+                    rejection.path(),
+                    new BlueprintReadinessReport(
+                        rejection.path(),
+                        BlueprintReadinessState.ACTION_NEEDED,
+                        List.of(
+                            new BlueprintReadinessIssue(
+                                "definition-error",
+                                BlueprintReadinessState.ACTION_NEEDED,
+                                rejection.error())))));
     extensionReadiness.refresh(blueprints);
     reports = Map.copyOf(refreshed);
     return summary();

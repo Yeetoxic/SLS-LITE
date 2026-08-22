@@ -828,7 +828,8 @@ public final class SLSCommand implements SimpleCommand {
       }
       if (readinessCatalog != null) {
         BlueprintReadinessSummary readiness =
-            readinessCatalog.refresh(blueprints.getAll(), softwareProfiles.getAll());
+            readinessCatalog.refresh(
+                blueprints.getAll(), softwareProfiles.getAll(), blueprints.rejections());
         source.sendMessage(
             CommandMessages.message(
                 "Blueprint readiness: ready="
