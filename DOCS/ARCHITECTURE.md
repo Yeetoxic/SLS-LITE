@@ -215,7 +215,7 @@ under test resources, never the production artifact.
 Compatibility readers are retained when they protect operator state or produce
 an intentional migration response. This includes schema-1/schema-2 instance
 metadata adoption, the deprecated `lobby.emergency` configuration alias, and
-the pinned vSLS blueprint and command vocabulary. Their tests and migration
+the reviewed vSLS blueprint and command vocabulary. Their tests and migration
 documentation define the removal boundary.
 
 Packaged resources are organized by purpose:

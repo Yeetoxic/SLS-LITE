@@ -60,9 +60,8 @@ class CommandMessagesTest {
   }
 
   @Test
-  void commandContractIsPinnedToTheReviewedVSLSRevision() {
-    assertEquals("v0.2.0", VSLSCommandContract.RELEASE);
-    assertEquals("8e8b1e3cf7d2157887764c16f11b8901f8241121", VSLSCommandContract.COMMIT);
+  void commandContractTracksTheReviewedVSLSMainBranch() {
+    assertEquals("main", VSLSCommandContract.UPSTREAM_BRANCH);
     assertEquals(
         List.of("join", "list", "find", "dequeue", "version"), VSLSCommandContract.PUBLIC_ROOT);
     assertFalse(VSLSCommandContract.ADMIN_ROOT.isEmpty());

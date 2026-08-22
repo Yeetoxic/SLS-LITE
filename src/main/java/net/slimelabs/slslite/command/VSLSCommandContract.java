@@ -4,15 +4,14 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Machine-readable command contract pinned to the upstream vSLS release.
+ * Machine-readable command contract reviewed against the upstream vSLS main branch.
  *
  * <p>The runtime remains intentionally hand-written, but every supported, adapted, additive, or
  * intentionally unavailable branch must be represented here and verified by contract tests.
  */
 public final class VSLSCommandContract {
 
-  static final String RELEASE = "v0.2.0";
-  static final String COMMIT = "8e8b1e3cf7d2157887764c16f11b8901f8241121";
+  static final String UPSTREAM_BRANCH = "main";
 
   public static final List<String> LOCAL_CREATE_MODIFIERS =
       List.of(

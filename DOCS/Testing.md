@@ -119,23 +119,25 @@ network.
 
 ## Modern Blueprint Corpus
 
-Run the opt-in modern SLS corpus harness against a copied blueprint directory:
+Update a local upstream checkout to its `main` branch, then run the opt-in
+modern SLS corpus harness against its blueprint directory:
 
 ```powershell
 mvn "-Dtest=BlueprintCorpusCompatibilityIT" `
-  "-Dsls.compatibility.blueprints=path/to/blueprints" test
+  "-Dsls.compatibility.blueprints=.local-fixtures/upstream-sls-main/blueprints" test
 ```
 
 This validates schema compatibility without requiring referenced world or
 plugin volume sources. It does not claim that every blueprint is launch-ready;
 runtime content, software, Java, memory, and unsupported volume modes remain
-separate gates.
+separate gates. Review differences before refreshing repository-owned fixtures;
+ordinary builds must not download or depend directly on the moving branch.
 
-Run each example from the pinned SLS checkout independently:
+Run each example from a reviewed SLS `main` checkout independently:
 
 ```powershell
 mvn "-Dtest=BlueprintExamplesCompatibilityIT" `
-  "-Dsls.compatibility.examples=.local-fixtures/upstream-sls-v0.2.0/examples" test
+  "-Dsls.compatibility.examples=.local-fixtures/upstream-sls-main/examples" test
 ```
 
 Keep source checkouts under `.local-fixtures/`, not Maven's `target/` build

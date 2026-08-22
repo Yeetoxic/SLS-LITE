@@ -4,7 +4,7 @@
 
 <!-- sls-command-contract-sha256:4ca36eb8f256951e2b7822db1f17821ba519225308c45e022e61a0b88d2f716d -->
 
-SLS-LITE uses `/sls` and mirrors the pinned vSLS command tree where the local
+SLS-LITE uses `/sls` and mirrors the reviewed vSLS command tree where the local
 operation exists. Composite instance IDs use `<blueprint>.<short-id>`. For
 server-targeting commands, player senders may use `this` for their current
 managed backend.
@@ -157,7 +157,7 @@ instance resources are allocated. The effective definition is recorded in
 instance metadata, so persistent instances retain the same overrides through
 proxy restart, `/sls restart`, and `/sls reset`.
 
-The complete pinned daemon/container-only create modifier set is:
+The complete reviewed daemon/container-only create modifier set is:
 
 ```text
 --node= --cpu= --swap= --io_weight= --disk_space= --threads=
@@ -168,7 +168,7 @@ Each is recognized and rejected with an explicit local-mode explanation.
 Unknown flags are reported separately; they are not mislabeled as known
 daemon behavior.
 
-Debug mode follows the pinned vSLS player-only toggle and gray enabled/disabled
+Debug mode follows the reviewed vSLS player-only toggle and gray enabled/disabled
 feedback. While enabled, the player receives timestamp-hovered SLS-LITE debug
 lines containing the invoked `/sls` operation and sender. Command arguments,
 child-console content, host paths, credentials, and other unbounded details are
@@ -223,7 +223,7 @@ loss, and coalesces noisy excess output. Players receive a clickable stop action
   to the public blueprint limit, including while another connection is in
   flight. A bounded backend-only slot ceiling permits the override without
   changing the capacity advertised by `{max_players}` or used by matchmaking.
-- Kill always means immediate process termination. Its pinned upstream `force`
+- Kill always means immediate process termination. Its upstream `force`
   modifier requests Velocity unregistration even if the termination request
   itself fails; it never releases process, port, memory, or storage ownership
   while the operating-system process may still be alive. `--force` is accepted
@@ -246,7 +246,7 @@ and write an operator audit message. A failed evacuation cancels the operation.
 
 ## Present But Unavailable
 
-The pinned vSLS root includes commands that are not locally implemented yet:
+The reviewed vSLS root includes commands that are not locally implemented yet:
 
 ```text
 pause resume
@@ -260,5 +260,5 @@ control plane and points to `/sls system` plus local lifecycle commands. These
 placeholders preserve command familiarity without pretending a local
 equivalent exists.
 
-The detailed pinned upstream comparison is maintained in
+The detailed upstream comparison is maintained in
 [SLS Command Compatibility](SLS_Command_Compatibility.md).

@@ -21,4 +21,4 @@ newer clients may connect when that installed ViaVersion build reports a valid
 translation to the backend baseline. Exact tested rows remain separately marked
 because dynamic protocol support does not certify game or plugin behavior.
 
-Canonical matrices: [Compatibility](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Compatibility.md), [SLS v0.2.0](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/SLS_v0.2.0_Compatibility.md), and [Protocol Compatibility](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Protocol_Compatibility.md).
+Canonical matrices: [Compatibility](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Compatibility.md), [SLS Main](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/SLS_Main_Compatibility.md), and [Protocol Compatibility](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Protocol_Compatibility.md).

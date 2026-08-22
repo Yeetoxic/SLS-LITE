@@ -1,16 +1,16 @@
-# SLS v0.2.0 Compatibility Matrix
+# SLS Main Compatibility Matrix
 
 [Documentation home](README.md)
 
-This is the pinned modern SLS source contract for SLS-LITE.
+This is the maintained upstream SLS source contract for SLS-LITE.
 
 - Upstream repository: `https://github.com/jessefaler/SLS`
-- Release/tag: `v0.2.0`
-- Commit: `8e8b1e3cf7d2157887764c16f11b8901f8241121`
+- Tracked branch: `main`
 - Upstream license: GNU AGPL v3.0
 
-The matrix describes SLS-LITE's contract with the pinned source models,
-parsers, bundled examples, software definitions, and vSLS implementation.
+The matrix describes SLS-LITE's contract with the reviewed source models,
+parsers, bundled examples, software definitions, and vSLS implementation on
+`main`.
 
 ## Status Terms
 
@@ -22,9 +22,11 @@ parsers, bundled examples, software definitions, and vSLS implementation.
 
 ## Scope Boundary
 
-The pinned tag and commit define the reproducible shared schema and command
-comparison. The table below describes current behavior; implementation and test
-history belongs in release records rather than this operator-facing matrix.
+The upstream `main` branch defines the moving comparison target. Reviewed local
+fixtures make ordinary builds reproducible; scheduled or manual audits identify
+upstream drift before those fixtures and this matrix are updated. The table
+below describes current behavior; implementation and test history belongs in
+release records rather than this operator-facing matrix.
 
 | Area | Compatibility decision |
 | --- | --- |
@@ -52,7 +54,7 @@ out of scope.
 
 ## Blueprint Schema
 
-| SLS v0.2.0 field | Status | SLS-LITE behavior |
+| SLS main field | Status | SLS-LITE behavior |
 | --- | --- | --- |
 | `blueprint.id` | Adapted | Global stable ID restricted to the portable slug `[a-z0-9][a-z0-9_-]{0,63}` for filesystem, process, and Velocity registration safety. |
 | `blueprint.name` | Supported | Display name. |
@@ -74,12 +76,12 @@ out of scope.
 | `parser: file` | Adapted | Contained UTF-8 line-prefix replacement with an 8 MiB limit and atomic target swap. Missing targets become empty files; absent prefixes are not inserted. |
 | `state.volumes` mapping form with `mode: cow` | Adapted | Portable transactional private copy. |
 | Volume shorthand `name:source:target[:mode]` | Supported | Omitted mode defaults to `cow`. |
-| Multiple `cow` volumes targeting one directory | Adapted | Deterministic declaration-order merge; first source wins collisions, matching SLS v0.2.0 OverlayFS lower-layer precedence. |
+| Multiple `cow` volumes targeting one directory | Adapted | Deterministic declaration-order merge; first source wins collisions, matching SLS main OverlayFS lower-layer precedence. |
 | `mode: ro` | Adapted | Private writable instance snapshot protects the source; not a strict read-only bind mount. |
 | `mode: rw` | Adapted | Creates and verifies a directory link to a source confined below the SLS-LITE data root. The source outlives instances and is shared concurrently; operators should normally combine it with a single-instance policy. |
 | `state.mounts` | Intentionally unsupported | Reload fails with a local-mode explanation and recommends a contained `cow` or `ro` volume. |
 | `state.copy` mapping and shorthand | Adapted | Transactional contained file/directory copy after software and volumes. Sources must be relative to the SLS-LITE data root; full-SLS absolute/allowed-host sources are intentionally rejected. Persistent instances refresh sources on reset rather than every restart. |
-| `state.persistent_files` | SLS-LITE extension | Single-writer regular-file import and bounded atomic write-back below `volumes/`, with conflict preservation and no symlink or mount dependency. Full SLS v0.2.0 has no file-shaped volume behavior; its volume manager checks directory sources. |
+| `state.persistent_files` | SLS-LITE extension | Single-writer regular-file import and bounded atomic write-back below `volumes/`, with conflict preservation and no symlink or mount dependency. Full SLS main has no file-shaped volume behavior; its volume manager checks directory sources. |
 | `state.env` | Adapted | Validated strings reach the local child process; JVM, loader, path, and SLS-owned variables are rejected. Names are visible to operators, values are not logged. |
 | `save` | Supported | Persistent instance directory and identity. |
 | `annotations` | Adapted | Unknown trees, including YAML null values, are retained as immutable metadata. |
@@ -91,7 +93,7 @@ is omitted.
 
 ## vSLS Annotations
 
-| SLS v0.2.0 annotation | Status | SLS-LITE behavior |
+| SLS main annotation | Status | SLS-LITE behavior |
 | --- | --- | --- |
 | `annotations.vsls.dont-stop-when-empty` | Supported | Excludes the blueprint from idle cleanup. |
 | `annotations.vsls.max-instances` | Supported | Supplies the instance cap when local `server.limits.max_instances` is omitted. |
@@ -109,7 +111,7 @@ adaptation and must remain visible in documentation.
 Modern SLS software YAML is directly recognized through a constrained local
 adapter.
 
-| SLS v0.2.0 field | Status | Local interpretation |
+| SLS main field | Status | Local interpretation |
 | --- | --- | --- |
 | `software.id` | Supported | Local profile ID. |
 | `software.name` | Supported | Preserved display metadata. |
@@ -161,7 +163,7 @@ configuration language; host topology does not.
 
 ## Commands And Permissions
 
-The pinned vSLS root names remain the command vocabulary. Compatibility is
+The reviewed vSLS root names remain the command vocabulary. Compatibility is
 split deliberately:
 
 - The compatibility contract covers blueprint/software language and runtime
@@ -203,9 +205,9 @@ Network APIs and distributed control-plane behavior remain outside the first
 single-host release. The separate versioned Java extension API is supported;
 it does not emulate Protocube, daemon, or S4J endpoints.
 
-## Fields Not In The Pin
+## Fields Not In The Upstream Contract
 
-`allowed-client-versions` does not appear in the SLS `v0.2.0` source, models,
+`allowed-client-versions` does not appear in the SLS `main` source, models,
 examples, or vSLS implementation. SLS-LITE does not interpret this field or
 claim automatic per-blueprint client-version admission.
 

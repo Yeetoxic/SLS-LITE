@@ -6,8 +6,7 @@ SLS-LITE mirrors the vSLS in-game command interface so operators and players can
 move between the two products without relearning command names or argument
 order. The compatibility target is:
 
-- SLS `v0.2.0`
-- Commit `8e8b1e3cf7d2157887764c16f11b8901f8241121`
+- SLS `main`
 - [vSLS command reference](https://protoxon.github.io/sls-docs/guide/vsls/commands.html)
 
 The upstream command and permission behavior is the default. SLS-LITE may add
@@ -39,15 +38,15 @@ instance are rejected.
 | --- | --- | --- | --- |
 | `info [server]` | Details: `sls.command.admin` | Adapted | Summary and local instance details include players, lifecycle, process, resource, queue, log, and directory information. |
 | `list` | Public | Adapted | vSLS layout, status colors, counts, and hover information matched. |
-| `create <type> <id> [flags...]` | Admin | Adapted | Provisions and starts a fresh local instance with dedicated permission and completion behavior. `--memory`, `--save`, `--seed`, `--view-distance`, additive `--simulation-distance`, and `--enable-command-block` are validated and persisted across restart/reset. Every pinned daemon/container-only flag is recognized and explicitly rejected: `--node`, `--cpu`, `--swap`, `--io_weight`, `--disk_space`, `--threads`, `--oom_disabled`, `--software`, `--version`, `--image`, and `--env`. |
+| `create <type> <id> [flags...]` | Admin | Adapted | Provisions and starts a fresh local instance with dedicated permission and completion behavior. `--memory`, `--save`, `--seed`, `--view-distance`, additive `--simulation-distance`, and `--enable-command-block` are validated and persisted across restart/reset. Every reviewed daemon/container-only flag is recognized and explicitly rejected: `--node`, `--cpu`, `--swap`, `--io_weight`, `--disk_space`, `--threads`, `--oom_disabled`, `--software`, `--version`, `--image`, and `--env`. |
 | `start <type> <id>` | Admin | Adapted | Starts local ephemeral or persistent instances within blueprint and host limits. |
-| `join <type> <id> [target]` | Self public; others admin | Adapted | Capacity-aware allocation is supported. The pinned player-only `/sls join player <player> --force` form uses SLS-LITE administrative access, clearer sender/target feedback, and a clickable full-instance confirmation while preserving backend safety limits. |
+| `join <type> <id> [target]` | Self public; others admin | Adapted | Capacity-aware allocation is supported. The upstream player-only `/sls join player <player> --force` form uses SLS-LITE administrative access, clearer sender/target feedback, and a clickable full-instance confirmation while preserving backend safety limits. |
 | `find <player>` | Public | Supported | vSLS messages, hover details, and action-bar feedback matched. |
 | `system` | Admin | Adapted | Reports local runtime, JVM memory, managed memory allocation, supervised process usage and limit, CPU threads, Java, OS, lobby state, output policy, and startup capability probes. |
 | `node <id> [drained [value]]` | Admin | Explicit local-mode boundary | Node administration is distributed-only; the retained command explains the boundary and points to local system/lifecycle commands. |
 | `console <server> <command>` | Admin | Adapted | Safe local process input is followed by an asynchronous, cursor-isolated capture of at most eight new lines over two seconds. Existing `--follow` and `--unfollow` forms remain compatibility aliases, while canonical live reading is separated under `logs`. |
 | `blueprint <id>` | Admin | Supported | Pretty-prints one globally unique blueprint ID with its local launch/storage details. The additive `blueprints [registry]` form remains available for catalog browsing. |
-| `debug` | Admin, player-only | Adapted | Matches the pinned player-only toggle and gray `Debug mode enabled.` / `Debug mode disabled.` feedback under `sls.command.debug` or umbrella administration. The local opt-in stream emits bounded timestamp-hovered command-dispatch context without arguments or child-console content and adds a once-per-second current-instance action bar for RSS/budget, CPU, players/capacity, and state. It stays silent off managed backends and whenever built-in preparation feedback owns the action bar; subscriptions end on disable, disconnect, permission loss, or shutdown. |
+| `debug` | Admin, player-only | Adapted | Matches the upstream player-only toggle and gray `Debug mode enabled.` / `Debug mode disabled.` feedback under `sls.command.debug` or umbrella administration. The local opt-in stream emits bounded timestamp-hovered command-dispatch context without arguments or child-console content and adds a once-per-second current-instance action bar for RSS/budget, CPU, players/capacity, and state. It stays silent off managed backends and whenever built-in preparation feedback owns the action bar; subscriptions end on disable, disconnect, permission loss, or shutdown. |
 | `delete <server\|all>` | Admin | Adapted | Exact IDs and the additive `this` selector evacuate active players, stop cleanly, verify SLS-LITE metadata ownership, atomically rename storage to a delete tombstone, and remove it with mount/snapshot-aware cleanup. Interrupted cleanup is retried during startup reconciliation. `all` processes ordinary instances sequentially with per-server results and always skips the protected managed lobby. |
 | `logs <server> [page] [lines]` | Admin | Adapted | vSLS pagination is backed by a bounded 1,000-line local process-output buffer. Additive `logs <server|this> --follow` and targetless `logs --unfollow` provide one rate-limited live stream per sender under the less-powerful logs permission. |
 | `reload [all\|config\|blueprints\|software]` | Admin | Adapted | Every blueprint is checked: valid siblings publish together, invalid definitions are absent from the new immutable catalog, accepted/rejected counts are reported, and exact per-file errors go to the detail log. Software/global transaction failures still reject incompatible publication. SLS-LITE-owned dynamic registrations are reconciled without mutating foreign conflicts. `config` directs the operator to restart Velocity because host-wide services cannot be rebuilt safely in place. |
@@ -65,7 +64,7 @@ instance are rejected.
 
 ## Presentation Contract
 
-The implemented command output follows the pinned vSLS component structure:
+The implemented command output follows the reviewed vSLS component structure:
 
 - Blue gradient `[SLS]` prefix. SLS-LITE intentionally omits vSLS's repeated
   project/author hover from this prefix; command-specific player, server, and
@@ -81,8 +80,8 @@ The implemented command output follows the pinned vSLS component structure:
   `SLS-LITE` replaces `vSLS` branding, and daemon-only metrics or actions are
   replaced with truthful local equivalents.
 
-The source contract is encoded in `VSLSCommandContract` and tested against the
-pinned release and commit. Commands advertised by the upstream root tree but
+The source contract is encoded in `VSLSCommandContract` and reviewed against
+upstream `main`. Commands advertised by the upstream root tree but
 not implemented in SLS-LITE return a styled compatibility response instead of
 falling through as an unknown command.
 
@@ -98,7 +97,7 @@ instance; resume directs operators to restart a stopped persistent instance.
 implemented command tree. Each semantic argument branch records:
 
 - its stable ID and displayed syntax;
-- whether it is pinned upstream or additive in SLS-LITE;
+- whether it follows upstream or is additive in SLS-LITE;
 - whether it is supported, locally adapted, or an explicit unavailable
   response;
 - its public, administrative, self/other, bootstrap, or built-in access model;
@@ -114,8 +113,8 @@ the intentional `node`, `pause`, or `resume` compatibility responses. Runtime
 tests exercise public and granular permissions, built-in administrators,
 console/player restrictions, other-player access, force permissions, invalid
 usage, and hidden suggestions. `OperatorDocumentationContractTest` additionally
-fails the build when command roots, permission nodes, modifiers, the pinned
-release/commit, or canonical host-configuration keys and defaults drift from
+fails the build when command roots, permission nodes, modifiers, the tracked
+branch, or canonical host-configuration keys and defaults drift from
 their operator documentation.
 
 ## Compatibility Rules
@@ -128,8 +127,8 @@ their operator documentation.
 5. Require admin permission for `all`, `local`, another player, force actions,
    destructive actions, and server administration.
 6. Test the complete tree against a versioned command fixture before release.
-7. Review the upstream command implementation and documentation whenever the
-   pinned SLS target changes.
+7. Periodically review the upstream command implementation and documentation on
+   SLS `main`; update the local contract only after material drift is reviewed.
 
 SLS-LITE granular lifecycle permissions are additive:
 

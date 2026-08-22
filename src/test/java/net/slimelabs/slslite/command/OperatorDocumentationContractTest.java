@@ -73,15 +73,13 @@ final class OperatorDocumentationContractTest {
   }
 
   @Test
-  void compatibilityDocumentationRemainsPinnedToTheCommandContract() throws IOException {
+  void compatibilityDocumentationTargetsMainAndCoversTheCommandContract() throws IOException {
     for (String document : Set.of("DOCS/Compatibility.md", "DOCS/SLS_Command_Compatibility.md")) {
       String content = read(document);
       assertTrue(
-          content.contains(VSLSCommandContract.RELEASE),
-          () -> document + " is missing pinned release " + VSLSCommandContract.RELEASE);
-      assertTrue(
-          content.contains(VSLSCommandContract.COMMIT),
-          () -> document + " is missing pinned commit " + VSLSCommandContract.COMMIT);
+          content.contains("SLS `" + VSLSCommandContract.UPSTREAM_BRANCH + "`")
+              || content.contains("SLS `main` branch"),
+          () -> document + " must identify the upstream SLS main branch");
     }
 
     String compatibility = read("DOCS/SLS_Command_Compatibility.md");

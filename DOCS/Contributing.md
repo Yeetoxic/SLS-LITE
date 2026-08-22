@@ -85,10 +85,12 @@ security implications, and destructive behavior must be explicit.
 
 ## Compatibility Work
 
-Pin the upstream SLS revision before comparing behavior. Record whether each
-feature is supported, adapted, SLS-LITE-only, or intentionally unsupported.
-Proposed work belongs only in `todo.md`. Do not copy upstream code or fixtures
-without checking their license and attribution requirements.
+Compare behavior against the current upstream SLS `main` branch. Record the
+audit in development or release evidence, but keep operator documentation free
+of transient commit hashes and release pins. Classify each feature as supported,
+adapted, SLS-LITE-only, or intentionally unsupported. Proposed work belongs
+only in `todo.md`. Do not copy upstream code or fixtures without checking their
+license and attribution requirements.
 
 ## Release Artifacts
 

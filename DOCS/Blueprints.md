@@ -230,7 +230,7 @@ server:
 For every existing line beginning with a `find` key, SLS-LITE replaces the
 whole line with the mapped scalar value. It does not append a replacement when
 the prefix is absent. A missing target is created as an empty file, matching
-SLS v0.2.0 behavior. Prefixes may not overlap; definitions such as `server-`
+SLS main behavior. Prefixes may not overlap; definitions such as `server-`
 and `server-port=` are rejected because one input line could match both.
 
 Targets must remain inside the instance and may not traverse symbolic links.
@@ -451,7 +451,7 @@ HTTP(S) URL. See [Resource Packs](Resource_Packs.md).
 The field shape above is the implemented local subset. Unsupported modern SLS
 structural fields are rejected with their path; unknown annotations are
 preserved in memory. See the
-[SLS v0.2.0 compatibility matrix](SLS_v0.2.0_Compatibility.md) for the pinned,
+[SLS main compatibility matrix](SLS_Main_Compatibility.md) for the maintained,
 field-by-field boundary.
 
 Blueprint parsing does not require volume source directories to exist. This

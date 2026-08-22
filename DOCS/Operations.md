@@ -63,7 +63,7 @@ timeout, so unsaved child-process data may be lost.
 
 Persistent instance storage is preserved. Verified ephemeral storage, ports,
 memory admission, logs, mounts, and registrations are released only by normal
-terminal cleanup. The pinned vSLS `force` modifier requests backend
+terminal cleanup. The upstream vSLS `force` modifier requests backend
 unregistration when the termination request itself fails; SLS-LITE never uses
 that modifier to pretend a possibly live process has released its other
 resources.

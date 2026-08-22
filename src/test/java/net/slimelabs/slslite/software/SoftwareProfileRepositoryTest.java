@@ -191,7 +191,7 @@ class SoftwareProfileRepositoryTest {
   @Test
   void adaptsPinnedModernPaperDefinition() throws Exception {
     copyResource(
-        "fixtures/compatibility/sls-v0.2.0/software/paper.yml", "upstream/minecraft/paper.yml");
+        "fixtures/compatibility/sls-main/software/paper.yml", "upstream/minecraft/paper.yml");
     SoftwareProfileRepository repository = new SoftwareProfileRepository(temporaryDirectory);
 
     repository.reload();

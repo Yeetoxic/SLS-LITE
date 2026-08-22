@@ -58,7 +58,7 @@ Start at:
 
 - `command/SLSCommand.java` for dispatch and the small shared surface;
 - `command/handler/` for execution and completion of a command family;
-- `command/VSLSCommandContract.java` for the pinned vSLS command shape;
+- `command/VSLSCommandContract.java` for the reviewed vSLS command shape;
 - `CommandPermissions`, `CommandAuthorizer`, and `CommandMessages` for access
   and presentation;
 - `CommandInstanceAccess` and `InstanceTargetResolver` for instance lookup,

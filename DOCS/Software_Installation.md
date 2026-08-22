@@ -75,7 +75,7 @@ structural keys fail profile loading.
 ## Modern SLS Definitions
 
 SLS-LITE directly recognizes the modern SLS `software:` shape documented by
-SLS and pinned in the compatibility contract at `v0.2.0`:
+SLS `main` and maintained in the compatibility contract:
 
 ```yaml
 software:

@@ -13,9 +13,8 @@ import org.junit.jupiter.api.Test;
 final class VSLSCommandContractTest {
 
   @Test
-  void contractRemainsPinnedToReviewedUpstreamRevision() {
-    assertEquals("v0.2.0", VSLSCommandContract.RELEASE);
-    assertEquals("8e8b1e3cf7d2157887764c16f11b8901f8241121", VSLSCommandContract.COMMIT);
+  void contractTargetsTheUpstreamMainBranch() {
+    assertEquals("main", VSLSCommandContract.UPSTREAM_BRANCH);
   }
 
   @Test

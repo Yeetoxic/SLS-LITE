@@ -53,7 +53,7 @@ summaries.
 | Security and privacy | [Security and Privacy](Security_and_Privacy.md) | [Backend Messaging](Backend_Messaging.md) |
 | Software profiles and installation | [Software Installation](Software_Installation.md) | Generated Paper and vanilla profiles |
 | Lobby and player fallback behavior | [SLS-Limbo](SLS_Limbo.md) | [Protocol Compatibility](Protocol_Compatibility.md) |
-| SLS and platform compatibility | [Compatibility](Compatibility.md) | [SLS v0.2.0 matrix](SLS_v0.2.0_Compatibility.md) |
+| SLS and platform compatibility | [Compatibility](Compatibility.md) | [SLS Main matrix](SLS_Main_Compatibility.md) |
 | Migration | [Migration](Migration.md) | Historical fixtures under `DOCS/HISTORICAL/` |
 | Java extension development | [Java Extension API](Java_API.md) | [API scope policy](Java_API_Compatibility.md), [example extension](../examples/velocity-extension/README.md) |
 | Paper backend, NPC, and menu integrations | [Backend Messaging](Backend_Messaging.md) | [Paper sender example](../examples/paper-backend-sender/README.md) |

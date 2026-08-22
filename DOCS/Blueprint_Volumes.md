@@ -37,7 +37,7 @@ selects the safest available implementation for the configured paths:
 
 Multiple `cow` entries may target the same exact directory. SLS-LITE merges
 them in blueprint declaration order, matching the lower-layer order used by
-SLS v0.2.0:
+SLS main:
 
 - directories merge;
 - the first source wins when the same path exists in multiple sources;

@@ -1233,7 +1233,7 @@ than exposing core implementation classes.
       notices, update the config generation and copyable reference, and test
       clean install, upgrade, reload, API absence/version compatibility, and
       managed Paper plus SLS-Limbo forwarding.
-- [ ] Replace the release/commit-pinned SLS `v0.2.0` compatibility contract with
+- [x] Replace the release/commit-pinned SLS compatibility contract with
       ongoing compatibility against the current SLS `main` branch. Remove exact
       upstream release and commit constants, assertions, current-document names,
       and operator-facing claims; those pins established SLS-LITE's initial

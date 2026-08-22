@@ -6,10 +6,11 @@ SLS-LITE is an independent, single-host implementation of useful SLS concepts.
 It does not run under full SLS and does not require Protocube, a daemon, S4J,
 Docker, or another SLS installation.
 
-The compatibility contract is pinned to SLS `v0.2.0` at commit
-`8e8b1e3cf7d2157887764c16f11b8901f8241121`. The field-level comparison and
-scope decisions are in the
-[SLS v0.2.0 Compatibility Matrix](SLS_v0.2.0_Compatibility.md).
+The compatibility contract follows the upstream SLS `main` branch. The
+field-level comparison and scope decisions are in the
+[SLS Main Compatibility Matrix](SLS_Main_Compatibility.md). Reviewed,
+repository-owned fixtures keep ordinary builds deterministic between upstream
+audits.
 
 ## Current Feature Matrix
 
@@ -48,11 +49,11 @@ Shared-product material uses these permanent scope labels:
 
 ## Complete Current SLS Project Map
 
-The current comparison baseline is upstream SLS `main` and tag `v0.2.0`, both
-at commit `8e8b1e3cf7d2157887764c16f11b8901f8241121` as of 2026-08-03. The audit
-covers Protocube, daemon, vSLS, the shared blueprint/software definitions, and
-the bundled SlimePacks extension. A matching field or command name does not
-imply that SLS-LITE provides the distributed or container boundary around it.
+The current comparison baseline is the upstream SLS `main` branch. Periodic
+drift audits cover Protocube, daemon, vSLS, the shared blueprint/software
+definitions, and the bundled SlimePacks extension. A matching field or command
+name does not imply that SLS-LITE provides the distributed or container
+boundary around it.
 
 | Full-SLS surface | Classification | SLS-LITE decision |
 | --- | --- | --- |
@@ -84,7 +85,8 @@ boundaries, not silent parser acceptance or incomplete runtime behavior.
 ## Compatibility Rules
 
 1. Modern SLS terminology wins when equivalent behavior exists.
-2. Historical SLS v2.1.2 defines the proven single-host workflows to preserve.
+2. The preserved historical single-host SLS fixture defines the proven local
+   workflows to preserve.
 3. Local adaptations must keep the same operator intent without claiming
    distributed isolation or enforcement.
 4. Unsupported structural fields are rejected with actionable paths.
@@ -95,18 +97,16 @@ boundaries, not silent parser acceptance or incomplete runtime behavior.
    labeled local configuration.
 8. Full SLS must never become a runtime dependency of SLS-LITE.
 
-## Version Baselines
+## Compatibility Baselines
 
-- Command/presentation target: SLS `v0.2.0`, commit
-  `8e8b1e3cf7d2157887764c16f11b8901f8241121`.
-- Historical single-host behavior: SLS `2.1.2`, commit
-  `4f9b7ca7f6d857d43253076f1627ad4087f663ab`.
-- Current SLS-LITE candidate: `0.1.0-rc.2`.
+- Command, schema, and presentation target: upstream SLS `main`.
+- Historical single-host behavior: the preserved legacy fixtures documented in
+  [Migration](Migration.md).
 
 The supported release line retains these boundaries:
 
-- full SLS remains pinned to `v0.2.0`/`8e8b1e3c` because no newer stable shared
-  contract supersedes it;
+- full SLS compatibility follows reviewed changes on `main`; ordinary builds
+  use repository-owned fixtures and never download a moving branch;
 - Minecraft and Paper 26.2 remain the stable server baseline; Minecraft 26.3 is
   still a snapshot line and is handled only by the documented forward-client
   ViaVersion policy;
@@ -165,7 +165,7 @@ filesystems, or rejected helper handshakes degrade to portable copy under
 
 The compatibility work must:
 
-- pin the modern SLS revision used for the run;
+- record the upstream `main` comparison run in development or release evidence;
 - compare configuration, blueprints, commands, permissions, lifecycle,
   installation, storage, observability, and integrations;
 - classify every feature as supported, adapted, SLS-LITE-only, or intentionally

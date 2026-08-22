@@ -1,5 +1,5 @@
-# Derived from software/paper.yml in SLS v0.2.0.
-# Source commit: 8e8b1e3cf7d2157887764c16f11b8901f8241121
+# Derived from software/paper.yml in SLS main.
+# Maintained against the upstream SLS main branch.
 # Source license: GNU Affero General Public License v3.0
 
 software:
