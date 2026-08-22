@@ -80,6 +80,13 @@ slots, and available ports. Queued and in-flight joins reserve player capacity.
 The public limit is enforced for matchmaking, direct joins, and native Velocity
 server-selection routes.
 
+For `save: true`, new creation does not silently replace an inactive retained
+instance of the same blueprint. Restart or reset the named retained instance to
+reuse its exact ID, or delete it explicitly before creating a replacement. This
+also prevents a failed start or unresolved persistent-file conflict from
+accumulating additional saved instance directories through repeated start or
+matchmaking requests.
+
 The generated backend `max-players` may be higher than this public limit. That
 bounded technical headroom exists only so an authorized administrator can use
 `/sls join player <player> --force` without also needing Paper operator access.

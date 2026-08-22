@@ -320,6 +320,8 @@ public final class InstanceManager implements ServerController {
     SoftwareProfile profile = definition.softwareProfile();
     InstanceDefinitionIdentity definitionIdentity =
         InstanceDefinitionIdentity.from(blueprint, profile);
+    List<String> retainedPersistentIds =
+        blueprint.save() ? List.copyOf(metadata.persistentInstanceIds(blueprint.id())) : List.of();
 
     String instanceId;
     int port;
@@ -330,6 +332,7 @@ public final class InstanceManager implements ServerController {
       if (maintenance.enabled()) {
         throw new InstanceOperationException(maintenanceMessage(maintenance));
       }
+      requireNoInactivePersistentReplacement(blueprint, retainedPersistentIds);
       enforceInstanceLimit(blueprint, null);
       instanceId = uniqueInstanceId(blueprint.id());
       if (!resourceBudget.tryReserve(instanceId, blueprint.memoryLimitMiB())) {
@@ -1238,6 +1241,34 @@ public final class InstanceManager implements ServerController {
               + blueprint.maxInstances()
               + " active instance(s)");
     }
+  }
+
+  private void requireNoInactivePersistentReplacement(
+      Blueprint blueprint, List<String> retainedPersistentIds) throws InstanceOperationException {
+    String retainedId =
+        retainedPersistentIds.stream()
+            .filter(
+                id -> {
+                  ManagedInstance instance = instances.get(id);
+                  return instance == null
+                      || instance.state() == InstanceState.STOPPING
+                      || instance.state() == InstanceState.STOPPED
+                      || instance.state() == InstanceState.FAILED;
+                })
+            .filter(id -> !persistentOperations.hasPendingDelete(id))
+            .findFirst()
+            .orElse(null);
+    if (retainedId == null) {
+      return;
+    }
+    throw new InstanceOperationException(
+        "Persistent instance "
+            + retainedId
+            + " already exists for blueprint "
+            + blueprint.type()
+            + "/"
+            + blueprint.id()
+            + "; restart or reset that instance, or delete it before creating a replacement");
   }
 
   synchronized ManagedInstance findActive(String instanceId) {

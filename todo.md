@@ -1179,6 +1179,22 @@ whose known limitations and compatibility boundaries match observed behavior,
 with `v0.1.0-rc.1` retained as the prior baseline. New findings after publication
 move into a new release-candidate subsection.
 
+#### `v0.1.0-rc.2.1`
+
+Temporary hotfix candidate for release-blocking RC.2 lifecycle defects. Preserve
+RC.2 as an immutable baseline and defer the planned RC.3 feature scope below.
+
+- [x] Prevent failed or stopped `save: true` instances from being silently
+      replaced by newly generated instance IDs. New creation now names the
+      retained instance and requires the operator or caller to restart, reset,
+      or delete it. Preserve persistent-file conflict candidates and keep
+      restart/reset on the exact existing ID. Cover repeated creation attempts
+      so one recoverable failure cannot accumulate additional saved directories.
+- [ ] Triage and resolve the second maintainer-reported hotfix defect.
+- [ ] Set the hotfix version consistently, update the release workflow to accept
+      the SemVer-ordered `x.y.z-rc.N.H` form, publish focused release and upgrade
+      notes, and complete the required regression and distribution gates.
+
 #### v0.1.0-rc.3
 
 Active post-RC.2 extension-integration follow-up. Preserve RC.2 as an immutable

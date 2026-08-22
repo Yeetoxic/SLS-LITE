@@ -169,6 +169,29 @@ class InstanceManagerTest {
   }
 
   @Test
+  void rejectsNewPersistentReplacementWhileStoppedInstanceCanBeRecovered() throws Exception {
+    createContext(true, true);
+    ManagedInstance original = manager.start("fixture");
+    original.readyFuture().get(10, TimeUnit.SECONDS);
+    manager.stop(original.id()).get(10, TimeUnit.SECONDS);
+    awaitCleanup();
+
+    InstanceOperationException rejected =
+        assertThrows(InstanceOperationException.class, () -> manager.start("fixture"));
+    InstanceOperationException repeated =
+        assertThrows(InstanceOperationException.class, () -> manager.start("fixture"));
+
+    assertTrue(rejected.getMessage().contains(original.id()));
+    assertTrue(rejected.getMessage().contains("restart or reset"));
+    assertEquals(rejected.getMessage(), repeated.getMessage());
+    assertEquals(List.of(original.id()), manager.persistentInstanceIds("fixture"));
+
+    ManagedInstance restarted = manager.restart(original.id()).get(10, TimeUnit.SECONDS);
+    restarted.readyFuture().get(10, TimeUnit.SECONDS);
+    assertEquals(original.id(), restarted.id());
+  }
+
+  @Test
   void forceKillReleasesAdmissionsAndPreservesPersistentStorage() throws Exception {
     TestContext context = createContext(true, true);
     ManagedInstance instance = manager.start("fixture");
