@@ -35,7 +35,6 @@ final class VSLSCommandContractTest {
             "system",
             "node",
             "console.server",
-            "console.follow",
             "blueprint.id",
             "blueprints",
             "debug",
@@ -158,9 +157,8 @@ final class VSLSCommandContractTest {
         branch("stop.server").modifiers());
     assertEquals(List.of(VSLSCommandContract.ADDITIVE_FORCE), branch("restart.server").modifiers());
     assertEquals(List.of(VSLSCommandContract.REMOTE_STATUS), branch("status.remote").modifiers());
-    assertEquals(
-        List.of(VSLSCommandContract.CONSOLE_FOLLOW, VSLSCommandContract.CONSOLE_UNFOLLOW),
-        branch("console.follow").modifiers());
+    assertEquals(List.of(VSLSCommandContract.LOGS_FOLLOW), branch("logs.follow").modifiers());
+    assertEquals(List.of(VSLSCommandContract.LOGS_UNFOLLOW), branch("logs.unfollow").modifiers());
     assertEquals(
         List.of(
             VSLSCommandContract.Completion.SOFTWARE,

@@ -166,6 +166,44 @@ final class InstanceReconcilerTest {
   }
 
   @Test
+  void quarantinesDuplicatePersistentInstancesWithoutPublishingEitherCopy() throws Exception {
+    Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
+    Path software = Files.createDirectories(temporaryDirectory.resolve("software/base"));
+    Files.writeString(software.resolve("server.jar"), "fixture");
+    Path canonical = temporaryDirectory.resolve("volumes/whitelists/lobby/whitelist.json");
+    Files.createDirectories(canonical.getParent());
+    Files.writeString(canonical, "[]\n");
+    InstanceDirectoryPreparer preparer = new InstanceDirectoryPreparer(root, temporaryDirectory);
+    BlueprintPersistentFile persistentFile =
+        new BlueprintPersistentFile(
+            "whitelist", "volumes/whitelists/lobby/whitelist.json", "whitelist.json");
+    Path first =
+        preparer.prepare(
+            "lobby.sav001", software, List.of(), List.of(), List.of(persistentFile), () -> false);
+    preparer.publishPersistentFiles("lobby.sav001");
+    preparer.suspend("lobby.sav001");
+    Path second =
+        preparer.prepare(
+            "lobby.sav002", software, List.of(), List.of(), List.of(persistentFile), () -> false);
+    Files.writeString(first.resolve("whitelist.json"), "[\"first\"]\n");
+    Files.writeString(second.resolve("whitelist.json"), "[\"second\"]\n");
+    InstanceMetadataStore metadata = new InstanceMetadataStore(root);
+    metadata.write(first, record("lobby.sav001", true, InstanceState.READY, null, null));
+    metadata.write(second, record("lobby.sav002", true, InstanceState.READY, null, null));
+
+    InstanceReconciliationReport report =
+        new InstanceReconciler(preparer, LoggerFactory.getLogger(InstanceReconcilerTest.class))
+            .reconcile();
+
+    assertEquals(2, report.preservedPersistent());
+    assertEquals(0, report.failures());
+    assertEquals("[]\n", Files.readString(canonical));
+    assertFalse(Files.exists(temporaryDirectory.resolve("internal/persistent-file-conflicts")));
+    assertEquals(InstanceState.STOPPED, metadata.read(first).orElseThrow().state());
+    assertEquals(InstanceState.STOPPED, metadata.read(second).orElseThrow().state());
+  }
+
+  @Test
   void publishesEphemeralPersistentFileBeforeCrashReconciliationDeletesInstance() throws Exception {
     Path root = Files.createDirectories(temporaryDirectory.resolve("instances"));
     Path software = Files.createDirectories(temporaryDirectory.resolve("software/base"));

@@ -405,11 +405,20 @@ public final class LocalLobbyProvider implements LobbyProvider {
       persistentId = previous.id();
     }
     if (persistentId == null) {
-      persistentId =
-          instances.persistentInstanceIds(blueprint.id()).stream()
-              .sorted()
-              .findFirst()
-              .orElse(null);
+      List<String> retained =
+          instances.persistentInstanceIds(blueprint.id()).stream().sorted().toList();
+      if (retained.size() > 1) {
+        throw new InstanceOperationException(
+            "Managed lobby blueprint "
+                + blueprint.type()
+                + "/"
+                + blueprint.id()
+                + " has multiple retained persistent instances after restart: "
+                + String.join(", ", retained.stream().limit(5).toList())
+                + (retained.size() > 5 ? ", ..." : "")
+                + "; delete the unwanted instances before lobby startup can resume");
+      }
+      persistentId = retained.isEmpty() ? null : retained.getFirst();
     }
     if (persistentId == null) {
       ManagedInstance instance = instances.start(blueprint.id());

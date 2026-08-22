@@ -49,6 +49,38 @@ class LocalJoinServiceTest {
   @TempDir Path temporaryDirectory;
 
   @Test
+  void resumesTheRetainedPersistentInstanceAfterProxyRestart() throws Exception {
+    Fixture fixture = fixture(Duration.ofSeconds(5), 0, null, "save: true");
+    fixture.controller().retain("smoke", "smoke.saved01");
+    try (LocalJoinService service = fixture.service()) {
+      LocalJoinService.JoinAttempt attempt = service.join(fixture.player(), "test", "smoke");
+
+      assertEquals("smoke.saved01", attempt.instance().id());
+      assertEquals(0, fixture.controller().startCount());
+      assertEquals(1, fixture.controller().restartCount());
+    }
+  }
+
+  @Test
+  void refusesToChooseBetweenMultipleRetainedPersistentInstances() throws Exception {
+    Fixture fixture = fixture(Duration.ofSeconds(5), 0, null, "save: true");
+    fixture.controller().retain("smoke", "smoke.saved01");
+    fixture.controller().retain("smoke", "smoke.saved02");
+    try (LocalJoinService service = fixture.service()) {
+      InstanceOperationException exception =
+          assertThrows(
+              InstanceOperationException.class,
+              () -> service.join(fixture.player(), "test", "smoke"));
+
+      assertTrue(exception.getMessage().contains("multiple retained persistent instances"));
+      assertTrue(exception.getMessage().contains("smoke.saved01"));
+      assertTrue(exception.getMessage().contains("smoke.saved02"));
+      assertEquals(0, fixture.controller().startCount());
+      assertEquals(0, fixture.controller().restartCount());
+    }
+  }
+
+  @Test
   void emitsOrderedMatchmakingEventsForSuccessfulTransfer() throws Exception {
     Fixture fixture = fixture(Duration.ofSeconds(5));
     List<LocalJoinService.MatchmakingTransition> events = new CopyOnWriteArrayList<>();
@@ -1115,7 +1147,10 @@ class LocalJoinServiceTest {
     private final Map<String, Blueprint> blueprints;
     private final Path directory;
     private final Map<String, ManagedInstance> instances = new LinkedHashMap<>();
+    private final Map<String, String> retainedBlueprints = new LinkedHashMap<>();
     private int stopCount;
+    private int startCount;
+    private int restartCount;
     private int sequence;
 
     private FakeController(Blueprint blueprint, Path directory) {
@@ -1129,6 +1164,7 @@ class LocalJoinServiceTest {
 
     @Override
     public ManagedInstance start(String blueprintId) {
+      startCount++;
       Blueprint blueprint = blueprints.get(blueprintId);
       if (blueprint == null) {
         throw new IllegalArgumentException("Unknown blueprint " + blueprintId);
@@ -1145,6 +1181,32 @@ class LocalJoinServiceTest {
     @Override
     public Collection<ManagedInstance> getAll() {
       return List.copyOf(instances.values());
+    }
+
+    @Override
+    public Collection<String> persistentInstanceIds(String blueprintId) {
+      return retainedBlueprints.entrySet().stream()
+          .filter(entry -> entry.getValue().equals(blueprintId))
+          .map(Map.Entry::getKey)
+          .toList();
+    }
+
+    @Override
+    public CompletableFuture<ManagedInstance> restart(String instanceId)
+        throws InstanceOperationException {
+      restartCount++;
+      String blueprintId = retainedBlueprints.get(instanceId);
+      if (blueprintId == null) {
+        throw new InstanceOperationException("Unknown persistent instance " + instanceId);
+      }
+      Blueprint blueprint = blueprints.get(blueprintId);
+      InstanceLifecycle lifecycle = new InstanceLifecycle(instanceId);
+      lifecycle.transitionTo(InstanceState.PREPARING);
+      ManagedInstance instance =
+          new ManagedInstance(
+              instanceId, blueprint, 25600, directory.resolve(instanceId), lifecycle);
+      instances.put(instance.id(), instance);
+      return CompletableFuture.completedFuture(instance);
     }
 
     @Override
@@ -1171,6 +1233,18 @@ class LocalJoinServiceTest {
 
     private int stopCount() {
       return stopCount;
+    }
+
+    private void retain(String blueprintId, String instanceId) {
+      retainedBlueprints.put(instanceId, blueprintId);
+    }
+
+    private int startCount() {
+      return startCount;
+    }
+
+    private int restartCount() {
+      return restartCount;
     }
   }
 }

@@ -2,7 +2,7 @@
 
 [Documentation home](README.md)
 
-<!-- sls-command-contract-sha256:4ca36eb8f256951e2b7822db1f17821ba519225308c45e022e61a0b88d2f716d -->
+<!-- sls-command-contract-sha256:03b4e95467791a7fb801301fb244e2d2f4eca6ae368ec072c1e807dad45156e4 -->
 
 SLS-LITE uses `/sls` and mirrors the reviewed vSLS command tree where the local
 operation exists. Composite instance IDs use `<blueprint>.<short-id>`. For
@@ -27,7 +27,7 @@ complete permission inventory synchronized with the runtime:
 | `sls.command.admin` | Every administrative command, force operation, and local administrator-management action. |
 | `sls.command.blueprint` | Inspect one blueprint. |
 | `sls.command.blueprints` | Browse blueprint registries. |
-| `sls.command.console` | Send commands to managed child-console input. Legacy follow aliases remain available under this stronger permission. |
+| `sls.command.console` | Send commands to managed child-console input. |
 | `sls.command.create` | Provision a fresh instance. |
 | `sls.command.debug` | Toggle the player-only bounded debug stream. |
 | `sls.command.delete` | Delete ordinary managed instances. |
@@ -93,8 +93,6 @@ name a player and cannot use player-only selectors.
 | `/sls status [server\|this] [remote]` | `status` | Lifecycle state. Players may omit the target for their current server. `remote` is retained as an explicit local-mode boundary response because no daemon exists. |
 | `/sls stats [server\|this]` | `stats` | Uptime, CPU time, configured/current memory, Linux process I/O where measurable, and log retention. |
 | `/sls console <server\|this> <command...>` | `console` | Write one command to the child process input, then asynchronously show up to eight new output lines captured during the bounded two-second response window. |
-| `/sls console <server\|this> --follow` | `console` | Compatibility alias for `/sls logs <server\|this> --follow`. New integrations should use the `logs` form. |
-| `/sls console <server\|this> --unfollow` | `console` | Compatibility alias for targetless `/sls logs --unfollow`. The named target is ignored so a stopped instance cannot trap the session. |
 | `/sls logs <server\|this> [page] [lines]` | `logs` | Read retained child output; up to 100 lines per page. |
 | `/sls logs <server\|this> --follow` | `logs` | Follow bounded live child output. Starting another follow moves the sender's single session to the new instance. |
 | `/sls logs --unfollow` | `logs` | Stop the sender's active live-output session without requiring the old target to remain active. |
@@ -187,7 +185,7 @@ it never replays old retained lines. Capture waits away from Velocity's command
 thread, stops after two seconds or eight lines, and renders at most 320
 characters per line. A quiet command receives a concise no-output response.
 
-`logs --follow` is an additive operator mode and does not alter the pinned
+`logs --follow` is an additive operator mode and does not alter the reviewed
 `console <server> <command...>` input form. It uses the same cursor-backed buffer in
 bounded 16-line batches without blocking the managed process's output reader.
 If output outruns the configured in-memory retention buffer, the operator is told how many

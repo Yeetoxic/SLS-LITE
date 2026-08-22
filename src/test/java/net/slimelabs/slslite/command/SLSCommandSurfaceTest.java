@@ -312,9 +312,9 @@ final class SLSCommandSurfaceTest {
   }
 
   @Test
-  void consoleFollowCompletionIsPermissionFiltered() {
+  void consoleInputDoesNotSuggestLegacyOutputAliases() {
     assertEquals(
-        List.of("--follow", "--unfollow"),
+        List.of(),
         command
             .suggestAsync(
                 invocation(
@@ -351,7 +351,7 @@ final class SLSCommandSurfaceTest {
   }
 
   @Test
-  void administratorUmbrellaCanFollowAndMalformedModifiersAreNeverSentAsCommands() {
+  void administratorUmbrellaCanFollowAndMalformedLogsModifiersAreRejected() {
     ManagedInstance instance = managedInstance("server.abcdef");
     command = command(controller(instance));
     List<Component> administratorMessages = new ArrayList<>();
@@ -367,29 +367,12 @@ final class SLSCommandSurfaceTest {
     command.execute(
         invocation(source(Set.of("sls.command.logs"), malformedLogs), "logs", "--follow"));
     assertTrue(plainText(malformedLogs.get(1)).contains("/sls logs <server|this | --follow>"));
-
-    List<Component> malformedConsole = new ArrayList<>();
-    command.execute(
-        invocation(
-            source(Set.of("sls.command.console"), malformedConsole),
-            "console",
-            instance.id(),
-            "--unfollow",
-            "unexpected"));
-    assertTrue(plainText(malformedConsole.get(1)).contains("/sls console <server | command>"));
-    assertTrue(plainText(malformedConsole.get(2)).contains("/sls logs"));
   }
 
   @Test
-  void consoleFollowAliasAndPlayerThisUseTheSharedSession() {
+  void playerThisUsesTheCanonicalLogsSession() {
     ManagedInstance instance = managedInstance("server.abcdef");
     command = command(controller(instance));
-    List<Component> consoleMessages = new ArrayList<>();
-    ConsoleCommandSource console = console(consoleMessages);
-    command.execute(invocation(console, "console", instance.id(), "--follow"));
-    command.execute(invocation(console, "console", "deleted.old", "--unfollow"));
-    assertTrue(plainText(consoleMessages.getFirst()).contains("Following live output"));
-    assertTrue(plainText(consoleMessages.getLast()).contains("Stopped following live output"));
 
     List<Component> playerMessages = new ArrayList<>();
     Player player = playerOn(instance.id(), Set.of("sls.command.logs"), playerMessages);

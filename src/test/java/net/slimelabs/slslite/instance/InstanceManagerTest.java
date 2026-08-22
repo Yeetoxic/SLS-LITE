@@ -358,6 +358,25 @@ class InstanceManagerTest {
   }
 
   @Test
+  void proxyRestartCannotAllocateAroundTheRetainedPersistentInstance() throws Exception {
+    createContext(true, true);
+    ManagedInstance original = manager.start("fixture");
+    original.readyFuture().get(10, TimeUnit.SECONDS);
+
+    manager.shutdown(Duration.ofSeconds(3));
+
+    createContext(true, true);
+    InstanceOperationException replacement =
+        assertThrows(InstanceOperationException.class, () -> manager.start("fixture"));
+    assertTrue(replacement.getMessage().contains(original.id()));
+    assertEquals(List.of(original.id()), manager.persistentInstanceIds("fixture"));
+
+    ManagedInstance recovered = manager.restart(original.id()).get(10, TimeUnit.SECONDS);
+    recovered.readyFuture().get(10, TimeUnit.SECONDS);
+    assertEquals(original.id(), recovered.id());
+  }
+
+  @Test
   void createOverridesSurviveManagerRecreationRestartAndReset() throws Exception {
     TestContext context = createContext(false, true);
     InstanceLaunchOverrides overrides =

@@ -6,8 +6,12 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import net.slimelabs.slslite.instance.InstancePreparationException;
@@ -73,13 +77,50 @@ public final class InstanceReconciler {
 
     MutableReport report = new MutableReport();
     report.recoveredStorageTransactions = recoveredTransactions;
+    Set<String> ambiguousPersistentIds = ambiguousPersistentIds(directories);
     for (Path directory : directories) {
-      reconcile(directory, report);
+      reconcile(
+          directory, report, ambiguousPersistentIds.contains(directory.getFileName().toString()));
     }
     return report.snapshot();
   }
 
-  private void reconcile(Path directory, MutableReport report) {
+  private Set<String> ambiguousPersistentIds(List<Path> directories) {
+    Map<String, List<String>> idsByBlueprint = new HashMap<>();
+    for (Path directory : directories) {
+      try {
+        metadataStore
+            .read(directory)
+            .filter(InstanceMetadata::persistent)
+            .filter(metadata -> directory.getFileName().toString().equals(metadata.instanceId()))
+            .ifPresent(
+                metadata ->
+                    idsByBlueprint
+                        .computeIfAbsent(
+                            metadata.blueprintId(), ignored -> new java.util.ArrayList<>())
+                        .add(metadata.instanceId()));
+      } catch (IOException ignored) {
+        // The normal reconciliation pass reports unreadable metadata.
+      }
+    }
+    Set<String> ambiguousIds = new HashSet<>();
+    idsByBlueprint.forEach(
+        (blueprintId, ids) -> {
+          if (ids.size() > 1) {
+            ids.sort(String::compareTo);
+            ambiguousIds.addAll(ids);
+            logger.error(
+                "Refusing to publish persistent files for blueprint {} during startup because "
+                    + "multiple retained instances exist: {}. Delete the unwanted copies before "
+                    + "starting this blueprint.",
+                blueprintId,
+                String.join(", ", ids));
+          }
+        });
+    return Set.copyOf(ambiguousIds);
+  }
+
+  private void reconcile(Path directory, MutableReport report, boolean ambiguousPersistentCopy) {
     Optional<InstanceMetadata> loaded;
     try {
       loaded = metadataStore.read(directory);
@@ -132,16 +173,27 @@ public final class InstanceReconciler {
     }
     if (metadata.persistent()) {
       try {
-        directoryPreparer.publishPersistentFiles(metadata.instanceId());
+        if (!ambiguousPersistentCopy) {
+          directoryPreparer.publishPersistentFiles(metadata.instanceId());
+        }
         directoryPreparer.suspend(metadata.instanceId());
         metadataStore.write(directory, metadata.withoutProcess(InstanceState.STOPPED));
         report.preservedPersistent++;
-        detailLog.normal(
-            correlationId,
-            "reconciliation",
-            "Preserving persistent instance {} from blueprint {}",
-            metadata.instanceId(),
-            metadata.blueprintId());
+        if (ambiguousPersistentCopy) {
+          detailLog.normal(
+              correlationId,
+              "reconciliation",
+              "Quarantined ambiguous persistent instance {} from blueprint {} without publishing files",
+              metadata.instanceId(),
+              metadata.blueprintId());
+        } else {
+          detailLog.normal(
+              correlationId,
+              "reconciliation",
+              "Preserving persistent instance {} from blueprint {}",
+              metadata.instanceId(),
+              metadata.blueprintId());
+        }
       } catch (IOException | InstancePreparationException exception) {
         report.failures++;
         logger.error(

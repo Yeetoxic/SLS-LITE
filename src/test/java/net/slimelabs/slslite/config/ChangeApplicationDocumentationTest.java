@@ -10,7 +10,7 @@ class ChangeApplicationDocumentationTest {
 
   @Test
   void canonicalGuidePinsEveryChangeBoundary() throws Exception {
-    String guide = Files.readString(Path.of("DOCS", "Change_Application.md"));
+    String guide = Files.readString(Path.of("DOCS", "Change_Application.md")).replace("\r\n", "\n");
 
     assertTrue(guide.contains("`config.yml` | Restart Velocity"));
     assertTrue(guide.contains("SLS-LITE or extension plugin JAR | Restart Velocity"));

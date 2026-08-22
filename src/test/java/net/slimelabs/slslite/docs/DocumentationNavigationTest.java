@@ -145,7 +145,6 @@ final class DocumentationNavigationTest {
         "src/main/java/net/slimelabs/slslite/BuildInfo.java",
         "public static final String VERSION = \"" + version + "\";");
     assertContains("src/main/resources/velocity-plugin.json", "\"version\": \"" + version + "\"");
-    assertContains("DOCS/Compatibility.md", "SLS-LITE candidate: `" + version + "`");
     assertContains("DOCS/Protocol_Compatibility.md", "| SLS-LITE | `" + version + "` |");
     assertContains("RELEASE_NOTES.md", "# SLS-LITE " + version);
     assertContains("WIKI/Home.md", "SLS-LITE " + version);

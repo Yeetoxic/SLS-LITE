@@ -40,8 +40,8 @@ public final class VSLSCommandContract {
   public static final String ADDITIVE_FORCE = "--force";
   public static final String REMOTE_STATUS = "remote";
   public static final String RELOAD_CONFIG = "config";
-  public static final String CONSOLE_FOLLOW = "--follow";
-  public static final String CONSOLE_UNFOLLOW = "--unfollow";
+  public static final String LOGS_FOLLOW = "--follow";
+  public static final String LOGS_UNFOLLOW = "--unfollow";
 
   static final List<String> PUBLIC_ROOT = List.of("join", "list", "find", "dequeue", "version");
 
@@ -192,18 +192,6 @@ public final class VSLSCommandContract {
               "console <server|this> <command...>",
               "console",
               Completion.INSTANCE_OR_THIS),
-          branch(
-              "console.follow",
-              "console <server|this> <--follow|--unfollow>",
-              Origin.ADDITIVE,
-              Availability.SUPPORTED,
-              Access.ADMIN,
-              Sender.ANY,
-              List.of("sls.command.console"),
-              List.of(),
-              List.of(CONSOLE_FOLLOW, CONSOLE_UNFOLLOW),
-              Completion.INSTANCE_OR_THIS,
-              Completion.CONSOLE_FOLLOW),
           adminBranch("blueprint.id", "blueprint <id>", "blueprint", Completion.BLUEPRINT),
           branch(
               "blueprints",
@@ -236,9 +224,9 @@ public final class VSLSCommandContract {
               Sender.ANY,
               List.of("sls.command.logs"),
               List.of(),
-              List.of(CONSOLE_FOLLOW),
+              List.of(LOGS_FOLLOW),
               Completion.INSTANCE_OR_THIS,
-              Completion.CONSOLE_FOLLOW),
+              Completion.LIVE_OUTPUT),
           branch(
               "logs.unfollow",
               "logs --unfollow",
@@ -248,8 +236,8 @@ public final class VSLSCommandContract {
               Sender.ANY,
               List.of("sls.command.logs"),
               List.of(),
-              List.of(CONSOLE_UNFOLLOW),
-              Completion.CONSOLE_FOLLOW),
+              List.of(LOGS_UNFOLLOW),
+              Completion.LIVE_OUTPUT),
           adminBranch("reload.default", "reload", "reload"),
           adminBranch(
               "reload.mode",
@@ -474,7 +462,7 @@ public final class VSLSCommandContract {
     SOFTWARE_VERSION,
     ADMIN_ACTION,
     ADMINISTRATOR,
-    CONSOLE_FOLLOW
+    LIVE_OUTPUT
   }
 
   public record Branch(

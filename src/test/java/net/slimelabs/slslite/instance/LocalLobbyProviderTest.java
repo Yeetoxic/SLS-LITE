@@ -49,7 +49,7 @@ class LocalLobbyProviderTest {
             proxy,
             blueprints,
             controller,
-            new LobbyConfig(LobbyMode.MANAGED, "lobby", "lobby"),
+            recoveryConfig(0),
             LoggerFactory.getLogger(LocalLobbyProviderTest.class));
 
     provider.start();
@@ -86,6 +86,29 @@ class LocalLobbyProviderTest {
     assertEquals("lobby.saved01", controller.instance().id());
     assertEquals(0, controller.starts());
     assertEquals(1, controller.restarts);
+    provider.close();
+  }
+
+  @Test
+  void refusesAmbiguousPersistentLobbyCopiesAfterProxyRestart() throws Exception {
+    BlueprintRepository blueprints = persistentBlueprints();
+    FakeController controller =
+        new FakeController(blueprints.get("lobby", "lobby").orElseThrow(), temporaryDirectory);
+    controller.persistentId = "lobby.saved01";
+    controller.additionalPersistentId = "lobby.saved02";
+    LocalLobbyProvider provider =
+        new LocalLobbyProvider(
+            proxy(new LinkedHashMap<>()),
+            blueprints,
+            controller,
+            recoveryConfig(0),
+            LoggerFactory.getLogger(LocalLobbyProviderTest.class));
+
+    provider.start();
+
+    assertEquals(LobbyStatus.OFFLINE, provider.status());
+    assertEquals(0, controller.starts());
+    assertEquals(0, controller.restarts);
     provider.close();
   }
 
@@ -583,6 +606,7 @@ class LocalLobbyProviderTest {
     private int resets;
     private int stops;
     private String persistentId;
+    private String additionalPersistentId;
     private boolean failRestarts;
 
     private FakeController(Blueprint blueprint, Path directory) {
@@ -607,7 +631,12 @@ class LocalLobbyProviderTest {
 
     @Override
     public Collection<String> persistentInstanceIds(String blueprintId) {
-      return persistentId == null ? List.of() : List.of(persistentId);
+      if (persistentId == null) {
+        return List.of();
+      }
+      return additionalPersistentId == null
+          ? List.of(persistentId)
+          : List.of(persistentId, additionalPersistentId);
     }
 
     @Override

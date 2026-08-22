@@ -364,7 +364,7 @@ public final class SLSCommand implements SimpleCommand {
                 : completed(List.of());
         case "logs" ->
             authorizer.canAdminister(source, "logs")
-                ? completed(withPrefix(VSLSCommandContract.CONSOLE_UNFOLLOW, instanceIds()))
+                ? completed(withPrefix(VSLSCommandContract.LOGS_UNFOLLOW, instanceIds()))
                 : completed(List.of());
         case "find", "join" ->
             completed(playerRoutingHandler.suggestions(source, operation, arguments));
@@ -410,15 +410,9 @@ public final class SLSCommand implements SimpleCommand {
     if (arguments.length == 3 && "admin".equals(operation)) {
       return completed(adminHandler.suggestions(source, arguments));
     }
-    if (arguments.length == 3
-        && "console".equals(operation)
-        && authorizer.canAdminister(source, "console")) {
-      return completed(
-          List.of(VSLSCommandContract.CONSOLE_FOLLOW, VSLSCommandContract.CONSOLE_UNFOLLOW));
-    }
     if (arguments.length == 3 && "logs".equals(operation)) {
       return authorizer.canAdminister(source, "logs")
-          ? completed(List.of(VSLSCommandContract.CONSOLE_FOLLOW, "1"))
+          ? completed(List.of(VSLSCommandContract.LOGS_FOLLOW, "1"))
           : completed(List.of());
     }
     if (arguments.length == 3 && "status".equals(operation)) {
@@ -591,23 +585,8 @@ public final class SLSCommand implements SimpleCommand {
       return;
     }
 
-    if (isFollowModifier(arguments[2]) && arguments.length != 3) {
-      sendConsoleUsage(source);
-      return;
-    }
-
-    if (arguments.length == 3
-        && VSLSCommandContract.CONSOLE_UNFOLLOW.equalsIgnoreCase(arguments[2])) {
-      stopFollowing(source);
-      return;
-    }
     ManagedInstance instance = resolveInstance(source, arguments[1]);
     if (instance == null) {
-      return;
-    }
-    if (arguments.length == 3
-        && VSLSCommandContract.CONSOLE_FOLLOW.equalsIgnoreCase(arguments[2])) {
-      startFollowing(source, instance, "console");
       return;
     }
     String command = String.join(" ", java.util.Arrays.copyOfRange(arguments, 2, arguments.length));
@@ -635,15 +614,13 @@ public final class SLSCommand implements SimpleCommand {
   }
 
   private void logs(CommandSource source, String[] arguments) {
-    if (arguments.length == 2
-        && VSLSCommandContract.CONSOLE_UNFOLLOW.equalsIgnoreCase(arguments[1])) {
+    if (arguments.length == 2 && VSLSCommandContract.LOGS_UNFOLLOW.equalsIgnoreCase(arguments[1])) {
       if (requireAdmin(source, "logs", "view managed server logs")) {
         stopFollowing(source);
       }
       return;
     }
-    if (arguments.length == 3
-        && VSLSCommandContract.CONSOLE_FOLLOW.equalsIgnoreCase(arguments[2])) {
+    if (arguments.length == 3 && VSLSCommandContract.LOGS_FOLLOW.equalsIgnoreCase(arguments[2])) {
       if (!requireAdmin(source, "logs", "view managed server logs")) {
         return;
       }
@@ -665,8 +642,8 @@ public final class SLSCommand implements SimpleCommand {
   }
 
   private static boolean isFollowModifier(String argument) {
-    return VSLSCommandContract.CONSOLE_FOLLOW.equalsIgnoreCase(argument)
-        || VSLSCommandContract.CONSOLE_UNFOLLOW.equalsIgnoreCase(argument);
+    return VSLSCommandContract.LOGS_FOLLOW.equalsIgnoreCase(argument)
+        || VSLSCommandContract.LOGS_UNFOLLOW.equalsIgnoreCase(argument);
   }
 
   private static void sendConsoleUsage(CommandSource source) {
@@ -731,7 +708,7 @@ public final class SLSCommand implements SimpleCommand {
     }
     return feedback.append(
         Component.text("[Stop following]", NamedTextColor.RED)
-            .clickEvent(ClickEvent.runCommand("/sls logs " + VSLSCommandContract.CONSOLE_UNFOLLOW))
+            .clickEvent(ClickEvent.runCommand("/sls logs " + VSLSCommandContract.LOGS_UNFOLLOW))
             .hoverEvent(Component.text("Stop live managed output", NamedTextColor.GRAY)));
   }
 

@@ -1189,7 +1189,9 @@ RC.2 as an immutable baseline and defer the planned RC.3 feature scope below.
       retained instance and requires the operator or caller to restart, reset,
       or delete it. Preserve persistent-file conflict candidates and keep
       restart/reset on the exact existing ID. Cover repeated creation attempts
-      so one recoverable failure cannot accumulate additional saved directories.
+      and full proxy restarts so one recoverable failure cannot accumulate
+      additional saved directories. Matchmaking and managed-lobby startup
+      resume the single retained ID and refuse ambiguous legacy duplicates.
 - [x] Surface malformed or invalid blueprint files in the normal readiness
       workflow. Preserve fault-isolated rejection details across startup and
       reload, list rejected paths as `action needed`, and expose the exact
@@ -1304,15 +1306,10 @@ than exposing core implementation classes.
       truncation, redaction, disconnect/shutdown cleanup, command length/rate
       limits, and audit records. Never expose process handles, raw streams, or an
       unbounded logging callback.
-- [ ] Remove the legacy `/sls console <server|this> --follow|--unfollow`
-      compatibility aliases. Keep `/sls console <server|this> <command...>`
-      exclusively for bounded managed-server console input, and keep retained
-      plus live output exclusively under `/sls logs`, using
-      `/sls logs <server|this> --follow` and targetless
-      `/sls logs --unfollow`. Remove the aliases from parsing, completion,
-      command contracts, help, tests, and documentation; return concise
-      corrective usage when an old form is attempted rather than interpreting
-      the modifier as a child-server command.
+- [x] Keep `/sls console <server|this> <command...>` exclusively for bounded
+      managed-server console input, with retained and live output exclusively
+      under `/sls logs`. Keep parsing, completion, command contracts, help,
+      tests, and documentation aligned with that separation.
 - [ ] Add composable matchmaking and admission-policy hooks with immutable
       request snapshots and typed allow, reject, rank, and reservation results.
       Define deterministic precedence and conflict behavior; bound execution;

@@ -87,6 +87,11 @@ also prevents a failed start or unresolved persistent-file conflict from
 accumulating additional saved instance directories through repeated start or
 matchmaking requests.
 
+After a proxy restart, matchmaking resumes the blueprint's single retained
+persistent instance instead of allocating a new ID. If legacy storage contains
+multiple retained IDs for one blueprint, matchmaking refuses to choose between
+them and names the conflict so an operator can delete the unwanted copies.
+
 The generated backend `max-players` may be higher than this public limit. That
 bounded technical headroom exists only so an authorized administrator can use
 `/sls join player <player> --force` without also needing Paper operator access.

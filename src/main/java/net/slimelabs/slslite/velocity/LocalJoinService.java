@@ -280,7 +280,7 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
                 + "blueprint has reached its instance limit");
       }
       ManagedInstance instance =
-          existing.isPresent() ? existing.get() : instances.start(provision.id());
+          existing.isPresent() ? existing.get() : provisionOrResume(provision);
       if (created) {
         queueOwnedInstances.add(instance.id());
       }
@@ -320,6 +320,44 @@ public final class LocalJoinService implements AutoCloseable, IdleAdmissionContr
               }
             });
     return new JoinAttempt(entry.ticket, entry.instance, created, entry.completion);
+  }
+
+  private ManagedInstance provisionOrResume(Blueprint blueprint) throws InstanceOperationException {
+    if (!blueprint.save()) {
+      return instances.start(blueprint.id());
+    }
+    List<String> retained =
+        instances.persistentInstanceIds(blueprint.id()).stream().sorted().toList();
+    if (retained.isEmpty()) {
+      return instances.start(blueprint.id());
+    }
+    if (retained.size() > 1) {
+      throw new InstanceOperationException(
+          "Blueprint "
+              + blueprint.type()
+              + "/"
+              + blueprint.id()
+              + " has multiple retained persistent instances after restart: "
+              + String.join(", ", retained.stream().limit(5).toList())
+              + (retained.size() > 5 ? ", ..." : "")
+              + "; delete the unwanted instances before matchmaking can resume");
+    }
+    String instanceId = retained.getFirst();
+    try {
+      return instances.restart(instanceId).join();
+    } catch (java.util.concurrent.CompletionException exception) {
+      Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+      throw new InstanceOperationException(
+          "Unable to resume persistent instance " + instanceId + ": " + rootMessage(cause), cause);
+    }
+  }
+
+  private static String rootMessage(Throwable failure) {
+    Throwable current = failure;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+    return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
   }
 
   public long queueTimeoutSeconds() {
