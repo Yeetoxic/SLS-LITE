@@ -158,6 +158,9 @@ final class DocumentationNavigationTest {
     assertTrue(releaseWorkflow.contains("environment: ${{ inputs.mode }}"));
     assertTrue(releaseWorkflow.contains("Refusing to replace or promote existing release"));
     assertFalse(
+        releaseWorkflow.contains("SLS-LITE candidate:"),
+        "Release validation must not restore a version pin on the branch-based compatibility page");
+    assertFalse(
         Files.exists(PROJECT.resolve(".github/workflows/api-distribution-smoke.yml")),
         "Obsolete standalone distribution workflow still exists");
   }
