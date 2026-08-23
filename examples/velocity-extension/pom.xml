@@ -11,7 +11,7 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <sls-lite.version>0.1.0-rc.2.1</sls-lite.version>
+        <sls-lite.version>0.1.0-rc.2.2</sls-lite.version>
         <velocity.version>4.1.0-20260719.140524-3</velocity.version>
     </properties>
 

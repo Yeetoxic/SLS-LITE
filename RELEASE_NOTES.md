@@ -1,85 +1,97 @@
-# SLS-LITE 0.1.0-rc.2.1
+# SLS-LITE 0.1.0-rc.2.2
 
-## RC.2.2 Blueprint Migration Notice
+This compatibility follow-up aligns omitted blueprint capacity with current
+full-SLS/vSLS behavior and begins the planned shared blueprint-shape migration.
+The implementation is otherwise frozen; RC.3 feature and architecture work
+remains out of scope for this candidate.
 
-RC.2.2 begins preparation for the shared SLS/SLS-LITE blueprint model. The
-local public player cap moves from `server.limits.max_players` to
-`annotations.sls-lite.max-players`; `server.limits.max_instances` remains in
-place. The removed RC syntax is intentionally rejected rather than retained as
-an alias. Established `annotations.vsls.matchmaking.maxPlayers` input remains
-supported as the upstream-compatible fallback, and omitted player capacity
-defaults to `10000`.
+## Blueprint Capacity
 
-This temporary hotfix candidate addresses release-blocking lifecycle and
-diagnostic problems reported against RC.2. It is intentionally narrow; the
-planned RC.3 feature work remains deferred.
+- A blueprint that omits player capacity now defaults to `10000` public player
+  slots per instance.
+- A blueprint that omits its instance cap now uses `2147483647`, displayed to
+  operators as `unlimited`. Configured host memory, managed-process, and port
+  budgets still limit actual local concurrency.
+- Explicit finite capacity values remain unchanged.
+- Established `annotations.vsls.matchmaking.maxPlayers` and
+  `annotations.vsls.max-instances` remain supported as upstream-compatible
+  fallbacks when the corresponding SLS-LITE settings are omitted.
 
-## Fixes
+## Breaking Blueprint Migration
 
-- Saved instances are no longer silently replaced with newly generated IDs.
-  Start and creation paths identify an existing retained instance and require
-  an explicit restart, reset, or deletion instead of leaving duplicate storage.
-- Matchmaking and the managed lobby resume their single retained persistent
-  instance after a full proxy restart. If legacy storage contains multiple
-  retained copies for one blueprint, startup refuses to choose arbitrarily.
-- Startup reconciliation quarantines ambiguous persistent copies without
-  publishing any copy's managed files. It names the conflicting instance IDs so
-  an operator can preserve the wanted copy and remove the others safely.
-- Reset and replacement cleanup retain the exact persistent instance identity,
-  preserve unresolved file-conflict candidates, and avoid accumulating stale
-  directories after interrupted or failed lifecycle operations.
-- Malformed blueprints now appear in the normal `action needed` workflow at
-  startup and after reload. `/sls blueprint <rejected-path>` exposes the exact
-  parser or validation failure, including suggestions for recognizable typos
-  such as `state.volunes` instead of `state.volumes`.
-- `/sls console` is exclusively managed-server console input. Live output is
-  available only through `/sls logs <server|this> --follow` and targetless
-  `/sls logs --unfollow`.
+The SLS-LITE public player cap moved from `server.limits.max_players` to
+`annotations.sls-lite.max-players`:
 
-## Compatibility and Documentation
+```yaml
+server:
+  limits:
+    memory_limit: 1536
+    max_instances: 1
 
-- The full-SLS compatibility baseline now follows the upstream `main` branch
-  instead of a pinned release or commit. Documentation avoids repeating
-  upstream version identifiers that become stale between audits.
-- The SLS-LITE Java API remains compatible with the RC.2 API contracts. This
-  hotfix does not introduce a new extension API surface or configuration
-  generation.
-- Java 21 plugin bytecode remains supported on the tested Java 25 Velocity
-  runtime. Existing RC.2 host, storage, forwarding, and protocol boundaries are
-  unchanged.
+annotations:
+  sls-lite:
+    max-players: 100
+```
 
-## Upgrade From RC.2
+The removed field is not accepted or silently translated. Blueprint reload
+reports an actionable error naming the replacement. Zero, negative,
+fractional, textual, overflowing, and malformed namespace input is rejected
+with the exact annotation path.
+
+`server.limits.max_instances` intentionally remains in the general limits
+section. The internal SLS-LITE annotation reader is now shared by capacity,
+lifecycle, queue, crash-recovery, and process-timeout policies so namespace and
+primitive validation remain consistent.
+
+## Upgrade From RC.2.1
 
 1. Stop Velocity normally and confirm its managed child processes have exited.
-2. Back up the complete `plugins/sls-lite/` directory and installed RC.2 plugin
-   JAR as one matching restore set.
-3. Replace only the plugin JAR with `0.1.0-rc.2.1`; do not use a plugin
-   hot-reloader. No configuration rewrite is required.
-4. Start Velocity and review the startup checklist, `/sls system`, blueprint
+2. Back up the complete `plugins/sls-lite/` directory and installed plugin JAR
+   as one matching restore set.
+3. Before startup, replace every `server.limits.max_players` declaration with
+   `annotations.sls-lite.max-players`. Preserve the same positive integer value.
+4. Replace only the plugin JAR with `0.1.0-rc.2.2`; do not use a plugin
+   hot-reloader. No `config.yml` rewrite is required.
+5. Start Velocity and review the startup checklist, `/sls system`, blueprint
    `action needed` entries, and the detailed log.
-5. If more than one saved instance is reported for a persistent blueprint,
-   preserve a backup and delete only the unwanted copies before starting that
-   blueprint. SLS-LITE deliberately will not select one on your behalf.
-6. Exercise a representative saved server through start or matchmaking,
-   restart, reset where appropriate, and a full proxy restart.
+6. For `save: true` blueprints whose annotation tree changed during this
+   migration, review the reported definition drift and use the normal reset
+   path before reuse. Reset reconstructs the instance from its current
+   blueprint sources; back up operator-owned state first.
+7. Verify a finite-cap blueprint and an omitted-cap blueprint through reload,
+   creation or matchmaking, direct join, restart, and a full proxy restart.
 
-If RC.2 persistent-file state has been used, do not attempt an in-place
-downgrade. Stop the proxy and restore the matching data-directory and JAR backup
-instead.
+Operators upgrading directly from RC.2 should also read the RC.2.1 lifecycle
+and malformed-blueprint fixes in the repository history. If RC.2 persistent
+file state has been used, do not attempt an in-place downgrade: stop the proxy
+and restore the matching data-directory and JAR backup instead.
+
+## Compatibility
+
+- The SLS-LITE Java API remains compatible with the published RC.2 API
+  contracts; this candidate adds no extension API surface.
+- The full-SLS compatibility baseline continues to follow upstream `main`
+  without embedding a release or commit pin in operator documentation.
+- Java 21 plugin bytecode remains supported on the tested Java 25 Velocity
+  runtime. Existing host, storage, forwarding, and protocol boundaries are
+  unchanged.
 
 ## Known Boundaries
 
-- SLS-LITE manages one host allocation. It does not reproduce full SLS nodes,
+- SLS-LITE manages one host allocation. It does not reproduce full-SLS nodes,
   containers, HTTP control plane, or distributed resource enforcement.
 - Host permissions determine which storage strategies and child-process
   features are available. Portable copy remains the universal fallback unless
   the operator excludes it.
 - Existing configuration, software profiles, blueprints, volume sources, and
-  saved instances remain operator-owned. The hotfix reports ambiguous state
-  instead of deleting or merging it automatically.
+  saved instances remain operator-owned. SLS-LITE reports ambiguous or
+  incompatible state instead of deleting or merging it automatically.
+- Cleanup of every unreachable directory after all possible failed or
+  cancelled start phases remains assigned to RC.3 because it requires broader
+  lifecycle and reconciliation work.
 
 Use the current [installation guide](DOCS/Getting_Started.md),
-[migration guide](DOCS/Migration.md),
+[blueprint reference](DOCS/Blueprints.md),
 [compatibility matrix](DOCS/Compatibility.md), and
 [troubleshooting guide](DOCS/Troubleshooting.md). Report candidate issues with
 the SLS-LITE version, host capability summary, relevant detailed-log excerpt,

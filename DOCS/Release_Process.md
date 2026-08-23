@@ -12,7 +12,7 @@ reused or promoted.
 | Mode | Version | Publication |
 | --- | --- | --- |
 | `distribution-smoke` | Any current project version | Unique private draft and temporary tag; deleted by default after verification. |
-| `release-candidate` | `x.y.z-rc.N` | New public prerelease after approval by the protected `release-candidate` environment. |
+| `release-candidate` | `x.y.z-rc.N` or `x.y.z-rc.N.H` | New public prerelease after approval by the protected `release-candidate` environment. |
 | `release` | `x.y.z` | New stable release after approval by the protected `release` environment. |
 
 Candidate and stable modes require `release_tag` to equal the exact

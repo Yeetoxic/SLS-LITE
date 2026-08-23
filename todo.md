@@ -1234,6 +1234,9 @@ per-blueprint caps that diverge from current full-SLS/vSLS behavior.
       fractional, textual, and greater-than-`2147483647` values plus a malformed
       `annotations.sls-lite` namespace, with the exact annotation path retained
       in every actionable blueprint error.
+`v0.1.0-rc.2.2` exit: the repository version, artifact metadata, release notes,
+current documentation, and tested blueprint contract agree; automated release
+gates and explicit maintainer verification approve the immutable candidate.
 
 #### v0.1.0-rc.3
 
