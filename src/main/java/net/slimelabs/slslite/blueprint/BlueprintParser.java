@@ -19,8 +19,8 @@ final class BlueprintParser {
   private static final Pattern VALID_ID = Pattern.compile("[a-z0-9][a-z0-9_-]{0,63}");
   private static final Pattern VALID_PROPERTY_KEY = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]*");
   private static final int DEFAULT_MEMORY_MIB = 1024;
-  private static final int DEFAULT_MAX_PLAYERS = 20;
-  private static final int DEFAULT_MAX_INSTANCES = 1;
+  private static final int DEFAULT_MAX_PLAYERS = 10_000;
+  private static final int DEFAULT_MAX_INSTANCES = Integer.MAX_VALUE;
   static final int MAX_BLUEPRINT_BYTES = 1024 * 1024;
 
   Blueprint parse(Path path) throws BlueprintException {

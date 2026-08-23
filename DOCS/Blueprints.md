@@ -70,8 +70,8 @@ documented below.
 | `server.image` | no | Modern `java_<major>` selector; requires a matching local Java runtime unless it matches the proxy JVM. |
 | `server.path` | no | Relative manually prepared base path below `plugins/sls-lite/software/`; bypasses provider installation. |
 | `server.limits.memory_limit` | no | Positive MiB; inherits a modern software definition's `limits.memory_limit`, otherwise defaults to `1024`. |
-| `server.limits.max_players` | no | Positive public player slots per instance; default `20`. |
-| `server.limits.max_instances` | no | Positive concurrent instances; default `1`. |
+| `server.limits.max_players` | no | Positive public player slots per instance; full-SLS/vSLS default `10000`. |
+| `server.limits.max_instances` | no | Positive concurrent instances; defaults to `unlimited` in operator output, represented internally by the full-SLS/vSLS value `2147483647`. Host memory, process, and port admission still bound actual concurrency. |
 | `save` | no | Boolean persistence policy; default `false`. |
 
 SLS-LITE prefers a ready instance with capacity. It creates another instance
@@ -426,9 +426,9 @@ annotations:
 `dont-stop-when-empty` excludes the blueprint from idle cleanup.
 `max-instances` and `matchmaking.maxPlayers` supply capacity defaults when the
 SLS-LITE `server.limits.max_instances` and `max_players` extensions are
-omitted. Explicit local limits take precedence. Missing or invalid vSLS
-capacity values retain the constrained defaults of one instance and 20
-players.
+omitted. Explicit local limits take precedence. Missing capacity values follow
+full SLS: `10000` players and `2147483647` instances. Invalid values reject the
+blueprint with an actionable error instead of silently selecting a default.
 
 `matchmaking.gameType` groups blueprints into one local matchmaking pool. A
 join still names a blueprint in its normal `blueprint.type` registry, but

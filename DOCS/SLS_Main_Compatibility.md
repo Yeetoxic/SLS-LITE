@@ -101,10 +101,10 @@ is omitted.
 | `annotations.vsls.matchmaking.gameType` | Adapted | Groups blueprints into a local matchmaking pool while retaining blueprint type as the operator registry. |
 | `annotations.vsls.on-join[].run` | Adapted | Runs at most 32 single-line backend-console commands after a managed-backend transition, with validated `{PLAYER_NAME}`/`{PLAYER_UUID}` substitution and disconnect cleanup. |
 
-When neither local limits nor vSLS annotations provide capacity, SLS-LITE keeps
-its constrained-host defaults of 20 players and one instance. Full vSLS uses
-effectively unlimited matchmaking defaults. This is an intentional local safety
-adaptation and must remain visible in documentation.
+When neither local limits nor vSLS annotations provide capacity, SLS-LITE
+matches full vSLS `main`: matchmaking defaults to `10000` players and the
+blueprint instance count defaults to `2147483647`. Actual local concurrency is
+bounded by the explicit host memory, managed-process, and port budgets.
 
 ## Software Definitions
 

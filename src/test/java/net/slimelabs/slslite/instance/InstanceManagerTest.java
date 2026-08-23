@@ -715,7 +715,13 @@ class InstanceManagerTest {
 
   @Test
   void enforcesBlueprintInstanceLimitForDirectStarts() throws Exception {
-    createContext(false, true);
+    TestContext context = createContext(false, true);
+    Path source = temporaryDirectory.resolve("blueprints/fixture.yml");
+    Files.writeString(
+        source,
+        Files.readString(source)
+            .replace("memory_limit: 256", "memory_limit: 256\n    max_instances: 1"));
+    context.blueprints().reload();
     ManagedInstance first = manager.start("fixture");
     first.readyFuture().get(10, TimeUnit.SECONDS);
 

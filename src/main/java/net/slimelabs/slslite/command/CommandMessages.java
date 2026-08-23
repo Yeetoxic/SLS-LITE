@@ -175,7 +175,12 @@ public final class CommandMessages {
             .appendNewline()
             .append(labelValue("Capacity:", blueprint.maxPlayers() + " players per instance"))
             .appendNewline()
-            .append(labelValue("Instance limit:", Integer.toString(blueprint.maxInstances())))
+            .append(
+                labelValue(
+                    "Instance limit:",
+                    blueprint.maxInstances() == Integer.MAX_VALUE
+                        ? "unlimited"
+                        : Integer.toString(blueprint.maxInstances())))
             .appendNewline()
             .append(labelValue("Persistence:", blueprint.save() ? "persistent" : "ephemeral"))
             .appendNewline()

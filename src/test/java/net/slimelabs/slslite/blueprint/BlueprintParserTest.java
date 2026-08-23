@@ -14,7 +14,7 @@ class BlueprintParserTest {
   @TempDir Path temporaryDirectory;
 
   @Test
-  void parsesSingleDocumentWithLocalDefaults() throws Exception {
+  void parsesSingleDocumentWithUpstreamCapacityDefaults() throws Exception {
     Path source = temporaryDirectory.resolve("game.yml");
     Files.writeString(
         source,
@@ -32,8 +32,8 @@ class BlueprintParserTest {
 
     assertEquals("game", blueprint.id());
     assertEquals(1024, blueprint.memoryLimitMiB());
-    assertEquals(20, blueprint.maxPlayers());
-    assertEquals(1, blueprint.maxInstances());
+    assertEquals(10_000, blueprint.maxPlayers());
+    assertEquals(Integer.MAX_VALUE, blueprint.maxInstances());
     assertTrue(blueprint.inheritsSoftwareMemory());
     assertTrue(blueprint.inheritsSoftwareImage());
   }

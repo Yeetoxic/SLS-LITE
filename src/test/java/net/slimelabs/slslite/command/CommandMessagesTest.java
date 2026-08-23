@@ -78,7 +78,7 @@ class CommandMessagesTest {
             "1.11.2",
             1024,
             8,
-            2,
+            Integer.MAX_VALUE,
             false,
             java.util.Map.of(),
             List.of(
@@ -101,6 +101,7 @@ class CommandMessagesTest {
     assertTrue(text.contains("Blueprint: minigame/blastoff"));
     assertTrue(text.contains("Software: paper-auto 1.11.2"));
     assertTrue(text.contains("Capacity: 8 players per instance"));
+    assertTrue(text.contains("Instance limit: unlimited"));
     assertTrue(text.contains("world: worlds/minigames/blastoff -> /world [cow]"));
 
     String directDetails = plainText(CommandMessages.blueprintDetails(blueprint, List.of()));

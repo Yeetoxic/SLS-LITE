@@ -1203,6 +1203,22 @@ RC.2 as an immutable baseline and defer the planned RC.3 feature scope below.
 - [x] Complete the GitHub Actions distribution gates and manual release
       verification for `v0.1.0-rc.2.1`.
 
+#### `v0.1.0-rc.2.2`
+
+Small compatibility follow-up for blueprint capacity omitted by operators.
+Keep the explicit local host admission budgets while removing unexpected
+per-blueprint caps that diverge from current full-SLS/vSLS behavior.
+
+- [x] Match current full-SLS/vSLS capacity defaults when neither local limits
+      nor vSLS annotations provide them: `10000` players per instance and
+      `2147483647` instances. Present the instance sentinel as `unlimited` in
+      operator output, retain explicit finite limits unchanged, and continue to
+      bound actual concurrency through configured memory, managed-process, and
+      port budgets. Reject malformed capacity input with actionable blueprint
+      errors rather than silently defaulting it. Update compatibility and
+      blueprint documentation and cover parser, command presentation, direct
+      instance admission, matchmaking, and the complete regression suite.
+
 #### v0.1.0-rc.3
 
 Active post-RC.2 extension-integration follow-up. Preserve RC.2 as an immutable
