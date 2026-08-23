@@ -82,8 +82,8 @@ Start at:
 - `BlueprintParser` for field validation and normalization;
 - `BlueprintRepository` for recursive discovery, duplicate handling, bundled
   template installation, and catalog publication;
-- `VSLSBlueprintAnnotations` and `BlueprintLifecyclePolicy` for lifecycle
-  annotations;
+- `SLSLiteBlueprintAnnotations`, `VSLSBlueprintAnnotations`, and the focused
+  policy records for annotation decoding and lifecycle behavior;
 - `instance/model/InstanceDefinitionIdentity` for persistent-instance
   compatibility.
 

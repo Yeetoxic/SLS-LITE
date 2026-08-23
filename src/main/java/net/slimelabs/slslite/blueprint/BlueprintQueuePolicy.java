@@ -1,12 +1,12 @@
 package net.slimelabs.slslite.blueprint;
 
 import java.time.Duration;
-import java.util.Map;
 
 public record BlueprintQueuePolicy(Duration timeout) {
 
-  public static final String NAMESPACE = "sls-lite";
-  public static final String QUEUE_TIMEOUT_SECONDS = "queue-timeout-seconds";
+  public static final String NAMESPACE = SLSLiteBlueprintAnnotations.NAMESPACE;
+  public static final String QUEUE_TIMEOUT_SECONDS =
+      SLSLiteBlueprintAnnotations.QUEUE_TIMEOUT_SECONDS;
 
   public BlueprintQueuePolicy {
     if (timeout == null || timeout.isNegative()) {
@@ -20,37 +20,15 @@ public record BlueprintQueuePolicy(Duration timeout) {
     if (hostDefault.isZero() || hostDefault.isNegative()) {
       throw new IllegalArgumentException("host queue timeout must be positive");
     }
-    Object value = annotation(blueprint.annotations());
-    if (value == null) {
-      return new BlueprintQueuePolicy(hostDefault);
-    }
-    if (!(value instanceof Number number)
-        || number.longValue() < 0
-        || number.longValue() > Integer.MAX_VALUE
-        || number.doubleValue() != number.longValue()) {
-      throw new IllegalArgumentException(
-          "annotation 'sls-lite.queue-timeout-seconds' must be a non-negative integer");
-    }
-    return new BlueprintQueuePolicy(Duration.ofSeconds(number.longValue()));
+    var seconds =
+        SLSLiteBlueprintAnnotations.optionalInteger(
+            blueprint.annotations(), QUEUE_TIMEOUT_SECONDS, 0, Integer.MAX_VALUE);
+    return seconds.isPresent()
+        ? new BlueprintQueuePolicy(Duration.ofSeconds(seconds.getAsInt()))
+        : new BlueprintQueuePolicy(hostDefault);
   }
 
   public boolean expires() {
     return !timeout.isZero();
-  }
-
-  private static Object annotation(Map<String, Object> annotations) {
-    Object flattened = annotations.get(NAMESPACE + "." + QUEUE_TIMEOUT_SECONDS);
-    if (flattened != null) {
-      return flattened;
-    }
-    Object namespace = annotations.get(NAMESPACE);
-    if (namespace == null) {
-      return null;
-    }
-    if (!(namespace instanceof Map<?, ?> values)) {
-      throw new IllegalArgumentException(
-          "annotation namespace '" + NAMESPACE + "' must be an object");
-    }
-    return values.get(QUEUE_TIMEOUT_SECONDS);
   }
 }

@@ -20,6 +20,14 @@ class BlueprintProcessTimeoutsTest {
   }
 
   @Test
+  void sharesFlattenedAnnotationCompatibilityWithOtherLocalPolicies() {
+    BlueprintProcessTimeouts timeouts =
+        BlueprintProcessTimeouts.fromAnnotations(Map.of("sls-lite.startup-timeout-seconds", 240));
+
+    assertEquals(Duration.ofSeconds(240), timeouts.startupTimeout().orElseThrow());
+  }
+
+  @Test
   void rejectsZeroFractionalAndExcessiveTimeouts() {
     assertInvalid("startup-timeout-seconds", 0);
     assertInvalid("startup-timeout-seconds", 3601);

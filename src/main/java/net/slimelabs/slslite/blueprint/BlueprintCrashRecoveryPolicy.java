@@ -11,7 +11,6 @@ public record BlueprintCrashRecoveryPolicy(
     Duration maximumBackoff,
     Duration stableAfter) {
 
-  private static final String NAMESPACE = "sls-lite";
   private static final int MAX_ATTEMPTS_LIMIT = 100;
   private static final int MAX_DELAY_SECONDS = 86_400;
 
@@ -33,14 +32,20 @@ public record BlueprintCrashRecoveryPolicy(
 
   public static BlueprintCrashRecoveryPolicy from(Blueprint blueprint) {
     Map<String, Object> annotations = blueprint.annotations();
-    boolean enabled = booleanValue(annotations, "restart-on-crash", false);
-    int attempts = integerValue(annotations, "restart-max-attempts", 3, 0, MAX_ATTEMPTS_LIMIT);
+    boolean enabled =
+        SLSLiteBlueprintAnnotations.booleanValue(annotations, "restart-on-crash", false);
+    int attempts =
+        SLSLiteBlueprintAnnotations.integerValue(
+            annotations, "restart-max-attempts", 3, 0, MAX_ATTEMPTS_LIMIT);
     int initial =
-        integerValue(annotations, "restart-initial-backoff-seconds", 5, 1, MAX_DELAY_SECONDS);
+        SLSLiteBlueprintAnnotations.integerValue(
+            annotations, "restart-initial-backoff-seconds", 5, 1, MAX_DELAY_SECONDS);
     int maximum =
-        integerValue(annotations, "restart-max-backoff-seconds", 60, 1, MAX_DELAY_SECONDS);
+        SLSLiteBlueprintAnnotations.integerValue(
+            annotations, "restart-max-backoff-seconds", 60, 1, MAX_DELAY_SECONDS);
     int stable =
-        integerValue(annotations, "restart-stable-after-seconds", 120, 1, MAX_DELAY_SECONDS);
+        SLSLiteBlueprintAnnotations.integerValue(
+            annotations, "restart-stable-after-seconds", 120, 1, MAX_DELAY_SECONDS);
     return new BlueprintCrashRecoveryPolicy(
         enabled,
         enabled ? attempts : 0,
@@ -62,58 +67,6 @@ public record BlueprintCrashRecoveryPolicy(
       delay = Math.min(maximumBackoff.toSeconds(), Math.multiplyExact(delay, 2));
     }
     return Duration.ofSeconds(delay);
-  }
-
-  private static boolean booleanValue(
-      Map<String, Object> annotations, String key, boolean defaultValue) {
-    Object value = value(annotations, key);
-    if (value == null) {
-      return defaultValue;
-    }
-    if (!(value instanceof Boolean result)) {
-      throw new IllegalArgumentException(
-          "annotation '" + NAMESPACE + "." + key + "' must be true or false");
-    }
-    return result;
-  }
-
-  private static int integerValue(
-      Map<String, Object> annotations, String key, int defaultValue, int minimum, int maximum) {
-    Object value = value(annotations, key);
-    if (value == null) {
-      return defaultValue;
-    }
-    if (!(value instanceof Number number)
-        || number.doubleValue() != number.intValue()
-        || number.intValue() < minimum
-        || number.intValue() > maximum) {
-      throw new IllegalArgumentException(
-          "annotation '"
-              + NAMESPACE
-              + "."
-              + key
-              + "' must be an integer from "
-              + minimum
-              + " through "
-              + maximum);
-    }
-    return number.intValue();
-  }
-
-  private static Object value(Map<String, Object> annotations, String key) {
-    Object flattened = annotations.get(NAMESPACE + "." + key);
-    if (flattened != null) {
-      return flattened;
-    }
-    Object namespace = annotations.get(NAMESPACE);
-    if (namespace == null) {
-      return null;
-    }
-    if (!(namespace instanceof Map<?, ?> values)) {
-      throw new IllegalArgumentException(
-          "annotation namespace '" + NAMESPACE + "' must be an object");
-    }
-    return values.get(key);
   }
 
   private static void requirePositiveBounded(Duration value, String label) {
