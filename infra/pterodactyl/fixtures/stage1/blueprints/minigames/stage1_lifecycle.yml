@@ -13,7 +13,6 @@ server:
         enable-command-block: true
   limits:
     memory_limit: 1024
-    max_players: 1
     max_instances: 2
 
 state:
@@ -31,6 +30,7 @@ save: false
 
 annotations:
   sls-lite:
+    max-players: 1
     acceptance-fixture: stage1
     idle-shutdown-seconds: 60
     stop-when-empty: true

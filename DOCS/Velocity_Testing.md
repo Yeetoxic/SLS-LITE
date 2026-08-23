@@ -126,7 +126,8 @@ node tools/protocol-smoke/force-join-smoke.js `
 ```
 
 Use it only against the disposable offline fixture. The selected blueprint
-must have `max_players: 1` and `max_instances: 1`, `SLS_FORCE_ADMIN` must be a
+must have `annotations.sls-lite.max-players: 1` and
+`server.limits.max_instances: 1`, `SLS_FORCE_ADMIN` must be a
 built-in test administrator, and the client protocol must be supported by the
 fixture backend or its compatible Via plugins. The script keeps the target
 connected while it verifies ordinary denial, unauthorized force denial,

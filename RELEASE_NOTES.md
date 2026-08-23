@@ -1,5 +1,15 @@
 # SLS-LITE 0.1.0-rc.2.1
 
+## RC.2.2 Blueprint Migration Notice
+
+RC.2.2 begins preparation for the shared SLS/SLS-LITE blueprint model. The
+local public player cap moves from `server.limits.max_players` to
+`annotations.sls-lite.max-players`; `server.limits.max_instances` remains in
+place. The removed RC syntax is intentionally rejected rather than retained as
+an alias. Established `annotations.vsls.matchmaking.maxPlayers` input remains
+supported as the upstream-compatible fallback, and omitted player capacity
+defaults to `10000`.
+
 This temporary hotfix candidate addresses release-blocking lifecycle and
 diagnostic problems reported against RC.2. It is intentionally narrow; the
 planned RC.3 feature work remains deferred.

@@ -32,8 +32,6 @@ server:
         # resource-pack-sha1: "0123456789abcdef0123456789abcdef01234567"
         # require-resource-pack: false
   limits:
-    # Positive integer. Player slots available on each instance.
-    max_players: 20
     # Positive integer. Maximum simultaneous instances for this blueprint.
     max_instances: 1
     # Positive integer MiB admission reservation for each instance.
@@ -78,6 +76,8 @@ save: false
 
 annotations:
   sls-lite:
+    # Positive integer. Public player slots available on each instance.
+    max-players: 20
     # Prevent automatic empty-server shutdown for priority services.
     keep-alive: false
     # Optional per-blueprint override; omit to use config.yml.

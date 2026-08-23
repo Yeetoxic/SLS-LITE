@@ -126,11 +126,14 @@ server:
   software: paper
   version: "1.20.4"
   limits:
-    max_players: 12
     max_instances: 1
     memory_limit: 1536
 
 save: false
+
+annotations:
+  sls-lite:
+    max-players: 12
 
 state:
   volumes:

@@ -8,7 +8,6 @@ server:
   version: "1.18.2"
   limits:
     memory_limit: 1024
-    max_players: 8
   configs:
     server.properties:
       parser: properties
@@ -40,6 +39,7 @@ annotations:
       maxPlayers: 8
       gameType: "stage2-adventure"
   sls-lite:
+    max-players: 8
     acceptance-fixture: "stage2"
     idle-shutdown-seconds: 600
   compatibility:

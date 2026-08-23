@@ -41,6 +41,7 @@ final class BlueprintParser {
       Map<String, Object> state = optionalMap(root, "state", path);
       Map<String, Object> annotations = optionalMap(root, "annotations", path);
       VSLSBlueprintAnnotations.validate(annotations);
+      SLSLiteBlueprintAnnotations.maxPlayers(annotations);
       BlueprintProcessTimeouts.fromAnnotations(annotations);
       if (state.containsKey("mounts")) {
         throw error(
@@ -58,7 +59,6 @@ final class BlueprintParser {
           "server.limits",
           path,
           "memory_limit",
-          "max_players",
           "max_instances",
           "swap",
           "io_weight",
@@ -82,11 +82,8 @@ final class BlueprintParser {
       validateRelativePath(softwarePath, "server.path", path);
       int memory = optionalPositiveInt(limits, "memory_limit", DEFAULT_MEMORY_MIB, path);
       int maxPlayers =
-          optionalPositiveInt(
-              limits,
-              "max_players",
-              VSLSBlueprintAnnotations.maxPlayers(annotations).orElse(DEFAULT_MAX_PLAYERS),
-              path);
+          SLSLiteBlueprintAnnotations.maxPlayers(annotations)
+              .orElse(VSLSBlueprintAnnotations.maxPlayers(annotations).orElse(DEFAULT_MAX_PLAYERS));
       int maxInstances =
           optionalPositiveInt(
               limits,

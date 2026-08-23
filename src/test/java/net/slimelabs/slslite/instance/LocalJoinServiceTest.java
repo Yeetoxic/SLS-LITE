@@ -192,6 +192,7 @@ class LocalJoinServiceTest {
             """
                     annotations:
                       sls-lite:
+                        max-players: 1
                         queue-timeout-seconds: 0
                     """);
     try (LocalJoinService service = fixture.service()) {
@@ -800,7 +801,15 @@ class LocalJoinServiceTest {
       int connectedPlayers,
       CompletableFuture<ConnectionRequestBuilder.Result> pendingConnection)
       throws Exception {
-    return fixture(timeout, connectedPlayers, pendingConnection, "");
+    return fixture(
+        timeout,
+        connectedPlayers,
+        pendingConnection,
+        """
+                annotations:
+                  sls-lite:
+                    max-players: 1
+                """);
   }
 
   private Fixture fixture(
@@ -824,7 +833,6 @@ class LocalJoinServiceTest {
                   version: "26.1"
                   limits:
                     memory_limit: 512
-                    max_players: 1
                     max_instances: 2
                 %s
                 """
@@ -882,9 +890,10 @@ class LocalJoinServiceTest {
                       version: "1.21.11"
                       limits:
                         memory_limit: 512
-                        max_players: 1
                         max_instances: 1
                     annotations:
+                      sls-lite:
+                        max-players: 1
                       vsls:
                         matchmaking:
                           gameType: party

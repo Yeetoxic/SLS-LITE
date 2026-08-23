@@ -86,10 +86,10 @@ out of scope.
 | `save` | Supported | Persistent instance directory and identity. |
 | `annotations` | Adapted | Unknown trees, including YAML null values, are retained as immutable metadata. |
 
-SLS-LITE extensions under `server.limits` are `max_players` and
-`max_instances`. Modern vSLS expresses those intentions under
-`annotations.vsls`; the annotation form takes effect when the local extension
-is omitted.
+The SLS-LITE extension under `server.limits` is `max_instances`. The local
+public player cap is `annotations.sls-lite.max-players`. Modern vSLS expresses
+both intentions under `annotations.vsls`; its annotation form takes effect
+when the corresponding SLS-LITE setting is omitted.
 
 ## vSLS Annotations
 
@@ -97,7 +97,7 @@ is omitted.
 | --- | --- | --- |
 | `annotations.vsls.dont-stop-when-empty` | Supported | Excludes the blueprint from idle cleanup. |
 | `annotations.vsls.max-instances` | Supported | Supplies the instance cap when local `server.limits.max_instances` is omitted. |
-| `annotations.vsls.matchmaking.maxPlayers` | Supported | Supplies per-instance matchmaking capacity when local `server.limits.max_players` is omitted. |
+| `annotations.vsls.matchmaking.maxPlayers` | Supported | Supplies per-instance matchmaking capacity when local `annotations.sls-lite.max-players` is omitted. |
 | `annotations.vsls.matchmaking.gameType` | Adapted | Groups blueprints into a local matchmaking pool while retaining blueprint type as the operator registry. |
 | `annotations.vsls.on-join[].run` | Adapted | Runs at most 32 single-line backend-console commands after a managed-backend transition, with validated `{PLAYER_NAME}`/`{PLAYER_UUID}` substitution and disconnect cleanup. |
 

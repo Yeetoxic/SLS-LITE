@@ -39,12 +39,12 @@ class BlueprintRepositoryTest {
                         view-distance: 8
                   limits:
                     memory_limit: 1536
-                    max_players: 32
                     max_instances: 3
                 save: false
                 annotations:
                   sls-lite:
                     stop-when-empty: true
+                    max-players: 32
                 """);
 
     BlueprintRepository repository = new BlueprintRepository(temporaryDirectory);
@@ -118,7 +118,7 @@ class BlueprintRepositoryTest {
   }
 
   @Test
-  void localLimitsOverrideVSLSAnnotationDefaults() throws Exception {
+  void localAnnotationsOverrideVSLSAnnotationDefaults() throws Exception {
     write(
         "precedence.yml",
         """
@@ -130,9 +130,10 @@ class BlueprintRepositoryTest {
                   software: paper
                   version: "1.21.1"
                   limits:
-                    max_players: 12
                     max_instances: 3
                 annotations:
+                  sls-lite:
+                    max-players: 12
                   vsls:
                     max-instances: 5
                     matchmaking:
@@ -145,6 +146,29 @@ class BlueprintRepositoryTest {
     Blueprint blueprint = repository.get("precedence").orElseThrow();
     assertEquals(12, blueprint.maxPlayers());
     assertEquals(3, blueprint.maxInstances());
+  }
+
+  @Test
+  void rejectsRemovedServerLimitsMaxPlayersKey() throws Exception {
+    write(
+        "removed-max-players.yml",
+        """
+                blueprint:
+                  id: removed-max-players
+                  name: Removed max players
+                  type: minigame
+                server:
+                  software: paper
+                  version: "1.21.1"
+                  limits:
+                    max_players: 12
+                """);
+
+    BlueprintException exception =
+        assertThrows(
+            BlueprintException.class, () -> new BlueprintRepository(temporaryDirectory).reload());
+
+    assertTrue(exception.getMessage().contains("server.limits.max_players"));
   }
 
   @Test

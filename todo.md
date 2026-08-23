@@ -1218,6 +1218,14 @@ per-blueprint caps that diverge from current full-SLS/vSLS behavior.
       errors rather than silently defaulting it. Update compatibility and
       blueprint documentation and cover parser, command presentation, direct
       instance admission, matchmaking, and the complete regression suite.
+- [x] Start the unified blueprint-shape migration by moving the local public
+      player cap from `server.limits.max_players` to
+      `annotations.sls-lite.max-players`, while retaining the general
+      `server.limits.max_instances` field. Intentionally reject the removed RC
+      syntax instead of maintaining an inter-update alias; retain
+      `annotations.vsls.matchmaking.maxPlayers` as the upstream-compatible
+      fallback. Update bundled examples, public documentation, release notes,
+      and parser regressions.
 
 #### v0.1.0-rc.3
 
@@ -1291,6 +1299,18 @@ than exposing core implementation classes.
       registry entries, preserve permission-safe player counts and hover
       details, and update command contracts, documentation, and lifecycle plus
       proxy-restart tests.
+- [ ] Implement `annotations.sls-lite.start-on-proxy-start` for ordinary
+      blueprint-managed startup services. A true value starts exactly one
+      instance during proxy startup; persistent blueprints resume their single
+      retained ID, ephemeral blueprints create one fresh instance, and
+      ambiguous retained copies are refused with `action needed` diagnostics.
+      Keep startup idempotent across reload and recovery, respect blueprint plus
+      host memory/process/port admission, and never create a second copy of the
+      configured managed lobby. Retain `config.yml` lobby ownership for its
+      special routing, protection, and recovery contract. Cover multiple
+      annotated blueprints, partial admission, individual failures, proxy
+      restart, shutdown races, saved-instance recovery, extension-visible
+      metadata, documentation, and deterministic startup ordering.
 - [ ] Coordinate and implement one portable SLS/SLS-LITE blueprint-schema
       overhaul. Agree the contract with Protoxon before freezing either side,
       while allowing clear, documented breaking migrations from SLS-LITE's

@@ -8,11 +8,11 @@ server:
   version: "26.2"
   limits:
     memory_limit: 1536
-    max_players: 100
     max_instances: 1
 
 save: true
 
 annotations:
   sls-lite:
+    max-players: 100
     keep-alive: true

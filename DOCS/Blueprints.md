@@ -23,7 +23,6 @@ server:
   # path: paper/1.18.2
   limits:
     memory_limit: 1024
-    max_players: 12
     max_instances: 2
   configs:
     server.properties:
@@ -48,6 +47,7 @@ state:
 
 annotations:
   sls-lite:
+    max-players: 12
     keep-alive: false
     idle-shutdown-seconds: 180
     stop-when-empty: true
@@ -70,8 +70,8 @@ documented below.
 | `server.image` | no | Modern `java_<major>` selector; requires a matching local Java runtime unless it matches the proxy JVM. |
 | `server.path` | no | Relative manually prepared base path below `plugins/sls-lite/software/`; bypasses provider installation. |
 | `server.limits.memory_limit` | no | Positive MiB; inherits a modern software definition's `limits.memory_limit`, otherwise defaults to `1024`. |
-| `server.limits.max_players` | no | Positive public player slots per instance; full-SLS/vSLS default `10000`. |
 | `server.limits.max_instances` | no | Positive concurrent instances; defaults to `unlimited` in operator output, represented internally by the full-SLS/vSLS value `2147483647`. Host memory, process, and port admission still bound actual concurrency. |
+| `annotations.sls-lite.max-players` | no | Positive public player slots per instance; full-SLS/vSLS default `10000`. |
 | `save` | no | Boolean persistence policy; default `false`. |
 
 SLS-LITE prefers a ready instance with capacity. It creates another instance
@@ -95,7 +95,8 @@ them and names the conflict so an operator can delete the unwanted copies.
 The generated backend `max-players` may be higher than this public limit. That
 bounded technical headroom exists only so an authorized administrator can use
 `/sls join player <player> --force` without also needing Paper operator access.
-It does not increase ordinary capacity: SLS-LITE enforces `max_players` at the
+It does not increase ordinary capacity: SLS-LITE enforces
+`annotations.sls-lite.max-players` at the
 proxy for every non-forced route.
 
 ### Base Template Decision
@@ -425,8 +426,9 @@ annotations:
 
 `dont-stop-when-empty` excludes the blueprint from idle cleanup.
 `max-instances` and `matchmaking.maxPlayers` supply capacity defaults when the
-SLS-LITE `server.limits.max_instances` and `max_players` extensions are
-omitted. Explicit local limits take precedence. Missing capacity values follow
+SLS-LITE `server.limits.max_instances` and
+`annotations.sls-lite.max-players` settings are omitted. Explicit SLS-LITE
+settings take precedence. Missing capacity values follow
 full SLS: `10000` players and `2147483647` instances. Invalid values reject the
 blueprint with an actionable error instead of silently selecting a default.
 

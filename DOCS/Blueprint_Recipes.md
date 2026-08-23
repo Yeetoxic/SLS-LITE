@@ -87,8 +87,10 @@ server:
   version: "REPLACE_WITH_EXACT_VERSION"
   limits:
     memory_limit: 1024
-    max_players: 20
     max_instances: 1
+annotations:
+  sls-lite:
+    max-players: 20
 state:
   persistent_files:
     - name: whitelist
@@ -135,8 +137,10 @@ server:
   version: "REPLACE_WITH_EXACT_VERSION"
   limits:
     memory_limit: 1024
-    max_players: 12
     max_instances: 2
+annotations:
+  sls-lite:
+    max-players: 12
 save: false
 state:
   volumes:
@@ -185,8 +189,10 @@ server:
   version: "REPLACE_WITH_EXACT_VERSION"
   limits:
     memory_limit: 2048
-    max_players: 20
     max_instances: 1
+annotations:
+  sls-lite:
+    max-players: 20
 save: true
 state:
   volumes:
@@ -438,8 +444,10 @@ server:
         settings:
           allow-end: false
   limits:
-    max_players: 16
     max_instances: 1
+annotations:
+  sls-lite:
+    max-players: 16
 save: false
 ```
 
@@ -635,8 +643,10 @@ server:
   path: imports/existing-paper
   limits:
     memory_limit: 2048
-    max_players: 20
     max_instances: 1
+annotations:
+  sls-lite:
+    max-players: 20
 save: true
 ```
 
