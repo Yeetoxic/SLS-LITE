@@ -54,6 +54,10 @@ final class BlueprintParser {
       requireOnlyKeys(
           server, "server", path, "software", "version", "image", "path", "limits", "configs");
       requireOnlyKeys(state, "state", path, "volumes", "copy", "persistent_files", "env");
+      if (limits.containsKey("max_players")) {
+        throw error(
+            path, "'server.limits.max_players' was removed; use annotations.sls-lite.max-players");
+      }
       requireOnlyKeys(
           limits,
           "server.limits",

@@ -1226,6 +1226,14 @@ per-blueprint caps that diverge from current full-SLS/vSLS behavior.
       `annotations.vsls.matchmaking.maxPlayers` as the upstream-compatible
       fallback. Update bundled examples, public documentation, release notes,
       and parser regressions.
+- [x] Give the removed `server.limits.max_players` field a direct actionable
+      migration error naming `annotations.sls-lite.max-players`, rather than a
+      generic unknown-key rejection. Keep this diagnostic-only: do not accept,
+      translate, or preserve the removed field as compatibility input.
+- [x] Cover the new local player-cap boundary directly. Reject zero, negative,
+      fractional, textual, and greater-than-`2147483647` values plus a malformed
+      `annotations.sls-lite` namespace, with the exact annotation path retained
+      in every actionable blueprint error.
 
 #### v0.1.0-rc.3
 
@@ -1369,10 +1377,104 @@ than exposing core implementation classes.
       require reason-bearing requests, preserve cleanup/reconciliation, prevent
       raw PID/process access, and prove late exits cannot escape shutdown or
       corrupt persistent-instance state.
+- [ ] Centralize exception-chain inspection and operator-safe failure messages.
+      Replace the duplicated `rootCause` and `rootMessage` implementations in
+      command, API, installation, lobby, lifecycle, and Velocity adapters with
+      one explicit contract for raw internal cause selection and one redacted,
+      bounded, single-line diagnostic boundary. Preserve typed exception
+      decisions, avoid double wrapping or double redaction, and cover null
+      messages, nested completion/execution wrappers, cycles or pathological
+      chains, secrets, paths, multiline text, and truncation.
+- [ ] Split `SLSConfigRepository` parsing into focused section decoders while
+      retaining one atomic load-and-publish repository. Give resources,
+      software, network/matchmaking/lifecycle, diagnostics/logging, forwarding
+      and security, presentation, lobby/limbo, storage, and managed paths clear
+      decoding ownership; keep unknown-key errors, exact field paths, defaults,
+      legacy migration reporting, cross-section validation, and generated
+      reference configuration synchronized. Split the large repository test by
+      those same behaviors without weakening clean-install, upgrade, reload,
+      confinement, or malformed-input coverage.
+- [ ] Decompose `DefaultSLSLiteApi` internally without changing any published
+      API descriptor. Extract immutable view mapping, diagnostics snapshot
+      assembly, bounded event sequencing/delivery, and administrative operation
+      execution behind package-private collaborators; keep extension contexts,
+      readiness/diagnostic contributions, failure retention, shutdown, queue
+      backpressure, event ordering, and API 1.0-1.2 binary consumer tests intact.
+- [ ] Finish the `/sls` handler migration so `SLSCommand` owns dispatch, shared
+      authorization, and completion aggregation rather than complete command
+      families. Move console/log sessions, reload, maintenance, root/list/version
+      presentation, and debug/join-probe behavior into focused handlers as their
+      RC.3 surfaces change. Consolidate repeated target/error presentation,
+      preserve the pinned command contract and granular permissions, and split
+      oversized command tests along the resulting behavior boundaries.
+- [ ] Make the unified blueprint migration establish section-level parser
+      ownership rather than extending the monolithic `BlueprintParser`. Keep
+      document loading and final assembly centralized, while focused decoders
+      own metadata/server, state files/copies/volumes, configuration edits, and
+      annotation namespaces. Preserve strict structural-key validation,
+      open-ended third-party annotations, actionable full paths and typo
+      suggestions, source confinement, overlap detection, migration errors, and
+      the shared attributed blueprint corpus. Split repository/parser tests by
+      schema, state, annotations, compatibility, and catalog behavior.
+- [ ] Replace telescoping internal construction for `InstanceManager`,
+      `LocalJoinService`, `SLSCommand`, and `SoftwareInstallationService` with
+      named dependency/configuration records and production factories where
+      that reduces wiring mistakes. Preserve any constructor signatures that
+      are genuinely part of a supported boundary, make ownership of executors
+      and closeable children explicit, reject incomplete dependency bundles,
+      and keep test seams readable without introducing a service locator or
+      dependency-injection framework.
 
 `v0.1.0-rc.3` exit: the extension hooks remain bounded under failure and load,
 their compatibility contracts are documented and consumer-tested, and external
 testers receive reproducible artifacts without weakening the RC.2 invariants.
+
+#### `v0.1.0-rc.4`
+
+Dedicated internal-architecture and stabilization candidate after RC.3. Keep
+RC.3.x versions available for narrow corrective follow-ups discovered during
+RC.3 validation; do not place these planned state-machine refactors into a
+hotfix-style candidate.
+
+- [ ] Decompose `LocalJoinService` only as a dedicated concurrency-safe change.
+      Separate blueprint pool selection/provisioning, matchmaking queue state,
+      connection-admission reservations, and Velocity transfer completion
+      behind narrow collaborators while retaining one observable coordinator.
+      Preserve forced/direct joins, draining, queue-owned orphan cleanup,
+      timeout precision, player disconnect races, capacity accounting, event
+      ordering, and shutdown; split the large test by queue, admission,
+      provisioning, transfer, and pool-selection behavior with deterministic
+      scheduler control.
+- [ ] Reduce `InstanceManager` without fragmenting its state machine. Extract
+      only ownership boundaries proven by tests--such as registry snapshots,
+      failure classification/reporting, or stateless admission calculations--
+      while it continues to coordinate start/stop/finalization and Velocity
+      publication until a safer replacement boundary is demonstrated. Preserve
+      cancellation and late-callback races, persistent restart/reset/delete,
+      resource and port release, deferred cleanup, crash recovery, maintenance,
+      and shutdown. Split its large regression class by lifecycle operation and
+      persistence behavior as boundaries become real.
+- [ ] Separate software cache inventory/cleanup and bounded installation-history
+      retention from `SoftwareInstallationService`, leaving installation
+      deduplication, provider execution, staging, and publication under one
+      lifecycle owner. Take an immutable snapshot of active/protected versions
+      or hold the existing lock through the necessary decision boundary; never
+      delete active, retained-instance, lobby, unknown, unsafe, or too-new
+      content. Preserve dry-run/confirmation, interruption, quarantine,
+      transition reporting, shutdown, and provider tests, then split the large
+      service test by installation, cache maintenance, history, and lifecycle.
+- [ ] Audit executor and scheduler ownership after the stateful decompositions.
+      Centralize daemon thread naming/factory mechanics and shutdown helpers
+      where semantics truly match, but keep workload isolation, bounded queues,
+      rejection policy, cancellation, and service-local lifecycle explicit. Do
+      not replace intentionally isolated pools with a global executor merely to
+      reduce construction code; document every remaining thread owner and prove
+      proxy shutdown leaves no managed worker alive.
+
+`v0.1.0-rc.4` exit: each extraction preserves observable lifecycle behavior,
+all concurrency and shutdown regressions pass repeatedly, architecture and
+contributor documentation match the new ownership boundaries, and the
+maintainer approves the resulting candidate for external stabilization.
 
 Stage 4.3 acceptance: the latest published candidate has completed its planned
 external testing period; no known release blockers remain; every accepted

@@ -168,7 +168,65 @@ class BlueprintRepositoryTest {
         assertThrows(
             BlueprintException.class, () -> new BlueprintRepository(temporaryDirectory).reload());
 
-    assertTrue(exception.getMessage().contains("server.limits.max_players"));
+    assertTrue(
+        exception
+            .getMessage()
+            .contains(
+                "'server.limits.max_players' was removed; use "
+                    + "annotations.sls-lite.max-players"));
+  }
+
+  @Test
+  void rejectsInvalidLocalMaxPlayersValues() throws Exception {
+    for (String configured : List.of("0", "-1", "1.5", "unlimited", "2147483648")) {
+      write(
+          "invalid-local-max-players.yml",
+          """
+                  blueprint:
+                    id: invalid-local-max-players
+                    name: Invalid local max players
+                    type: minigame
+                  server:
+                    software: paper
+                    version: "1.21.1"
+                  annotations:
+                    sls-lite:
+                      max-players: %s
+                  """
+              .formatted(configured));
+
+      BlueprintException exception =
+          assertThrows(
+              BlueprintException.class,
+              () -> new BlueprintRepository(temporaryDirectory).reload(),
+              configured);
+
+      assertTrue(exception.getMessage().contains("annotations.sls-lite.max-players"), configured);
+      Files.delete(temporaryDirectory.resolve("invalid-local-max-players.yml"));
+    }
+  }
+
+  @Test
+  void rejectsMalformedLocalAnnotationNamespace() throws Exception {
+    write(
+        "invalid-local-namespace.yml",
+        """
+                blueprint:
+                  id: invalid-local-namespace
+                  name: Invalid local namespace
+                  type: minigame
+                server:
+                  software: paper
+                  version: "1.21.1"
+                annotations:
+                  sls-lite: invalid
+                """);
+
+    BlueprintException exception =
+        assertThrows(
+            BlueprintException.class, () -> new BlueprintRepository(temporaryDirectory).reload());
+
+    assertTrue(exception.getMessage().contains("annotations.sls-lite must be an object"));
   }
 
   @Test
