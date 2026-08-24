@@ -41,6 +41,29 @@ class FailedStartDiagnosticsTest {
   }
 
   @Test
+  void preservesBoundedLeadingAndTrailingOutput() throws Exception {
+    FailedStartDiagnostics diagnostics =
+        new FailedStartDiagnostics(temporaryDirectory.resolve("failed-starts"));
+    ManagedInstance instance = instance("game.abc123");
+    for (int index = 0; index < 250; index++) {
+      ManagedInstanceTestFactory.appendLog(instance, "output-" + index);
+    }
+
+    Path report =
+        diagnostics.record(instance, FailurePhase.RUNTIME, new IllegalStateException("crashed"));
+    String content = Files.readString(report);
+
+    assertTrue(content.contains("output-0"));
+    assertTrue(content.contains("output-99"));
+    assertFalse(content.lines().anyMatch("output-100"::equals));
+    assertFalse(content.lines().anyMatch("output-149"::equals));
+    assertTrue(content.contains("50 retained lines omitted"));
+    assertTrue(content.contains("output-150"));
+    assertTrue(content.contains("output-249"));
+    assertTrue(Files.size(report) <= FailedStartDiagnostics.MAX_REPORT_BYTES);
+  }
+
+  @Test
   void prunesOldReports() throws Exception {
     Path root = temporaryDirectory.resolve("failed-starts");
     FailedStartDiagnostics diagnostics = new FailedStartDiagnostics(root);

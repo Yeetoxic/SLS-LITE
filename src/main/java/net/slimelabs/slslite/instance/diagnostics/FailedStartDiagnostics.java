@@ -18,6 +18,7 @@ public final class FailedStartDiagnostics {
   static final int MAX_REPORTS = 20;
   static final int MAX_OUTPUT_LINES = 200;
   static final int MAX_REPORT_BYTES = 256 * 1024;
+  private static final String OMITTED_OUTPUT = "[SLS-LITE] ... %d retained lines omitted ...";
 
   private final Path root;
   private final Path confinementRoot;
@@ -51,7 +52,7 @@ public final class FailedStartDiagnostics {
             + ".log";
     Path report = root.resolve(fileName);
     Path temporary = Files.createTempFile(root, "." + instance.id() + "-", ".tmp");
-    List<String> output = instance.logs(1, MAX_OUTPUT_LINES).lines();
+    List<String> output = diagnosticOutput(instance);
 
     StringBuilder content = new StringBuilder();
     append(content, "recorded_at", Instant.now().toString());
@@ -94,6 +95,24 @@ public final class FailedStartDiagnostics {
     }
     prune();
     return report;
+  }
+
+  private static List<String> diagnosticOutput(ManagedInstance instance) {
+    int retained = instance.retainedLogLines();
+    if (retained == 0) {
+      return List.of();
+    }
+    List<String> output = instance.logs(1, retained).lines();
+    if (output.size() <= MAX_OUTPUT_LINES) {
+      return output;
+    }
+    int leading = MAX_OUTPUT_LINES / 2;
+    int trailing = MAX_OUTPUT_LINES - leading;
+    java.util.ArrayList<String> selected = new java.util.ArrayList<>(MAX_OUTPUT_LINES + 1);
+    selected.addAll(output.subList(0, leading));
+    selected.add(OMITTED_OUTPUT.formatted(output.size() - leading - trailing));
+    selected.addAll(output.subList(output.size() - trailing, output.size()));
+    return List.copyOf(selected);
   }
 
   private void prune() throws IOException {

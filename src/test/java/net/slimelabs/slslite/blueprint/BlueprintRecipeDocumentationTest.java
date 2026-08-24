@@ -37,7 +37,7 @@ final class BlueprintRecipeDocumentationTest {
 
   @Test
   void everyPublishedYamlRecipeIsACompleteAcceptedBlueprint() throws Exception {
-    String document = Files.readString(PROJECT.resolve("DOCS/Blueprint_Recipes.md"));
+    String document = Files.readString(PROJECT.resolve("DOCS/blueprints/README.md"));
     Matcher blocks = YAML_BLOCK.matcher(document);
     Set<String> parsedIds = new LinkedHashSet<>();
     int index = 0;
@@ -54,7 +54,7 @@ final class BlueprintRecipeDocumentationTest {
 
   @Test
   void recipeBookStaysPortableAndExplainsTheCriticalPrecedenceRules() throws Exception {
-    String document = Files.readString(PROJECT.resolve("DOCS/Blueprint_Recipes.md"));
+    String document = Files.readString(PROJECT.resolve("DOCS/blueprints/README.md"));
 
     assertFalse(document.contains("/home/container"));
     assertFalse(document.contains("C:\\"));

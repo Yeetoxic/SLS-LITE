@@ -14,7 +14,7 @@ cannot bypass hosting-panel limits or security restrictions.
 3. Start Velocity once and wait for SLS-LITE initialization.
 4. Stop Velocity and review `plugins/sls-lite/config.yml`.
 5. Follow the canonical copyable
-   [forwarding and first-connection setup](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Getting_Started.md#forwarding-and-first-connection),
+   [forwarding and first-connection setup](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/README.md#forwarding-and-first-connection),
    choosing the production or explicitly insecure isolated-development path and
    the matching Velocity-native, external, or managed lobby route.
 6. Review the generated software profiles and accept the Minecraft EULA only
@@ -27,4 +27,4 @@ cannot bypass hosting-panel limits or security restrictions.
 Back up configuration, administrators, blueprints, volumes, software profiles,
 manually supplied runtimes/software, and persistent instances before updates.
 
-Canonical instructions: [Getting Started](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Getting_Started.md) and [Data Layout](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Data_Layout.md).
+Canonical instructions: [Getting Started](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/README.md) and [Data Layout](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/Data_Layout.md).

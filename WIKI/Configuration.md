@@ -27,5 +27,5 @@ Set `presentation.transfer_action_bar.enabled: false` when an extension should
 own that surface. Otherwise its joining, force-joining, dequeue, and animation
 entries accept bounded MiniMessage; `<server>` is substituted safely.
 
-Canonical reference: [Configuration](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Configuration.md). The shipped source of defaults is
+Canonical reference: [Configuration](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/Configuration.md). The shipped source of defaults is
 [`config.yml`](https://github.com/Yeetoxic/SLS-LITE/blob/main/src/main/resources/defaults/host/config.yml).

@@ -33,7 +33,6 @@ final class PersistentFileStateManager {
   private final Path instancesRoot;
   private final Path contentRoot;
   private final Path persistentFilesRoot;
-  private final Path backupRoot;
   private final Path conflictRoot;
   private final Map<Path, String> owners = new ConcurrentHashMap<>();
 
@@ -41,7 +40,6 @@ final class PersistentFileStateManager {
     this.instancesRoot = canonicalRoot(instancesRoot);
     this.contentRoot = canonicalRoot(contentRoot);
     this.persistentFilesRoot = this.contentRoot.resolve("volumes").normalize();
-    this.backupRoot = this.contentRoot.resolve("internal/persistent-file-backups").normalize();
     this.conflictRoot = this.contentRoot.resolve("internal/persistent-file-conflicts").normalize();
   }
 
@@ -167,7 +165,6 @@ final class PersistentFileStateManager {
           throw conflict(entry);
         }
         if (!sourceDigest.equals(targetDigest)) {
-          preserveBackup(entry, source);
           atomicWriteSource(entry.source(), target);
         }
         published.add(entry.withDigest(targetDigest));
@@ -194,7 +191,6 @@ final class PersistentFileStateManager {
       if (source.equals(persistentFilesRoot)
           || !source.startsWith(persistentFilesRoot)
           || source.startsWith(instancesRoot)
-          || source.startsWith(backupRoot)
           || source.startsWith(conflictRoot)) {
         throw new InstancePreparationException(
             "Persistent file source must stay below volumes/: " + file.source());
@@ -281,9 +277,7 @@ final class PersistentFileStateManager {
       if (source.equals(persistentFilesRoot) || !source.startsWith(persistentFilesRoot)) {
         throw new InstancePreparationException("Persistent file manifest source escapes volumes/");
       }
-      if (source.startsWith(instancesRoot)
-          || source.startsWith(backupRoot)
-          || source.startsWith(conflictRoot)) {
+      if (source.startsWith(instancesRoot) || source.startsWith(conflictRoot)) {
         throw new InstancePreparationException(
             "Persistent file manifest source uses reserved managed storage");
       }
@@ -323,11 +317,6 @@ final class PersistentFileStateManager {
     }
     ConfinedFiles.atomicWriteProperties(
         destination, MANIFEST_FILE, values, "Managed by SLS-LITE", MAX_MANIFEST_BYTES);
-  }
-
-  private void preserveBackup(Entry entry, byte[] source) throws IOException {
-    Path directory = recoveryDirectory("persistent-file-backups", entry.source());
-    ConfinedFiles.atomicWrite(directory, "previous.bak", source, MAX_FILE_BYTES);
   }
 
   private void preserveConflict(Entry entry, byte[] target) throws IOException {

@@ -156,7 +156,7 @@ diagnostics:
 
 forwarding:
   # First-time setup, matching velocity.toml examples, and connection checks:
-  # https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Getting_Started.md#forwarding-and-first-connection
+  # https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/README.md#forwarding-and-first-connection
   # Player-information forwarding mode. Valid values:
   #   none   - disable Velocity forwarding in managed Paper servers. Suitable
   #            only for isolated development where player identity is not needed.
@@ -170,9 +170,10 @@ forwarding:
 
   # Non-blank relative path from the Velocity working directory to the same
   # secret file configured by forwarding-secret-file in velocity.toml. Absolute
-  # paths and paths escaping the Velocity directory are rejected. Replace
-  # Velocity's placeholder with a private cryptographically random value of at
-  # least 32 characters before enabling modern forwarding.
+  # paths and paths escaping the Velocity directory are rejected. Velocity or
+  # the host normally generates this file; reuse it and do not replace its
+  # private value. If it is genuinely absent, create a cryptographically random
+  # value of at least 32 characters before enabling modern forwarding.
   secret_file: forwarding.secret
 
 security:
@@ -289,12 +290,12 @@ lobby:
     #              proxy-installed ViaVersion to translate to. Older fixed
     #              baselines have unsafe heightmap translation behavior.
     # Keep -1 unless the selected protocol is listed as tested in
-    # DOCS/Protocol_Compatibility.md. When ViaVersion is present, native mode is
+    # DOCS/networking/Protocol_Compatibility.md. When ViaVersion is present, native mode is
     # exposed to ViaVersion as the safe 1.21.5 baseline instead of its internal
     # -1 sentinel. SLS-LITE does not impose a maximum client version: a newer
     # client may use this baseline when the installed ViaVersion build reports
     # support for both protocols. Exact tested paths remain listed in
-    # DOCS/Protocol_Compatibility.md.
+    # DOCS/networking/Protocol_Compatibility.md.
     advertised_protocol: -1
 
     # Player-facing NanoLimbo presentation. Text fields use bounded MiniMessage.

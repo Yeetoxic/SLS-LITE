@@ -36,12 +36,12 @@ product: full SLS is not a runtime dependency or operating mode.
   menu, matchmaking, and narrowly allowlisted SLS command integrations.
 
 The exact current scope and intentional limitations are listed in
-[Compatibility](DOCS/Compatibility.md).
+[Compatibility](DOCS/compatibility/README.md).
 
 ViaVersion is detected when the operator installs it on Velocity; it is not
 bundled or required by SLS-LITE. Detection alone does not make an untested
 Minecraft client version supported. See
-[Protocol Compatibility](DOCS/Protocol_Compatibility.md) for supported native
+[Protocol Compatibility](DOCS/networking/Protocol_Compatibility.md) for supported native
 and translated paths.
 
 ## Requirements
@@ -66,21 +66,21 @@ restrictions.
 2. Place `sls-lite-<version>.jar` in Velocity's `plugins/` directory.
 3. Start Velocity once to generate `plugins/sls-lite/`.
 4. Follow the canonical
-   [forwarding and first-connection setup](DOCS/Getting_Started.md#forwarding-and-first-connection),
+   [forwarding and first-connection setup](DOCS/setup/README.md#forwarding-and-first-connection),
    then review the remaining `config.yml` memory, ports, lobby, and security
    choices.
 5. After reviewing the Minecraft EULA, accept it either per automatic software
    profile with `software.accept_eula: true` or host-wide with
    `software.auto_accept_eula: true` in `config.yml`.
 6. Add worlds and blueprints using the copyable
-   [Blueprint Recipe Book](DOCS/Blueprint_Recipes.md), then restart Velocity or
+   [Blueprint Recipe Book](DOCS/blueprints/README.md), then restart Velocity or
    run `/sls reload blueprints`.
 
 Reloading changes future assembly without touching running servers. Read
-[Applying Changes Safely](DOCS/Change_Application.md) before choosing restart
+[Applying Changes Safely](DOCS/operations/Applying_Changes.md) before choosing restart
 or reset for a persistent instance.
 
-See [Getting Started](DOCS/Getting_Started.md) for the complete clean install,
+See [Getting Started](DOCS/setup/README.md) for the complete clean install,
 real-network and isolated-development paths, first transfer, updates, backup,
 and removal.
 
@@ -122,18 +122,18 @@ the blueprint's `blueprint.type`.
 ## Documentation
 
 - [Documentation index](DOCS/README.md)
-- [Getting started and installation](DOCS/Getting_Started.md)
-- [Configuration reference](DOCS/Configuration.md)
-- [Blueprint reference](DOCS/Blueprints.md)
-- [Commands and permissions](DOCS/Commands.md)
-- [Operations and recovery](DOCS/Operations.md)
-- [Troubleshooting](DOCS/Troubleshooting.md)
-- [Migration](DOCS/Migration.md)
-- [Architecture and contributor map](DOCS/ARCHITECTURE.md)
-- [Java extension API](DOCS/Java_API.md)
-- [Java API scope and compatibility policy](DOCS/Java_API_Compatibility.md)
-- [Paper backend messaging](DOCS/Backend_Messaging.md)
-- [Security and privacy](DOCS/Security_and_Privacy.md)
+- [Getting started and installation](DOCS/setup/README.md)
+- [Configuration reference](DOCS/setup/Configuration.md)
+- [Blueprint reference](DOCS/blueprints/Schema.md)
+- [Commands and permissions](DOCS/operations/Commands.md)
+- [Operations and recovery](DOCS/operations/README.md)
+- [Troubleshooting](DOCS/operations/Troubleshooting.md)
+- [Migration](DOCS/compatibility/Migration_From_SLS.md)
+- [Architecture and contributor map](DOCS/development/Architecture.md)
+- [Java extension API](DOCS/extensions/README.md)
+- [Java API scope and compatibility policy](DOCS/extensions/Compatibility.md)
+- [Paper backend messaging](DOCS/integrations/backend-messaging/README.md)
+- [Security and privacy](DOCS/operations/Security_and_Privacy.md)
 - [Current release notes](RELEASE_NOTES.md)
 - [Reviewable GitHub Wiki source](WIKI/README.md)
 
@@ -161,3 +161,10 @@ projects and must not be installed as another plugin.
 SLS-LITE is licensed under the
 [GNU Affero General Public License v3.0](LICENSE). Bundled dependency notices
 and corresponding source information are under [THIRD_PARTY](THIRD_PARTY).
+
+## Community
+
+- [Contributing](CONTRIBUTING.md)
+- [Support](SUPPORT.md)
+- [Security policy](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)

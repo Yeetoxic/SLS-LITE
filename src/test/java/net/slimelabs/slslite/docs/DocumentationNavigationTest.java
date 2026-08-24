@@ -62,14 +62,21 @@ final class DocumentationNavigationTest {
   }
 
   @Test
-  void everyTopLevelGuideReturnsToTheCanonicalIndex() throws IOException {
-    try (Stream<Path> documents = Files.list(PROJECT.resolve("DOCS"))) {
-      for (Path document : documents.filter(path -> path.toString().endsWith(".md")).toList()) {
-        if (document.getFileName().toString().equals("README.md")) {
+  void everyCurrentGuideReturnsToTheCanonicalIndex() throws IOException {
+    Path docs = PROJECT.resolve("DOCS");
+    Path historical = docs.resolve("HISTORICAL");
+    try (Stream<Path> documents = Files.walk(docs)) {
+      for (Path document :
+          documents
+              .filter(Files::isRegularFile)
+              .filter(path -> path.toString().endsWith(".md"))
+              .filter(path -> !path.startsWith(historical))
+              .toList()) {
+        if (document.equals(docs.resolve("README.md"))) {
           continue;
         }
         assertTrue(
-            Files.readString(document).contains("[Documentation home](README.md)"),
+            linksTo(Files.readString(document), document.getParent(), docs.resolve("README.md")),
             () -> relative(document) + " does not link to DOCS/README.md");
       }
     }
@@ -139,13 +146,13 @@ final class DocumentationNavigationTest {
             .matcher(Files.readString(PROJECT.resolve("pom.xml")));
     assertTrue(versionMatcher.find(), "Project version is missing from pom.xml");
     String version = versionMatcher.group(1);
-    assertEquals("0.1.0-rc.2.2", version, "Unexpected release-candidate version");
+    assertEquals("0.1.0-rc.2.3", version, "Unexpected release-candidate version");
 
     assertContains(
         "src/main/java/net/slimelabs/slslite/BuildInfo.java",
         "public static final String VERSION = \"" + version + "\";");
     assertContains("src/main/resources/velocity-plugin.json", "\"version\": \"" + version + "\"");
-    assertContains("DOCS/Protocol_Compatibility.md", "| SLS-LITE | `" + version + "` |");
+    assertContains("DOCS/networking/Protocol_Compatibility.md", "| SLS-LITE | `" + version + "` |");
     assertContains("RELEASE_NOTES.md", "# SLS-LITE " + version);
     assertContains("WIKI/Home.md", "SLS-LITE " + version);
 
@@ -168,8 +175,14 @@ final class DocumentationNavigationTest {
   private static String publicGuideText() throws IOException {
     StringBuilder publicGuides = new StringBuilder(Files.readString(PROJECT.resolve("README.md")));
     for (String root : List.of("DOCS", "WIKI")) {
-      try (Stream<Path> documents = Files.list(PROJECT.resolve(root))) {
-        for (Path document : documents.filter(path -> path.toString().endsWith(".md")).toList()) {
+      Path directory = PROJECT.resolve(root);
+      try (Stream<Path> documents = Files.walk(directory)) {
+        for (Path document :
+            documents
+                .filter(Files::isRegularFile)
+                .filter(path -> path.toString().endsWith(".md"))
+                .filter(path -> !path.startsWith(PROJECT.resolve("DOCS/HISTORICAL")))
+                .toList()) {
           publicGuides.append('\n').append(Files.readString(document));
         }
       }
@@ -201,6 +214,20 @@ final class DocumentationNavigationTest {
 
   private static String relative(Path path) {
     return PROJECT.relativize(path).toString().replace('\\', '/');
+  }
+
+  private static boolean linksTo(String content, Path parent, Path expected) {
+    Matcher links = MARKDOWN_LINK.matcher(content);
+    while (links.find()) {
+      String target = links.group(1).split("#", 2)[0].replace("<", "").replace(">", "");
+      if (!target.isBlank()
+          && !target.startsWith("http://")
+          && !target.startsWith("https://")
+          && parent.resolve(target).normalize().equals(expected)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static void assertContains(String relativePath, String expected) throws IOException {

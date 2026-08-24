@@ -22,7 +22,7 @@ class PersistentFileStateManagerTest {
   @TempDir Path temporaryDirectory;
 
   @Test
-  void importsAndAtomicallyPublishesChangedFileWithBackup() throws Exception {
+  void importsAndAtomicallyPublishesChangedFileWithoutBackup() throws Exception {
     Fixture fixture = fixture();
     fixture.manager.prepare("lobby.abcdef", fixture.instance, List.of(mapping()), () -> false);
 
@@ -34,11 +34,24 @@ class PersistentFileStateManagerTest {
     fixture.manager.publish("lobby.abcdef", fixture.instance);
 
     assertEquals("[\"player\"]\n", Files.readString(fixture.source));
-    assertEquals(
-        "[]\n",
-        Files.readString(
-            findOnly(fixture.content.resolve("internal/persistent-file-backups"), "previous.bak")));
+    assertFalse(Files.exists(fixture.content.resolve("internal/persistent-file-backups")));
     assertFalse(Files.exists(fixture.source.resolveSibling(".sls-lite-whitelist.json.tmp")));
+  }
+
+  @Test
+  void leavesLegacyPersistentFileBackupsUntouched() throws Exception {
+    Fixture fixture = fixture();
+    Path legacy =
+        Files.createDirectories(fixture.content.resolve("internal/persistent-file-backups/legacy"))
+            .resolve("previous.bak");
+    Files.writeString(legacy, "operator recovery data\n");
+    fixture.manager.prepare("lobby.abcdef", fixture.instance, List.of(mapping()), () -> false);
+    Files.writeString(fixture.target(), "[\"player\"]\n");
+
+    fixture.manager.publish("lobby.abcdef", fixture.instance);
+
+    assertEquals("[\"player\"]\n", Files.readString(fixture.source));
+    assertEquals("operator recovery data\n", Files.readString(legacy));
   }
 
   @Test

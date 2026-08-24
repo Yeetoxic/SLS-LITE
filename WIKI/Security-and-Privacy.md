@@ -9,4 +9,4 @@ Use online-mode Velocity, modern forwarding with a private unique secret,
 granular permissions, and only trusted Velocity extensions. SLS-LITE admission
 limits are not container or hosting-panel isolation.
 
-Canonical guidance: [Security and Privacy](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Security_and_Privacy.md).
+Canonical guidance: [Security and Privacy](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/operations/Security_and_Privacy.md).

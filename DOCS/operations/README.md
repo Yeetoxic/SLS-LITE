@@ -1,0 +1,334 @@
+# Operations And Recovery
+
+[Documentation home](../README.md)
+
+In this branch: [commands](Commands.md), [applying changes](Applying_Changes.md),
+[troubleshooting](Troubleshooting.md),
+[lifecycle concurrency](Lifecycle_Concurrency.md), and
+[security and privacy](Security_and_Privacy.md).
+
+SLS-LITE owns local child processes, loopback registrations, admission
+reservations, instance directories, and queued transfers. Use SLS-LITE commands
+or normal Velocity shutdown so those resources are released coherently.
+
+`/sls reload` reconciles only dynamic registrations created by the active
+SLS-LITE process. Missing owned entries are restored; a same-name registration
+with another address is reported and left untouched. Normal shutdown removes
+remaining owned entries after bounded child cleanup. Replacing the SLS-LITE JAR
+requires a normal Velocity restart; binary plugin-manager hot reload is not a
+supported lifecycle boundary.
+
+## Lifecycle
+
+Managed instances move through explicit states:
+
+```text
+CREATED -> PREPARING -> STARTING -> READY -> STOPPING -> STOPPED
+                                      |
+                                      `-> FAILED
+```
+
+An instance is registered with Velocity only after its configured readiness
+pattern is observed and backend protocol synchronization completes. Startup
+failure, cancellation, and timeout unregister the backend and release owned
+memory, process slots, ports, and ephemeral files.
+
+## Starting And Joining
+
+`/sls start` creates an instance immediately. `/sls join` prefers a ready
+instance with capacity and creates one only when necessary. Multiple requests
+for the same cold destination share its startup.
+
+Players stay on their current healthy backend while queued. SLS-Limbo is used
+only when no normal backend is safe. Queue entries are removed on success,
+timeout, cancellation, disconnect, startup failure, and shutdown.
+
+## Stopping
+
+Ordinary stop:
+
+1. prevents new admission to the target;
+2. moves connected players to the primary lobby when possible;
+3. sends the software profile's stop command;
+4. waits for its stop timeout;
+5. force-terminates only when graceful shutdown fails;
+6. releases registrations and resource reservations;
+7. removes the directory only when it is verified ephemeral.
+
+Stopping during installation or preparation cancels that instance's wait
+without cancelling a shared download required by another instance.
+
+## Force Termination
+
+`/sls kill` is an explicit emergency operation. SLS-LITE evacuates players,
+removes the backend from routing, calls the operating system's forcible process
+termination directly, and then uses the same process-exit cleanup boundary as a
+normal stop. It does not send the software stop command or wait for its graceful
+timeout, so unsaved child-process data may be lost.
+
+Persistent instance storage is preserved. Verified ephemeral storage, ports,
+memory admission, logs, mounts, and registrations are released only by normal
+terminal cleanup. The upstream vSLS `force` modifier requests backend
+unregistration when the termination request itself fails; SLS-LITE never uses
+that modifier to pretend a possibly live process has released its other
+resources.
+
+Ordinary `kill all` targets are handled sequentially and the managed lobby is
+skipped. Including the lobby requires `force` and `sls.command.kill.force`;
+ordinary targets are processed first, then players are diverted to SLS-Limbo
+before the lobby process is terminated.
+
+The pinned non-dashed `force` modifier is also retained for graceful
+`/sls stop`. For ordinary servers it does not weaken lifecycle ownership:
+SLS-LITE already unregisters the Velocity backend before requesting graceful
+shutdown, then retains process, port, memory, and storage ownership until
+verified exit. On the protected managed lobby, either `force` or the additive
+`--force` alias additionally requires `sls.command.stop.force` and activates
+the intentional SLS-Limbo drain workflow.
+
+## Idle Cleanup
+
+Empty, ready, ephemeral instances stop after
+`lifecycle.idle_shutdown_seconds`. Rejoining or queueing during the delay
+cancels the drain. Persistent instances, the active lobby, keep-alive
+blueprints, and disabled policies are excluded.
+
+## Persistent Instances
+
+Persistent directories have `.sls-lite-instance.properties` ownership
+metadata. Normal restart verifies the recorded definition identity. Reset uses
+sibling staging and backup directories so an interrupted replacement can be
+rolled back during startup reconciliation.
+
+Never manually edit ownership metadata or remove a reset backup while Velocity
+is running. Back up persistent content before `/sls reset`.
+
+## Startup Reconciliation
+
+On startup SLS-LITE:
+
+- resolves interrupted reset and delete transactions;
+- validates owned instance metadata;
+- removes confirmed stale ephemeral directories;
+- preserves persistent directories;
+- verifies PID and process start time before treating a child as owned;
+- preserves malformed, unknown, or unverifiable directories for operator
+  inspection.
+
+Reconciliation is deliberately conservative. Unknown data costs disk space but
+is not silently deleted.
+
+## Lobby Recovery
+
+A managed primary lobby and SLS-Limbo each have independent bounded recovery
+budgets with exponential backoff. A healthy period resets the used budget.
+
+Protected lobby stop/restart/reset and kill requires its matching force
+permission.
+Players are evacuated to SLS-Limbo before the process changes. Restart/reset
+restores routing only after the lobby is ready and returns tracked players from
+SLS-Limbo.
+
+If both normal lobby and SLS-Limbo are unavailable, SLS-LITE remains loaded for
+console administration and recovery. Players without a safe backend receive a
+clear unavailability message rather than entering a reconnect loop.
+
+## Logs And Diagnostics
+
+Use:
+
+```text
+/sls info
+/sls info <server>
+/sls status <server>
+/sls stats <server>
+/sls logs <server> [page] [lines]
+/sls logs <server|this> --follow
+/sls logs --unfollow
+/sls console <server|this> <command...>
+/sls install info
+/sls install logs <software> <version>
+/sls system
+```
+
+Each managed instance retains 1,000 recent lines in memory for `/sls logs`.
+Live follow uses the same bounded buffer and is rate-limited; `console` is for
+child-process input, not the canonical output-reading interface.
+Temporary file output stops at its configured hard cap. Files are not rotated.
+Proxy mirroring is disabled by default to prevent child-console spam.
+
+Authorized players may toggle `/sls debug` to receive bounded command-dispatch
+context in chat. Each line includes only the `/sls` operation, sender, severity,
+and a timestamp hover. Arguments and raw child output are excluded so console
+commands, credentials, host paths, and high-volume logs are not mirrored into
+chat. While the player is connected to a managed instance and built-in
+preparation feedback does not own the action bar,
+the same toggle publishes a once-per-second action-bar summary containing
+process RSS versus the blueprint memory budget, process CPU use,
+players/capacity, and lifecycle state. RSS is resident process memory rather
+than Java heap use and CPU may exceed 100% on multicore hosts; unavailable host
+metrics remain explicitly `n/a`. The opt-in state is not persisted and is
+cleared on disable, disconnect, permission loss, or proxy shutdown.
+
+The proxy console records concise milestones, warnings, failures, recovery, and
+operator actions. Routine probes, provisioning steps, timings, reconciliation
+decisions, and storage traces go to the bounded rotating
+`plugins/sls-lite/logs/sls-lite-detail.log`. Correlation IDs in console
+summaries locate the associated detail records. `detailed_logging.level`
+controls that file; `detailed_logging.mirror_to_proxy_console` is a separate,
+default-off mirror and never suppresses important console output. Failed starts
+also retain a bounded redacted report and recent child-output excerpt; full
+retained child output remains in `/sls logs` and its configured temporary file.
+
+Each instance also emits one bounded provisioning timing summary. It separates
+operation-executor dispatch, software resolution, file preparation,
+configuration, child launch, readiness detection, and Velocity/protocol
+registration from total elapsed time. A termination summary reports graceful
+or forced shutdown, cleanup, and total instance lifetime. Timings use a
+monotonic clock and are emitted for successful, failed, and cancelled starts;
+they contain no player names, host paths, or child-console content.
+
+Matchmaking emits a separate bounded join summary. `queue` measures from
+accepted matchmaking request until the Velocity connection request begins;
+`transfer` measures that request's completion. Successful, rejected, failed,
+timed-out, and cancelled outcomes are retained in the summary. The first
+`ServerConnectedEvent` for each managed instance records `First-player timing`
+from backend readiness, and each proxy startup records `Proxy restart recovery
+timing` until the primary lobby is ready. These measurements also use a
+monotonic clock, report once per lifecycle, and omit player identity.
+
+On Linux, `/sls stats <server>` also reads the verified live child PID's
+`/proc/<pid>/status` and `/proc/<pid>/io`. It reports current RSS, logical
+characters read/written, and kernel-accounted storage bytes when those files
+are accessible. These are cumulative process counters; cached I/O can make
+storage reads smaller than logical reads. Hardened providers and non-Linux
+hosts receive explicit `not measurable` or `unavailable` values. Per-process
+network use remains unavailable because all managed children share the
+host/container network namespace. Recursive instance disk measurement is kept
+out of this synchronous command because it can block for seconds on translated
+storage; use the opt-in storage benchmark for logical and allocated size.
+
+`/sls system` reports the instance filesystem, usable space, supported
+attribute views, same-filesystem atomic directory moves, reflink clone support,
+Btrfs detection, Linux OverlayFS kernel/privilege prerequisites,
+fuse-overlayfs prerequisites, process identity support, and the requested and
+selected COW strategies for the configured instance path. Storage probes create
+and remove contained temporary entries under the instances directory. Reflinks
+are tested through a shell-free `cp --reflink=always` invocation where that
+interface is available. Btrfs is tested by creating, snapshotting, mutating,
+and deleting contained subvolumes on the exact instance filesystem. FUSE
+eligibility requires a successful contained
+mount/write-isolation/unmount/cleanup probe, not merely `/dev/fuse`.
+
+`storage.strategy` accepts `auto`, `copy`, `reflink`, `btrfs`, `overlay`,
+`fuse-overlay`, and `snapshot-hook`. Reflink and Btrfs preparation are active
+after the configured instance path passes the corresponding contained probe.
+`auto` then considers kernel OverlayFS and fuse-overlayfs after their
+exact-path probes and finally selects `portable-copy`. An incompatible reflink
+source falls back safely.
+When Btrfs is selected, eligible `cow` source subvolumes are snapshotted;
+ordinary or nested-subvolume sources fall back under `auto`. Explicit
+`reflink` or `btrfs` fails and rolls back when its source is ineligible.
+Snapshot helpers are explicit-only and excluded from automatic selection.
+The executable receives `--protocol sls-snapshot-helper-v1`, an operation
+(`probe`, `prepare`, `suspend`, `resume`, or `delete`), and absolute
+`--source`/`--target` or `--instances-root` arguments. It must print exactly
+`sls-snapshot-helper-v1 ok` and exit zero. SLS-LITE invokes no shell, caps
+stdout/stderr, enforces the configured timeout, writes a durable manifest
+before prepare, and requires delete to remove its target and mounts. Provider
+operations must be idempotent: recovery can repeat an operation when the helper
+succeeded but the process stopped before SLS-LITE could persist the resulting
+state.
+
+The general automatic priority is reflink, Btrfs snapshot, kernel OverlayFS,
+rootless fuse-overlayfs, then portable copy. Btrfs eligibility is evaluated
+per `cow` source after the storage strategy is selected; ordered merges retain
+their declaration-order portable semantics.
+
+Expected optional capabilities that are unavailable under `auto` are reported
+as `INFO`, not warnings. An explicitly requested unavailable strategy remains a
+warning at the individual probe and a startup `FAILURE` at strategy selection.
+Configured but unused Java runtimes and the managed-memory budget explanation
+are informational for the same reason.
+
+When `auto` or kernel OverlayFS is requested and the kernel driver plus
+`CAP_SYS_ADMIN` are available, SLS-LITE performs a contained probe beneath the
+instance-storage path. It mounts one immutable lower directory with private
+upper/work directories, verifies reads and write isolation, unmounts, verifies
+upper-layer persistence, and removes the probe. An unmount failure preserves
+the probe path for operator recovery instead of traversing a potentially live
+mount.
+
+Selected OverlayFS instances store private upper/work directories and a durable
+manifest inside the instance directory. Persistent instances are unmounted
+after stop and remounted on reuse. Reset, deletion, rollback, and startup crash
+reconciliation suspend managed layers before traversing or moving directories.
+Unmount refuses a live filesystem unless its type and upper/work paths match
+the manifest.
+
+## Troubleshooting
+
+Use the ordered diagnosis and symptom-specific procedures in
+[Troubleshooting](Troubleshooting.md). Preserve the correlation ID, relevant
+detail-log excerpt, instance/software identity, and `/sls system` output when
+reporting a failure; do not publish forwarding secrets, administrator claim
+codes, complete player logs, or unrelated host paths.
+
+## Constrained Hosts
+
+- Keep child console mirroring off.
+- Use small safe `-Xms` values and honest `memory_limit` reservations.
+- Limit simultaneous instances and managed ports.
+- Prefer exact cached software and avoid deleting reusable caches.
+- Installed server artifacts are reused only after provider size/checksum
+  verification. Files written by a running child, including Paper `cache/` and
+  `libraries/`, are never promoted into the shared software base because the
+  child is not a trusted artifact source.
+- Keep source worlds immutable and reasonably sized.
+- Use native Linux storage where possible.
+- Measure startup and loaded memory for the actual plugins and worlds.
+
+Constrained-host behavior is bounded as follows:
+
+| Area | Bounded behavior | Operator responsibility |
+| --- | --- | --- |
+| Memory and processes | Heap admission is synchronized; SLS-Limbo participates; process count, ports, blueprint instance count, and the 32-entry preparation queue are bounded. | Keep the admission budget below real panel capacity and include JVM native memory, Velocity, and the OS. |
+| Idle instances | Non-lobby, non-keepalive instances stop after their configured empty interval; a pending/new join cancels the drain. | Use a nonzero timeout on constrained hosts and reserve keepalive only for required services. |
+| Software cache | Installed artifacts are reused only after provider verification; mutable child output is never promoted into the shared base. Installer history and output are bounded in memory. | Verified artifacts are retained indefinitely because automatic eviction could remove the only runnable version. Remove obsolete version directories only during a maintenance window after confirming no blueprint or instance needs them. |
+| Child output | In-memory output retains 1,000 lines; command pages return at most 100; the optional file has a per-instance hard cap and is truncated on the next process start. | Lower the file cap or disable it where disk is scarce. |
+| Instance storage | Ephemeral instances are deleted after stop; persistent instances remain; recognized stale ephemerals and interrupted reset siblings are reconciled at startup. Unknown or ambiguously owned directories are preserved. | Investigate preserved-unknown warnings instead of deleting blindly. No automatic persistent-instance quota or cache eviction exists. |
+
+This policy favors recoverability over aggressive reclamation: when ownership
+or process identity is uncertain, SLS-LITE leaves the bytes in place and names
+the directory in diagnostics.
+
+On Linux, startup also reports a finite cgroup v1/v2 hard limit and current
+usage when the container exposes trustworthy controller files. This measurement
+is diagnostic: SLS-LITE does not raise its configured managed-memory admission
+budget from it, and an absent or unbounded cgroup limit is reported as
+unavailable rather than guessed from host RAM.
+
+SLS-LITE uses reflink clones, eligible Btrfs subvolume snapshots, kernel
+OverlayFS, or fuse-overlayfs for `cow` volumes when the selected storage
+supports them, with transactional portable copying as the universal fallback.
+Explicit snapshot helpers extend the same lifecycle to operator-managed ZFS,
+LVM-thin, or provider storage without auto-discovery. On non-Windows hosts, the
+portable fallback preserves
+sampled large zero runs as sparse extents while small and ordinary files retain
+native Java copying. Windows retains native copying because seek-created holes
+do not guarantee NTFS sparse allocation without platform-specific controls.
+Full directory copies use bounded parallel copying with no more than four
+workers and two in-flight tasks per worker. Ordered first-wins volume merges
+remain sequential. Failure and cancellation stop queued work, drain every
+started worker, and only then allow transactional rollback to remove the
+partial destination. Valid persistent instances reuse their prepared storage
+until an explicit reset, and mutable world files are never hard-linked.
+
+On non-Windows hosts the sparse-aware fallback preserves sampled large zero
+runs as holes while verifying byte-for-byte content. Bounded parallel copying
+improves independent-file throughput without changing merge order or allowing
+rollback to race unfinished workers.
+
+Valid persistent instances reuse their existing directory on restart and do
+not reapply a changed software template. Only an explicit reset constructs a
+new sibling staging directory and swaps it after initialization commits.

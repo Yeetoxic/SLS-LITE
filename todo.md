@@ -1244,27 +1244,54 @@ Narrow corrective follow-up for defects discovered after RC.2.2 publication.
 Keep RC.2.2 immutable and do not pull planned RC.3 feature work into this
 candidate.
 
-- [ ] Remove automatic persistent-file backup creation. Continue to publish
+- [x] Remove automatic persistent-file backup creation. Continue to publish
       declared persistent files atomically and retain mandatory conflict
       candidates when both the canonical and instance copies changed, but leave
       backup and retention policy to the operator. Remove backup-specific code,
       tests, path reservations, and current documentation without deleting
       existing `internal/persistent-file-backups/` data; document that legacy
       backup data may be inspected and removed manually.
-- [ ] Report unexpected exits after successful readiness as runtime failures.
+- [x] Report unexpected exits after successful readiness as runtime failures.
       Do not construct a misleading `before readiness` failure for an instance
       that was already registered and serving players; retain the actual exit
       code, runtime phase, instance identity, and focused lifecycle regression
       coverage.
-- [ ] Preserve useful context from oversized managed-process output in retained
+- [x] Preserve useful context from oversized managed-process output in retained
       diagnostics. A large Paper watchdog thread dump must not displace its
       watchdog header and primary server-thread stack from the report; retain a
       bounded combination of leading and trailing context within the existing
       redaction, confinement, report-count, and byte-size limits, and cover the
       truncation boundary directly.
-- [ ] Set the RC.2.3 version consistently, publish focused release and upgrade
-      notes, run the complete local verification suite, and complete GitHub
-      Actions plus explicit maintainer runtime verification.
+- [x] Keep living documentation focused on the current supported contract.
+      Remove RC-by-RC feature narratives and unnecessary exact SLS-LITE version
+      comparisons from current manuals; retain exact versions only for current
+      artifact/compatibility identity plus release and security mechanics. Do
+      not document compatibility behavior for previous SLS-LITE releases in the
+      current manuals; use release notes, Git history, and tag-pinned
+      documentation for historical behavior and upgrade boundaries.
+- [x] Add a simplified, detailed NPC/menu backend-messaging walkthrough. Cover
+      exact source selection, the Paper sender, safe direct matchmaking,
+      player-context click commands, the separately gated command-relay
+      alternative, permissions, restart requirements, and ordered diagnosis.
+      Cover third-party command forwarders as a separate integration path whose
+      installation, channel, allowlist, and security policy are not controlled
+      by SLS-LITE backend-messaging settings. Keep
+      `DOCS/integrations/backend-messaging/README.md` as a decision hub and
+      maintain separate built-in and third-party setup guides.
+- [x] Reorganize the canonical manuals into a shallow topic tree rooted at
+      `DOCS/README.md`. Give each major branch a landing page, preserve the
+      historical archive separately, rewrite repository links, and recursively
+      verify that every current guide can navigate back to the documentation
+      root.
+- [x] Apply progressive disclosure to newcomer documentation. Lead with the
+      shortest installation, first-blueprint, troubleshooting, software, and
+      change-application paths; keep deeper constraints and contributor detail
+      available without placing them before the immediate task.
+- [x] Complete GitHub community-health entry points. Provide root-level
+      contribution, support, security, and conduct policies; retain structured
+      bug and feature forms and route sensitive reports privately.
+- [x] Set the RC.2.3 version consistently, publish focused release and upgrade
+      notes, and pass the complete local verification suite.
 
 `v0.1.0-rc.2.3` exit: every confirmed regression in scope has a reproducible
 test and verified correction; persistent-file publication no longer imposes an

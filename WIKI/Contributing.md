@@ -20,4 +20,4 @@ configuration defaults, accepted/rejected fields, restart boundaries, security
 effects, destructive behavior, and compatibility classifications must remain
 explicit. Keep release/test records separate from operator instructions.
 
-Canonical contributor material: [Contributing](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Contributing.md), [Architecture](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/ARCHITECTURE.md), [Contributor Architecture](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Contributor_Architecture.md), and [Testing](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Testing.md).
+Canonical contributor material: [Contributing](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/development/README.md), [Architecture](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/development/Architecture.md), [Contributor Architecture](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/development/Contributor_Architecture.md), and [Testing](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/development/Testing.md).

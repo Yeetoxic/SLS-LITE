@@ -82,7 +82,7 @@ import org.slf4j.Logger;
 public final class SLSLite implements SLSLiteApiProvider {
 
   private static final String CONFIGURATION_GUIDE =
-      "https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Copyable_Config.md";
+      "https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/Copyable_Config.md";
 
   private final ProxyServer proxy;
   private final Logger logger;

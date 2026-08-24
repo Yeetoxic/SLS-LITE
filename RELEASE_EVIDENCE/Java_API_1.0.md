@@ -2,7 +2,7 @@
 
 This record covers the versioned in-process Java extension API introduced
 before the SLS-LITE release candidate. Operator and extension-author guidance
-lives in [Java Extension API](../DOCS/Java_API.md); this file records validation
+lives in [Java Extension API](../DOCS/extensions/README.md); this file records validation
 rather than forming part of the public contract.
 
 ## Public Boundary

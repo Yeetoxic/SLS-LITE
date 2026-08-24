@@ -31,8 +31,8 @@ final class OperatorDocumentationContractTest {
 
   @Test
   void commandAndPermissionDocumentationCoversTheVersionedRuntimeContract() throws IOException {
-    String commands = read("DOCS/Commands.md");
-    String compatibility = read("DOCS/SLS_Command_Compatibility.md");
+    String commands = read("DOCS/operations/Commands.md");
+    String compatibility = read("DOCS/compatibility/SLS_Commands.md");
     String combined = commands + System.lineSeparator() + compatibility;
     Map<String, String> commandRows = commandRows(commands, compatibility);
 
@@ -74,7 +74,8 @@ final class OperatorDocumentationContractTest {
 
   @Test
   void compatibilityDocumentationTargetsMainAndCoversTheCommandContract() throws IOException {
-    for (String document : Set.of("DOCS/Compatibility.md", "DOCS/SLS_Command_Compatibility.md")) {
+    for (String document :
+        Set.of("DOCS/compatibility/README.md", "DOCS/compatibility/SLS_Commands.md")) {
       String content = read(document);
       assertTrue(
           content.contains("SLS `" + VSLSCommandContract.UPSTREAM_BRANCH + "`")
@@ -82,7 +83,7 @@ final class OperatorDocumentationContractTest {
           () -> document + " must identify the upstream SLS main branch");
     }
 
-    String compatibility = read("DOCS/SLS_Command_Compatibility.md");
+    String compatibility = read("DOCS/compatibility/SLS_Commands.md");
     for (VSLSCommandContract.Branch branch : VSLSCommandContract.BRANCHES) {
       if (branch.availability() == VSLSCommandContract.Availability.LOCAL_MODE_RESPONSE
           || branch.availability() == VSLSCommandContract.Availability.BUILD_RESPONSE) {
@@ -96,7 +97,7 @@ final class OperatorDocumentationContractTest {
   @Test
   void configurationReferenceMatchesEveryCanonicalDefaultLeaf() throws IOException {
     Map<String, String> defaults = flattenBundledDefaults();
-    Map<String, String> documented = configurationRows(read("DOCS/Configuration.md"));
+    Map<String, String> documented = configurationRows(read("DOCS/setup/Configuration.md"));
 
     Set<String> expectedKeys = new LinkedHashSet<>(defaults.keySet());
     expectedKeys.add("storage.snapshot_hook.executable");
@@ -119,7 +120,7 @@ final class OperatorDocumentationContractTest {
 
   @Test
   void copyableConfigurationExactlyMatchesTheBundledCanonicalFile() throws IOException {
-    String document = normalize(read("DOCS/Copyable_Config.md"));
+    String document = normalize(read("DOCS/setup/Copyable_Config.md"));
     String opening = "```yaml\n";
     int start = document.indexOf(opening);
     int end = document.indexOf("\n```", start + opening.length());
@@ -134,8 +135,8 @@ final class OperatorDocumentationContractTest {
 
   @Test
   void canonicalForwardingOnboardingPinsProductionAndIsolatedDevelopmentPaths() throws IOException {
-    String guide = normalize(read("DOCS/Getting_Started.md"));
-    String anchor = "DOCS/Getting_Started.md#forwarding-and-first-connection";
+    String guide = normalize(read("DOCS/setup/README.md"));
+    String anchor = "DOCS/setup/README.md#forwarding-and-first-connection";
 
     for (String required :
         Set.of(

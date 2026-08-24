@@ -1,67 +1,158 @@
 # SLS-LITE Documentation
 
 SLS-LITE is a single-host Velocity plugin; full SLS remains a separate
-distributed product. Start with the journey that matches your role, then use
-the canonical subject map to find detail without relying on duplicated
-summaries.
+distributed product. Documentation is organized as a topic tree: choose a
+branch here, then follow that branch's local navigation.
+
+## What Are You Trying To Do?
+
+- **Install SLS-LITE:** follow [Getting Started](setup/README.md).
+- **Create your first server:** copy a working
+  [blueprint recipe](blueprints/README.md#1-disposable-world).
+- **Fix a problem:** start with [Troubleshooting](operations/Troubleshooting.md).
+- **Connect an NPC or menu:** choose a
+  [backend-messaging path](integrations/backend-messaging/README.md).
+
+You do not need to read the whole tree. Each beginner guide gives you a short
+working path first and links to reference material when a choice needs more
+explanation.
+
+## Documentation Tree
+
+```text
+DOCS/
+|-- README.md                         <- start here
+|-- setup/                            <- install, configure, data, software
+|-- blueprints/                       <- recipes, schema, volumes, packs
+|-- operations/                       <- commands, lifecycle, safety, recovery
+|-- networking/                       <- SLS-Limbo and protocol support
+|-- integrations/
+|   `-- backend-messaging/            <- built-in or third-party NPC bridges
+|-- compatibility/                    <- SLS comparison and migration from SLS
+|-- extensions/                       <- public Java extension API
+|-- development/                      <- internals, tests, contribution, release
+`-- HISTORICAL/                       <- non-runtime research fixtures
+```
+
+## Operator Branches
+
+### [Setup and configuration](setup/README.md)
+
+Install SLS-LITE, complete the first run, configure the host, understand its
+data layout, and install server software.
+
+- [Host configuration](setup/Configuration.md)
+- [Complete copyable configuration](setup/Copyable_Config.md)
+- [Data layout](setup/Data_Layout.md)
+- [Software installation](setup/Software_Installation.md)
+
+### [Blueprints](blueprints/README.md)
+
+Start with working recipes, then use the full schema and storage references for
+custom definitions.
+
+- [Blueprint schema](blueprints/Schema.md)
+- [Volumes and storage modes](blueprints/Volumes.md)
+- [Resource packs](blueprints/Resource_Packs.md)
+
+### [Operations and recovery](operations/README.md)
+
+Run the network, use commands, apply changes safely, diagnose failures, and
+understand lifecycle concurrency and security boundaries.
+
+- [Commands and permissions](operations/Commands.md)
+- [Applying changes safely](operations/Applying_Changes.md)
+- [Troubleshooting](operations/Troubleshooting.md)
+- [Lifecycle concurrency](operations/Lifecycle_Concurrency.md)
+- [Security and privacy](operations/Security_and_Privacy.md)
+
+### [Networking and fallback](networking/README.md)
+
+Configure and operate SLS-Limbo, then verify the exact supported protocol and
+ViaVersion paths.
+
+- [Protocol compatibility](networking/Protocol_Compatibility.md)
+
+### [Backend and NPC integrations](integrations/backend-messaging/README.md)
+
+Choose between SLS-LITE's source-verified backend channel and a separately
+secured third-party command forwarder.
+
+- [Built-in backend messaging](integrations/backend-messaging/Built_In.md)
+- [Third-party command forwarding](integrations/backend-messaging/Third_Party.md)
+- [Paper sender example](../examples/paper-backend-sender/README.md)
+
+## Compatibility and Development Branches
+
+### [Compatibility](compatibility/README.md)
+
+Review current SLS/SLS-LITE boundaries, full-SLS and vSLS surface decisions, and
+the supported process for migrating a network from SLS.
+
+- [Full-SLS compatibility](compatibility/SLS_Main.md)
+- [SLS command compatibility](compatibility/SLS_Commands.md)
+- [Migrating from SLS](compatibility/Migration_From_SLS.md)
+
+### [Java extension API](extensions/README.md)
+
+Build trusted Velocity extensions against the public API and its documented
+compatibility policy.
+
+- [API scope and compatibility policy](extensions/Compatibility.md)
+- [Example Velocity extension](../examples/velocity-extension/README.md)
+
+### [Development and contribution](development/README.md)
+
+Understand the codebase, internal invariants, test fixtures, and release gates.
+
+- [Architecture](development/Architecture.md)
+- [Contributor architecture](development/Contributor_Architecture.md)
+- [Internal invariants](development/Internal_Invariants.md)
+- [Testing](development/Testing.md)
+- [Velocity fixture](development/Velocity_Testing.md)
+- [Pterodactyl fixture](development/Pterodactyl_Local_Testing.md)
+- [Release process](development/Release_Process.md)
 
 ## Suggested Journeys
 
 ### New operator
 
-1. [Getting Started](Getting_Started.md)
-2. [Blueprint Recipe Book](Blueprint_Recipes.md)
-3. [Configuration](Configuration.md) and the [complete copyable config](Copyable_Config.md)
-4. [Commands and Permissions](Commands.md)
-5. [Full Blueprint Schema](Blueprints.md)
-6. [Applying Changes Safely](Change_Application.md)
-7. [Operations and Recovery](Operations.md)
-8. [Current Release Notes](../RELEASE_NOTES.md)
+1. [Install and complete the first run](setup/README.md)
+2. [Create a server from a recipe](blueprints/README.md)
+3. [Learn commands and permissions](operations/Commands.md)
+4. [Operate and recover the network](operations/README.md)
+5. Read the [current release notes](../RELEASE_NOTES.md)
 
-### Existing SLS or SLS-LITE operator
+### Existing SLS operator
 
-1. [Compatibility](Compatibility.md)
-2. [Migration](Migration.md)
-3. [Data Layout](Data_Layout.md)
-4. [Operations and Recovery](Operations.md)
+1. [Review compatibility](compatibility/README.md)
+2. [Migrate from SLS](compatibility/Migration_From_SLS.md)
+3. [Verify the current data layout](setup/Data_Layout.md)
+4. [Run the migrated network](operations/README.md)
+
+### NPC or menu integrator
+
+1. [Choose a backend-messaging path](integrations/backend-messaging/README.md)
+2. Follow either the [built-in](integrations/backend-messaging/Built_In.md) or
+   [third-party](integrations/backend-messaging/Third_Party.md) guide
+3. Test the player-context action before attaching it to an NPC
 
 ### Extension developer
 
-1. [Java Extension API](Java_API.md)
-2. [API Scope and Compatibility Policy](Java_API_Compatibility.md)
-3. [Example Velocity Extension](../examples/velocity-extension/README.md)
-4. [Backend Messaging](Backend_Messaging.md)
+1. [Read the Java API guide](extensions/README.md)
+2. [Review the API compatibility policy](extensions/Compatibility.md)
+3. [Build the example extension](../examples/velocity-extension/README.md)
 
 ### Contributor or tester
 
-1. [Contributing](Contributing.md)
-2. [Contributor Architecture Guide](Contributor_Architecture.md)
-3. [Internal Invariants](Internal_Invariants.md)
-4. [Testing](Testing.md)
+1. [Read the contribution guide](development/README.md)
+2. [Understand the architecture](development/Architecture.md)
+3. [Review internal invariants](development/Internal_Invariants.md)
+4. [Select the correct tests](development/Testing.md)
 
-## Canonical Subject Map
+## Canonical Generated References
 
-| Subject | Canonical page | Supporting detail |
-| --- | --- | --- |
-| Installation, first run, update, backup, removal | [Getting Started](Getting_Started.md) | [Data Layout](Data_Layout.md) |
-| Host configuration and defaults | [Configuration](Configuration.md) | [Complete copyable config](Copyable_Config.md), generated `config.yml` |
-| Blueprint recipes, schema, and behavior | [Blueprint Recipe Book](Blueprint_Recipes.md) | [Blueprints](Blueprints.md), [Blueprint Volumes](Blueprint_Volumes.md), [Resource Packs](Resource_Packs.md) |
-| Commands and permissions | [Commands](Commands.md) | [vSLS command comparison](SLS_Command_Compatibility.md) |
-| Daily operation, logs, lifecycle, recovery | [Operations](Operations.md) | [Lifecycle concurrency](Lifecycle_Concurrency.md) |
-| Reload, restart, reset, and change application | [Applying Changes Safely](Change_Application.md) | [Blueprints](Blueprints.md), [Configuration](Configuration.md) |
-| Failure diagnosis and problem reports | [Troubleshooting](Troubleshooting.md) | [Software Installation](Software_Installation.md), [Resource Packs](Resource_Packs.md) |
-| Security and privacy | [Security and Privacy](Security_and_Privacy.md) | [Backend Messaging](Backend_Messaging.md) |
-| Software profiles and installation | [Software Installation](Software_Installation.md) | Generated Paper and vanilla profiles |
-| Lobby and player fallback behavior | [SLS-Limbo](SLS_Limbo.md) | [Protocol Compatibility](Protocol_Compatibility.md) |
-| SLS and platform compatibility | [Compatibility](Compatibility.md) | [SLS Main matrix](SLS_Main_Compatibility.md) |
-| Migration | [Migration](Migration.md) | Historical fixtures under `DOCS/HISTORICAL/` |
-| Java extension development | [Java Extension API](Java_API.md) | [API scope policy](Java_API_Compatibility.md), [example extension](../examples/velocity-extension/README.md) |
-| Paper backend, NPC, and menu integrations | [Backend Messaging](Backend_Messaging.md) | [Paper sender example](../examples/paper-backend-sender/README.md) |
-| Architecture and internal contracts | [Architecture](ARCHITECTURE.md) | [Contributor architecture](Contributor_Architecture.md), [internal invariants](Internal_Invariants.md) |
-| Test selection and fixtures | [Testing](Testing.md) | [Velocity fixture](Velocity_Testing.md), [Pterodactyl fixture](Pterodactyl_Local_Testing.md) |
-| Candidate and release procedure | [Release Process](Release_Process.md) | [Current release notes](../RELEASE_NOTES.md) |
-
-The generated commented files are canonical schema examples:
+The generated commented files remain the canonical schema examples:
 
 - `src/main/resources/defaults/host/config.yml`
 - `src/main/resources/defaults/blueprints/template.yml.example`
@@ -73,11 +164,12 @@ every full-SLS definition, command, node feature, or API is available locally.
 
 ## Project References
 
-Contributor and legal material is deliberately separate from operator
-instructions:
-
 - [Reviewable GitHub Wiki source](../WIKI/README.md)
-- [Contributing](Contributing.md)
+- [Current release notes](../RELEASE_NOTES.md)
+- [Contributing](../CONTRIBUTING.md)
+- [Support](../SUPPORT.md)
+- [Security policy](../SECURITY.md)
+- [Code of Conduct](../CODE_OF_CONDUCT.md)
 - [License](../LICENSE)
 - [Third-party notices](../THIRD_PARTY/THIRD-PARTY-NOTICES.txt)
 - [NanoLimbo provenance](../THIRD_PARTY/NanoLimbo.md)

@@ -141,7 +141,7 @@ class PublicApiContractTest {
 
   @Test
   void publicMethodsAndCapabilitiesRemainDocumented() throws Exception {
-    String documentation = Files.readString(Path.of("DOCS", "Java_API.md"));
+    String documentation = Files.readString(Path.of("DOCS", "extensions", "README.md"));
 
     Arrays.stream(SLSLiteApi.class.getDeclaredMethods())
         .map(method -> "`" + method.getName() + "(")

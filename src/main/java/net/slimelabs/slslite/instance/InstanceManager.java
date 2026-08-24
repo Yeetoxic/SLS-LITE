@@ -740,7 +740,9 @@ public final class InstanceManager implements ServerController {
       Throwable diagnosticFailure =
           failure == null
               ? new ProcessStartException(
-                  "Managed process exited with code " + exitCode + " before readiness")
+                  "Managed process exited with code "
+                      + exitCode
+                      + (reachedReadiness ? " after readiness" : " before readiness"))
               : failure;
       recordFailedStart(
           instance,
@@ -990,7 +992,10 @@ public final class InstanceManager implements ServerController {
     try {
       Path report = failedStartDiagnostics.record(instance, phase, failure);
       logger.warn(
-          "Retained failed-start diagnostics for {} as {}", instance.id(), report.getFileName());
+          "Retained {} diagnostics for {} as {}",
+          phase == FailurePhase.RUNTIME ? "runtime-failure" : "failed-start",
+          instance.id(),
+          report.getFileName());
     } catch (IOException exception) {
       logger.warn(
           "Unable to retain failed-start diagnostics for {}: {}",

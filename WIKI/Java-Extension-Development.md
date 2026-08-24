@@ -22,4 +22,4 @@ The API does not expose distributed nodes, containers, arbitrary storage or
 process control, replacement matchmaking/lobby/install/storage providers, or
 an authenticated HTTP administration endpoint.
 
-Canonical guide: [Java Extension API](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Java_API.md). Contract boundaries: [API Scope and Compatibility Policy](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Java_API_Compatibility.md). Working source: [Example Velocity Extension](https://github.com/Yeetoxic/SLS-LITE/tree/main/examples/velocity-extension).
+Canonical guide: [Java Extension API](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/extensions/README.md). Contract boundaries: [API Scope and Compatibility Policy](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/extensions/Compatibility.md). Working source: [Example Velocity Extension](https://github.com/Yeetoxic/SLS-LITE/tree/main/examples/velocity-extension).

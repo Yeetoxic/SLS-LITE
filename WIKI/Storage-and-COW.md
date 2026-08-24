@@ -1,7 +1,7 @@
 # Storage and COW
 
 New to blueprint mappings? Start with the copyable visual
-[Blueprint Recipe Book](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Blueprint_Recipes.md)
+[Blueprint Recipe Book](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/blueprints/README.md)
 before choosing an advanced storage strategy.
 
 Blueprint volumes use `cow`, `ro`, or `rw` intent:
@@ -35,4 +35,4 @@ copy instead.
 Always budget enough disk for portable fallback and keep source worlds
 unchanged while preparation is running.
 
-Canonical reference: [Blueprint Volumes](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Blueprint_Volumes.md). Operational probes and recovery are documented in [Operations](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Operations.md).
+Canonical reference: [Blueprint Volumes](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/blueprints/Volumes.md). Operational probes and recovery are documented in [Operations](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/operations/README.md).

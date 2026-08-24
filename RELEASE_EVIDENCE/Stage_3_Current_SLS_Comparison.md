@@ -68,7 +68,7 @@ field matrix still described `rw` volumes, `create`, `delete`, `kill`,
 Those statements contradicted the implemented and tested product. The matrix
 now describes verified shared-directory links, the completed command surface,
 all native COW strategies, and explicit rejection of unsafe `create`
-modifiers. `DOCS/Compatibility.md` now contains the whole-project map instead
+modifiers. `DOCS/compatibility/README.md` now contains the whole-project map instead
 of limiting its comparison to vSLS and shared YAML.
 
 No feature was added merely to imitate distributed SLS. In particular, a

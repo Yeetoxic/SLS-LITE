@@ -623,6 +623,14 @@ class InstanceManagerTest {
     assertEquals(FailurePhase.RUNTIME, failures.getFirst().phase());
     assertEquals(InstanceManager.FailureCategory.PROCESS, failures.getFirst().category());
     assertEquals(instance.correlationId(), failures.getFirst().correlationId());
+    Path diagnostics = temporaryDirectory.resolve("diagnostics/failed-starts");
+    try (var reports = Files.list(diagnostics)) {
+      Path report = reports.filter(Files::isRegularFile).findFirst().orElseThrow();
+      String content = Files.readString(report);
+      assertTrue(content.contains("phase=runtime"));
+      assertTrue(content.contains("Managed process exited with code 7 after readiness"));
+      assertFalse(content.contains("before readiness"));
+    }
   }
 
   @Test

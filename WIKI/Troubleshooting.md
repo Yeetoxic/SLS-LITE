@@ -17,4 +17,4 @@ detail logs. Preserve correlation IDs when asking for help.
 Do not manually delete instance directories, transaction backups, storage
 manifests, or mounts while Velocity is running.
 
-Canonical diagnosis and reporting procedures: [Troubleshooting](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Troubleshooting.md). Lifecycle recovery is documented in [Operations](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Operations.md), and installation-specific guidance is in [Software Installation](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Software_Installation.md).
+Canonical diagnosis and reporting procedures: [Troubleshooting](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/operations/Troubleshooting.md). Lifecycle recovery is documented in [Operations](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/operations/README.md), and installation-specific guidance is in [Software Installation](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/Software_Installation.md).

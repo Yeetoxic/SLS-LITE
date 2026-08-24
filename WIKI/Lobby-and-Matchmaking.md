@@ -29,4 +29,4 @@ queued slots, and creates a new instance only within blueprint and host limits.
 Queue entries terminate on success, timeout, cancellation, disconnect,
 startup failure, instance failure, or shutdown.
 
-Canonical references: [SLS-Limbo](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/SLS_Limbo.md), [Configuration](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Configuration.md), and [Operations](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Operations.md).
+Canonical references: [SLS-Limbo](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/networking/README.md), [Configuration](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/Configuration.md), and [Operations](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/operations/README.md).

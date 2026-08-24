@@ -25,4 +25,4 @@ provisioning, timing, storage, and reconciliation records go to the bounded
 SLS-LITE detail log unless console mirroring is explicitly enabled.
 
 Canonical lifecycle, logging, backup, shutdown, and recovery guidance:
-[Operations and Recovery](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Operations.md) and [Getting Started](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Getting_Started.md).
+[Operations and Recovery](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/operations/README.md) and [Getting Started](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/README.md).

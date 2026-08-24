@@ -23,4 +23,4 @@ Useful starting commands:
 Use tab completion rather than guessing selectors or force syntax. Commands
 that have no safe single-host equivalent return an explicit explanation.
 
-Canonical command and permission inventory: [Commands](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Commands.md). Upstream naming differences are recorded in [vSLS Command Compatibility](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/SLS_Command_Compatibility.md).
+Canonical command and permission inventory: [Commands](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/operations/Commands.md). Upstream naming differences are recorded in [vSLS Command Compatibility](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/compatibility/SLS_Commands.md).

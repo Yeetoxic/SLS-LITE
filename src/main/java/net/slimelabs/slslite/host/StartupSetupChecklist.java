@@ -8,7 +8,7 @@ import java.util.Objects;
 public final class StartupSetupChecklist {
 
   public static final String SETUP_GUIDE =
-      "https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/Getting_Started.md";
+      "https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/README.md";
   private static final int MAX_CONSOLE_ACTIONS = 2;
 
   private StartupSetupChecklist() {}
