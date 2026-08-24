@@ -1238,6 +1238,39 @@ per-blueprint caps that diverge from current full-SLS/vSLS behavior.
 current documentation, and tested blueprint contract agree; automated release
 gates and explicit maintainer verification approve the immutable candidate.
 
+#### `v0.1.0-rc.2.3`
+
+Narrow corrective follow-up for defects discovered after RC.2.2 publication.
+Keep RC.2.2 immutable and do not pull planned RC.3 feature work into this
+candidate.
+
+- [ ] Remove automatic persistent-file backup creation. Continue to publish
+      declared persistent files atomically and retain mandatory conflict
+      candidates when both the canonical and instance copies changed, but leave
+      backup and retention policy to the operator. Remove backup-specific code,
+      tests, path reservations, and current documentation without deleting
+      existing `internal/persistent-file-backups/` data; document that legacy
+      backup data may be inspected and removed manually.
+- [ ] Report unexpected exits after successful readiness as runtime failures.
+      Do not construct a misleading `before readiness` failure for an instance
+      that was already registered and serving players; retain the actual exit
+      code, runtime phase, instance identity, and focused lifecycle regression
+      coverage.
+- [ ] Preserve useful context from oversized managed-process output in retained
+      diagnostics. A large Paper watchdog thread dump must not displace its
+      watchdog header and primary server-thread stack from the report; retain a
+      bounded combination of leading and trailing context within the existing
+      redaction, confinement, report-count, and byte-size limits, and cover the
+      truncation boundary directly.
+- [ ] Set the RC.2.3 version consistently, publish focused release and upgrade
+      notes, run the complete local verification suite, and complete GitHub
+      Actions plus explicit maintainer runtime verification.
+
+`v0.1.0-rc.2.3` exit: every confirmed regression in scope has a reproducible
+test and verified correction; persistent-file publication no longer imposes an
+automatic backup policy; metadata, documentation, artifacts, and release gates
+agree on the immutable candidate.
+
 #### v0.1.0-rc.3
 
 Active post-RC.2 extension-integration follow-up. Preserve RC.2 as an immutable
@@ -1305,11 +1338,13 @@ than exposing core implementation classes.
       stopped `save: true` instances retained on disk alongside active servers,
       show each exact composite instance ID, and report the current lifecycle
       stage rather than collapsing preparation, readiness, stopping, failure,
-      and saved-offline states into a generic status. Keep output bounded and
-      consistently ordered, distinguish retained offline instances from active
-      registry entries, preserve permission-safe player counts and hover
-      details, and update command contracts, documentation, and lifecycle plus
-      proxy-restart tests.
+      and saved-offline states into a generic status. Put the instance ID on the
+      primary visible line for every listed server rather than hiding it in hover
+      text, so operators can continuously identify the exact reset/restart
+      target. Keep output bounded and consistently ordered, distinguish retained
+      offline instances from active registry entries, preserve permission-safe
+      player counts and hover details, and update command contracts,
+      documentation, and lifecycle plus proxy-restart tests.
 - [ ] Implement `annotations.sls-lite.start-on-proxy-start` for ordinary
       blueprint-managed startup services. A true value starts exactly one
       instance during proxy startup; persistent blueprints resume their single
