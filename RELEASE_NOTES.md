@@ -59,6 +59,9 @@ reconciliation.
 - GitHub community entry points now include root-level contributing, support,
   security, and conduct policies. Structured issue forms route ordinary bugs
   and feature requests separately from private security reports.
+- Reviewable Wiki source now mirrors the task-first documentation model,
+  generated-forwarding-secret guidance, split backend-integration paths, and
+  community support routes while keeping `DOCS/` canonical.
 - Backend-messaging documentation now includes a complete NPC/menu quick start:
   Paper sender setup, exact source authorization, direct matchmaking, optional
   allowlisted command relay, player-context requirements, and troubleshooting.

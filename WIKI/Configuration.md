@@ -11,7 +11,7 @@ Review these areas on every host:
 - Storage strategy and optional snapshot-helper settings
 - Matchmaking defaults, per-blueprint queue expiry, and bounded diagnostic retention
 - Java runtime mapping
-- Forwarding mode and secret
+- Forwarding mode and the path to Velocity's or the host's generated secret
 - Velocity-native, external, or managed lobby policy
 - SLS-Limbo memory and recovery limits
 - Queue, lifecycle, readiness, and shutdown timeouts
@@ -27,5 +27,11 @@ Set `presentation.transfer_action_bar.enabled: false` when an extension should
 own that surface. Otherwise its joining, force-joining, dequeue, and animation
 entries accept bounded MiniMessage; `<server>` is substituted safely.
 
-Canonical reference: [Configuration](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/Configuration.md). The shipped source of defaults is
+Reuse the same relative secret path configured by Velocity. Do not replace an
+existing generated secret during SLS-LITE setup; create one manually only when
+the configured file is genuinely absent.
+
+Canonical reference:
+[Configuration](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/setup/Configuration.md).
+The shipped source of defaults is
 [`config.yml`](https://github.com/Yeetoxic/SLS-LITE/blob/main/src/main/resources/defaults/host/config.yml).

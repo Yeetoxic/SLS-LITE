@@ -14,3 +14,9 @@
 - [Java Extension Development](Java-Extension-Development)
 - [Backend Integrations](Backend-Integrations)
 - [Contributing](Contributing)
+
+**Project**
+
+- [Support](https://github.com/Yeetoxic/SLS-LITE/blob/main/SUPPORT.md)
+- [Security Policy](https://github.com/Yeetoxic/SLS-LITE/blob/main/SECURITY.md)
+- [Code of Conduct](https://github.com/Yeetoxic/SLS-LITE/blob/main/CODE_OF_CONDUCT.md)

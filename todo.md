@@ -1290,6 +1290,9 @@ candidate.
 - [x] Complete GitHub community-health entry points. Provide root-level
       contribution, support, security, and conduct policies; retain structured
       bug and feature forms and route sensitive reports privately.
+- [x] Synchronize the reviewable Wiki with the task-first documentation tree,
+      generated forwarding-secret behavior, split backend-integration guides,
+      release-note upgrade routing, and community-health entry points.
 - [x] Set the RC.2.3 version consistently, publish focused release and upgrade
       notes, and pass the complete local verification suite.
 

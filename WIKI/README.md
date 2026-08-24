@@ -9,8 +9,9 @@ pages are concise entry points; detailed behavior remains canonical under
 1. Change the canonical repository documentation first.
 2. Update only the affected wiki summary or link.
 3. Verify that every availability claim describes implemented behavior.
-4. Review links and Markdown in the repository pull request or commit.
-5. Publish only from the reviewed revision intended for the wiki.
+4. Keep newcomer pages task-first and link to `DOCS/` for detailed choices.
+5. Review links and Markdown in the repository pull request or commit.
+6. Publish only from the reviewed revision intended for the wiki.
 
 ## Publishing
 

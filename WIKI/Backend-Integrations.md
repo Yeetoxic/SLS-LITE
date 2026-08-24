@@ -29,7 +29,11 @@ the needed `sls join` root, retain normal Velocity permissions, and make the NPC
 run the forwarder's wrapper as the player rather than console. SLS-LITE's
 `backend_messaging` allowlists do not protect another plugin's channel.
 
-Canonical protocol, configuration, and security guide:
-[Backend Messaging](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/integrations/backend-messaging/README.md).
+Choose the matching canonical guide:
+
+- [Messaging decision hub](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/integrations/backend-messaging/README.md)
+- [Built-in backend messaging](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/integrations/backend-messaging/Built_In.md)
+- [Third-party command forwarding](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/integrations/backend-messaging/Third_Party.md)
+
 Working Paper source:
 [Backend Sender Example](https://github.com/Yeetoxic/SLS-LITE/tree/main/examples/paper-backend-sender).

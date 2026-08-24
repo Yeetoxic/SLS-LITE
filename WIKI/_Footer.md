@@ -1,1 +1,1 @@
-Canonical documentation: [repository docs](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/README.md) | [license](https://github.com/Yeetoxic/SLS-LITE/blob/main/LICENSE)
+Canonical documentation: [repository docs](https://github.com/Yeetoxic/SLS-LITE/blob/main/DOCS/README.md) | [support](https://github.com/Yeetoxic/SLS-LITE/blob/main/SUPPORT.md) | [security](https://github.com/Yeetoxic/SLS-LITE/blob/main/SECURITY.md) | [license](https://github.com/Yeetoxic/SLS-LITE/blob/main/LICENSE)
