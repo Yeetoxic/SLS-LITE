@@ -3,6 +3,7 @@ package net.slimelabs.slslite.config;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import net.slimelabs.slslite.blueprint.Blueprint;
+import net.slimelabs.slslite.blueprint.Mixin;
 import net.slimelabs.slslite.software.SoftwareProfile;
 
 public final class DefinitionCatalog {
@@ -10,7 +11,7 @@ public final class DefinitionCatalog {
   private static final int DEFAULT_BLUEPRINT_MEMORY_MIB = 1024;
 
   private final AtomicReference<Snapshot> active =
-      new AtomicReference<>(new Snapshot(Map.of(), Map.of()));
+      new AtomicReference<>(new Snapshot(Map.of(), Map.of(), Map.of()));
 
   public Snapshot snapshot() {
     return active.get();
@@ -21,6 +22,17 @@ public final class DefinitionCatalog {
         current ->
             new Snapshot(
                 resolveBlueprints(blueprints, current.softwareProfiles()),
+                current.mixins(),
+                current.softwareProfiles()));
+  }
+
+  public synchronized void installDefinitions(
+      Map<String, Blueprint> blueprints, Map<String, Mixin> mixins) {
+    active.updateAndGet(
+        current ->
+            new Snapshot(
+                resolveBlueprints(blueprints, current.softwareProfiles()),
+                Map.copyOf(mixins),
                 current.softwareProfiles()));
   }
 
@@ -28,12 +40,18 @@ public final class DefinitionCatalog {
     active.updateAndGet(
         current ->
             new Snapshot(
-                resolveBlueprints(current.blueprints(), softwareProfiles), softwareProfiles));
+                resolveBlueprints(current.blueprints(), softwareProfiles),
+                current.mixins(),
+                softwareProfiles));
   }
 
   public synchronized void install(
-      Map<String, Blueprint> blueprints, Map<String, SoftwareProfile> softwareProfiles) {
-    active.set(new Snapshot(resolveBlueprints(blueprints, softwareProfiles), softwareProfiles));
+      Map<String, Blueprint> blueprints,
+      Map<String, Mixin> mixins,
+      Map<String, SoftwareProfile> softwareProfiles) {
+    active.set(
+        new Snapshot(
+            resolveBlueprints(blueprints, softwareProfiles), Map.copyOf(mixins), softwareProfiles));
   }
 
   public static Map<String, Blueprint> resolveBlueprints(
@@ -61,9 +79,12 @@ public final class DefinitionCatalog {
   }
 
   public record Snapshot(
-      Map<String, Blueprint> blueprints, Map<String, SoftwareProfile> softwareProfiles) {
+      Map<String, Blueprint> blueprints,
+      Map<String, Mixin> mixins,
+      Map<String, SoftwareProfile> softwareProfiles) {
     public Snapshot {
       blueprints = Map.copyOf(blueprints);
+      mixins = Map.copyOf(mixins);
       softwareProfiles = Map.copyOf(softwareProfiles);
     }
   }

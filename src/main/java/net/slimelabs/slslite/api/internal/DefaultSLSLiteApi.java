@@ -42,6 +42,7 @@ import net.slimelabs.slslite.api.InstanceTransferStatus;
 import net.slimelabs.slslite.api.InstanceView;
 import net.slimelabs.slslite.api.LobbyDiagnosticView;
 import net.slimelabs.slslite.api.MaintenanceView;
+import net.slimelabs.slslite.api.MixinView;
 import net.slimelabs.slslite.api.QueueRequest;
 import net.slimelabs.slslite.api.QueueResult;
 import net.slimelabs.slslite.api.QueueTicket;
@@ -77,6 +78,8 @@ import net.slimelabs.slslite.api.event.SoftwareReleaseChannel;
 import net.slimelabs.slslite.api.event.Subscription;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.Mixin;
+import net.slimelabs.slslite.blueprint.Overlay;
 import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessCatalog;
 import net.slimelabs.slslite.blueprint.readiness.ExtensionBlueprintReadinessRegistry;
 import net.slimelabs.slslite.config.DefinitionReloader;
@@ -397,6 +400,19 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
     requireReady();
     requireId(blueprintId, "blueprintId");
     return blueprints.get(blueprintId).map(DefaultSLSLiteApi::view);
+  }
+
+  @Override
+  public List<MixinView> mixins() {
+    requireReady();
+    return blueprints.getAllMixins().stream().map(DefaultSLSLiteApi::view).toList();
+  }
+
+  @Override
+  public Optional<MixinView> mixin(String mixinId) {
+    requireReady();
+    requireId(mixinId, "mixinId");
+    return blueprints.getMixin(mixinId).map(DefaultSLSLiteApi::view);
   }
 
   @Override
@@ -1062,6 +1078,32 @@ public final class DefaultSLSLiteApi implements SLSLiteApi, AutoCloseable {
         !blueprint.copies().isEmpty(),
         blueprint.environment().keySet(),
         blueprint.annotations());
+  }
+
+  private static MixinView view(Mixin mixin) {
+    Overlay overlay = mixin.overlay();
+    Overlay.Server server = overlay.server();
+    Overlay.State state = overlay.state();
+    return new MixinView(
+        mixin.id(),
+        mixin.description(),
+        mixin.extendsMixins(),
+        server == null ? null : server.software(),
+        server == null ? null : server.version(),
+        state == null
+            ? List.of()
+            : state.volumes().stream()
+                .map(
+                    volume ->
+                        new VolumeView(
+                            volume.name(),
+                            volume.source(),
+                            volume.target(),
+                            volume.mode().name().toLowerCase(java.util.Locale.ROOT)))
+                .toList(),
+        state != null && !state.copies().isEmpty(),
+        state == null ? Set.of() : state.environment().keySet(),
+        overlay.annotations());
   }
 
   private static QueueTicket view(LocalJoinService.QueueTicket ticket) {

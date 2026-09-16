@@ -2,7 +2,7 @@
 
 [Documentation home](../README.md)
 
-<!-- sls-command-contract-sha256:03b4e95467791a7fb801301fb244e2d2f4eca6ae368ec072c1e807dad45156e4 -->
+<!-- sls-command-contract-sha256:3411e691d2289370b9cd6c02abd13d045ad4cfb352fb9ada676a9e634c8f4191 -->
 
 SLS-LITE uses `/sls` and mirrors the reviewed vSLS command tree where the local
 operation exists. Composite instance IDs use `<blueprint>.<short-id>`. For
@@ -27,6 +27,7 @@ complete permission inventory synchronized with the runtime:
 | `sls.command.admin` | Every administrative command, force operation, and local administrator-management action. |
 | `sls.command.blueprint` | Inspect one blueprint. |
 | `sls.command.blueprints` | Browse blueprint registries. |
+| `sls.command.mixin` | Inspect one resolved mixin. |
 | `sls.command.console` | Send commands to managed child-console input. |
 | `sls.command.create` | Provision a fresh instance. |
 | `sls.command.debug` | Toggle the player-only bounded debug stream. |
@@ -83,8 +84,9 @@ name a player and cannot use player-only selectors.
 | `/sls admin remove <player>` | `admin` | Remove one by last known name. |
 | `/sls admin list` | `admin` | List built-in administrators. |
 | `/sls admin code` | console only | Issue a short-lived one-time claim code. |
-| `/sls blueprint <id-or-rejected-path>` | `blueprint` | Show one blueprint's definition and exact preflight problems, or the validation error for a rejected blueprint file. |
+| `/sls blueprint <id-or-rejected-path>` | `blueprint` | Show one composed blueprint's definition and exact preflight problems, or the validation error for a rejected blueprint file. Includes are already applied. |
 | `/sls blueprints [registry]` | `blueprints` | List blueprint details and compact `ready`, `action needed`, or `temporarily unavailable` readiness labels. Rejected files appear as `action needed` in the unfiltered list instead of disappearing from inspection. |
+| `/sls mixin <id>` | `mixin` | Show one resolved mixin after `extends` chains are flattened. |
 | `/sls create <registry> <blueprint> [flags...]` | `create` | Provision and start a fresh managed instance. Supported local overrides are persisted across restart and reset. |
 | `/sls debug` | `debug` | Player-only toggle for bounded command-dispatch diagnostics in chat and a once-per-second action-bar summary for the player's current managed instance. |
 | `/sls join-test <server\|this>` | `join-test` | Run a bounded Minecraft status negotiation against a ready registered backend. This is a reachability diagnostic, not a synthetic player login. |
@@ -105,7 +107,7 @@ name a player and cannot use player-only selectors.
 | `/sls restart [server\|this]` | `restart` | Restart a persistent instance with the same data; players may omit the current target. |
 | `/sls reset [server\|this]` | `reset` | Rebuild a persistent instance from current sources; players may omit the current target. |
 | `/sls dequeue <player\|all\|local>` | `dequeue`, `dequeue.others`, or admin | Cancel matching queued joins. |
-| `/sls reload [all\|blueprints\|software\|config]` | `reload` | Atomically reload definition catalogs. `config` explains that host-wide settings require a Velocity restart. |
+| `/sls reload [all\|blueprints\|software\|config]` | `reload` | Atomically reload definition catalogs and report accepted blueprints, rejected files, and accepted mixins. `config` explains that host-wide settings require a Velocity restart. |
 | `/sls maintenance <on\|off\|status> [reason]` | `maintenance` | Block or restore brand-new instance creation without stopping active instances. Existing capacity, shutdown, cleanup, and persistent identity restarts remain available while draining. The optional bounded reason is shown when creation is rejected. |
 | `/sls install info` | `install` | Show software installation state. |
 | `/sls install logs <software> <version>` | `install` | Show recent provider-install output. |

@@ -53,6 +53,17 @@ public interface SLSLiteApi {
    */
   Optional<BlueprintView> blueprint(String blueprintId);
 
+  /** Returns an immutable snapshot of all loaded mixins. */
+  List<MixinView> mixins();
+
+  /**
+   * Finds a loaded mixin by identifier.
+   *
+   * @param mixinId mixin identifier
+   * @return immutable view when present
+   */
+  Optional<MixinView> mixin(String mixinId);
+
   /** Returns an immutable snapshot of all managed instances. */
   List<InstanceView> instances();
 

@@ -2,6 +2,7 @@ package net.slimelabs.slslite.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -97,6 +98,38 @@ class DefinitionReloaderTest {
         repositories.blueprints().rejections().stream()
             .map(BlueprintRepository.Rejection::path)
             .toList());
+  }
+
+  @Test
+  void mixinRejectionDoesNotRemoveValidBlueprints() throws Exception {
+    Repositories repositories = repositories();
+    Files.writeString(
+        repositories.blueprintsPath().resolve("cycle-a.yml"),
+        """
+                mixin:
+                  id: cycle_a
+                extends:
+                  - cycle_b
+                """);
+    Files.writeString(
+        repositories.blueprintsPath().resolve("cycle-b.yml"),
+        """
+                mixin:
+                  id: cycle_b
+                extends:
+                  - cycle_a
+                """);
+
+    DefinitionReloadReport report =
+        DefinitionReloader.reload(
+            repositories.config(), repositories.blueprints(), repositories.profiles(), true, false);
+
+    assertEquals(java.util.Set.of("test"), repositories.blueprints().snapshot().values().keySet());
+    assertEquals(1, report.acceptedBlueprints());
+    assertTrue(repositories.blueprints().getAllMixins().isEmpty());
+    assertTrue(
+        repositories.blueprints().rejections().stream()
+            .anyMatch(rejection -> rejection.error().contains("mixin inheritance cycle detected")));
   }
 
   @Test
