@@ -294,6 +294,7 @@ public final class SLSCommand implements SimpleCommand {
       case "admin" -> adminHandler.execute(invocation.source(), arguments);
       case "blueprint" -> inspectionHandler.blueprint(invocation.source(), arguments);
       case "blueprints" -> inspectionHandler.blueprints(invocation.source(), arguments);
+      case "mixin" -> inspectionHandler.mixin(invocation.source(), arguments);
       case "console" -> console(invocation.source(), arguments);
       case "create" -> lifecycleHandler.create(invocation.source(), arguments);
       case "dequeue" -> playerRoutingHandler.dequeue(invocation.source(), arguments);
@@ -358,6 +359,7 @@ public final class SLSCommand implements SimpleCommand {
         case "admin" -> completed(adminHandler.suggestions(source, arguments));
         case "blueprint" -> completed(inspectionHandler.suggestions(source, operation, arguments));
         case "blueprints" -> completed(inspectionHandler.suggestions(source, operation, arguments));
+        case "mixin" -> completed(inspectionHandler.suggestions(source, operation, arguments));
         case "console" ->
             authorizer.canAdminister(source, operation)
                 ? completed(withPrefix("this", instanceIds()))
@@ -760,6 +762,8 @@ public final class SLSCommand implements SimpleCommand {
                   + report.acceptedBlueprints()
                   + ", rejected="
                   + report.rejectedBlueprints().size()
+                  + "; mixins accepted="
+                  + blueprints.getAllMixins().size()
                   + "; changes "
                   + report.blueprints().summary()
                   + "; software "

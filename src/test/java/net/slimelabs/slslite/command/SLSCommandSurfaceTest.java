@@ -24,6 +24,8 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.Mixin;
+import net.slimelabs.slslite.blueprint.Overlay;
 import net.slimelabs.slslite.host.HostCapability;
 import net.slimelabs.slslite.host.HostCapabilityStatus;
 import net.slimelabs.slslite.instance.ManagedInstance;
@@ -54,7 +56,17 @@ final class SLSCommandSurfaceTest {
             Map.of(
                 "arena",
                 new Blueprint(
-                    "arena", "Arena", "minigame", "paper-auto", "1.21.5", 1024, false, Map.of()))));
+                    "arena", "Arena", "minigame", "paper-auto", "1.21.5", 1024, false, Map.of())),
+            Map.of(
+                "shared",
+                new Mixin(
+                    "shared",
+                    "Common plugins",
+                    List.of("base"),
+                    new Overlay(
+                        new Overlay.Server("paper", "1.21.5", null, null, 2048, null, Map.of()),
+                        null,
+                        Map.of())))));
     command =
         new SLSCommand(
             null,
@@ -84,6 +96,20 @@ final class SLSCommandSurfaceTest {
     assertTrue(plainText(messages.getFirst()).contains("Blueprint minigame/arena"));
     assertEquals(
         List.of("arena"), command.suggestAsync(invocation(permitted, "blueprint", "")).join());
+  }
+
+  @Test
+  void singularMixinDispatchAndCompletionUseThePinnedRoot() {
+    List<Component> messages = new ArrayList<>();
+    CommandSource permitted = source(Set.of("sls.command.mixin"), messages);
+
+    command.execute(invocation(permitted, "mixin", "shared"));
+
+    assertEquals(2, messages.size());
+    assertTrue(plainText(messages.getFirst()).contains("Mixin shared"));
+    assertTrue(plainText(messages.get(1)).contains("Extends: base"));
+    assertEquals(
+        List.of("shared"), command.suggestAsync(invocation(permitted, "mixin", "")).join());
   }
 
   @Test

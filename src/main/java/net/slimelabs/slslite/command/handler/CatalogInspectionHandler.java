@@ -7,6 +7,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.Mixin;
 import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessCatalog;
 import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessReport;
 import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessState;
@@ -135,6 +136,33 @@ final class CatalogInspectionHandler {
     }
   }
 
+  void mixin(CommandSource source, String[] arguments) {
+    if (!requireAdmin(source, "mixin", "inspect mixins")) {
+      return;
+    }
+    if (arguments.length != 2) {
+      source.sendMessage(CommandMessages.usage("/sls mixin", "id"));
+      return;
+    }
+    Mixin mixin = blueprints.getMixin(arguments[1]).orElse(null);
+    if (mixin == null) {
+      BlueprintRepository.Rejection rejection = rejected(arguments[1]);
+      if (rejection != null) {
+        source.sendMessage(
+            CommandMessages.message("Mixin file " + rejection.path(), NamedTextColor.GREEN));
+        source.sendMessage(
+            CommandMessages.prefix()
+                .append(Component.text("- " + rejection.error(), NamedTextColor.RED)));
+        return;
+      }
+      source.sendMessage(
+          CommandMessages.message("Mixin not found: " + arguments[1], NamedTextColor.YELLOW));
+      return;
+    }
+    source.sendMessage(CommandMessages.message("Mixin " + mixin.id(), NamedTextColor.GREEN));
+    source.sendMessage(CommandMessages.prefix().append(CommandMessages.mixinDetails(mixin)));
+  }
+
   void installReadinessCatalog(BlueprintReadinessCatalog catalog) {
     readiness = java.util.Objects.requireNonNull(catalog, "catalog");
   }
@@ -144,6 +172,15 @@ final class CatalogInspectionHandler {
       return authorizer.canAdminister(source, operation)
           ? java.util.stream.Stream.concat(
                   blueprints.getAll().stream().map(Blueprint::id),
+                  blueprints.rejections().stream().map(BlueprintRepository.Rejection::path))
+              .sorted()
+              .toList()
+          : List.of();
+    }
+    if ("mixin".equals(operation)) {
+      return authorizer.canAdminister(source, operation)
+          ? java.util.stream.Stream.concat(
+                  blueprints.getAllMixins().stream().map(Mixin::id),
                   blueprints.rejections().stream().map(BlueprintRepository.Rejection::path))
               .sorted()
               .toList()

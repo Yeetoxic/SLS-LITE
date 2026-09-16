@@ -80,6 +80,8 @@ final class HostInspectionHandler {
             .appendNewline()
             .append(infoLine("Blueprints:", Integer.toString(blueprints.getAll().size())))
             .appendNewline()
+            .append(infoLine("Mixins:", Integer.toString(blueprints.getAllMixins().size())))
+            .appendNewline()
             .append(
                 infoLine("Software profiles:", Integer.toString(softwareProfiles.getAll().size())))
             .appendNewline()

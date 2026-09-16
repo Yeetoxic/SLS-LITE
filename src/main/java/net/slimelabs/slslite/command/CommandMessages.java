@@ -4,6 +4,7 @@ import com.velocitypowered.api.proxy.Player;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -14,6 +15,8 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintCopy;
 import net.slimelabs.slslite.blueprint.BlueprintVolume;
+import net.slimelabs.slslite.blueprint.Mixin;
+import net.slimelabs.slslite.blueprint.Overlay;
 import net.slimelabs.slslite.instance.ManagedInstance;
 import net.slimelabs.slslite.instance.model.InstanceState;
 
@@ -169,6 +172,13 @@ public final class CommandMessages {
             .appendNewline()
             .append(labelValue("Blueprint:", blueprint.type() + "/" + blueprint.id()))
             .appendNewline()
+            .append(
+                labelValue(
+                    "Includes:",
+                    blueprint.includes().isEmpty()
+                        ? "none"
+                        : String.join(", ", blueprint.includes())))
+            .appendNewline()
             .append(labelValue("Software:", blueprint.software() + " " + blueprint.version()))
             .appendNewline()
             .append(labelValue("Memory:", blueprint.memoryLimitMiB() + " MiB"))
@@ -250,6 +260,75 @@ public final class CommandMessages {
       String summary = String.join(", ", names);
       if (blueprint.environment().size() > names.size()) {
         summary += " +" + (blueprint.environment().size() - names.size());
+      }
+      tooltip.appendNewline().append(labelValue("Environment:", summary));
+    }
+    return tooltip.build();
+  }
+
+  public static Component mixinDetails(Mixin mixin) {
+    Overlay overlay = mixin.overlay();
+    Overlay.Server server = overlay.server();
+    Overlay.State state = overlay.state();
+    TextComponent.Builder tooltip =
+        Component.text()
+            .append(labelValue("Mixin:", mixin.id()))
+            .appendNewline()
+            .append(
+                labelValue(
+                    "Description:", mixin.description().isEmpty() ? "none" : mixin.description()))
+            .appendNewline()
+            .append(
+                labelValue(
+                    "Extends:",
+                    mixin.extendsMixins().isEmpty()
+                        ? "none"
+                        : String.join(", ", mixin.extendsMixins())))
+            .appendNewline()
+            .append(
+                labelValue(
+                    "Software:",
+                    server == null || server.software() == null
+                        ? "none"
+                        : server.software()
+                            + (server.version() == null ? "" : " " + server.version())));
+    if (server != null && server.memoryLimitMiB() != null) {
+      tooltip.appendNewline().append(labelValue("Memory:", server.memoryLimitMiB() + " MiB"));
+    }
+    List<BlueprintVolume> volumes = state == null ? List.of() : state.volumes();
+    if (volumes.isEmpty()) {
+      tooltip.appendNewline().append(labelValue("Volumes:", "none"));
+    } else {
+      tooltip.appendNewline().append(labelValue("Volumes:", Integer.toString(volumes.size())));
+      for (BlueprintVolume volume : volumes) {
+        tooltip
+            .appendNewline()
+            .append(
+                Component.text(
+                    "  "
+                        + volume.name()
+                        + ": "
+                        + volume.source()
+                        + " -> "
+                        + volume.target()
+                        + " ["
+                        + volume.mode().name().toLowerCase()
+                        + "]",
+                    NamedTextColor.DARK_PURPLE));
+      }
+    }
+    List<BlueprintCopy> copies = state == null ? List.of() : state.copies();
+    tooltip
+        .appendNewline()
+        .append(labelValue("Copies:", copies.isEmpty() ? "none" : Integer.toString(copies.size())));
+    Map<String, String> environment = state == null ? Map.of() : state.environment();
+    if (environment.isEmpty()) {
+      tooltip.appendNewline().append(labelValue("Environment:", "none"));
+    } else {
+      List<String> names = environment.keySet().stream().sorted().limit(8).toList();
+      String summary = String.join(", ", names);
+      if (environment.size() > names.size()) {
+        summary += " +" + (environment.size() - names.size());
       }
       tooltip.appendNewline().append(labelValue("Environment:", summary));
     }

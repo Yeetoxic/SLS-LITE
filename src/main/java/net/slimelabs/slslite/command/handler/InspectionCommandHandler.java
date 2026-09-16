@@ -105,6 +105,10 @@ public final class InspectionCommandHandler {
     catalog.blueprint(source, arguments);
   }
 
+  public void mixin(CommandSource source, String[] arguments) {
+    catalog.mixin(source, arguments);
+  }
+
   public void list(CommandSource source) {
     instance.list(source);
   }
@@ -136,7 +140,9 @@ public final class InspectionCommandHandler {
   }
 
   public List<String> suggestions(CommandSource source, String operation, String[] arguments) {
-    if (("blueprint".equals(operation) || "blueprints".equals(operation))
+    if (("blueprint".equals(operation)
+            || "blueprints".equals(operation)
+            || "mixin".equals(operation))
         && arguments.length == 2) {
       return catalog.suggestions(source, operation);
     }

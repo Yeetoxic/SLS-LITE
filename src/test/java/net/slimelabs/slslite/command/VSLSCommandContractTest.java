@@ -36,6 +36,7 @@ final class VSLSCommandContractTest {
             "node",
             "console.server",
             "blueprint.id",
+            "mixin.id",
             "blueprints",
             "debug",
             "delete.server",
@@ -181,7 +182,8 @@ final class VSLSCommandContractTest {
     assertEquals(VSLSCommandContract.Origin.PINNED, branch("create").origin());
     assertEquals(VSLSCommandContract.Origin.PINNED, branch("start.type").origin());
     assertEquals(VSLSCommandContract.Origin.PINNED, branch("join.type").origin());
-    assertEquals(VSLSCommandContract.Origin.PINNED, branch("list").origin());
+    assertEquals(VSLSCommandContract.Origin.PINNED, branch("blueprint.id").origin());
+    assertEquals(VSLSCommandContract.Origin.PINNED, branch("mixin.id").origin());
     assertTrue(branch("list").selectors().isEmpty());
 
     assertEquals(VSLSCommandContract.Origin.ADDITIVE, branch("start.blueprint").origin());
