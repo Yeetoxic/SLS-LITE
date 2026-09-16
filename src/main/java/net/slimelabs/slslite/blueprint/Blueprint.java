@@ -23,6 +23,7 @@ public record Blueprint(
     List<BlueprintCopy> copies,
     List<BlueprintPersistentFile> persistentFiles,
     Map<String, String> environment,
+    List<String> includes,
     boolean inheritsSoftwareMemory,
     boolean inheritsSoftwareImage) {
 
@@ -40,6 +41,7 @@ public record Blueprint(
     copies = List.copyOf(copies);
     persistentFiles = List.copyOf(persistentFiles);
     environment = validateEnvironment(environment);
+    includes = List.copyOf(includes);
   }
 
   public Blueprint(
@@ -81,6 +83,7 @@ public record Blueprint(
         copies,
         List.of(),
         environment,
+        List.of(),
         false,
         false);
   }
@@ -126,6 +129,7 @@ public record Blueprint(
         copies,
         List.of(),
         environment,
+        List.of(),
         inheritsSoftwareMemory,
         inheritsSoftwareImage);
   }
@@ -151,6 +155,7 @@ public record Blueprint(
         copies,
         persistentFiles,
         environment,
+        includes,
         inheritsSoftwareMemory,
         inheritsSoftwareImage);
   }
@@ -192,6 +197,7 @@ public record Blueprint(
         List.of(),
         List.of(),
         Map.of(),
+        List.of(),
         false,
         false);
   }
@@ -410,7 +416,12 @@ public record Blueprint(
   }
 
   static Map<String, String> validateEnvironment(Map<String, String> configured) {
-    if (configured.size() > 64) {
+    return validateEnvironment(configured, true);
+  }
+
+  static Map<String, String> validateEnvironment(
+      Map<String, String> configured, boolean enforceSizeLimits) {
+    if (enforceSizeLimits && configured.size() > 64) {
       throw new IllegalArgumentException(
           "Blueprint environment must not contain more than 64 variables");
     }
@@ -440,7 +451,7 @@ public record Blueprint(
             "Blueprint environment value exceeds 8192 bytes: " + name);
       }
       totalBytes += name.length() + valueBytes;
-      if (totalBytes > 64 * 1024) {
+      if (enforceSizeLimits && totalBytes > 64 * 1024) {
         throw new IllegalArgumentException("Blueprint environment exceeds 65536 bytes");
       }
       normalized.put(name, value);
