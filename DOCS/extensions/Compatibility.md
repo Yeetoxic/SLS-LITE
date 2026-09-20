@@ -6,20 +6,20 @@ SLS-LITE's public Java API is the local extension boundary for trusted Velocity
 plugins. It is not a smaller Protocube HTTP API and does not represent remote
 nodes, Docker containers, or another SLS installation.
 
-API `1.2` is the current supported compatibility contract and retains the API
-`1.0` and `1.1` baselines. Its developer-facing usage is documented in
+API `1.3` is the current supported compatibility contract and retains the API
+`1.0`, `1.1`, and `1.2` baselines. Its developer-facing usage is documented in
 [Java Extension API](README.md). Breaking changes require a new API major
 version; compatible additions may be introduced in a minor version.
 
 ## API and SPI Boundary
 
 An API lets an extension inspect SLS-LITE, request safe operations, and observe
-results. An SPI lets an extension replace or inject core behavior. API 1.2
+results. An SPI lets an extension replace or inject core behavior. API 1.3
 exposes safe operations and only narrowly bounded action hooks.
 
-| Surface | API 1.2 | Outside the API 1.2 contract |
+| Surface | API 1.3 | Outside the API 1.3 contract |
 | --- | --- | --- |
-| Catalog and runtime inspection | Immutable blueprint, instance, system, lobby, installation, capability, and diagnostic views | Mutable repositories or coordinator access |
+| Catalog and runtime inspection | Immutable blueprint, mixin, instance, system, lobby, installation, capability, and diagnostic views | Mutable repositories or coordinator access |
 | Local operations | Start, stop, restart/reset, delete, installation requests, definition reload, maintenance, exact transfer, matchmaking, queue control, and documented safe actions | Direct process, filesystem, port, mount, force-termination, or protected-lobby control |
 | Events | Instance, player routing, lobby/recovery, catalog, installation, reconciliation, failure, and shutdown events | Distributed node/daemon event emulation |
 | Extension hooks | Namespaced annotations, bounded readiness/status findings, and instance-ready/post-transfer actions with owned cleanup | Replacement matchmaking, lobby, installer, storage/COW, or process-provider SPIs |
@@ -30,13 +30,10 @@ filesystem, process, resource-accounting, and security invariants. Publishing
 one would make an unsafe implementation detail a compatibility
 promise.
 
-## Supported 1.2 Contract
+## Supported 1.3 Contract
 
-API 1.2 includes the API 1.0 and 1.1 baselines plus additive safe administrative
-requests, exact-instance routing, and namespaced operational diagnostics. The
-definition-reload result also includes a bounded impact summary without
-granting extensions authority to mutate affected instances. The complete
-current contract includes:
+API 1.3 includes the API 1.0, 1.1, and 1.2 baselines plus additive mixin
+inspection. The complete current contract includes:
 
 - stable immutable models and machine-readable failure categories;
 - bounded ordered callbacks with explicit threading, overload, and shutdown

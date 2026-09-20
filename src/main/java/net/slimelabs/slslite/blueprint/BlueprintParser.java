@@ -3,6 +3,8 @@ package net.slimelabs.slslite.blueprint;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -18,42 +20,115 @@ final class BlueprintParser {
 
   private static final Pattern VALID_ID = Pattern.compile("[a-z0-9][a-z0-9_-]{0,63}");
   private static final Pattern VALID_PROPERTY_KEY = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]*");
-  private static final int DEFAULT_MEMORY_MIB = 1024;
-  private static final int DEFAULT_MAX_PLAYERS = 10_000;
-  private static final int DEFAULT_MAX_INSTANCES = Integer.MAX_VALUE;
   static final int MAX_BLUEPRINT_BYTES = 1024 * 1024;
 
+  enum DocumentKind {
+    BLUEPRINT,
+    MIXIN,
+    AMBIGUOUS,
+    UNKNOWN
+  }
+
+  record ParsedFile(DocumentKind kind, BlueprintDocument blueprint, Mixin mixin) {}
+
   Blueprint parse(Path path) throws BlueprintException {
+    ParsedFile parsed = parseFile(path);
+    if (parsed.kind() != DocumentKind.BLUEPRINT || parsed.blueprint() == null) {
+      throw error(path, "document is not a blueprint");
+    }
+    if (!parsed.blueprint().includes().isEmpty()) {
+      throw error(path, "includes require mixin resolution; load the blueprints directory");
+    }
+    return BlueprintComposer.compose(parsed.blueprint(), parsed.blueprint().overlay());
+  }
+
+  ParsedFile parseFile(Path path) throws BlueprintException {
+    try (InputStream input = BoundedFileReader.openNoFollow(path, MAX_BLUEPRINT_BYTES)) {
+      Object document = yaml().load(input);
+      Map<String, Object> root = asMap(document, "root", path);
+      DocumentKind kind = classify(root);
+      return switch (kind) {
+        case BLUEPRINT -> new ParsedFile(kind, parseBlueprintDocument(root, path), null);
+        case MIXIN -> new ParsedFile(kind, null, parseMixinDocument(root, path));
+        case AMBIGUOUS -> throw error(path, "document has both mixin: and blueprint: sections");
+        case UNKNOWN -> throw error(path, "document has neither mixin: nor blueprint: section");
+      };
+    } catch (IOException exception) {
+      throw new BlueprintException("Unable to read blueprint " + path, exception);
+    } catch (RuntimeException exception) {
+      throw new BlueprintException(
+          "Invalid YAML in " + path + ": " + exception.getMessage(), exception);
+    }
+  }
+
+  private static DocumentKind classify(Map<String, Object> root) {
+    boolean hasBlueprint = root.containsKey("blueprint");
+    boolean hasMixin = root.containsKey("mixin");
+    if (hasBlueprint && hasMixin) {
+      return DocumentKind.AMBIGUOUS;
+    }
+    if (hasMixin) {
+      return DocumentKind.MIXIN;
+    }
+    if (hasBlueprint) {
+      return DocumentKind.BLUEPRINT;
+    }
+    return DocumentKind.UNKNOWN;
+  }
+
+  private static Yaml yaml() {
     LoaderOptions options = new LoaderOptions();
     options.setAllowDuplicateKeys(false);
     options.setCodePointLimit(MAX_BLUEPRINT_BYTES);
     options.setMaxAliasesForCollections(50);
     options.setNestingDepthLimit(50);
-    Yaml yaml = new Yaml(new SafeConstructor(options));
+    return new Yaml(new SafeConstructor(options));
+  }
 
-    try (InputStream input = BoundedFileReader.openNoFollow(path, MAX_BLUEPRINT_BYTES)) {
-      Object document = yaml.load(input);
-      Map<String, Object> root = asMap(document, "root", path);
-      Map<String, Object> metadata = requiredMap(root, "blueprint", path);
-      Map<String, Object> server = requiredMap(root, "server", path);
-      Map<String, Object> limits = optionalMap(server, "limits", "server", path);
-      ParsedConfigs parsedConfigs = parseConfigs(server, path);
-      Map<String, Object> state = optionalMap(root, "state", path);
-      Map<String, Object> annotations = optionalMap(root, "annotations", path);
-      VSLSBlueprintAnnotations.validate(annotations);
-      SLSLiteBlueprintAnnotations.maxPlayers(annotations);
-      BlueprintProcessTimeouts.fromAnnotations(annotations);
-      if (state.containsKey("mounts")) {
-        throw error(
-            path,
-            "'state.mounts' is not available in local mode; use a "
-                + "contained state.volume with mode cow or ro");
-      }
-      requireOnlyKeys(root, "", path, "blueprint", "server", "state", "save", "annotations");
-      requireOnlyKeys(metadata, "blueprint", path, "id", "name", "type");
+  private BlueprintDocument parseBlueprintDocument(Map<String, Object> root, Path path)
+      throws BlueprintException {
+    requireOnlyKeys(
+        root, "", path, "blueprint", "includes", "server", "state", "save", "annotations");
+    Map<String, Object> metadata = requiredMap(root, "blueprint", path);
+    requireOnlyKeys(metadata, "blueprint", path, "id", "name", "type");
+    String id = requiredString(metadata, "id", path);
+    if (!VALID_ID.matcher(id).matches()) {
+      throw error(path, "blueprint.id must match " + VALID_ID.pattern());
+    }
+    List<String> includes = parseIdList(root, "includes", path);
+    Overlay overlay = parseOverlay(root, path);
+    boolean save = optionalBoolean(root, path);
+    return new BlueprintDocument(
+        path,
+        id,
+        requiredString(metadata, "name", path),
+        requiredString(metadata, "type", path),
+        includes,
+        overlay,
+        save);
+  }
+
+  private Mixin parseMixinDocument(Map<String, Object> root, Path path) throws BlueprintException {
+    requireOnlyKeys(root, "", path, "mixin", "extends", "server", "state", "annotations");
+    Map<String, Object> metadata = requiredMap(root, "mixin", path);
+    requireOnlyKeys(metadata, "mixin", path, "id", "description");
+    String id = requiredString(metadata, "id", path);
+    if (!VALID_ID.matcher(id).matches()) {
+      throw error(path, "mixin.id must match " + VALID_ID.pattern());
+    }
+    String description = optionalString(metadata, "description", path);
+    List<String> extendsMixins = parseIdList(root, "extends", path);
+    Overlay overlay = parseOverlay(root, path);
+    return new Mixin(id, description == null ? "" : description, extendsMixins, overlay);
+  }
+
+  private Overlay parseOverlay(Map<String, Object> root, Path path) throws BlueprintException {
+    Overlay.Server server = null;
+    if (root.containsKey("server")) {
+      Map<String, Object> values = asMap(root.get("server"), "server", path);
       requireOnlyKeys(
-          server, "server", path, "software", "version", "image", "path", "limits", "configs");
-      requireOnlyKeys(state, "state", path, "volumes", "copy", "persistent_files", "env");
+          values, "server", path, "software", "version", "image", "path", "limits", "configs");
+      Map<String, Object> limits = optionalMap(values, "limits", "server", path);
       if (limits.containsKey("max_players")) {
         throw error(
             path, "'server.limits.max_players' was removed; use annotations.sls-lite.max-players");
@@ -71,65 +146,70 @@ final class BlueprintParser {
           "threads",
           "oom_disabled");
       validateDistributedLimits(limits, path);
-
-      String id = requiredString(metadata, "id", path);
-      if (!VALID_ID.matcher(id).matches()) {
-        throw error(path, "blueprint.id must match " + VALID_ID.pattern());
+      String software = optionalString(values, "software", path);
+      if (software != null) {
+        software = software.toLowerCase(Locale.ROOT);
       }
-
-      String name = requiredString(metadata, "name", path);
-      String type = requiredString(metadata, "type", path);
-      String software = requiredString(server, "software", path);
-      String version = requiredString(server, "version", path);
-      String image = optionalString(server, "image", path);
-      String softwarePath = optionalString(server, "path", path);
+      String softwarePath = optionalString(values, "path", path);
       validateRelativePath(softwarePath, "server.path", path);
-      int memory = optionalPositiveInt(limits, "memory_limit", DEFAULT_MEMORY_MIB, path);
-      int maxPlayers =
-          SLSLiteBlueprintAnnotations.maxPlayers(annotations)
-              .orElse(VSLSBlueprintAnnotations.maxPlayers(annotations).orElse(DEFAULT_MAX_PLAYERS));
-      int maxInstances =
-          optionalPositiveInt(
-              limits,
-              "max_instances",
-              VSLSBlueprintAnnotations.maxInstances(annotations).orElse(DEFAULT_MAX_INSTANCES),
-              path);
-      boolean save = optionalBoolean(root, "save", false, path);
-      List<BlueprintVolume> volumes = parseVolumes(state, path);
-      List<BlueprintCopy> copies = parseCopies(state, path);
-      List<BlueprintPersistentFile> persistentFiles = parsePersistentFiles(state, path);
-      Map<String, String> environment = parseEnvironment(state, path);
-
-      return new Blueprint(
-          id,
-          name,
-          type,
-          software,
-          version,
-          image,
-          softwarePath,
-          memory,
-          maxPlayers,
-          maxInstances,
-          save,
-          parsedConfigs.serverProperties(),
-          parsedConfigs.yamlConfigs(),
-          parsedConfigs.textFileConfigs(),
-          annotations,
-          volumes,
-          copies,
-          persistentFiles,
-          environment,
-          !limits.containsKey("memory_limit"),
-          image == null);
-    } catch (IOException exception) {
-      throw new BlueprintException("Unable to read blueprint " + path, exception);
-    } catch (BlueprintException exception) {
-      throw exception;
-    } catch (RuntimeException exception) {
-      throw new BlueprintException(
-          "Invalid YAML in " + path + ": " + exception.getMessage(), exception);
+      server =
+          new Overlay.Server(
+              software,
+              optionalString(values, "version", path),
+              optionalString(values, "image", path),
+              softwarePath,
+              optionalPositiveInteger(limits, "memory_limit", path),
+              optionalPositiveInteger(limits, "max_instances", path),
+              parseConfigs(values, path));
     }
+
+    Overlay.State state = null;
+    if (root.containsKey("state")) {
+      Map<String, Object> values = asMap(root.get("state"), "state", path);
+      if (values.containsKey("mounts")) {
+        throw error(
+            path,
+            "'state.mounts' is not available in local mode; use a "
+                + "contained state.volume with mode cow or ro");
+      }
+      requireOnlyKeys(values, "state", path, "volumes", "copy", "persistent_files", "env");
+      state =
+          new Overlay.State(
+              parseVolumes(values, path),
+              parseCopies(values, path),
+              parsePersistentFiles(values, path),
+              parseEnvironment(values, path));
+    }
+
+    Map<String, Object> annotations = optionalMap(root, "annotations", path);
+    if (!annotations.isEmpty()) {
+      BlueprintComposer.validateAnnotations(annotations, path);
+    }
+    return new Overlay(server, state, annotations);
+  }
+
+  private static List<String> parseIdList(Map<String, Object> root, String key, Path path)
+      throws BlueprintException {
+    if (!root.containsKey(key)) {
+      return List.of();
+    }
+    Object configured = root.get(key);
+    if (!(configured instanceof List<?> rawIds)) {
+      throw error(path, "'" + key + "' must be a list");
+    }
+    ArrayList<String> ids = new ArrayList<>();
+    HashSet<String> seen = new HashSet<>();
+    for (Object value : rawIds) {
+      if (!(value instanceof String stringValue) || stringValue.isBlank()) {
+        throw error(path, "'" + key + "' contains an empty mixin id");
+      }
+      String id = stringValue.trim();
+      if (!seen.add(id)) {
+        throw error(path, "'" + key + "' contains duplicate mixin id \"" + id + "\"");
+      }
+      ids.add(id);
+    }
+    return List.copyOf(ids);
   }
 
   private static Map<String, Object> requiredMap(Map<String, Object> parent, String key, Path path)
@@ -206,12 +286,11 @@ final class BlueprintParser {
     }
   }
 
-  private static int optionalPositiveInt(
-      Map<String, Object> values, String key, int defaultValue, Path path)
+  private static Integer optionalPositiveInteger(Map<String, Object> values, String key, Path path)
       throws BlueprintException {
     Object value = values.get(key);
     if (value == null) {
-      return defaultValue;
+      return null;
     }
     if (!(value instanceof Number number)
         || number.intValue() <= 0
@@ -242,15 +321,14 @@ final class BlueprintParser {
     }
   }
 
-  private static boolean optionalBoolean(
-      Map<String, Object> values, String key, boolean defaultValue, Path path)
+  private static boolean optionalBoolean(Map<String, Object> values, Path path)
       throws BlueprintException {
-    Object value = values.get(key);
+    Object value = values.get("save");
     if (value == null) {
-      return defaultValue;
+      return false;
     }
     if (!(value instanceof Boolean booleanValue)) {
-      throw error(path, "'" + key + "' must be true or false");
+      throw error(path, "'" + "save" + "' must be true or false");
     }
     return booleanValue;
   }
@@ -265,7 +343,7 @@ final class BlueprintParser {
       throw error(path, "'state.volumes' must be a list");
     }
 
-    java.util.ArrayList<BlueprintVolume> volumes = new java.util.ArrayList<>();
+    ArrayList<BlueprintVolume> volumes = new ArrayList<>();
     for (int index = 0; index < rawVolumes.size(); index++) {
       String section = "state.volumes[" + index + "]";
       BlueprintVolume parsed =
@@ -286,11 +364,8 @@ final class BlueprintParser {
     if (!(configured instanceof List<?> rawCopies)) {
       throw error(path, "'state.copy' must be a list");
     }
-    if (rawCopies.size() > 128) {
-      throw error(path, "'state.copy' must not contain more than 128 entries");
-    }
 
-    java.util.ArrayList<BlueprintCopy> copies = new java.util.ArrayList<>();
+    ArrayList<BlueprintCopy> copies = new ArrayList<>();
     for (int index = 0; index < rawCopies.size(); index++) {
       String section = "state.copy[" + index + "]";
       Object rawCopy = rawCopies.get(index);
@@ -335,14 +410,8 @@ final class BlueprintParser {
     if (!(configured instanceof List<?> rawFiles)) {
       throw error(path, "'state.persistent_files' must be a list");
     }
-    if (rawFiles.size() > 32) {
-      throw error(path, "'state.persistent_files' must not contain more than 32 entries");
-    }
 
-    java.util.ArrayList<BlueprintPersistentFile> files = new java.util.ArrayList<>();
-    java.util.HashSet<String> names = new java.util.HashSet<>();
-    java.util.HashSet<String> sources = new java.util.HashSet<>();
-    java.util.HashSet<String> targets = new java.util.HashSet<>();
+    ArrayList<BlueprintPersistentFile> files = new ArrayList<>();
     for (int index = 0; index < rawFiles.size(); index++) {
       String section = "state.persistent_files[" + index + "]";
       Map<String, Object> values = asMap(rawFiles.get(index), section, path);
@@ -365,20 +434,9 @@ final class BlueprintParser {
           .anyMatch(segment -> segment.toLowerCase(Locale.ROOT).startsWith(".sls-lite-"))) {
         throw error(path, "'" + section + ".target' uses a reserved SLS-LITE path");
       }
-      String portableName = name.toLowerCase(Locale.ROOT);
-      String portableSource = source.toLowerCase(Locale.ROOT);
-      String portableTarget = target.toLowerCase(Locale.ROOT);
-      if (!names.add(portableName)) {
-        throw error(path, "duplicate persistent file name: " + name);
-      }
-      if (!sources.add(portableSource)) {
-        throw error(path, "duplicate persistent file source: " + source);
-      }
-      if (!targets.add(portableTarget)) {
-        throw error(path, "duplicate persistent file target: " + target);
-      }
       files.add(new BlueprintPersistentFile(name, source, target));
     }
+    BlueprintComposer.validatePersistentFileUniqueness(files, path);
     return List.copyOf(files);
   }
 
@@ -396,7 +454,7 @@ final class BlueprintParser {
       environment.put(entry.getKey(), value);
     }
     try {
-      return Blueprint.validateEnvironment(environment);
+      return Blueprint.validateEnvironment(environment, false);
     } catch (IllegalArgumentException exception) {
       throw error(path, exception.getMessage());
     }
@@ -434,23 +492,21 @@ final class BlueprintParser {
       throws BlueprintException {
     BlueprintVolume.Mode parsedMode;
     try {
-      parsedMode = BlueprintVolume.Mode.valueOf(mode.trim().toUpperCase(java.util.Locale.ROOT));
+      parsedMode = BlueprintVolume.Mode.valueOf(mode.trim().toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException exception) {
       throw error(path, "'" + section + ".mode' must be cow, ro, or rw");
     }
     return new BlueprintVolume(name, source, target, parsedMode);
   }
 
-  private static ParsedConfigs parseConfigs(Map<String, Object> server, Path path)
+  private static Map<String, Overlay.Config> parseConfigs(Map<String, Object> server, Path path)
       throws BlueprintException {
     Map<String, Object> configs = optionalMap(server, "configs", path);
     if (configs.isEmpty()) {
-      return new ParsedConfigs(Map.of(), Map.of(), Map.of());
+      return Map.of();
     }
 
-    Map<String, String> properties = new LinkedHashMap<>();
-    Map<String, Map<String, Object>> yamlConfigs = new LinkedHashMap<>();
-    Map<String, Map<String, String>> textFileConfigs = new LinkedHashMap<>();
+    LinkedHashMap<String, Overlay.Config> parsed = new LinkedHashMap<>();
     for (Map.Entry<String, Object> entry : configs.entrySet()) {
       String target = entry.getKey();
       if (target.isBlank()) {
@@ -459,31 +515,41 @@ final class BlueprintParser {
       validateRelativePath(target, "server.configs target", path);
       Map<String, Object> config = asMap(entry.getValue(), "server.configs." + target, path);
       requireOnlyKeys(config, "server.configs." + target, path, "parser", "find");
-      String parser = requiredString(config, "parser", path);
+      String parser = requiredString(config, "parser", path).toLowerCase(Locale.ROOT);
       Map<String, Object> find = optionalMap(config, "find", path);
-      if (parser.equalsIgnoreCase("properties")) {
-        if (!target.equals("server.properties")) {
-          throw error(
-              path,
-              "properties config target '" + target + "' is not supported; use server.properties");
+      switch (parser) {
+        case "properties" -> {
+          if (!target.equals("server.properties")) {
+            throw error(
+                path,
+                "properties config target '"
+                    + target
+                    + "' is not supported; use server.properties");
+          }
+          parsed.put(target, new Overlay.Config(parser, objectMap(parseProperties(find, path))));
         }
-        properties.putAll(parseProperties(find, path));
-      } else if (parser.equalsIgnoreCase("yaml")) {
-        String lowerTarget = target.toLowerCase(Locale.ROOT);
-        if (!lowerTarget.endsWith(".yml") && !lowerTarget.endsWith(".yaml")) {
-          throw error(path, "YAML config target must end in .yml or .yaml");
+        case "yaml" -> {
+          String lowerTarget = target.toLowerCase(Locale.ROOT);
+          if (!lowerTarget.endsWith(".yml") && !lowerTarget.endsWith(".yaml")) {
+            throw error(path, "YAML config target must end in .yml or .yaml");
+          }
+          parsed.put(target, new Overlay.Config(parser, validateYamlMap(find, target, path)));
         }
-        yamlConfigs.put(target, validateYamlMap(find, target, path));
-      } else if (parser.equalsIgnoreCase("file")) {
-        textFileConfigs.put(target, parseTextFileReplacements(find, target, path));
-      } else {
-        throw error(path, "unsupported parser '" + parser + "' for server.configs." + target);
+        case "file" ->
+            parsed.put(
+                target,
+                new Overlay.Config(
+                    parser, objectMap(parseTextFileReplacements(find, target, path))));
+        default ->
+            throw error(path, "unsupported parser '" + parser + "' for server.configs." + target);
       }
     }
-    return new ParsedConfigs(
-        Map.copyOf(properties),
-        Map.copyOf(yamlConfigs),
-        java.util.Collections.unmodifiableMap(textFileConfigs));
+    return Map.copyOf(parsed);
+  }
+
+  private static Map<String, Object> objectMap(Map<String, String> values) {
+    LinkedHashMap<String, Object> copied = new LinkedHashMap<>(values);
+    return Map.copyOf(copied);
   }
 
   private static Map<String, String> parseTextFileReplacements(
@@ -573,18 +639,19 @@ final class BlueprintParser {
     if (value instanceof String || value instanceof Number || value instanceof Boolean) {
       return value;
     }
-    if (value == null) {
-      throw error(path, "'" + key + "' must not be null");
-    }
-    if (value instanceof Map<?, ?>) {
-      return validateYamlMap(asMap(value, key, path), key, path);
-    }
-    if (value instanceof List<?> list) {
-      java.util.ArrayList<Object> values = new java.util.ArrayList<>();
-      for (int index = 0; index < list.size(); index++) {
-        values.add(validateYamlValue(list.get(index), key + "[" + index + "]", path));
+    switch (value) {
+      case null -> throw error(path, "'" + key + "' must not be null");
+      case Map<?, ?> map -> {
+        return validateYamlMap(asMap(value, key, path), key, path);
       }
-      return List.copyOf(values);
+      case List<?> list -> {
+        ArrayList<Object> values = new ArrayList<>();
+        for (int index = 0; index < list.size(); index++) {
+          values.add(validateYamlValue(list.get(index), key + "[" + index + "]", path));
+        }
+        return List.copyOf(values);
+      }
+      default -> {}
     }
     throw error(path, "'" + key + "' contains an unsupported YAML value");
   }
@@ -604,9 +671,4 @@ final class BlueprintParser {
   private static BlueprintException error(Path path, String message) {
     return new BlueprintException(path + ": " + message);
   }
-
-  private record ParsedConfigs(
-      Map<String, String> serverProperties,
-      Map<String, Map<String, Object>> yamlConfigs,
-      Map<String, Map<String, String>> textFileConfigs) {}
 }

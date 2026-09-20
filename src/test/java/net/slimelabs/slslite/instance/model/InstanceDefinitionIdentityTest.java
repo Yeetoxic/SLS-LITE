@@ -196,6 +196,7 @@ final class InstanceDefinitionIdentityTest {
                 new BlueprintPersistentFile(
                     "whitelist", "volumes/whitelist.json", "whitelist.json")),
             original.environment(),
+            original.includes(),
             original.inheritsSoftwareMemory(),
             original.inheritsSoftwareImage());
     assertNotEquals(

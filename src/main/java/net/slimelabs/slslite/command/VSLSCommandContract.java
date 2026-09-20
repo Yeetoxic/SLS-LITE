@@ -52,6 +52,7 @@ public final class VSLSCommandContract {
       List.of(
           "blueprint",
           "blueprints",
+          "mixin",
           "console",
           "create",
           "debug",
@@ -91,6 +92,7 @@ public final class VSLSCommandContract {
           "console",
           "dequeue",
           "blueprint",
+          "mixin",
           "version",
           "logs",
           "node",
@@ -193,6 +195,7 @@ public final class VSLSCommandContract {
               "console",
               Completion.INSTANCE_OR_THIS),
           adminBranch("blueprint.id", "blueprint <id>", "blueprint", Completion.BLUEPRINT),
+          adminBranch("mixin.id", "mixin <id>", "mixin", Completion.MIXIN),
           branch(
               "blueprints",
               "blueprints [registry]",
@@ -442,6 +445,7 @@ public final class VSLSCommandContract {
     BLUEPRINT_TYPE,
     BLUEPRINT_ID_FOR_TYPE,
     BLUEPRINT,
+    MIXIN,
     CREATE_MODIFIER,
     INSTANCE,
     INSTANCE_OR_THIS,

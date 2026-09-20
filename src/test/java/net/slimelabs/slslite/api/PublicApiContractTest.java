@@ -63,6 +63,7 @@ class PublicApiContractTest {
           InstanceStatisticsView.class,
           VolumeView.class,
           BlueprintView.class,
+          MixinView.class,
           InstanceView.class,
           LobbyDiagnosticView.class,
           MaintenanceView.class,
@@ -116,7 +117,8 @@ class PublicApiContractTest {
 
   @Test
   void versionAndCapabilitiesAreStable() {
-    assertEquals("1.2", ApiVersion.CURRENT.toString());
+    assertEquals("1.3", ApiVersion.CURRENT.toString());
+    assertTrue(Set.of(Capability.values()).contains(Capability.MIXIN_INSPECTION));
     assertTrue(Set.of(Capability.values()).contains(Capability.LIFECYCLE_EVENTS));
     assertTrue(Set.of(Capability.values()).contains(Capability.PLAYER_QUEUE));
     assertTrue(Set.of(Capability.values()).contains(Capability.MATCHMAKING_EVENTS));
@@ -225,6 +227,38 @@ class PublicApiContractTest {
                 false,
                 Set.of(),
                 Map.of("extension", new AtomicInteger(1))));
+  }
+
+  @Test
+  void mixinViewsDeepCopyExtensionMetadataAndOmitEnvironmentValues() {
+    List<String> nested = new ArrayList<>(List.of("one"));
+    Map<String, Object> annotation = new LinkedHashMap<>();
+    annotation.put("nested", nested);
+    Map<String, Object> annotations = new LinkedHashMap<>();
+    annotations.put("extension", annotation);
+    MixinView view =
+        new MixinView(
+            "shared",
+            "Common plugins",
+            List.of("base"),
+            "paper",
+            "26.2",
+            List.of(),
+            false,
+            Set.of("PUBLIC_ENDPOINT"),
+            annotations);
+
+    nested.add("two");
+    annotation.put("late", true);
+    annotations.clear();
+
+    Map<?, ?> copied = (Map<?, ?>) view.annotations().get("extension");
+    assertEquals(List.of("one"), copied.get("nested"));
+    assertEquals(false, copied.containsKey("late"));
+    assertEquals(Set.of("PUBLIC_ENDPOINT"), view.environmentVariables());
+    assertThrows(UnsupportedOperationException.class, () -> view.annotations().clear());
+    assertThrows(
+        UnsupportedOperationException.class, () -> ((List<?>) copied.get("nested")).clear());
   }
 
   @Test

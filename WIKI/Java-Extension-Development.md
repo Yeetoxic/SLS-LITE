@@ -1,6 +1,6 @@
 # Java Extension Development
 
-Trusted Velocity plugins can use the additive, internally frozen Java API 1.2 for
+Trusted Velocity plugins can use the additive, internally frozen Java API 1.3 for
 capability discovery, immutable inspection, bounded diagnostics, lifecycle and
 administrative requests, exact-instance routing, ordered events, namespaced
 annotations and readiness/status contributions, and owned action callbacks.

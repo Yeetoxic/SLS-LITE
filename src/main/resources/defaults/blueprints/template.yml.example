@@ -13,6 +13,11 @@ blueprint:
   # Registry/category used by /sls join <type> <id>.
   type: game
 
+# Optional mixin ids from the same blueprints tree. Later includes and this
+# file's own server/state/annotations win. Completeness is checked after merge.
+# includes:
+#   - shared_plugins
+
 server:
   # Must match a loaded software profile.
   software: paper

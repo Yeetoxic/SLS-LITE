@@ -62,7 +62,9 @@ class BlueprintExamplesCompatibilityIT {
         rejected.add(fileName);
         continue;
       }
-      assertFalse(repository.getAll().isEmpty(), () -> "No blueprint loaded from " + definition);
+      assertFalse(
+          repository.getAll().isEmpty() && repository.getAllMixins().isEmpty(),
+          () -> "No blueprint or mixin loaded from " + definition);
       loaded++;
     }
 

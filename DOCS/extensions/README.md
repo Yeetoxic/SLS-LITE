@@ -6,7 +6,7 @@ In this branch: [extension compatibility](Compatibility.md) and the
 [example Velocity extension](../../examples/velocity-extension/README.md).
 
 SLS-LITE exposes a versioned in-process Java API for trusted Velocity plugins.
-API `1.2` supports capability discovery, immutable blueprint and instance
+API `1.3` supports capability discovery, immutable blueprint, mixin, and instance
 inspection, asynchronous lifecycle, installation, definition reload,
 maintenance, exact-instance transfer, and player-matchmaking requests, queue
 inspection/cancellation, ordered lifecycle events, and bounded namespaced
@@ -35,12 +35,12 @@ developers, comparable to an SDK. Keeping it separate prevents extension code
 from accidentally importing SLS-LITE implementation packages and avoids using
 the large shaded runtime JAR as a development dependency.
 
-The accepted 1.2 JVM class, field, constructor, and method descriptors have a
+The accepted 1.3 JVM class, field, constructor, and method descriptors have a
 checked SHA-256 baseline in
-`src/test/resources/api/public-api-1.2.sha256`; the immutable 1.0 and 1.1
+`src/test/resources/api/public-api-1.3.sha256`; the immutable 1.0, 1.1, and 1.2
 fingerprints are retained beside it. The build derives the current signature directly from
 compiled class files (not reflection), writes the reviewable form to
-`target/api-signature/public-api-1.2.txt`, and fails on any descriptor or
+`target/api-signature/public-api-1.3.txt`, and fails on any descriptor or
 visibility change. Updating the current baseline requires an explicit
 compatibility review; a passing hash does not authorize an undocumented API
 change.
@@ -147,6 +147,7 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 | `extension(namespace)` | Create an owned extension callback/subscription context. |
 | `diagnostics()` | Capture redacted bounded operational diagnostics. |
 | `blueprints()` / `blueprint(id)` | Inspect immutable blueprint views. |
+| `mixins()` / `mixin(id)` | Inspect immutable resolved mixin views. |
 | `instances()` / `instance(id)` | Inspect immutable instance views. |
 | `start(request)` | Start and register an instance. |
 | `stop(id)` / `delete(id)` | Stop or delete through normal lifecycle rules. |
@@ -160,7 +161,7 @@ public `SLSLiteApiException`; shutdown changes the status to `CLOSED`.
 | `extensionDiagnostics()` | Read the bounded namespaced diagnostic cache and schedule an asynchronous refresh. |
 | `subscribe(listener)` | Receive ordered lifecycle, matchmaking, and failure events. |
 
-API 1.2 advertises `BLUEPRINT_INSPECTION`, `INSTANCE_INSPECTION`,
+API 1.3 advertises `BLUEPRINT_INSPECTION`, `MIXIN_INSPECTION`, `INSTANCE_INSPECTION`,
 `INSTANCE_START`, `INSTANCE_STOP`, `INSTANCE_DELETE`, `PLAYER_QUEUE`,
 `MATCHMAKING_EVENTS`, `INSTANCE_FAILURE_EVENTS`, `CATALOG_RELOAD_EVENTS`,
 `LOBBY_STATUS_EVENTS`, `SOFTWARE_INSTALLATION_EVENTS`, `RECONCILIATION_EVENTS`,

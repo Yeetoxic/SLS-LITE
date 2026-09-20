@@ -28,7 +28,7 @@ product: full SLS is not a runtime dependency or operating mode.
 - Bounded in-game logs, temporary log files, lifecycle logging, resource
   admission, forwarding configuration, and host capability checks.
 - Built-in administrator claiming plus standard Velocity permissions.
-- Versioned Java extension API 1.2 for capability discovery, immutable
+- Versioned Java extension API 1.3 for capability discovery, immutable
   inspection, safe asynchronous lifecycle/administrative and routing requests,
   lifecycle subscriptions, and namespaced blueprint-readiness/status
   contributions.

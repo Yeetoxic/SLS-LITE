@@ -17,6 +17,8 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.slimelabs.slslite.blueprint.Blueprint;
 import net.slimelabs.slslite.blueprint.BlueprintRepository;
+import net.slimelabs.slslite.blueprint.Mixin;
+import net.slimelabs.slslite.blueprint.Overlay;
 import net.slimelabs.slslite.blueprint.readiness.BlueprintReadinessCatalog;
 import net.slimelabs.slslite.command.CommandAuthorizer;
 import net.slimelabs.slslite.command.CommandInstanceAccess;
@@ -86,6 +88,57 @@ class InspectionCommandHandlerTest {
     assertTrue(plainText(details.getFirst()).contains("Blueprint minigame/arena"));
     assertTrue(plainText(details.get(1)).contains("Software: paper-auto 1.21.5"));
     assertTrue(plainText(details.get(1)).contains("Persistence: ephemeral"));
+  }
+
+  @Test
+  void singularMixinUsesDedicatedPermissionAndPrintsResolvedDetails() {
+    blueprints.install(
+        new BlueprintRepository.Snapshot(
+            Map.of(),
+            Map.of(
+                "shared",
+                new Mixin(
+                    "shared",
+                    "Common plugins",
+                    List.of("base"),
+                    new Overlay(
+                        new Overlay.Server("paper", "1.21.11", null, null, 2048, null, Map.of()),
+                        null,
+                        Map.of())))));
+
+    List<Component> denied = new ArrayList<>();
+    handler.mixin(
+        source(Set.of("sls.command.blueprint"), denied), new String[] {"mixin", "shared"});
+    assertTrue(plainText(denied.getFirst()).contains("do not have permission"));
+
+    List<Component> details = new ArrayList<>();
+    handler.mixin(source(Set.of("sls.command.mixin"), details), new String[] {"mixin", "shared"});
+    assertTrue(plainText(details.getFirst()).contains("Mixin shared"));
+    assertTrue(plainText(details.get(1)).contains("Extends: base"));
+    assertTrue(plainText(details.get(1)).contains("Software: paper 1.21.11"));
+  }
+
+  @Test
+  void singularMixinSuggestionsArePermissionFiltered() {
+    blueprints.install(
+        new BlueprintRepository.Snapshot(
+            Map.of(), Map.of("shared", new Mixin("shared", "", List.of(), Overlay.empty()))));
+    assertEquals(
+        List.of(),
+        handler.suggestions(
+            source(Set.of(), new ArrayList<>()), "mixin", new String[] {"mixin", ""}));
+    assertEquals(
+        List.of(),
+        handler.suggestions(
+            source(Set.of("sls.command.blueprint"), new ArrayList<>()),
+            "mixin",
+            new String[] {"mixin", ""}));
+    assertEquals(
+        List.of("shared"),
+        handler.suggestions(
+            source(Set.of("sls.command.mixin"), new ArrayList<>()),
+            "mixin",
+            new String[] {"mixin", ""}));
   }
 
   @Test

@@ -7,6 +7,65 @@ Blueprints describe launchable server types. SLS-LITE recursively loads
 only organization; `blueprint.type` is the dynamic registry used by commands.
 Blueprint IDs must be globally unique.
 
+Files are classified by top-level key:
+
+- `mixin:` → mixin overlay
+- `blueprint:` → blueprint
+- both or neither → rejected
+
+A `mixins/` subdirectory is conventional but not required.
+
+## Mixins
+
+Mixins are reusable configuration overlays that blueprints pull in with
+`includes`. Use them for shared plugins, limits, volumes, env vars, and other
+settings you do not want to copy into every blueprint.
+
+A mixin is not a full blueprint. Fields are optional overlays. Completeness
+(`server.software`, `server.version`, image resolution, and so on) is validated
+on the composed blueprint after includes are applied. `save` is blueprint-only
+and is rejected on mixin documents.
+
+```yaml
+mixin:
+  id: shared_plugins
+  description: Shared plugin jars for arcade games
+
+extends:
+  - paper_base
+
+state:
+  copy:
+    - volumes/plugins/SharedCore.jar:plugins/SharedCore.jar
+
+  env:
+    SHARED_CORE: "true"
+```
+
+`mixin.id` uses the same portable slug as `blueprint.id`. Mixins may `extends`
+other mixins; parents are applied left-to-right, then the mixin itself.
+
+When a blueprint lists mixins under `includes`:
+
+1. Each mixin's `extends` chain is flattened (parents first, then self).
+2. Included mixins are merged left-to-right.
+3. The blueprint's own `server`, `state`, and `annotations` are merged on top.
+
+Precedence: earlier includes → later includes → blueprint fields win.
+
+| Field | Merge behavior |
+| --- | --- |
+| `server` scalars (`software`, `version`, `image`, `path`) | Non-empty overlay replaces |
+| `server.limits` | Field-wise merge |
+| `server.configs` | Merged by filename; overlay replaces the whole file |
+| `state.volumes` | Same name replaces; new names append |
+| `state.copy` | Append |
+| `state.persistent_files` | Same name replaces; new names append |
+| `state.env` / `annotations` | Key overlay (later wins); nested annotation maps deep-merge |
+
+Inspect resolved mixins with `/sls mixin <id>` and composed blueprints with
+`/sls blueprint <id>`.
+
 ## Complete Supported Shape
 
 ```yaml
@@ -14,6 +73,9 @@ blueprint:
   id: biome_run
   name: Biome Run
   type: minigame
+
+includes:
+  - shared_plugins
 
 server:
   software: paper
@@ -65,8 +127,9 @@ documented below.
 | `blueprint.id` | yes | Lowercase `[a-z0-9][a-z0-9_-]{0,63}`; globally unique. |
 | `blueprint.name` | yes | Non-blank display name. |
 | `blueprint.type` | yes | Non-blank dynamic registry name. |
-| `server.software` | yes | ID of a loaded software profile. |
-| `server.version` | yes | Exact Minecraft/software version string. |
+| `includes` | no | Mixin ids applied left-to-right before this blueprint's own fields. |
+| `server.software` | after compose | ID of a loaded software profile. May come from an included mixin. |
+| `server.version` | after compose | Exact Minecraft/software version string. May come from an included mixin. |
 | `server.image` | no | Modern `java_<major>` selector; requires a matching local Java runtime unless it matches the proxy JVM. |
 | `server.path` | no | Relative manually prepared base path below `plugins/sls-lite/software/`; bypasses provider installation. |
 | `server.limits.memory_limit` | no | Positive MiB; inherits a modern software definition's `limits.memory_limit`, otherwise defaults to `1024`. |

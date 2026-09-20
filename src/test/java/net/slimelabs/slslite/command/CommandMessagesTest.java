@@ -99,6 +99,7 @@ class CommandMessagesTest {
     String text = plainText(hover);
 
     assertTrue(text.contains("Blueprint: minigame/blastoff"));
+    assertTrue(text.contains("Includes: none"));
     assertTrue(text.contains("Software: paper-auto 1.11.2"));
     assertTrue(text.contains("Capacity: 8 players per instance"));
     assertTrue(text.contains("Instance limit: unlimited"));
