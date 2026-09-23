@@ -1307,6 +1307,38 @@ Active post-RC.2 extension-integration follow-up. Preserve RC.2 as an immutable
 published baseline, retain its API compatibility, and add capabilities rather
 than exposing core implementation classes.
 
+- [ ] Fix the process/instance lock inversion during readiness and shutdown.
+      `SupervisedProcess.handleOutputLine()` completes readiness while holding
+      the process monitor; the inline `InstancePreparationPipeline` callback
+      enters `InstanceManager.registerReady()` and acquires the instance
+      monitor. Conversely, `InstanceManager.shutdown()` holds the instance
+      monitor while metadata collection calls synchronized process accessors.
+      Concurrent readiness and shutdown can deadlock before process supervision
+      reaches forced termination. Move callbacks outside process monitors and
+      establish consistent lock ordering across stop, kill, and shutdown paths.
+      Add a deterministic regression that overlaps readiness with shutdown and
+      verifies bounded completion and termination of every managed child.
+- [ ] Make shutdown deadlines independent of blocked child-console writes.
+      `SupervisedProcess.stop()` writes and flushes stdin under the process
+      monitor before scheduling its stop deadline; `sendCommand()` uses the
+      same monitor, as do forced-termination methods. A child that stops reading
+      stdin can fill the pipe and block both graceful shutdown and force-kill.
+      `ProcessSupervisor.shutdown()` calls stop sequentially before its timed
+      wait, so one blocked child can prevent stop requests to sibling children.
+      Bound console delivery and ensure forced termination can proceed without
+      waiting for a blocked writer. Test a full stdin pipe, concurrent console
+      delivery, and multiple children; verify the overall shutdown deadline and
+      actual child exits, including the SLS-Limbo close path.
+
+Shutdown incident context (reported 2026-09-22): on RC.2.3, two Java processes
+identified as SLS-LITE processes consumed heavy CPU and survived a Velocity stop
+through Pterodactyl; a core reportedly reached approximately 95 C. The operator
+rebooted without retaining logs or process command lines. The two findings above
+come from source review and have not yet been reproduced or established as the
+incident's cause. They could explain failed shutdown, but the CPU spike remains
+unconfirmed; capture backend and Velocity thread dumps, PID/parent/command-line
+details, and shutdown logs if it recurs. Preserve RC.2.3 as an immutable release.
+
 - [ ] Eliminate unreachable instance directories left by failed or cancelled
       starts. Audit every boundary between directory publication, metadata
       creation, configuration, process launch, readiness, registration, and
